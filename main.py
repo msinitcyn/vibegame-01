@@ -1,7 +1,8 @@
 """Дуэль шариков.
 
-Слева синий (W/S — движение, Пробел — выстрел),
-справа красный (стрелки ↑/↓ — движение, Enter — выстрел).
+Подобранные артефакты попадают в инвентарь (4 ячейки).
+Слева синий: W/S — движение, Пробел — выстрел, 1-4 — использовать артефакт из ячейки.
+Справа красный: стрелки ↑/↓ — движение, Enter — выстрел, 9, 0, -, = — использовать артефакт.
 R — новая игра после победы, F11 — окно/полный экран, Esc — выход.
 """
 import math
@@ -10,8 +11,8 @@ from pathlib import Path
 
 import pygame
 
-WIDTH, HEIGHT = 1000, 640
-HUD_H = 40                       # верхняя полоса с информацией
+WIDTH, HEIGHT = 1000, 700
+HUD_H = 60                       # верхняя полоса с информацией
 TOP, BOTTOM = HUD_H, HEIGHT      # границы игрового поля
 FPS = 60
 
@@ -23,15 +24,16 @@ BASE_RADIUS = 18
 BASE_SPEED = 300                 # пикс/сек
 BULLET_SPEED = 520
 BULLET_R = 5
-SHOT_COOLDOWN = 0.25
+SHOT_COOLDOWN = 0.25             # минимальная пауза между выстрелами
 MAX_HP = 10
 HEAL_AMOUNT = 3
+TRIPLE_SHOTS = 5
 
-ARTIFACT_R = 14
+INVENTORY_SIZE = 4
+ARTIFACT_R = 16
 ARTIFACT_SPAWN = (2.5, 5.0)      # интервал появления, сек
 ARTIFACT_LIFETIME = 8.0
 MAX_ARTIFACTS_PER_SIDE = 2
-ARTIFACT_COLOR = (150, 150, 170)  # все артефакты выглядят одинаково — сюрприз
 
 WALL_OFFSET = 110                # расстояние от игрока до стены
 WALL_H = 180                     # высота стены
@@ -44,31 +46,36 @@ BLUE = (70, 140, 255)
 RED = (255, 80, 80)
 WHITE = (235, 235, 235)
 GREY = (120, 120, 130)
-GOOD = (80, 220, 120)
-BAD = (240, 90, 60)
+SELF_RING = (80, 220, 120)       # зелёная рамка — артефакт усиливает тебя
+FOE_RING = (255, 150, 40)        # оранжевая рамка — артефакт бьёт по сопернику
+ICON_BG = (35, 38, 52)
 
-# тип: (буква, цвет, хороший?, описание)
-ARTIFACTS = {
-    "triple": ("x3", (255, 210, 60), True, "5 выстрелов веером"),
-    "grow2": ("x2", (200, 120, 255), False, "больше в 2 раза"),
-    "shrink": ("½", (90, 230, 230), True, "меньше в 2 раза"),
-    "freeze": ("❄", (170, 210, 255), False, "заморозка"),
-    "speed": ("»", (120, 255, 120), True, "скорость x1.8"),
-    "wall": ("▮", (200, 200, 255), True, "стена-зеркало"),
-    "rapid": ("!", (255, 160, 40), True, "скорострельность"),
-    "nofire": ("✕", (120, 120, 120), False, "не стреляешь"),
-    "slowfoe": ("~", (120, 200, 160), True, "пули соперника медленнее"),
-    "shield": ("◯", (120, 220, 255), True, "щит"),
-    "heal": ("+", (255, 120, 160), True, f"лечение +{HEAL_AMOUNT}"),
-    "clones": ("◎", (200, 200, 200), True, "двойники"),
-    "breaker": ("⚔", (255, 230, 120), True, "сбиваешь пули"),
-    "wavy": ("∿", (255, 200, 255), True, "пули волной"),
-    "invert": ("⇅", (200, 100, 100), False, "управление наоборот"),
-    "clearfoe": ("∅", (150, 255, 200), True, "пули соперника исчезли"),
-    "clearmine": ("∅", (255, 150, 150), False, "твои пули исчезли"),
+# Все артефакты полезные. kind: (название, на кого действует, цвет значка)
+ITEMS = {
+    "triple": ("веер: 5 выстрелов", "self", (255, 210, 60)),
+    "shrink": ("уменьшение", "self", (90, 230, 230)),
+    "speed": ("скорость", "self", (120, 255, 120)),
+    "wall": ("стена-зеркало", "self", (225, 235, 255)),
+    "rapid": ("скорострельность", "self", (255, 160, 40)),
+    "slowfoe": ("пули соперника медленнее", "self", (120, 210, 170)),
+    "shield": ("щит", "self", (120, 200, 255)),
+    "heal": (f"лечение +{HEAL_AMOUNT}", "self", (255, 90, 120)),
+    "clones": ("двойники", "self", (200, 200, 210)),
+    "breaker": ("сбиваешь пули", "self", (255, 240, 150)),
+    "wavy": ("пули волной", "self", (255, 140, 255)),
+    "clearfoe": ("убрать пули соперника", "self", (150, 255, 200)),
+    "foe_grow": ("соперник ×2", "foe", (190, 120, 255)),
+    "foe_freeze": ("заморозить соперника", "foe", (170, 220, 255)),
+    "foe_nofire": ("соперник не стреляет", "foe", (255, 110, 90)),
+    "foe_invert": ("соперник: управление наоборот", "foe", (255, 200, 90)),
 }
-DURATION = {"grow2": 7, "wavy": 7, "invert": 5, "shield": 6, "breaker": 8, "shrink": 7, "freeze": 2.5, "speed": 7,
-            "rapid": 7, "nofire": 4, "slowfoe": 7}
+
+# эффекты на игроке: длительность и короткая подпись для панели
+DURATION = {"grow2": 7, "shrink": 7, "freeze": 2.5, "speed": 7, "rapid": 7,
+            "nofire": 4, "slowfoe": 7, "shield": 6, "breaker": 8, "wavy": 7, "invert": 5}
+EFFECT_LABEL = {"grow2": "×2", "shrink": "мал", "freeze": "мороз", "speed": "скор",
+                "rapid": "очередь", "nofire": "без огня", "slowfoe": "замедл",
+                "shield": "щит", "breaker": "сбив", "wavy": "волна", "invert": "инверсия"}
 RAPID_FACTOR = 0.4               # пауза между выстрелами x0.4
 SLOW_BULLET_FACTOR = 0.45        # пули соперника летят в ~2 раза медленнее
 SHIELD_GAP = 10                  # щит на столько пикселей шире шарика
@@ -82,6 +89,83 @@ CLONE_RADIUS = BASE_RADIUS * 0.8
 CLONE_SPEED = BASE_SPEED * 0.7
 CLONE_SHOT_EVERY = (0.6, 1.5)    # пауза между выстрелами двойника, сек
 CLONE_TURN_EVERY = (0.4, 1.4)    # как часто двойник меняет направление
+
+
+def draw_icon(surf, kind, center, r):
+    """Значок артефакта — одинаковый на поле и в инвентаре."""
+    cx, cy = center
+    color = ITEMS[kind][2]
+    ring = FOE_RING if ITEMS[kind][1] == "foe" else SELF_RING
+
+    def P(u, v):
+        return (cx + u * r, cy + v * r)
+
+    w = max(2, int(r / 6))
+    pygame.draw.circle(surf, ICON_BG, center, r)
+    pygame.draw.circle(surf, ring, center, r, 2)
+
+    if kind == "triple":
+        for v in (-0.5, 0, 0.5):
+            pygame.draw.line(surf, color, P(-0.5, 0), P(0.55, v), w)
+            pygame.draw.circle(surf, color, P(0.55, v), r * 0.12)
+    elif kind == "shrink":
+        pygame.draw.circle(surf, color, center, r * 0.6, 1)
+        pygame.draw.circle(surf, color, center, r * 0.28)
+    elif kind == "speed":
+        for dx in (-0.35, 0.15):
+            pygame.draw.lines(surf, color, False,
+                              [P(dx, -0.4), P(dx + 0.35, 0), P(dx, 0.4)], w)
+    elif kind == "wall":
+        pygame.draw.rect(surf, (0, 0, 0), (*P(-0.2, -0.6), r * 0.2, r * 1.2))
+        pygame.draw.rect(surf, color, (*P(0, -0.6), r * 0.2, r * 1.2))
+        pygame.draw.rect(surf, (90, 40, 130), (*P(-0.2, -0.6), r * 0.4, r * 1.2), 1)
+    elif kind == "rapid":
+        for u in (-0.45, 0, 0.45):
+            pygame.draw.circle(surf, color, P(u, 0), r * 0.15)
+        pygame.draw.line(surf, color, P(-0.6, 0.35), P(0.6, 0.35), max(1, w // 2))
+    elif kind == "slowfoe":                       # песочные часы
+        pygame.draw.polygon(surf, color, [P(-0.4, -0.55), P(0.4, -0.55), P(0, 0)])
+        pygame.draw.polygon(surf, color, [P(-0.4, 0.55), P(0.4, 0.55), P(0, 0)], 2)
+    elif kind == "shield":
+        pygame.draw.polygon(surf, color, [P(0, -0.6), P(0.5, -0.4), P(0.45, 0.15),
+                                          P(0, 0.6), P(-0.45, 0.15), P(-0.5, -0.4)])
+    elif kind == "heal":
+        pygame.draw.rect(surf, color, (*P(-0.15, -0.55), r * 0.3, r * 1.1))
+        pygame.draw.rect(surf, color, (*P(-0.55, -0.15), r * 1.1, r * 0.3))
+    elif kind == "clones":
+        pygame.draw.circle(surf, color, P(-0.2, -0.12), r * 0.32, 2)
+        pygame.draw.circle(surf, color, P(0.2, 0.15), r * 0.32)
+    elif kind == "breaker":                       # вспышка столкновения
+        for i in range(8):
+            a = i * math.pi / 4
+            ln = 0.6 if i % 2 == 0 else 0.35
+            pygame.draw.line(surf, color, center, P(ln * math.cos(a), ln * math.sin(a)), w)
+    elif kind == "wavy":
+        pts = [P(-0.6 + i * 0.1, 0.3 * math.sin(i * 0.1 * 2 * math.pi / 0.6)) for i in range(13)]
+        pygame.draw.lines(surf, color, False, pts, w)
+    elif kind == "clearfoe":                      # пуля перечёркнута
+        pygame.draw.circle(surf, color, center, r * 0.45, 2)
+        pygame.draw.circle(surf, RED, center, r * 0.15)
+        pygame.draw.line(surf, color, P(-0.32, 0.32), P(0.32, -0.32), w)
+    elif kind == "foe_grow":                      # маленький шарик -> большой
+        pygame.draw.circle(surf, color, P(-0.45, 0), r * 0.13)
+        pygame.draw.line(surf, color, P(-0.28, 0), P(-0.05, 0), max(1, w // 2))
+        pygame.draw.polygon(surf, color, [P(0.02, 0), P(-0.1, -0.1), P(-0.1, 0.1)])
+        pygame.draw.circle(surf, color, P(0.3, 0), r * 0.3)
+    elif kind == "foe_freeze":                    # снежинка
+        for i in range(3):
+            a = i * math.pi / 3
+            dx, dy = 0.6 * math.cos(a), 0.6 * math.sin(a)
+            pygame.draw.line(surf, color, P(-dx, -dy), P(dx, dy), w)
+    elif kind == "foe_nofire":                    # пуля и красный крест
+        pygame.draw.circle(surf, WHITE, center, r * 0.2)
+        pygame.draw.line(surf, color, P(-0.45, -0.45), P(0.45, 0.45), w + 1)
+        pygame.draw.line(surf, color, P(-0.45, 0.45), P(0.45, -0.45), w + 1)
+    elif kind == "foe_invert":                    # стрелки вверх и вниз
+        pygame.draw.line(surf, color, P(-0.22, 0.55), P(-0.22, -0.45), w)
+        pygame.draw.polygon(surf, color, [P(-0.22, -0.6), P(-0.42, -0.3), P(-0.02, -0.3)])
+        pygame.draw.line(surf, color, P(0.22, -0.55), P(0.22, 0.45), w)
+        pygame.draw.polygon(surf, color, [P(0.22, 0.6), P(0.42, 0.3), P(0.02, 0.3)])
 
 
 def make_bullets(owner, x, y, direction, radius, angles):
@@ -102,12 +186,13 @@ def make_bullets(owner, x, y, direction, radius, angles):
 
 
 class Player:
-    def __init__(self, x, color, up_key, down_key, shoot_keys, direction, name):
+    def __init__(self, x, color, up_key, down_key, shoot_keys, item_keys, direction, name):
         self.x = x
         self.color = color
         self.up_key = up_key
         self.down_key = down_key
         self.shoot_keys = shoot_keys
+        self.item_keys = item_keys    # клавиши ячеек инвентаря
         self.dir = direction          # +1 стреляет вправо, -1 влево
         self.name = name
         self.reset()
@@ -118,6 +203,7 @@ class Player:
         self.cooldown = 0.0
         self.triple_shots = 0
         self.effects = {}             # имя эффекта -> оставшееся время
+        self.items = [None] * INVENTORY_SIZE
         self.moving = 0               # -1 вверх, +1 вниз, 0 стоит
         self.hit_flash = 0.0
 
@@ -137,6 +223,10 @@ class Player:
     @property
     def frozen(self):
         return "freeze" in self.effects
+
+    @property
+    def inventory_full(self):
+        return None not in self.items
 
     def update(self, dt, keys):
         for name in list(self.effects):
@@ -171,39 +261,31 @@ class Player:
             angles = (self.moving,)
         return make_bullets(self, self.x, self.y, self.dir, self.radius, angles)
 
-    def apply(self, kind):
-        if kind == "triple":
-            self.triple_shots = 5
-            return
-        if kind == "heal":
-            self.hp = min(MAX_HP, self.hp + HEAL_AMOUNT)
-            return
-        if kind in ("grow2", "shrink"):
+    def apply(self, effect):
+        if effect in ("grow2", "shrink"):
             # размерные эффекты заменяют друг друга
             for k in ("grow2", "shrink"):
                 self.effects.pop(k, None)
-        self.effects[kind] = DURATION[kind]
+        self.effects[effect] = DURATION[effect]
 
     def draw(self, surf):
         r = int(self.radius)
-        color = self.color
-        if self.hit_flash > 0:
-            color = WHITE
-        pygame.draw.circle(surf, color, (int(self.x), int(self.y)), r)
+        pos = (int(self.x), int(self.y))
+        color = WHITE if self.hit_flash > 0 else self.color
+        pygame.draw.circle(surf, color, pos, r)
         if self.frozen:
-            pygame.draw.circle(surf, (190, 230, 255), (int(self.x), int(self.y)), r + 4, 3)
+            pygame.draw.circle(surf, ITEMS["foe_freeze"][2], pos, r + 4, 3)
         if "speed" in self.effects:
-            pygame.draw.circle(surf, GOOD, (int(self.x), int(self.y)), r + 8, 1)
+            pygame.draw.circle(surf, ITEMS["speed"][2], pos, r + 8, 1)
         if "shield" in self.effects:
             t = self.effects["shield"]
             if t > 1.5 or int(t * 8) % 2:
-                pygame.draw.circle(surf, ARTIFACTS["shield"][1],
-                                   (int(self.x), int(self.y)), r + SHIELD_GAP, 3)
+                pygame.draw.circle(surf, ITEMS["shield"][2], pos, r + SHIELD_GAP, 3)
         if self.triple_shots:
-            pygame.draw.circle(surf, ARTIFACTS["triple"][1], (int(self.x), int(self.y)), max(3, r // 3))
+            pygame.draw.circle(surf, ITEMS["triple"][2], pos, max(3, r // 3))
         if "nofire" in self.effects:
             d = int(r * 0.7)
-            cx, cy = int(self.x), int(self.y)
+            cx, cy = pos
             pygame.draw.line(surf, (30, 30, 30), (cx - d, cy - d), (cx + d, cy + d), 4)
             pygame.draw.line(surf, (30, 30, 30), (cx - d, cy + d), (cx + d, cy - d), 4)
 
@@ -296,15 +378,11 @@ class Artifact:
         self.kind = kind
         self.life = ARTIFACT_LIFETIME
 
-    def draw(self, surf, font):
+    def draw(self, surf):
         # мигает перед исчезновением
         if self.life < 2 and int(self.life * 8) % 2 == 0:
             return
-        pos = (int(self.x), int(self.y))
-        pygame.draw.circle(surf, ARTIFACT_COLOR, pos, ARTIFACT_R)
-        pygame.draw.circle(surf, WHITE, pos, ARTIFACT_R + 3, 2)
-        txt = font.render("?", True, (20, 20, 20))
-        surf.blit(txt, txt.get_rect(center=pos))
+        draw_icon(surf, self.kind, (int(self.x), int(self.y)), ARTIFACT_R)
 
 
 class Wall:
@@ -393,16 +471,24 @@ class Game:
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont("dejavusans", 18, bold=True)
         self.small = pygame.font.SysFont("dejavusans", 14)
+        self.tiny = pygame.font.SysFont("dejavusans", 11, bold=True)
         self.big = pygame.font.SysFont("dejavusans", 56, bold=True)
 
         # управление по физическим клавишам (scancode) — работает в любой раскладке
-        self.blue = Player(60, BLUE, pygame.KSCAN_W, pygame.KSCAN_S,
-                           (pygame.KSCAN_SPACE,), 1, "Синий")
+        self.blue = Player(60, BLUE, pygame.KSCAN_W, pygame.KSCAN_S, (pygame.KSCAN_SPACE,),
+                           (pygame.KSCAN_1, pygame.KSCAN_2, pygame.KSCAN_3, pygame.KSCAN_4),
+                           1, "Синий")
         self.red = Player(WIDTH - 60, RED, pygame.KSCAN_UP, pygame.KSCAN_DOWN,
-                          (pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER), -1, "Красный")
+                          (pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER),
+                          (pygame.KSCAN_9, pygame.KSCAN_0, pygame.KSCAN_MINUS, pygame.KSCAN_EQUALS),
+                          -1, "Красный")
+        self.key_names = {self.blue: "1234", self.red: "90-="}
         self.held = set()             # зажатые физические клавиши
         self.players = (self.blue, self.red)
         self.restart()
+
+    def other(self, p):
+        return self.red if p is self.blue else self.blue
 
     def restart(self):
         for p in self.players:
@@ -437,51 +523,74 @@ class Game:
                     if not self.winner:
                         for p in self.players:
                             if e.scancode in p.shoot_keys:
-                                shots = p.shoot()
-                                if shots:
-                                    self.audio.shoot("blue" if p is self.blue else "red")
-                                self.bullets.extend(shots)
+                                self.fire(p)
+                            if e.scancode in p.item_keys:
+                                self.use_item(p, p.item_keys.index(e.scancode))
             if not self.winner:
                 self.update(dt)
             self.draw()
+
+    def fire(self, p):
+        shots = p.shoot()
+        if shots:
+            self.audio.shoot("blue" if p is self.blue else "red")
+            self.bullets.extend(shots)
+
+    def popup(self, text, p, color):
+        self.popups.append([text, p.x + p.dir * 90, p.y, POPUP_TIME, color])
+
+    def use_item(self, p, slot):
+        kind = p.items[slot]
+        if kind is None:
+            return
+        p.items[slot] = None
+        foe = self.other(p)
+        if kind == "triple":
+            p.triple_shots = TRIPLE_SHOTS
+        elif kind == "heal":
+            p.hp = min(MAX_HP, p.hp + HEAL_AMOUNT)
+        elif kind == "wall":
+            self.walls[p] = Wall(p)       # новая стена заменяет старую
+        elif kind == "clearfoe":
+            for b in self.bullets:
+                if b.owner is foe:
+                    b.alive = False
+        elif kind == "clones":
+            have = sum(1 for c in self.clones if c.owner is p)
+            for _ in range(max(0, min(CLONE_COUNT, MAX_CLONES - have))):
+                self.clones.append(Clone(p))
+        elif kind == "foe_grow":
+            foe.apply("grow2")
+        elif kind.startswith("foe_"):
+            foe.apply(kind[4:])           # foe_freeze -> freeze и т.д.
+        else:
+            p.apply(kind)
+        target = foe if ITEMS[kind][1] == "foe" else p
+        self.popup(ITEMS[kind][0] + "!", target, ITEMS[kind][2])
 
     def update(self, dt):
         for p in self.players:
             p.update(dt, self.held)
 
-        # артефакты появляются на вертикали каждого игрока
+        # артефакты появляются на вертикали игрока, пока у него есть место в инвентаре
         for p in self.players:
             self.spawn_timer[p] -= dt
             if self.spawn_timer[p] <= 0:
                 self.spawn_timer[p] = random.uniform(*ARTIFACT_SPAWN)
-                if sum(1 for a in self.artifacts if a.x == p.x) < MAX_ARTIFACTS_PER_SIDE:
-                    self.artifacts.append(Artifact(p.x, random.choice(list(ARTIFACTS))))
+                on_side = sum(1 for a in self.artifacts if a.x == p.x)
+                if not p.inventory_full and on_side < MAX_ARTIFACTS_PER_SIDE:
+                    self.artifacts.append(Artifact(p.x, random.choice(list(ITEMS))))
 
         for a in self.artifacts:
             a.life -= dt
         for p in self.players:
             for a in self.artifacts:
-                if a.x == p.x and a.life > 0 and abs(a.y - p.y) < p.radius + ARTIFACT_R:
-                    if a.kind == "wall":
-                        self.walls[p] = Wall(p)   # новая стена заменяет старую
-                    elif a.kind == "clearfoe":
-                        for b in self.bullets:
-                            if b.owner is not p:
-                                b.alive = False
-                    elif a.kind == "clearmine":
-                        for b in self.bullets:
-                            if b.owner is p:
-                                b.alive = False
-                    elif a.kind == "clones":
-                        have = sum(1 for c in self.clones if c.owner is p)
-                        for _ in range(max(0, min(CLONE_COUNT, MAX_CLONES - have))):
-                            self.clones.append(Clone(p))
-                    else:
-                        p.apply(a.kind)
+                if a.x == p.x and a.life > 0 and not p.inventory_full \
+                        and abs(a.y - p.y) < p.radius + ARTIFACT_R:
+                    p.items[p.items.index(None)] = a.kind
                     a.life = 0
-                    _, color, good, desc = ARTIFACTS[a.kind]
-                    self.popups.append([desc, p.x + p.dir * 70, p.y, POPUP_TIME,
-                                        GOOD if good else BAD])
+                    name, target, _ = ITEMS[a.kind]
+                    self.popup(name, p, FOE_RING if target == "foe" else SELF_RING)
         self.artifacts = [a for a in self.artifacts if a.life > 0]
 
         for owner in list(self.walls):
@@ -499,7 +608,7 @@ class Game:
 
         for b in self.bullets:
             prev_x = b.x
-            target = self.red if b.owner is self.blue else self.blue
+            target = self.other(b.owner)
             # если у цели «пули соперника медленнее» — эта пуля тормозит
             b.update(dt * (SLOW_BULLET_FACTOR if "slowfoe" in target.effects else 1))
             for w in self.walls.values():
@@ -507,7 +616,7 @@ class Game:
                     w.hit(b, prev_x)
             if not b.alive:
                 continue
-            target = self.red if b.owner is self.blue else self.blue
+            target = self.other(b.owner)      # владелец мог смениться после зеркала
             dist = math.hypot(b.x - target.x, b.y - target.y)
             if "shield" in target.effects and dist < target.radius + SHIELD_GAP + BULLET_R:
                 b.alive = False                   # щит поглощает пулю
@@ -529,7 +638,7 @@ class Game:
 
         for p in self.players:
             if p.hp <= 0:
-                self.winner = self.red if p is self.blue else self.blue
+                self.winner = self.other(p)
 
     def collide_bullets(self):
         """Пули игрока с «сбиваешь пули» уничтожают пули соперника (обе пропадают)."""
@@ -558,21 +667,40 @@ class Game:
         s = self.screen
         pygame.draw.rect(s, (30, 33, 45), (0, 0, WIDTH, HUD_H))
         pygame.draw.line(s, GREY, (0, HUD_H), (WIDTH, HUD_H), 2)
-        for p, x, align in ((self.blue, 10, "left"), (self.red, WIDTH - 10, "right")):
-            parts = [f"{p.name}: {'♥' * p.hp}"]
+        slot, gap = 44, 6
+        inv_w = INVENTORY_SIZE * slot + (INVENTORY_SIZE - 1) * gap
+        for p in self.players:
+            left = p is self.blue
+            # инвентарь — ближе к центру экрана
+            inv_x = WIDTH // 2 - 16 - inv_w if left else WIDTH // 2 + 16
+            for i, kind in enumerate(p.items):
+                rect = pygame.Rect(inv_x + i * (slot + gap), (HUD_H - slot) // 2, slot, slot)
+                pygame.draw.rect(s, (22, 24, 34), rect, border_radius=6)
+                pygame.draw.rect(s, p.color if kind else GREY, rect, 1, border_radius=6)
+                if kind:
+                    draw_icon(s, kind, rect.center, slot // 2 - 5)
+                key = self.tiny.render(self.key_names[p][i], True, WHITE)
+                s.blit(key, (rect.right - key.get_width() - 3, rect.bottom - key.get_height() - 1))
+
+            # жизни и эффекты — у края экрана
+            avail = WIDTH // 2 - 16 - inv_w - 20
+            line1 = self.font.render(f"{p.name}  {'♥' * p.hp}", True, p.color)
+            parts = [f"{EFFECT_LABEL[n]} {t:.0f}" for n, t in p.effects.items()]
             if p.triple_shots:
                 parts.append(f"веер {p.triple_shots}")
-            for name, t in p.effects.items():
-                parts.append(f"{ARTIFACTS[name][3]} {t:.0f}с")
             if p in self.walls:
-                parts.append(f"стена {self.walls[p].life:.0f}с")
+                parts.append(f"стена {self.walls[p].life:.0f}")
             n = sum(1 for c in self.clones if c.owner is p)
             if n:
                 parts.append(f"двойники {n}")
-            txt = self.font.render("   ".join(parts), True, p.color)
-            rect = txt.get_rect(midleft=(x, HUD_H // 2)) if align == "left" \
-                else txt.get_rect(midright=(x, HUD_H // 2))
-            s.blit(txt, rect)
+            line2 = self.small.render("  ·  ".join(parts), True, WHITE)
+            for img, cy in ((line1, 18), (line2, 42)):
+                if img.get_width() > avail:
+                    img = pygame.transform.smoothscale(
+                        img, (avail, img.get_height()))
+                rect = img.get_rect(midleft=(10, cy)) if left \
+                    else img.get_rect(midright=(WIDTH - 10, cy))
+                s.blit(img, rect)
 
     def draw(self):
         s = self.screen
@@ -585,7 +713,7 @@ class Game:
         for w in self.walls.values():
             w.draw(s)
         for a in self.artifacts:
-            a.draw(s, self.font)
+            a.draw(s)
         for c in self.clones:
             c.draw(s)
         for b in self.bullets:
@@ -595,7 +723,9 @@ class Game:
         for text, x, y, t, color in self.popups:
             img = self.font.render(text, True, color)
             img.set_alpha(int(255 * min(1, t / 0.5)))
-            s.blit(img, img.get_rect(center=(int(x), int(y))))
+            rect = img.get_rect(center=(int(x), int(y)))
+            rect.clamp_ip(pygame.Rect(0, TOP, WIDTH, BOTTOM - TOP))
+            s.blit(img, rect)
         self.draw_hud()
 
         if self.winner:
