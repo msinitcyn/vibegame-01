@@ -72,17 +72,19 @@ ITEMS = {
     "breaker": ("сбиваешь пули", "self", (255, 240, 150)),
     "wavy": ("пули волной", "self", (255, 140, 255)),
     "clearfoe": ("убрать пули соперника", "self", (150, 255, 200)),
+    "cleanse": ("очищение", "self", (210, 255, 230)),
     "foe_grow": ("соперник ×2", "foe", (190, 120, 255)),
     "foe_freeze": ("заморозить соперника", "foe", (170, 220, 255)),
     "foe_nofire": ("соперник не стреляет", "foe", (255, 110, 90)),
     "foe_invert": ("соперник: управление наоборот", "foe", (255, 200, 90)),
+    "foe_noitems": ("соперник без артефактов", "foe", (255, 130, 170)),
 }
 
 # Справка: категория и описание каждого артефакта (экран «Артефакты» в меню)
 HELP_SECTIONS = [
-    ("Защита", ["shield", "heal", "shrink", "speed", "clearfoe", "slowfoe"]),
-    ("Дебаффы на соперника", ["foe_grow", "foe_freeze", "foe_nofire", "foe_invert"]),
+    ("Защита", ["shield", "heal", "cleanse", "shrink", "speed", "clearfoe", "slowfoe"]),
     ("Атака", ["triple", "rapid", "wavy", "clones", "breaker", "wall"]),
+    ("Дебаффы на соперника", ["foe_grow", "foe_freeze", "foe_nofire", "foe_invert", "foe_noitems"]),
 ]
 
 
@@ -100,6 +102,10 @@ def item_help(kind):
         "foe_freeze": f"Соперник не может двигаться {d['freeze']} с. Стрелять может.",
         "foe_nofire": f"Соперник не может стрелять {d['nofire']} с.",
         "foe_invert": f"У соперника вверх и вниз меняются местами на {d['invert']} с.",
+        "foe_noitems": f"Соперник не может использовать артефакты {d['noitems']} с "
+                       "(кроме очищения). Подбирать может.",
+        "cleanse": "Снимает с тебя и твоих двойников все дебаффы соперника. "
+                   "Работает даже под запретом артефактов.",
         "triple": f"Следующие {TRIPLE_SHOTS} выстрелов летят веером в три стороны.",
         "rapid": f"Пауза между выстрелами {SHOT_COOLDOWN * RAPID_FACTOR:.1f} с вместо "
                  f"{SHOT_COOLDOWN} с, на {d['rapid']} с.",
@@ -112,14 +118,18 @@ def item_help(kind):
     }[kind]
 
 
-INSTANT_ITEMS = ("heal",)         # срабатывают сразу при подборе, минуя инвентарь
+INSTANT_ITEMS = ("heal",)
+# дебаффы: снимаются только временем или очищением, ничем другим
+BAD_EFFECTS = ("grow2", "freeze", "nofire", "invert", "noitems")         # срабатывают сразу при подборе, минуя инвентарь
 
 # эффекты на игроке: длительность и короткая подпись для панели
 DURATION = {"grow2": 7, "shrink": 7, "freeze": 2.5, "speed": 7, "rapid": 7,
-            "nofire": 4, "slowfoe": 7, "shield": 7, "breaker": 8, "wavy": 7, "invert": 5}
+            "nofire": 4, "slowfoe": 7, "shield": 7, "breaker": 8, "wavy": 7, "invert": 5,
+            "noitems": 5}
 EFFECT_LABEL = {"grow2": "×2", "shrink": "мал", "freeze": "мороз", "speed": "скор",
                 "rapid": "очередь", "nofire": "без огня", "slowfoe": "замедл",
-                "shield": "щит", "breaker": "сбив", "wavy": "волна", "invert": "инверсия"}
+                "shield": "щит", "breaker": "сбив", "wavy": "волна", "invert": "инверсия",
+                "noitems": "без артеф."}
 RAPID_FACTOR = 0.4               # пауза между выстрелами x0.4
 SLOW_BULLET_FACTOR = 0.45        # пули соперника летят в ~2 раза медленнее
 SHIELD_GAP = 10                  # щит на столько пикселей шире шарика
@@ -208,6 +218,12 @@ def draw_icon(surf, kind, center, r):
         pygame.draw.circle(surf, WHITE, center, r * 0.2)
         pygame.draw.line(surf, color, P(-0.45, -0.45), P(0.45, 0.45), w + 1)
         pygame.draw.line(surf, color, P(-0.45, 0.45), P(0.45, -0.45), w + 1)
+    elif kind == "foe_noitems":                   # ячейка инвентаря, перечёркнутая
+        pygame.draw.rect(surf, color, (*P(-0.4, -0.4), r * 0.8, r * 0.8), 2, border_radius=3)
+        pygame.draw.circle(surf, WHITE, center, r * 0.14)
+        pygame.draw.line(surf, color, P(-0.55, 0.55), P(0.55, -0.55), w + 1)
+    elif kind == "cleanse":                       # галочка
+        pygame.draw.lines(surf, color, False, [P(-0.45, 0.0), P(-0.12, 0.35), P(0.5, -0.4)], w + 1)
     elif kind == "foe_invert":                    # стрелки вверх и вниз
         pygame.draw.line(surf, color, P(-0.22, 0.55), P(-0.22, -0.45), w)
         pygame.draw.polygon(surf, color, [P(-0.22, -0.6), P(-0.42, -0.3), P(-0.02, -0.3)])
@@ -690,6 +706,12 @@ class AI:
                 game.use_item(me, random.choice(slots))
                 self.item_timer = random.uniform(*cfg["item_delay"])
             return
+        # дебаффы — сразу очищение
+        if any(e in me.effects for e in BAD_EFFECTS):
+            for i in slots:
+                if me.items[i] == "cleanse":
+                    game.use_item(me, i)
+                    return
         # в опасности — сразу защита
         if self.danger > 0:
             for i in slots:
@@ -867,7 +889,7 @@ class Game:
             p.reset(self.start_hp)
         self.bullets = []
         self.artifacts = []
-        self.walls = {}               # игрок -> его стена
+        self.walls = []               # стены могут стоять одновременно, у каждой свой таймер
         self.clones = []
         self.popups = []              # [текст, x, y, время, цвет]
         self.spawn_timer = {p: random.uniform(*ARTIFACT_SPAWN) for p in self.players}
@@ -1043,8 +1065,8 @@ class Game:
         t = self.font.render("Артефакты", True, WHITE)
         s.blit(t, t.get_rect(center=(WIDTH // 2, 24)))
         name_font = self.font
-        row_h, col_w = 50, 470
-        cols = {0: [HELP_SECTIONS[0], HELP_SECTIONS[1]], 1: [HELP_SECTIONS[2]]}
+        row_h, col_w = 48, 470
+        cols = {0: [HELP_SECTIONS[0]], 1: [HELP_SECTIONS[1], HELP_SECTIONS[2]]}
         for col, sections in cols.items():
             x0 = 20 + col * (col_w + 20)
             y = 50
@@ -1061,8 +1083,8 @@ class Game:
                         s.blit(self.tiny_text.render(line, True, WHITE), (x0 + 48, y + 21 + j * 14))
                     y += row_h
                 y += 6
-        # пояснения в свободном месте правой колонки
-        x0, y = 20 + col_w + 20, 50 + 32 + 6 * row_h + 20
+        # пояснения в свободном месте левой колонки
+        x0, y = 20, 50 + 32 + len(HELP_SECTIONS[0][1]) * row_h + 20
         notes = [
             "Зелёная рамка — артефакт для тебя, оранжевая — бьёт по сопернику.",
             "Эффекты складываются: например, волна + веер + скорость действуют вместе. "
@@ -1070,6 +1092,8 @@ class Game:
             "На двойников переходят: щит, волна, веер, скорострельность, ×2, уменьшение, "
             "сбивание пуль, скорость и «не стреляет».",
             "Пока инвентарь (4 ячейки) полон, новые артефакты на твоей стороне не появляются.",
+            "Дебаффы соперника снимаются только временем или очищением. Стен можно "
+            "поставить несколько — каждая стоит своё время.",
         ]
         for note in notes:
             for line in self.wrap(note, col_w):
@@ -1107,6 +1131,8 @@ class Game:
         kind = p.items[slot]
         if kind is None:
             return
+        if "noitems" in p.effects and kind != "cleanse":
+            return                            # запрет артефактов: ячейка не тратится
         p.items[slot] = None
         self.apply_item(p, kind)
 
@@ -1128,7 +1154,7 @@ class Game:
         elif kind == "heal":
             p.hp = min(p.max_hp, p.hp + HEAL_AMOUNT)
         elif kind == "wall":
-            self.walls[p] = Wall(p)       # новая стена заменяет старую
+            self.walls.append(Wall(p))
         elif kind == "clearfoe":
             for b in self.bullets:
                 if b.owner is foe:
@@ -1137,6 +1163,10 @@ class Game:
             have = sum(1 for c in self.clones if c.owner is p)
             for _ in range(max(0, min(CLONE_COUNT, MAX_CLONES - have))):
                 self.clones.append(Clone(p))
+        elif kind == "cleanse":
+            for u in [p] + self.clones_of(p):
+                for e in BAD_EFFECTS:
+                    u.effects.pop(e, None)
         elif kind == "foe_grow":
             self.give(foe, "grow2")
         elif kind.startswith("foe_"):
@@ -1179,10 +1209,9 @@ class Game:
                     self.popup(name, p, FOE_RING if target == "foe" else SELF_RING)
         self.artifacts = [a for a in self.artifacts if a.life > 0]
 
-        for owner in list(self.walls):
-            self.walls[owner].life -= dt
-            if self.walls[owner].life <= 0:
-                del self.walls[owner]
+        for w in self.walls:
+            w.life -= dt
+        self.walls = [w for w in self.walls if w.life > 0]
         for pp in self.popups:
             pp[2] -= 30 * dt
             pp[3] -= dt
@@ -1197,7 +1226,7 @@ class Game:
             target = self.other(b.owner)
             # если у цели «пули соперника медленнее» — эта пуля тормозит
             b.update(dt * (SLOW_BULLET_FACTOR if "slowfoe" in target.effects else 1))
-            for w in self.walls.values():
+            for w in self.walls:
                 if b.alive:
                     w.hit(b, prev_x)
             if not b.alive:
@@ -1268,6 +1297,8 @@ class Game:
                 pygame.draw.rect(s, p.color if kind else GREY, rect, 1, border_radius=6)
                 if kind:
                     draw_icon(s, kind, rect.center, slot // 2 - 5)
+                    if "noitems" in p.effects and kind != "cleanse":
+                        pygame.draw.line(s, ITEMS["foe_noitems"][2], rect.bottomleft, rect.topright, 2)
                 if self.ai and p is self.ai.me:
                     continue              # у компьютера клавиш нет
                 has_pad = self.players.index(p) < len(self.pads.pads)
@@ -1285,8 +1316,10 @@ class Game:
                      for n, t in p.effects.items()]
             if p.triple_shots:
                 parts.append(f"веер {p.triple_shots}")
-            if p in self.walls:
-                parts.append(f"стена {self.walls[p].life:.0f}")
+            mine = [w.life for w in self.walls if w.owner is p]
+            if mine:
+                parts.append(f"стена {max(mine):.0f}" if len(mine) == 1 else
+                             f"стены {len(mine)} (до {max(mine):.0f})")
             n = sum(1 for c in self.clones if c.owner is p)
             if n:
                 parts.append(f"двойники {n}")
@@ -1307,7 +1340,7 @@ class Game:
             pygame.draw.line(s, (40, 44, 58), (WIDTH // 2, y), (WIDTH // 2, y + 10))
         for p in self.players:
             pygame.draw.line(s, (32, 36, 50), (p.x, TOP), (p.x, BOTTOM))
-        for w in self.walls.values():
+        for w in self.walls:
             w.draw(s)
         for a in self.artifacts:
             a.draw(s)
