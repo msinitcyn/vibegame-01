@@ -76,6 +76,8 @@ ITEMS = {
     "foe_invert": ("соперник: управление наоборот", "foe", (255, 200, 90)),
 }
 
+INSTANT_ITEMS = ("heal",)         # срабатывают сразу при подборе, минуя инвентарь
+
 # эффекты на игроке: длительность и короткая подпись для панели
 DURATION = {"grow2": 7, "shrink": 7, "freeze": 2.5, "speed": 7, "rapid": 7,
             "nofire": 4, "slowfoe": 7, "shield": 6, "breaker": 8, "wavy": 7, "invert": 5}
@@ -916,6 +918,9 @@ class Game:
         if kind is None:
             return
         p.items[slot] = None
+        self.apply_item(p, kind)
+
+    def apply_item(self, p, kind):
         foe = self.other(p)
         if kind == "triple":
             p.triple_shots = TRIPLE_SHOTS
@@ -961,9 +966,13 @@ class Game:
             a.life -= dt
         for p in self.players:
             for a in self.artifacts:
-                if a.x == p.x and a.life > 0 and not p.inventory_full \
+                instant = a.kind in INSTANT_ITEMS
+                if a.x == p.x and a.life > 0 and (instant or not p.inventory_full) \
                         and abs(a.y - p.y) < p.radius + ARTIFACT_R:
-                    p.items[p.items.index(None)] = a.kind
+                    if instant:
+                        self.apply_item(p, a.kind)    # сразу, в инвентарь не кладём
+                    else:
+                        p.items[p.items.index(None)] = a.kind
                     a.life = 0
                     name, target, _ = ITEMS[a.kind]
                     self.popup(name, p, FOE_RING if target == "foe" else SELF_RING)
