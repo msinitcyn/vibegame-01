@@ -5,6 +5,8 @@
 Справа красный: стрелки ↑/↓ — движение, Enter — выстрел, 9, 0, -, = — использовать артефакт.
 В начале игры выбирается режим: два игрока или против компьютера (3 уровня сложности).
 R — новая игра после победы, Esc — в меню, F11 — окно/полный экран.
+Музыка: menu-*.mp3 в меню, background-normal-*.mp3 в игре, background-epic-*.mp3,
+когда у кого-то осталось мало жизней.
 
 Геймпады (PlayStation и любые другие): первый подключённый — синий, второй — красный.
 Стик или крестовина — движение, R1/R2 — выстрел, □ △ ○ ✕ — ячейки инвентаря 1-4,
@@ -24,6 +26,15 @@ FPS = 60
 
 ASSETS = Path(__file__).resolve().parent
 MUSIC_VOLUME = 0.4
+# музыка подбирается по маске имени файла — новые треки подхватываются сами
+MUSIC = {
+    "menu": "menu-*.mp3",                 # меню и справка, по кругу
+    "normal": "background-normal-*.mp3",  # обычная игра, треки по очереди вперемешку
+    "epic": "background-epic-*.mp3",      # концовка: у кого-то мало жизней
+}
+EPIC_HP = 3                      # эпичная музыка, когда у кого-то столько жизней или меньше
+MUSIC_FADE_MS = 800
+MUSIC_END = pygame.USEREVENT + 1
 SHOOT_VOLUME = 0.6
 
 BASE_RADIUS = 18
@@ -809,17 +820,21 @@ class Audio:
 
     def __init__(self):
         self.shots = {}
+        self.enabled = False
+        self.kind = None              # какая музыка сейчас: menu / normal / epic
+        self.track = None
         try:
             pygame.mixer.init()
         except pygame.error as e:
             print("Звук отключён:", e)
             return
-        try:
-            pygame.mixer.music.load(ASSETS / "background.mp3")
-            pygame.mixer.music.set_volume(MUSIC_VOLUME)
-            pygame.mixer.music.play(-1)          # бесконечный повтор
-        except pygame.error as e:
-            print("Нет фоновой музыки:", e)
+        self.enabled = True
+        self.tracks = {k: sorted(ASSETS.glob(mask)) for k, mask in MUSIC.items()}
+        for k, files in self.tracks.items():
+            if not files:
+                print(f"Нет музыки «{k}» ({MUSIC[k]})")
+        pygame.mixer.music.set_volume(MUSIC_VOLUME)
+        pygame.mixer.music.set_endevent(MUSIC_END)
         # у каждого игрока свой звук выстрела; shoot03.mp3 пока не используется
         for who, fname in (("blue", "shoot01.mp3"), ("red", "shoot02.mp3")):
             try:
@@ -828,6 +843,34 @@ class Audio:
                 self.shots[who] = snd
             except pygame.error as e:
                 print(f"Не загрузился {fname}:", e)
+
+    def music(self, kind):
+        """Включить музыку нужного вида; если она уже играет — ничего не делать."""
+        if not self.enabled or kind == self.kind:
+            return
+        self.kind = kind
+        self.track = None
+        self.play_next()
+
+    def play_next(self):
+        files = self.tracks.get(self.kind) or []
+        if not files:
+            pygame.mixer.music.stop()
+            return
+        # следующий трек — случайный, но не тот же самый, если есть выбор
+        choices = [f for f in files if f != self.track] or files
+        self.track = random.choice(choices)
+        try:
+            pygame.mixer.music.load(self.track)
+            # обычную игру — по одному треку, потом следующий; меню и концовку — по кругу
+            pygame.mixer.music.play(0 if self.kind == "normal" else -1, fade_ms=MUSIC_FADE_MS)
+        except pygame.error as e:
+            print(f"Не играет {self.track.name}:", e)
+
+    def on_music_end(self):
+        # событие приходит и когда мы сами меняем трек — тогда музыка уже снова играет
+        if self.enabled and self.kind == "normal" and not pygame.mixer.music.get_busy():
+            self.play_next()
 
     def shoot(self, who):
         snd = self.shots.get(who)
@@ -895,6 +938,7 @@ class Game:
         self.spawn_timer = {p: random.uniform(*ARTIFACT_SPAWN) for p in self.players}
         self.winner = None
         self.win_time = 0
+        self.epic = False             # включилась музыка концовки
         self.ai = AI(self, self.red, self.ai_level) if self.ai_level else None
 
     def run(self):
@@ -912,6 +956,8 @@ class Game:
                     if e.scancode == pygame.KSCAN_ESCAPE and self.state == "menu":
                         return
                     self.on_key(e.scancode)
+                if e.type == MUSIC_END:
+                    self.audio.on_music_end()
                 if e.type == pygame.CONTROLLERDEVICEADDED:
                     self.pads.add(e.device_index)
                 if e.type == pygame.CONTROLLERDEVICEREMOVED:
@@ -924,6 +970,7 @@ class Game:
                         self.on_pad(e.instance_id, btn)
             if self.winner and not self.win_time:
                 self.win_time = pygame.time.get_ticks()
+            self.update_music()
             if self.state == "menu":
                 self.draw_menu()
                 continue
@@ -999,6 +1046,10 @@ class Game:
             elif d > 0:
                 out.add(p.down_key)
         return out
+
+    def update_music(self):
+        in_menu = self.state in ("menu", "help")
+        self.audio.music("menu" if in_menu else "epic" if self.epic else "normal")
 
     def humans(self):
         return (self.blue,) if self.ai else self.players
@@ -1257,6 +1308,8 @@ class Game:
         for p in self.players:
             if p.hp <= 0:
                 self.winner = self.other(p)
+            if p.hp <= EPIC_HP:
+                self.epic = True          # и до конца партии, даже если подлечится
 
     def collide_bullets(self):
         """Пули игрока с «сбиваешь пули» уничтожают пули соперника (обе пропадают)."""
