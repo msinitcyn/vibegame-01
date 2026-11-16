@@ -71,6 +71,7 @@ GREY = (120, 120, 130)
 SELF_RING = (80, 220, 120)       # зелёная рамка — артефакт усиливает тебя
 BAD_TEXT = (255, 110, 90)
 FOE_RING = (255, 150, 40)        # оранжевая рамка — артефакт бьёт по сопернику
+ATTACK_RING = (80, 170, 255)     # синяя рамка — артефакт усиливает атаку
 ICON_BG = (35, 38, 52)
 
 # Все артефакты полезные. kind: (название, на кого действует, цвет значка)
@@ -133,6 +134,7 @@ def item_help(kind):
     }[kind]
 
 
+ATTACK_ITEMS = next(kinds for title, kinds in HELP_SECTIONS if title == "Атака")
 INSTANT_ITEMS = ("heal",)
 # дебаффы: снимаются только временем или очищением, ничем другим
 BAD_EFFECTS = ("grow2", "freeze", "nofire", "invert", "noitems")         # срабатывают сразу при подборе, минуя инвентарь
@@ -163,11 +165,20 @@ CLONE_TURN_EVERY = (0.4, 1.4)    # как часто двойник меняет
 CLONE_EFFECTS = ("shield", "wavy", "rapid", "grow2", "shrink", "breaker", "speed", "nofire")
 
 
+def ring_color(kind):
+    """Цвет рамки артефакта: оранжевая — по сопернику, синяя — атака, зелёная — защита."""
+    if ITEMS[kind][1] == "foe":
+        return FOE_RING
+    if kind in ATTACK_ITEMS:
+        return ATTACK_RING
+    return SELF_RING
+
+
 def draw_icon(surf, kind, center, r):
     """Значок артефакта — одинаковый на поле и в инвентаре."""
     cx, cy = center
     color = ITEMS[kind][2]
-    ring = FOE_RING if ITEMS[kind][1] == "foe" else SELF_RING
+    ring = ring_color(kind)
 
     def P(u, v):
         return (cx + u * r, cy + v * r)
@@ -1177,7 +1188,7 @@ class Game:
         # пояснения в свободном месте левой колонки
         x0, y = 20, 50 + 32 + len(HELP_SECTIONS[0][1]) * row_h + 20
         notes = [
-            "Зелёная рамка — артефакт для тебя, оранжевая — бьёт по сопернику.",
+            "Рамка: зелёная — защита, синяя — атака, оранжевая — бьёт по сопернику.",
             "Эффекты складываются: например, волна + веер + скорость действуют вместе. "
             "Повтор того же эффекта добавляет ему время (щиту — и удары).",
             "На двойников переходят: щит, волна, веер, скорострельность, ×2, уменьшение, "
@@ -1305,7 +1316,7 @@ class Game:
                         p.items[p.items.index(None)] = a.kind
                     a.life = 0
                     name, target, _ = ITEMS[a.kind]
-                    self.popup(name, p, FOE_RING if target == "foe" else SELF_RING)
+                    self.popup(name, p, ring_color(a.kind))
         self.artifacts = [a for a in self.artifacts if a.life > 0]
 
         # патроны: пачки на вертикали игрока, подбираются всегда
