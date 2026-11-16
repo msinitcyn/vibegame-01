@@ -49,6 +49,12 @@ INVENTORY_SIZE = 4
 ARTIFACT_R = 16
 ARTIFACT_SPAWN = (2.5, 5.0)      # интервал появления, сек
 ARTIFACT_LIFETIME = 8.0
+
+START_AMMO = 50                  # патронов в начале партии, верхнего лимита нет
+AMMO_PACK = 20                   # патронов в пачке
+AMMO_SPAWN = (7.0, 13.0)         # пачка раз в 7–13 с (в среднем 10 с ≈ 120 патронов в минуту)
+AMMO_LIFETIME = 10.0             # сколько пачка лежит на поле
+AMMO_COLOR = (230, 200, 90)
 MAX_ARTIFACTS_PER_SIDE = 2
 
 WALL_OFFSET = 110                # расстояние от игрока до стены
@@ -63,6 +69,7 @@ RED = (255, 80, 80)
 WHITE = (235, 235, 235)
 GREY = (120, 120, 130)
 SELF_RING = (80, 220, 120)       # зелёная рамка — артефакт усиливает тебя
+BAD_TEXT = (255, 110, 90)
 FOE_RING = (255, 150, 40)        # оранжевая рамка — артефакт бьёт по сопернику
 ICON_BG = (35, 38, 52)
 
@@ -362,6 +369,7 @@ class Player(Unit):
     def reset(self, hp=MAX_HP):
         self.y = (TOP + BOTTOM) / 2
         self.hp = self.max_hp = hp
+        self.ammo = START_AMMO
         self.cooldown = 0.0
         self.reset_effects()
         self.items = [None] * INVENTORY_SIZE
@@ -396,8 +404,9 @@ class Player(Unit):
 
     def shoot(self):
         # заморозка мешает только двигаться — стрелять можно
-        if not self.can_fire or self.cooldown > 0:
+        if not self.can_fire or self.cooldown > 0 or self.ammo <= 0:
             return []
+        self.ammo -= 1                # веер тоже тратит один патрон
         self.cooldown = SHOT_COOLDOWN * (RAPID_FACTOR if "rapid" in self.effects else 1)
         # угол наклона: вверх/вниз — 45°, стоя — прямо
         return make_bullets(self, self.x, self.y, self.dir, self.radius,
@@ -520,6 +529,30 @@ class Artifact:
         if self.life < 2 and int(self.life * 8) % 2 == 0:
             return
         draw_icon(surf, self.kind, (int(self.x), int(self.y)), ARTIFACT_R)
+
+
+class AmmoPack:
+    """Пачка патронов на вертикали игрока: подбирается сразу, в инвентарь не идёт."""
+
+    def __init__(self, x):
+        self.x = x
+        self.y = random.uniform(TOP + ARTIFACT_R + 5, BOTTOM - ARTIFACT_R - 5)
+        self.life = AMMO_LIFETIME
+
+    def draw(self, surf, font):
+        if self.life < 2 and int(self.life * 8) % 2 == 0:
+            return
+        r = ARTIFACT_R
+        box = pygame.Rect(0, 0, r * 2 + 4, r * 2 - 4)
+        box.center = (int(self.x), int(self.y))
+        pygame.draw.rect(surf, (60, 50, 20), box, border_radius=4)
+        pygame.draw.rect(surf, AMMO_COLOR, box, 2, border_radius=4)
+        # три патрона
+        for i in (-1, 0, 1):
+            bx = box.centerx + i * 7
+            pygame.draw.rect(surf, AMMO_COLOR, (bx - 2, box.top + 4, 4, 9), border_radius=2)
+        txt = font.render(str(AMMO_PACK), True, AMMO_COLOR)
+        surf.blit(txt, txt.get_rect(midbottom=(box.centerx, box.bottom + 1)))
 
 
 class Wall:
@@ -654,6 +687,9 @@ class AI:
     def goal_y(self):
         me = self.me
         foe = self.game.other(me)
+        packs = [a for a in self.game.ammo_packs if a.x == me.x]
+        if packs and me.ammo < 30:
+            return min(packs, key=lambda a: abs(a.y - me.y)).y
         if not me.inventory_full:
             mine = [a for a in self.game.artifacts if a.x == me.x]
             if mine:
@@ -694,11 +730,12 @@ class AI:
         self.danger = self.danger_of(self.move, threats)
 
         # 2. стрельба: если пуля с текущим наклоном долетит до соперника
-        if me.cooldown == 0:
+        if me.cooldown == 0 and me.ammo > 0:
             angles = (-1, 0, 1) if me.triple_shots else (me.moving,)
             aimed = any(abs(self.predicted_hit(a) - foe.y) < foe.radius + cfg["aim_tol"]
                         for a in angles)
-            if (aimed and random.random() < cfg["fire_chance"]) or random.random() < cfg["spray"]:
+            spray = cfg["spray"] if me.ammo > 15 else 0     # мало патронов — только прицельно
+            if (aimed and random.random() < cfg["fire_chance"]) or random.random() < spray:
                 game.fire(me)
 
         # 3. артефакты
@@ -937,6 +974,9 @@ class Game:
         self.clones = []
         self.popups = []              # [текст, x, y, время, цвет]
         self.spawn_timer = {p: random.uniform(*ARTIFACT_SPAWN) for p in self.players}
+        self.ammo_packs = []
+        self.ammo_timer = {p: random.uniform(*AMMO_SPAWN) for p in self.players}
+        self.no_ammo_shown = {p: -10_000 for p in self.players}
         self.winner = None
         self.win_time = 0
         self.ai = AI(self, self.red, self.ai_level) if self.ai_level else None
@@ -1143,6 +1183,8 @@ class Game:
             "На двойников переходят: щит, волна, веер, скорострельность, ×2, уменьшение, "
             "сбивание пуль, скорость и «не стреляет».",
             "Пока инвентарь (4 ячейки) полон, новые артефакты на твоей стороне не появляются.",
+            f"Патроны: в начале {START_AMMO}, выстрел (и веер) тратит 1. Пачки по {AMMO_PACK} "
+            "появляются на твоей вертикали и подбираются сразу, даже при полном инвентаре.",
             "Дебаффы соперника снимаются только временем или очищением. Стен можно "
             "поставить несколько — каждая стоит своё время.",
         ]
@@ -1170,6 +1212,12 @@ class Game:
         return lines
 
     def fire(self, p):
+        if p.ammo <= 0 and p.can_fire:
+            now = pygame.time.get_ticks()
+            if now - self.no_ammo_shown[p] > 1000:
+                self.no_ammo_shown[p] = now
+                self.popup("нет патронов", p, BAD_TEXT)
+            return
         shots = p.shoot()
         if shots:
             self.audio.shoot("blue" if p is self.blue else "red")
@@ -1259,6 +1307,21 @@ class Game:
                     name, target, _ = ITEMS[a.kind]
                     self.popup(name, p, FOE_RING if target == "foe" else SELF_RING)
         self.artifacts = [a for a in self.artifacts if a.life > 0]
+
+        # патроны: пачки на вертикали игрока, подбираются всегда
+        for p in self.players:
+            self.ammo_timer[p] -= dt
+            if self.ammo_timer[p] <= 0:
+                self.ammo_timer[p] = random.uniform(*AMMO_SPAWN)
+                self.ammo_packs.append(AmmoPack(p.x))
+        for a in self.ammo_packs:
+            a.life -= dt
+            for p in self.players:
+                if a.x == p.x and a.life > 0 and abs(a.y - p.y) < p.radius + ARTIFACT_R:
+                    p.ammo += AMMO_PACK
+                    a.life = 0
+                    self.popup(f"+{AMMO_PACK} патронов", p, AMMO_COLOR)
+        self.ammo_packs = [a for a in self.ammo_packs if a.life > 0]
 
         for w in self.walls:
             w.life -= dt
@@ -1391,7 +1454,8 @@ class Game:
             hearts = '♥' * min(p.hp, HEARTS_SHOWN)
             if p.hp > HEARTS_SHOWN:
                 hearts += f" +{p.hp - HEARTS_SHOWN}"
-            line1 = self.font.render(f"{p.name}  {hearts}", True, p.color)
+            line1 = self.font.render(f"{p.name}  {hearts}    патроны {p.ammo}", True,
+                                     p.color if p.ammo > 0 else BAD_TEXT)
             parts = [f"щит {p.shield_hits}×/{t:.0f}с" if n == "shield" else f"{EFFECT_LABEL[n]} {t:.0f}"
                      for n, t in p.effects.items()]
             if p.triple_shots:
@@ -1424,6 +1488,8 @@ class Game:
             w.draw(s)
         for a in self.artifacts:
             a.draw(s)
+        for a in self.ammo_packs:
+            a.draw(s, self.tiny)
         for c in self.clones:
             c.draw(s, self.tiny)
         for b in self.bullets:
