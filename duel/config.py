@@ -1,0 +1,89 @@
+"""Все настройки игры: размеры, скорости, длительности, патроны, цвета, звук."""
+
+from pathlib import Path
+
+import pygame
+
+
+WIDTH, HEIGHT = 1000, 724
+HUD_H = 84                       # верхняя полоса с информацией
+TOP, BOTTOM = HUD_H, HEIGHT      # границы игрового поля
+FPS = 60
+
+ASSETS = Path(__file__).resolve().parent.parent / "assets"
+MUSIC_DIR = ASSETS / "music"
+SOUNDS_DIR = ASSETS / "sounds"
+MUSIC_VOLUME = 0.4
+# музыка подбирается по маске имени файла — новые треки подхватываются сами
+MUSIC = {
+    "menu": "menu-*.mp3",          # меню и справка, по кругу
+    "game": "background-*.mp3",    # игра: все треки по очереди, вперемешку
+}
+MUSIC_FADE_MS = 800
+MUSIC_END = pygame.USEREVENT + 1
+SHOOT_VOLUME = 0.6
+
+BASE_RADIUS = 18
+BASE_SPEED = 300                 # пикс/сек
+BULLET_SPEED = 520
+BULLET_R = 5
+SHOT_COOLDOWN = 0.25             # минимальная пауза между выстрелами
+MAX_HP = 10
+TEST_HP = 1000                   # жизни в тестовом режиме
+HEARTS_SHOWN = 5                 # больше — рисуем 5 сердечек и «+остаток»
+HEAL_AMOUNT = 3
+TRIPLE_SHOTS = 5
+
+INVENTORY_SIZE = 4
+ARTIFACT_R = 16
+ARTIFACT_SPAWN = (2.5, 5.0)      # интервал появления, сек
+ARTIFACT_LIFETIME = 8.0
+
+START_AMMO = 50                  # патронов в начале партии, верхнего лимита нет
+AMMO_PACK = 20                   # патронов в пачке
+AMMO_SPAWN = (7.0, 13.0)         # пачка раз в 7–13 с (в среднем 10 с ≈ 120 патронов в минуту)
+AMMO_LIFETIME = 10.0             # сколько пачка лежит на поле
+AMMO_COLOR = (230, 200, 90)
+MAX_ARTIFACTS_PER_SIDE = 2
+
+WALL_OFFSET = 110                # расстояние от игрока до стены
+WALL_H = 180                     # высота стены
+WALL_W = 10                      # толщина стены
+WALL_TIME = 8.0
+POPUP_TIME = 1.5
+
+BG = (18, 20, 28)
+BLUE = (70, 140, 255)
+RED = (255, 80, 80)
+WHITE = (235, 235, 235)
+GREY = (120, 120, 130)
+SELF_RING = (80, 220, 120)       # зелёная рамка — артефакт усиливает тебя
+BAD_TEXT = (255, 110, 90)
+FOE_RING = (255, 150, 40)        # оранжевая рамка — артефакт бьёт по сопернику
+ATTACK_RING = (80, 170, 255)     # синяя рамка — артефакт усиливает атаку
+ICON_BG = (35, 38, 52)
+
+# эффекты на игроке: длительность и короткая подпись для панели
+DURATION = {"grow2": 7, "shrink": 7, "freeze": 2.5, "speed": 7, "rapid": 7,
+            "nofire": 4, "slowfoe": 7, "shield": 7, "breaker": 8, "wavy": 7, "invert": 5,
+            "noitems": 5}
+EFFECT_LABEL = {"grow2": "×2", "shrink": "мал", "freeze": "мороз", "speed": "скор",
+                "rapid": "очередь", "nofire": "без огня", "slowfoe": "замедл",
+                "shield": "щит", "breaker": "сбив", "wavy": "волна", "invert": "инверсия",
+                "noitems": "без артеф."}
+RAPID_FACTOR = 0.4               # пауза между выстрелами x0.4
+SLOW_BULLET_FACTOR = 0.45        # пули соперника летят в ~2 раза медленнее
+SHIELD_GAP = 10                  # щит на столько пикселей шире шарика
+SHIELD_HITS = 5                  # щит гасит столько пуль (или исчезает по времени)
+WAVE_AMP = (25, 55)              # размах волны пули, пикс (случайно для каждой пули)
+WAVE_FREQ = (1.2, 2.4)           # частота волны, раз в секунду (случайно)
+
+CLONE_COUNT = 2                  # сколько двойников даёт артефакт
+MAX_CLONES = 4                   # максимум двойников у одного игрока
+CLONE_TIME = 15.0                # двойник исчезает сам через это время
+CLONE_RADIUS = BASE_RADIUS * 0.8
+CLONE_SPEED = BASE_SPEED * 0.7
+CLONE_SHOT_EVERY = (0.6, 1.5)    # пауза между выстрелами двойника, сек
+CLONE_TURN_EVERY = (0.4, 1.4)    # как часто двойник меняет направление
+# эффекты хозяина, которые действуют и на его двойников (плюс веер)
+CLONE_EFFECTS = ("shield", "wavy", "rapid", "grow2", "shrink", "breaker", "speed", "nofire")

@@ -1,0 +1,239 @@
+"""Отрисовка: игровое поле, верхняя панель, меню, справка."""
+
+import pygame
+
+from .config import (
+    AMMO_PACK,
+    BAD_TEXT,
+    BG,
+    BLUE,
+    BOTTOM,
+    EFFECT_LABEL,
+    GREY,
+    HEARTS_SHOWN,
+    HEIGHT,
+    HUD_H,
+    INVENTORY_SIZE,
+    START_AMMO,
+    TOP,
+    WHITE,
+    WIDTH,
+)
+from .items import HELP_SECTIONS, ITEMS, item_help
+from .icons import draw_icon
+from .gamepad import PAD_ITEM_COLORS, PAD_ITEM_LABELS, PAD_ITEM_LAYOUT
+
+
+class ScreensMixin:
+    """Методы отрисовки игры; подмешиваются в Game."""
+
+    def draw_menu(self):
+        s = self.screen
+        s.fill(BG)
+        t = self.big.render("Дуэль шариков", True, WHITE)
+        s.blit(t, t.get_rect(center=(WIDTH // 2, 110)))
+        for i, (_, _, title) in enumerate(self.menu):
+            sel = i == self.menu_index
+            rect = pygame.Rect(0, 0, 440, 44)
+            rect.center = (WIDTH // 2, 215 + i * 52)
+            pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=10)
+            pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
+            txt = self.font.render(f"{i + 1}.  {title}", True, WHITE if sel else GREY)
+            s.blit(txt, txt.get_rect(center=rect.center))
+        hint = self.small.render("W/S или ↑/↓ — выбор,  Enter/Пробел или 1-6 — выбрать,  Esc — выход",
+                                 True, GREY)
+        s.blit(hint, hint.get_rect(center=(WIDTH // 2, 560)))
+        hint = self.small.render("Против компьютера: вы играете синим слева (W/S, Пробел, 1-4)",
+                                 True, GREY)
+        s.blit(hint, hint.get_rect(center=(WIDTH // 2, 585)))
+        n = len(self.pads.pads)
+        pads = "Геймпады не подключены" if n == 0 else \
+            "Геймпады: " + ",  ".join(f"{c.name} — {'синий' if i == 0 else 'красный' if i == 1 else 'запасной'}"
+                                     for i, (_, c) in enumerate(self.pads.pads))
+        hint = self.small.render(pads, True, WHITE if n else GREY)
+        s.blit(hint, hint.get_rect(center=(WIDTH // 2, 625)))
+        if n:
+            hint = self.small.render("Геймпад: стик/крестовина — движение, R1/R2 — огонь, "
+                                     "□ △ ○ ✕ — артефакты, Options — меню", True, GREY)
+            s.blit(hint, hint.get_rect(center=(WIDTH // 2, 650)))
+        pygame.display.flip()
+
+    def draw_help(self):
+        s = self.screen
+        s.fill(BG)
+        t = self.font.render("Артефакты", True, WHITE)
+        s.blit(t, t.get_rect(center=(WIDTH // 2, 24)))
+        name_font = self.font
+        row_h, col_w = 48, 470
+        cols = {0: [HELP_SECTIONS[0]], 1: [HELP_SECTIONS[1], HELP_SECTIONS[2]]}
+        for col, sections in cols.items():
+            x0 = 20 + col * (col_w + 20)
+            y = 50
+            for title, kinds in sections:
+                h = self.font.render(title, True, (200, 205, 220))
+                s.blit(h, (x0, y))
+                pygame.draw.line(s, GREY, (x0, y + 24), (x0 + col_w, y + 24), 1)
+                y += 32
+                for kind in kinds:
+                    draw_icon(s, kind, (x0 + 20, y + 20), 18)
+                    name = name_font.render(ITEMS[kind][0], True, ITEMS[kind][2])
+                    s.blit(name, (x0 + 48, y))
+                    for j, line in enumerate(self.wrap(item_help(kind), col_w - 50)):
+                        s.blit(self.tiny_text.render(line, True, WHITE), (x0 + 48, y + 21 + j * 14))
+                    y += row_h
+                y += 6
+        # пояснения в свободном месте левой колонки
+        x0, y = 20, 50 + 32 + len(HELP_SECTIONS[0][1]) * row_h + 20
+        notes = [
+            "Рамка: зелёная — защита, синяя — атака, оранжевая — бьёт по сопернику.",
+            "Эффекты складываются: например, волна + веер + скорость действуют вместе. "
+            "Повтор того же эффекта добавляет ему время (щиту — и удары).",
+            "На двойников переходят: щит, волна, веер, скорострельность, ×2, уменьшение, "
+            "сбивание пуль, скорость и «не стреляет».",
+            "Пока инвентарь (4 ячейки) полон, новые артефакты на твоей стороне не появляются.",
+            f"Патроны: в начале {START_AMMO}, выстрел (и веер) тратит 1. Пачки по {AMMO_PACK} "
+            "появляются на твоей вертикали и подбираются сразу, даже при полном инвентаре.",
+            "Дебаффы соперника снимаются только временем или очищением. Стен можно "
+            "поставить несколько — каждая стоит своё время.",
+        ]
+        for note in notes:
+            for line in self.wrap(note, col_w):
+                s.blit(self.tiny_text.render(line, True, GREY), (x0, y))
+                y += 15
+            y += 8
+        hint = self.small.render("Esc, Enter, Пробел или ✕/○ на геймпаде — назад", True, GREY)
+        s.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 16)))
+        pygame.display.flip()
+
+    def wrap(self, text, width):
+        """Разбивает текст на строки, чтобы влезали в width пикселей."""
+        lines, cur = [], ""
+        for word in text.split():
+            test = f"{cur} {word}".strip()
+            if self.tiny_text.size(test)[0] <= width:
+                cur = test
+            else:
+                lines.append(cur)
+                cur = word
+        if cur:
+            lines.append(cur)
+        return lines
+
+    def inventory_rects(self, left, pad):
+        """Ячейки инвентаря: ромбом, как кнопки геймпада, или в ряд для клавиатуры.
+
+        Инвентарь стоит ближе к центру экрана. Возвращает (прямоугольники, ширина блока).
+        """
+        if pad:
+            size, gap = 36, 2
+            width = 3 * size + 2 * gap
+            x0 = WIDTH // 2 - 16 - width if left else WIDTH // 2 + 16
+            cx, cy = x0 + width // 2, HUD_H // 2
+            step_x, step_y = size + gap, (HUD_H - size) // 2 - 2
+            rects = []
+            for dx, dy in PAD_ITEM_LAYOUT:
+                r = pygame.Rect(0, 0, size, size)
+                r.center = (cx + dx * step_x, cy + dy * step_y)
+                rects.append(r)
+            return rects, width
+        size, gap = 44, 6
+        width = INVENTORY_SIZE * size + (INVENTORY_SIZE - 1) * gap
+        x0 = WIDTH // 2 - 16 - width if left else WIDTH // 2 + 16
+        y = (HUD_H - size) // 2
+        return [pygame.Rect(x0 + i * (size + gap), y, size, size) for i in range(INVENTORY_SIZE)], width
+
+    def draw_hud(self):
+        s = self.screen
+        pygame.draw.rect(s, (30, 33, 45), (0, 0, WIDTH, HUD_H))
+        pygame.draw.line(s, GREY, (0, HUD_H), (WIDTH, HUD_H), 2)
+        for p in self.players:
+            left = p is self.blue
+            is_ai = bool(self.ai and p is self.ai.me)
+            has_pad = not is_ai and self.players.index(p) < len(self.pads.pads)
+            rects, inv_w = self.inventory_rects(left, has_pad)
+            for i, (kind, rect) in enumerate(zip(p.items, rects)):
+                pygame.draw.rect(s, (22, 24, 34), rect, border_radius=6)
+                pygame.draw.rect(s, p.color if kind else GREY, rect, 1, border_radius=6)
+                if kind:
+                    draw_icon(s, kind, rect.center, rect.w // 2 - 4)
+                    if "noitems" in p.effects and kind != "cleanse":
+                        pygame.draw.line(s, ITEMS["foe_noitems"][2], rect.bottomleft, rect.topright, 2)
+                if is_ai:
+                    continue              # у компьютера клавиш нет
+                if has_pad:
+                    color = PAD_ITEM_COLORS[i]
+                    if kind:              # значок кнопки в углу
+                        key = self.tiny.render(PAD_ITEM_LABELS[i], True, color)
+                        s.blit(key, (rect.right - key.get_width() - 2, rect.bottom - key.get_height()))
+                    else:                 # пустая ячейка — крупный значок кнопки по центру
+                        key = self.font.render(PAD_ITEM_LABELS[i], True, color)
+                        key.set_alpha(140)
+                        s.blit(key, key.get_rect(center=rect.center))
+                else:
+                    key = self.tiny.render(self.key_names[p][i], True, WHITE)
+                    s.blit(key, (rect.right - key.get_width() - 3, rect.bottom - key.get_height() - 1))
+
+            # жизни и эффекты — у края экрана
+            avail = WIDTH // 2 - 16 - inv_w - 20
+            hearts = '♥' * min(p.hp, HEARTS_SHOWN)
+            if p.hp > HEARTS_SHOWN:
+                hearts += f" +{p.hp - HEARTS_SHOWN}"
+            line1 = self.font.render(f"{p.name}  {hearts}    патроны {p.ammo}", True,
+                                     p.color if p.ammo > 0 else BAD_TEXT)
+            parts = [f"щит {p.shield_hits}×/{t:.0f}с" if n == "shield" else f"{EFFECT_LABEL[n]} {t:.0f}"
+                     for n, t in p.effects.items()]
+            if p.triple_shots:
+                parts.append(f"веер {p.triple_shots}")
+            mine = [w.life for w in self.walls if w.owner is p]
+            if mine:
+                parts.append(f"стена {max(mine):.0f}" if len(mine) == 1 else
+                             f"стены {len(mine)} (до {max(mine):.0f})")
+            n = sum(1 for c in self.clones if c.owner is p)
+            if n:
+                parts.append(f"двойники {n}")
+            line2 = self.small.render("  ·  ".join(parts), True, WHITE)
+            for img, cy in ((line1, HUD_H // 2 - 12), (line2, HUD_H // 2 + 14)):
+                if img.get_width() > avail:
+                    img = pygame.transform.smoothscale(
+                        img, (avail, img.get_height()))
+                rect = img.get_rect(midleft=(10, cy)) if left \
+                    else img.get_rect(midright=(WIDTH - 10, cy))
+                s.blit(img, rect)
+
+    def draw(self):
+        s = self.screen
+        s.fill(BG)
+        # центральная линия и вертикали игроков
+        for y in range(TOP, BOTTOM, 20):
+            pygame.draw.line(s, (40, 44, 58), (WIDTH // 2, y), (WIDTH // 2, y + 10))
+        for p in self.players:
+            pygame.draw.line(s, (32, 36, 50), (p.x, TOP), (p.x, BOTTOM))
+        for w in self.walls:
+            w.draw(s)
+        for a in self.artifacts:
+            a.draw(s)
+        for a in self.ammo_packs:
+            a.draw(s, self.tiny)
+        for c in self.clones:
+            c.draw(s, self.tiny)
+        for b in self.bullets:
+            b.draw(s)
+        for p in self.players:
+            p.draw(s, self.small)
+        for text, x, y, t, color in self.popups:
+            img = self.font.render(text, True, color)
+            img.set_alpha(int(255 * min(1, t / 0.5)))
+            rect = img.get_rect(center=(int(x), int(y)))
+            rect.clamp_ip(pygame.Rect(0, TOP, WIDTH, BOTTOM - TOP))
+            s.blit(img, rect)
+        self.draw_hud()
+
+        if self.winner:
+            shade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            shade.fill((0, 0, 0, 150))
+            s.blit(shade, (0, 0))
+            t = self.big.render(f"{self.winner.name} победил!", True, self.winner.color)
+            s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 20)))
+            t = self.font.render("R — ещё раз, Esc — в меню", True, WHITE)
+            s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 40)))
+        pygame.display.flip()

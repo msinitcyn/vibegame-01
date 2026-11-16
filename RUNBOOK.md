@@ -18,8 +18,10 @@ cd ~/projects/fast-game
 ```bash
 cd ~/projects/fast-game
 python3 -m venv .venv
-.venv/bin/pip install pygame
+.venv/bin/pip install pygame pytest pyflakes
 ```
+
+pytest и pyflakes нужны только для проверок (см. ниже), для игры хватает pygame.
 
 ## Меню
 
@@ -112,25 +114,61 @@ python3 -m venv .venv
 
 ## Настройки
 
-Всё задаётся константами в начале `main.py`:
+Все числа и цвета — в `duel/config.py`:
 
 - громкость — `MUSIC_VOLUME`, `SHOOT_VOLUME`;
 - жизни — `MAX_HP`, в тестовом режиме — `TEST_HP`, лечение — `HEAL_AMOUNT`;
 - щит — `SHIELD_HITS` и `DURATION["shield"]`;
 - патроны — `START_AMMO`, `AMMO_PACK`, `AMMO_SPAWN`, `AMMO_LIFETIME`;
 - длительность эффектов — словарь `DURATION`;
-- частота артефактов — `ARTIFACT_SPAWN`, `ARTIFACT_LIFETIME`;
-- сила компьютера — словарь `AI_LEVELS`;
-- мёртвая зона стика — `PAD_DEAD`.
+- частота артефактов — `ARTIFACT_SPAWN`, `ARTIFACT_LIFETIME`.
+
+Ещё два места:
+
+- сила компьютера — словарь `AI_LEVELS` в `duel/ai.py`;
+- мёртвая зона стика — `PAD_DEAD` в `duel/gamepad.py`.
 
 ## Музыка и звуки
 
-Файлы лежат рядом с `main.py` и подбираются по имени, так что новый трек достаточно положить в папку с подходящим именем:
+Музыка лежит в `assets/music/`, звуки — в `assets/sounds/`. Музыка подбирается по имени, так что новый трек достаточно положить в папку с подходящим именем:
 
 | Файлы | Когда играет |
 |---|---|
-| `menu-*.mp3` | меню и справка, по кругу |
-| `background-*.mp3` | игра: все треки по очереди, вперемешку; кончился один — начинается другой |
-| `shoot01.mp3` / `shoot02.mp3` | выстрел синего / красного |
+| `assets/music/menu-*.mp3` | меню и справка, по кругу |
+| `assets/music/background-*.mp3` | игра: все треки по очереди, вперемешку; кончился один — начинается другой |
+| `assets/sounds/shoot01.mp3` / `shoot02.mp3` | выстрел синего / красного |
 
 Громкость — `MUSIC_VOLUME`, `SHOOT_VOLUME`.
+
+## Структура проекта
+
+```
+main.py              запуск
+assets/music/        музыка
+assets/sounds/       звуки
+duel/                игра
+  config.py          все настройки: размеры, скорости, длительности, патроны, цвета, звук
+  items.py           артефакты: таблица, справка, группы, цвета рамок
+  icons.py           значки артефактов
+  entities.py        игрок, двойник, пуля, стена, артефакт, пачка патронов
+  ai.py              компьютерный соперник и уровни сложности
+  gamepad.py         геймпады
+  audio.py           музыка и звуки
+  screens.py         отрисовка: поле, верхняя панель, меню, справка
+  game.py            цикл игры, ввод, правила, применение артефактов
+tests/               автотесты
+```
+
+Новый артефакт: строка в `ITEMS` и `HELP_SECTIONS` и описание в `item_help` (`duel/items.py`), значок в `duel/icons.py`, действие в `Game.apply_item` (`duel/game.py`).
+
+## Проверки
+
+Перед коммитом:
+
+```bash
+cd ~/projects/fast-game
+.venv/bin/python -m pyflakes main.py duel tests   # опечатки и забытые импорты
+.venv/bin/python -m pytest -q                     # автотесты, ~2 секунды
+```
+
+Тесты запускают игру без окна и без звука: артефакты, эффекты, щит, стены, двойники, патроны, управление с клавиатуры и геймпада, меню, партии с компьютером, отрисовку всех экранов.
