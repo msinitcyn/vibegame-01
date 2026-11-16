@@ -13,6 +13,7 @@ FPS = 60
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
 MUSIC_DIR = ASSETS / "music"
 SOUNDS_DIR = ASSETS / "sounds"
+SPRITES_DIR = ASSETS / "sprites"
 MUSIC_VOLUME = 0.4
 # музыка подбирается по маске имени файла — новые треки подхватываются сами
 MUSIC = {

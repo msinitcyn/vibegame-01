@@ -38,11 +38,11 @@ from .config import (
     WALL_W,
     WAVE_AMP,
     WAVE_FREQ,
-    WHITE,
     WIDTH,
 )
 from .items import ITEMS
 from .icons import draw_icon
+from .sprites import draw_unit
 
 
 def make_bullets(owner, x, y, direction, radius, angles, wavy=False):
@@ -163,6 +163,7 @@ class Player(Unit):
         self.item_keys = item_keys    # клавиши ячеек инвентаря
         self.dir = direction          # +1 стреляет вправо, -1 влево
         self.name = name
+        self.sprite = "mage_blue" if direction > 0 else "mage_red"
         self.reset()
 
     def reset(self, hp=MAX_HP):
@@ -212,10 +213,8 @@ class Player(Unit):
                             self.shot_angles(self.moving), "wavy" in self.effects)
 
     def draw(self, surf, font=None):
-        r = int(self.radius)
         pos = (int(self.x), int(self.y))
-        color = WHITE if self.hit_flash > 0 else self.color
-        pygame.draw.circle(surf, color, pos, r)
+        draw_unit(surf, self.sprite, pos, self.radius, self.dir, white=self.hit_flash > 0)
         self.draw_effects(surf, font)
 
 
@@ -309,10 +308,8 @@ class Clone(Unit):
         if self.life < 2 and int(self.life * 8) % 2 == 0:
             return
         pos = (int(self.x), int(self.y))
-        r = int(self.radius)
-        faded = tuple(c // 2 for c in self.owner.color)
-        pygame.draw.circle(surf, faded, pos, r)
-        pygame.draw.circle(surf, self.owner.color, pos, r, 2)
+        # двойник — полупрозрачная копия хозяина
+        draw_unit(surf, self.owner.sprite, pos, self.radius, self.owner.dir, alpha=140)
         self.draw_effects(surf, font)
 
 
