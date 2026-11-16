@@ -3,13 +3,19 @@
 Подобранные артефакты попадают в инвентарь (4 ячейки).
 Слева синий: W/S — движение, Пробел — выстрел, 1-4 — использовать артефакт из ячейки.
 Справа красный: стрелки ↑/↓ — движение, Enter — выстрел, 9, 0, -, = — использовать артефакт.
-R — новая игра после победы, F11 — окно/полный экран, Esc — выход.
+В начале игры выбирается режим: два игрока или против компьютера (3 уровня сложности).
+R — новая игра после победы, Esc — в меню, F11 — окно/полный экран.
+
+Геймпады (PlayStation и любые другие): первый подключённый — синий, второй — красный.
+Стик или крестовина — движение, R1/R2 — выстрел, □ △ ○ ✕ — ячейки инвентаря 1-4,
+Options — в меню. В меню: крестовина — выбор, ✕ — начать. После победы: ✕ — ещё раз.
 """
 import math
 import random
 from pathlib import Path
 
 import pygame
+from pygame._sdl2 import controller
 
 WIDTH, HEIGHT = 1000, 700
 HUD_H = 60                       # верхняя полоса с информацией
@@ -430,6 +436,245 @@ class Wall:
         pygame.draw.rect(surf, self.owner.color, (mirror_x, self.y1, half, h), 1)
 
 
+# Параметры компьютерного соперника по уровням сложности
+AI_LEVELS = {
+    "easy": dict(
+        title="легко",
+        think=0.40,            # как часто компьютер принимает решения (реакция), сек
+        dodge=0.5,             # вероятность заметить летящую пулю
+        horizon=0.45,          # на сколько секунд вперёд следит за пулями
+        aim_noise=90,          # разброс, с которым он целится по высоте, пикс
+        aim_tol=45,            # насколько точным должен быть выстрел, чтобы стрелять
+        fire_chance=0.7,       # вероятность выстрелить, когда прицел готов
+        spray=0.45,            # вероятность выстрелить наугад, без прицела
+        item_delay=(5, 9),     # пауза перед использованием артефакта, сек
+        smart_items=False,     # тратит артефакты как попало
+    ),
+    "medium": dict(
+        title="средне",
+        think=0.18, dodge=0.75, horizon=0.8, aim_noise=40, aim_tol=30,
+        fire_chance=0.8, spray=0.3, item_delay=(2.5, 5), smart_items=True,
+    ),
+    "hard": dict(
+        title="сложно",
+        think=0.05, dodge=1.0, horizon=1.2, aim_noise=8, aim_tol=16,
+        fire_chance=1.0, spray=0.15, item_delay=(0.6, 1.8), smart_items=True,
+    ),
+}
+DEFENSIVE_ITEMS = ("shield", "wall", "clearfoe", "breaker", "slowfoe")
+
+
+def reflect_y(y):
+    """Высота пули с учётом отскоков от верхней и нижней стенок."""
+    lo, span = TOP + BULLET_R, BOTTOM - TOP - 2 * BULLET_R
+    m = (y - lo) % (2 * span)
+    return lo + (m if m <= span else 2 * span - m)
+
+
+class AI:
+    """Компьютер за правого игрока: уворачивается, собирает артефакты, целится, тратит артефакты."""
+
+    def __init__(self, game, me, level):
+        self.game = game
+        self.me = me
+        self.cfg = AI_LEVELS[level]
+        self.think_timer = 0.0
+        self.move = 0
+        self.noise = 0.0
+        self.noise_timer = 0.0
+        self.item_timer = random.uniform(*self.cfg["item_delay"])
+        self.danger = 0.0
+
+    def keys(self):
+        """Виртуально зажатые клавиши для Player.update."""
+        if self.move < 0:
+            return {self.me.up_key}
+        if self.move > 0:
+            return {self.me.down_key}
+        return set()
+
+    def threats(self):
+        """Пули соперника, летящие в нас: список (время до нас, высота в этот момент)."""
+        me, cfg = self.me, self.cfg
+        foe = self.game.other(me)
+        slow = SLOW_BULLET_FACTOR if "slowfoe" in me.effects else 1
+        out = []
+        for b in self.game.bullets:
+            if b.owner is not foe or b.vx * (me.x - b.x) <= 0:
+                continue
+            t = (me.x - b.x) / (b.vx * slow)
+            if t > cfg["horizon"]:
+                continue
+            out.append((t, reflect_y(b.y + b.vy * slow * t), b.wave_amp))
+        return out
+
+    def danger_of(self, move, threats):
+        me = self.me
+        speed = 0 if me.frozen else me.speed
+        if "invert" in me.effects:
+            move = -move              # компьютер тоже страдает от инверсии
+        d = 0.0
+        for t, y, wave in threats:
+            y_me = max(TOP + me.radius, min(BOTTOM - me.radius, me.y + move * speed * t))
+            if abs(y_me - y) < me.radius + BULLET_R + 6 + wave:
+                d += 1 / (t + 0.1)
+        return d
+
+    def goal_y(self):
+        me = self.me
+        foe = self.game.other(me)
+        if not me.inventory_full:
+            mine = [a for a in self.game.artifacts if a.x == me.x]
+            if mine:
+                return min(mine, key=lambda a: abs(a.y - me.y)).y
+        return foe.y + self.noise
+
+    def predicted_hit(self, angle):
+        me = self.me
+        foe = self.game.other(me)
+        ang = angle * math.pi / 4
+        vx = BULLET_SPEED * math.cos(ang)
+        vy = BULLET_SPEED * math.sin(ang)
+        t = abs(foe.x - me.x) / vx
+        return reflect_y(me.y + vy * t)
+
+    def update(self, dt):
+        cfg, me = self.cfg, self.me
+        game = self.game
+        foe = game.other(me)
+        self.noise_timer -= dt
+        if self.noise_timer <= 0:
+            self.noise_timer = random.uniform(0.6, 1.4)
+            self.noise = random.uniform(-cfg["aim_noise"], cfg["aim_noise"])
+        self.item_timer -= dt
+        self.think_timer -= dt
+        if self.think_timer > 0:
+            return
+        self.think_timer = cfg["think"]
+
+        # 1. движение: к цели, но в сторону, где не попадут
+        threats = [th for th in self.threats() if random.random() < cfg["dodge"]]
+        gy = self.goal_y()
+        want = 0 if abs(gy - me.y) < 8 else (1 if gy > me.y else -1)
+        if "invert" in me.effects:
+            want = -want
+        options = sorted((-1, 0, 1), key=lambda m: (self.danger_of(m, threats), m != want))
+        self.move = options[0]
+        self.danger = self.danger_of(self.move, threats)
+
+        # 2. стрельба: если пуля с текущим наклоном долетит до соперника
+        if me.cooldown == 0:
+            angles = (-1, 0, 1) if me.triple_shots else (me.moving,)
+            aimed = any(abs(self.predicted_hit(a) - foe.y) < foe.radius + cfg["aim_tol"]
+                        for a in angles)
+            if (aimed and random.random() < cfg["fire_chance"]) or random.random() < cfg["spray"]:
+                game.fire(me)
+
+        # 3. артефакты
+        self.use_items()
+
+    def use_items(self):
+        me, cfg, game = self.me, self.cfg, self.game
+        slots = [i for i, k in enumerate(me.items) if k]
+        if not slots:
+            return
+        if not cfg["smart_items"]:
+            if self.item_timer <= 0:
+                game.use_item(me, random.choice(slots))
+                self.item_timer = random.uniform(*cfg["item_delay"])
+            return
+        # в опасности — сразу защита
+        if self.danger > 0:
+            for i in slots:
+                if me.items[i] in DEFENSIVE_ITEMS:
+                    game.use_item(me, i)
+                    return
+        if self.item_timer > 0:
+            return
+        choice = None
+        for i in slots:
+            k = me.items[i]
+            if k == "heal":
+                if me.hp <= MAX_HP - HEAL_AMOUNT:
+                    choice = i
+                    break
+            elif k not in DEFENSIVE_ITEMS:
+                choice = i
+                break
+        if choice is None and me.inventory_full:
+            # всё забито защитой/лечением — потратить что-нибудь, чтобы собирать новое
+            choice = next((i for i in slots if me.items[i] != "heal"), slots[0])
+        if choice is not None:
+            game.use_item(me, choice)
+            self.item_timer = random.uniform(*cfg["item_delay"])
+
+
+PAD_DEAD = 0.45                  # мёртвая зона стика (доля от максимума)
+PAD_ITEM_BUTTONS = (pygame.CONTROLLER_BUTTON_X,   # □
+                    pygame.CONTROLLER_BUTTON_Y,   # △
+                    pygame.CONTROLLER_BUTTON_B,   # ○
+                    pygame.CONTROLLER_BUTTON_A)   # ✕
+PAD_ITEM_LABELS = "□△○✕"
+PAD_FIRE = "fire"                # условная кнопка: R1 или нажатый R2
+PAD_UP, PAD_DOWN = "up", "down"  # условные кнопки: стик вверх/вниз (для меню)
+
+
+class Gamepads:
+    """Подключённые геймпады в порядке подключения: [0] — синий, [1] — красный."""
+
+    def __init__(self):
+        controller.init()
+        self.pads = []                # (instance_id, Controller)
+        self.trigger = {}             # instance_id -> R2 зажат
+        self.stick = {}               # instance_id -> -1/0/1 положение стика для меню
+        for i in range(controller.get_count()):
+            self.add(i)
+
+    def add(self, device_index):
+        if not controller.is_controller(device_index):
+            return
+        c = controller.Controller(device_index)
+        iid = c.as_joystick().get_instance_id()
+        if all(iid != x for x, _ in self.pads):
+            self.pads.append((iid, c))
+            print(f"Геймпад подключён: {c.name}")
+
+    def remove(self, iid):
+        self.pads = [(x, c) for x, c in self.pads if x != iid]
+
+    def index(self, iid):
+        for i, (x, _) in enumerate(self.pads):
+            if x == iid:
+                return i
+        return None
+
+    def direction(self, i):
+        """-1 вверх, 1 вниз, 0 — для геймпада номер i."""
+        if i >= len(self.pads):
+            return 0
+        c = self.pads[i][1]
+        y = c.get_axis(pygame.CONTROLLER_AXIS_LEFTY) / 32767
+        up = c.get_button(pygame.CONTROLLER_BUTTON_DPAD_UP) or y < -PAD_DEAD
+        down = c.get_button(pygame.CONTROLLER_BUTTON_DPAD_DOWN) or y > PAD_DEAD
+        return -1 if up and not down else (1 if down and not up else 0)
+
+    def axis_event(self, e):
+        """Превращает R2 и стик в «нажатия». Возвращает условную кнопку или None."""
+        if e.axis == pygame.CONTROLLER_AXIS_TRIGGERRIGHT:
+            on = e.value > 32767 * 0.5
+            was = self.trigger.get(e.instance_id, False)
+            self.trigger[e.instance_id] = on
+            return PAD_FIRE if on and not was else None
+        if e.axis == pygame.CONTROLLER_AXIS_LEFTY:
+            v = e.value / 32767
+            pos = -1 if v < -PAD_DEAD else (1 if v > PAD_DEAD else 0)
+            was = self.stick.get(e.instance_id, 0)
+            self.stick[e.instance_id] = pos
+            if pos != was and pos:
+                return PAD_UP if pos < 0 else PAD_DOWN
+        return None
+
+
 class Audio:
     """Фоновая музыка и звуки выстрелов. Без звуковой карты игра работает молча."""
 
@@ -484,7 +729,21 @@ class Game:
                           -1, "Красный")
         self.key_names = {self.blue: "1234", self.red: "90-="}
         self.held = set()             # зажатые физические клавиши
+        self.pads = Gamepads()
         self.players = (self.blue, self.red)
+        self.modes = [(None, "Два игрока")] + \
+            [(lvl, f"Против компьютера: {cfg['title']}") for lvl, cfg in AI_LEVELS.items()]
+        self.menu_index = 0
+        self.state = "menu"
+        self.ai_level = None          # None — два игрока
+        self.restart()
+
+    def start(self, level):
+        """level=None — два игрока, иначе уровень компьютера за правого."""
+        self.ai_level = level
+        self.red.name = "Компьютер" if level else "Красный"
+        self.state = "play"
+        self.held.clear()
         self.restart()
 
     def other(self, p):
@@ -500,6 +759,8 @@ class Game:
         self.popups = []              # [текст, x, y, время, цвет]
         self.spawn_timer = {p: random.uniform(*ARTIFACT_SPAWN) for p in self.players}
         self.winner = None
+        self.win_time = 0
+        self.ai = AI(self, self.red, self.ai_level) if self.ai_level else None
 
     def run(self):
         while True:
@@ -513,22 +774,133 @@ class Game:
                     self.held.discard(e.scancode)
                 if e.type == pygame.KEYDOWN:
                     self.held.add(e.scancode)
-                    if e.scancode == pygame.KSCAN_ESCAPE:
+                    if e.scancode == pygame.KSCAN_ESCAPE and self.state == "menu":
                         return
-                    if e.scancode == pygame.KSCAN_F11:
-                        pygame.display.toggle_fullscreen()
-                        self.held.clear()
-                    if self.winner and e.scancode == pygame.KSCAN_R:
-                        self.restart()
-                    if not self.winner:
-                        for p in self.players:
-                            if e.scancode in p.shoot_keys:
-                                self.fire(p)
-                            if e.scancode in p.item_keys:
-                                self.use_item(p, p.item_keys.index(e.scancode))
+                    self.on_key(e.scancode)
+                if e.type == pygame.CONTROLLERDEVICEADDED:
+                    self.pads.add(e.device_index)
+                if e.type == pygame.CONTROLLERDEVICEREMOVED:
+                    self.pads.remove(e.instance_id)
+                if e.type == pygame.CONTROLLERBUTTONDOWN:
+                    self.on_pad(e.instance_id, e.button)
+                if e.type == pygame.CONTROLLERAXISMOTION:
+                    btn = self.pads.axis_event(e)
+                    if btn:
+                        self.on_pad(e.instance_id, btn)
+            if self.winner and not self.win_time:
+                self.win_time = pygame.time.get_ticks()
+            if self.state == "menu":
+                self.draw_menu()
+                continue
             if not self.winner:
                 self.update(dt)
             self.draw()
+
+    def on_key(self, sc):
+        """Нажатие клавиши (физической или «виртуальной» от геймпада)."""
+        if sc == pygame.KSCAN_F11:
+            pygame.display.toggle_fullscreen()
+            self.held.clear()
+        if self.state == "menu":
+            self.menu_key(sc)
+            return
+        if sc == pygame.KSCAN_ESCAPE:
+            self.state = "menu"
+            return
+        if self.winner and sc == pygame.KSCAN_R:
+            self.restart()
+        if not self.winner:
+            for p in self.humans():
+                if sc in p.shoot_keys:
+                    self.fire(p)
+                if sc in p.item_keys:
+                    self.use_item(p, p.item_keys.index(sc))
+
+    def on_pad(self, iid, btn):
+        """Кнопка геймпада -> соответствующая клавиша его игрока."""
+        i = self.pads.index(iid)
+        if i is None or i >= len(self.players):
+            return
+        p = self.players[i]
+        B = pygame
+        if self.state == "menu":
+            if btn in (B.CONTROLLER_BUTTON_DPAD_UP, PAD_UP):
+                self.on_key(B.KSCAN_UP)
+            elif btn in (B.CONTROLLER_BUTTON_DPAD_DOWN, PAD_DOWN):
+                self.on_key(B.KSCAN_DOWN)
+            elif btn in (B.CONTROLLER_BUTTON_A, B.CONTROLLER_BUTTON_START):
+                self.on_key(B.KSCAN_RETURN)
+            return
+        if btn == B.CONTROLLER_BUTTON_START:
+            self.on_key(B.KSCAN_ESCAPE)
+        elif self.winner:
+            # пауза после победы, чтобы случайное нажатие ✕ не перезапустило игру
+            if btn == B.CONTROLLER_BUTTON_A and pygame.time.get_ticks() - self.win_time > 1000:
+                self.on_key(B.KSCAN_R)
+        elif btn in (B.CONTROLLER_BUTTON_RIGHTSHOULDER, PAD_FIRE):
+            self.on_key(p.shoot_keys[0])
+        elif btn in PAD_ITEM_BUTTONS:
+            self.on_key(p.item_keys[PAD_ITEM_BUTTONS.index(btn)])
+
+    def pad_held(self):
+        """Направления с геймпадов в виде «зажатых» клавиш игроков."""
+        out = set()
+        for i, p in enumerate(self.players):
+            d = self.pads.direction(i)
+            if d < 0:
+                out.add(p.up_key)
+            elif d > 0:
+                out.add(p.down_key)
+        return out
+
+    def humans(self):
+        return (self.blue,) if self.ai else self.players
+
+    def menu_key(self, sc):
+        up = (pygame.KSCAN_W, pygame.KSCAN_UP)
+        down = (pygame.KSCAN_S, pygame.KSCAN_DOWN)
+        ok = (pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER, pygame.KSCAN_SPACE)
+        digits = (pygame.KSCAN_1, pygame.KSCAN_2, pygame.KSCAN_3, pygame.KSCAN_4)
+        if sc in up:
+            self.menu_index = (self.menu_index - 1) % len(self.modes)
+        elif sc in down:
+            self.menu_index = (self.menu_index + 1) % len(self.modes)
+        elif sc in digits and digits.index(sc) < len(self.modes):
+            self.menu_index = digits.index(sc)
+            self.start(self.modes[self.menu_index][0])
+        elif sc in ok:
+            self.start(self.modes[self.menu_index][0])
+
+    def draw_menu(self):
+        s = self.screen
+        s.fill(BG)
+        t = self.big.render("Дуэль шариков", True, WHITE)
+        s.blit(t, t.get_rect(center=(WIDTH // 2, 150)))
+        for i, (_, title) in enumerate(self.modes):
+            sel = i == self.menu_index
+            rect = pygame.Rect(0, 0, 440, 52)
+            rect.center = (WIDTH // 2, 270 + i * 66)
+            pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=10)
+            pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
+            txt = self.font.render(f"{i + 1}.  {title}", True, WHITE if sel else GREY)
+            s.blit(txt, txt.get_rect(center=rect.center))
+        hint = self.small.render("W/S или ↑/↓ — выбор,  Enter/Пробел или 1-4 — начать,  Esc — выход",
+                                 True, GREY)
+        s.blit(hint, hint.get_rect(center=(WIDTH // 2, 560)))
+        hint = self.small.render("Против компьютера: вы играете синим слева (W/S, Пробел, 1-4)",
+                                 True, GREY)
+        s.blit(hint, hint.get_rect(center=(WIDTH // 2, 585)))
+        n = len(self.pads.pads)
+        pads = "Геймпады не подключены" if n == 0 else \
+            "Геймпады: " + ",  ".join(f"{c.name} — {'синий' if i == 0 else 'красный' if i == 1 else 'запасной'}"
+                                     for i, (_, c) in enumerate(self.pads.pads))
+        hint = self.small.render(pads, True, WHITE if n else GREY)
+        s.blit(hint, hint.get_rect(center=(WIDTH // 2, 625)))
+        if n:
+            hint = self.small.render("Геймпад: стик/крестовина — движение, R1/R2 — огонь, "
+                                     "□ △ ○ ✕ — артефакты, Options — меню", True, GREY)
+            s.blit(hint, hint.get_rect(center=(WIDTH // 2, 650)))
+        pygame.display.flip()
 
     def fire(self, p):
         shots = p.shoot()
@@ -569,8 +941,12 @@ class Game:
         self.popup(ITEMS[kind][0] + "!", target, ITEMS[kind][2])
 
     def update(self, dt):
+        if self.ai:
+            self.ai.update(dt)
+        held = self.held | self.pad_held()
         for p in self.players:
-            p.update(dt, self.held)
+            keys = self.ai.keys() if self.ai and p is self.ai.me else held
+            p.update(dt, keys)
 
         # артефакты появляются на вертикали игрока, пока у него есть место в инвентаре
         for p in self.players:
@@ -679,7 +1055,11 @@ class Game:
                 pygame.draw.rect(s, p.color if kind else GREY, rect, 1, border_radius=6)
                 if kind:
                     draw_icon(s, kind, rect.center, slot // 2 - 5)
-                key = self.tiny.render(self.key_names[p][i], True, WHITE)
+                if self.ai and p is self.ai.me:
+                    continue              # у компьютера клавиш нет
+                has_pad = self.players.index(p) < len(self.pads.pads)
+                label = PAD_ITEM_LABELS[i] if has_pad else self.key_names[p][i]
+                key = self.tiny.render(label, True, WHITE)
                 s.blit(key, (rect.right - key.get_width() - 3, rect.bottom - key.get_height() - 1))
 
             # жизни и эффекты — у края экрана
@@ -734,7 +1114,7 @@ class Game:
             s.blit(shade, (0, 0))
             t = self.big.render(f"{self.winner.name} победил!", True, self.winner.color)
             s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 20)))
-            t = self.font.render("R — новая игра, Esc — выход", True, WHITE)
+            t = self.font.render("R — ещё раз, Esc — в меню", True, WHITE)
             s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 40)))
         pygame.display.flip()
 
