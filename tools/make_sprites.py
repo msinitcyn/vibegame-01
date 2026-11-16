@@ -1,7 +1,9 @@
-"""Рисует пиксельные спрайты игры и сохраняет их в assets/sprites/.
+"""Рисует пиксельные спрайты и фоны игры и сохраняет их в assets/sprites/.
 
-Маг с автоматом, 32×32, смотрит вправо. Синий и красный — один и тот же рисунок,
-отличаются только цвета команды. Перезапуск скрипта перерисовывает PNG.
+Маг с автоматом, 32×32, смотрит вправо. Синий (ледяной) и красный (огненный) —
+один и тот же рисунок, отличаются только цвета команды.
+Фоны половин поля: лёд у синего, лава у красного — в низком разрешении,
+игра увеличивает их без размытия. Перезапуск скрипта перерисовывает PNG.
 
     .venv/bin/python tools/make_sprites.py
 """
@@ -26,15 +28,21 @@ GUN, GUN_MID, GUN_HI = (46, 48, 58), (82, 86, 100), (140, 146, 160)
 WOOD = (120, 76, 40)
 BOOT, BOOT_SH = (96, 62, 40), (66, 42, 28)
 
-# цвета команды: основной, тень, блик
+# цвета команды: основной, тень, блик, украшение на шляпе
 TEAMS = {
-    "blue": ((70, 120, 235), (40, 70, 160), (130, 175, 255)),
-    "red": ((220, 60, 60), (140, 30, 40), (255, 130, 120)),
+    # ледяной маг: бело-голубая мантия, ледяной кристалл
+    "blue": ((185, 212, 240), (110, 150, 205), (240, 248, 255), (120, 225, 255)),
+    # огненный маг: красная мантия, золотая звезда
+    "red": ((220, 60, 50), (140, 30, 35), (255, 140, 100), GOLD),
 }
+
+# фоны: размер в «больших пикселях»; игра увеличивает в BG_SCALE раз
+BG_SCALE = 4
+BG_W, BG_H = 500 // BG_SCALE, 640 // BG_SCALE
 
 
 def draw_mage(team):
-    main, dark, light = TEAMS[team]
+    main, dark, light, accent = TEAMS[team]
     px = {}
 
     def put(x, y, c):
@@ -78,9 +86,9 @@ def draw_mage(team):
     put(6, 1, main)
     rect(3, 10, 17, 11, dark)                 # поля
     rect(4, 10, 16, 10, main)
-    # звезда на шляпе
+    # звезда (у ледяного — кристалл) на шляпе
     for x, y in ((10, 5), (9, 6), (10, 6), (11, 6), (10, 7)):
-        put(x, y, GOLD)
+        put(x, y, accent)
 
     # --- лицо
     rect(6, 12, 14, 15, SKIN)
@@ -130,6 +138,61 @@ def draw_mage(team):
     return surf
 
 
+def walk(rng, w, h, put, length, color, core=None, core_every=3):
+    """Трещина: случайное блуждание с уклоном в одну сторону."""
+    x, y = rng.randrange(w), rng.randrange(h)
+    dx, dy = rng.choice(((1, 0), (0, 1), (1, 1), (1, -1)))
+    for i in range(length):
+        put(x, y, core if core and i % core_every == 0 else color)
+        if rng.random() < 0.35:
+            dx, dy = rng.choice(((1, 0), (0, 1), (1, 1), (1, -1), (-1, 1)))
+        x, y = (x + dx) % w, (y + dy) % h
+
+
+def draw_background(kind):
+    """Тёмный фон половины поля: пули на нём должны хорошо читаться."""
+    import random
+    rng = random.Random(7 if kind == "ice" else 11)
+    w, h = BG_W, BG_H
+    if kind == "ice":
+        base, patches, crack, sparkle, edge = ((24, 40, 66), [(30, 50, 82), (20, 34, 58), (34, 58, 92)],
+                                               (52, 84, 124), (70, 108, 150), (110, 160, 215))
+    else:
+        base, patches, crack, sparkle, edge = ((30, 18, 18), [(44, 26, 24), (22, 13, 14), (52, 30, 26)],
+                                               (120, 40, 14), (96, 36, 16), (150, 50, 15))
+    surf = pygame.Surface((w, h))
+    surf.fill(base)
+
+    def put(x, y, c):
+        if 0 <= x < w and 0 <= y < h:
+            surf.set_at((x, y), c)
+
+    # пятна льда / камня
+    for _ in range(140):
+        c = rng.choice(patches)
+        x, y = rng.randrange(w), rng.randrange(h)
+        for _ in range(rng.randint(4, 14)):
+            put(x, y, c)
+            put(x + 1, y, c)
+            x += rng.choice((-1, 0, 1))
+            y += rng.choice((-1, 0, 1))
+    # трещины: во льду — светлые, в лаве — светящиеся с ярким ядром
+    for _ in range(22 if kind == "ice" else 16):
+        walk(rng, w, h, put, rng.randint(8, 26), crack,
+             core=None if kind == "ice" else (175, 70, 22), core_every=4)
+    # блёстки инея / искры — тусклые, чтобы не путались с пулями
+    for _ in range(40 if kind == "ice" else 30):
+        put(rng.randrange(w), rng.randrange(h), sparkle)
+    # кромка у середины поля: изломанная полоса
+    x_edge = w - 1 if kind == "ice" else 0
+    step = -1 if kind == "ice" else 1
+    for y in range(h):
+        depth = 1 + (y * 7 + (y // 3) * 5) % 3
+        for i in range(depth):
+            put(x_edge + step * i, y, edge if i == 0 else crack)
+    return surf
+
+
 def main(preview=None):
     pygame.init()
     OUT.mkdir(parents=True, exist_ok=True)
@@ -139,11 +202,18 @@ def main(preview=None):
         pygame.image.save(s, OUT / f"mage_{team}.png")
         sprites[team] = s
         print(f"сохранён {OUT / f'mage_{team}.png'}")
+    for kind in ("ice", "lava"):
+        bg = draw_background(kind)
+        pygame.image.save(bg, OUT / f"bg_{kind}.png")
+        sprites[kind] = bg
+        print(f"сохранён {OUT / f'bg_{kind}.png'}")
     if preview:
         # крупный предпросмотр: синий смотрит вправо, красный — влево, как в игре
         k = 10
         img = pygame.Surface((SIZE * k * 2 + 3 * 20, SIZE * k + 40))
-        img.fill((18, 20, 28))
+        img.blit(pygame.transform.scale(sprites["ice"], (img.get_width() // 2, img.get_height())), (0, 0))
+        img.blit(pygame.transform.scale(sprites["lava"], (img.get_width() // 2, img.get_height())),
+                 (img.get_width() // 2, 0))
         big_b = pygame.transform.scale(sprites["blue"], (SIZE * k, SIZE * k))
         big_r = pygame.transform.flip(pygame.transform.scale(sprites["red"], (SIZE * k, SIZE * k)), True, False)
         img.blit(big_b, (20, 20))

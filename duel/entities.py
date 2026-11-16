@@ -251,7 +251,11 @@ class Bullet:
             self.alive = False
 
     def draw(self, surf):
-        pygame.draw.circle(surf, self.owner.color, (int(self.x), int(self.y)), BULLET_R)
+        # тёмная обводка — чтобы пуля читалась и на льду, и на лаве
+        pos = (int(self.x), int(self.y))
+        pygame.draw.circle(surf, (16, 12, 20), pos, BULLET_R + 1)
+        pygame.draw.circle(surf, self.owner.color, pos, BULLET_R)
+        surf.set_at((pos[0] - 1, pos[1] - 2), (255, 255, 255))
 
 
 class Clone(Unit):

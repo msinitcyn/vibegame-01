@@ -29,6 +29,12 @@ def sprite(name, size, flip=False, white=False, alpha=255):
     return img
 
 
+@lru_cache(maxsize=None)
+def sprite_image(name, size):
+    """Картинка (например, фон) растянутая до size=(w, h) по пикселям."""
+    return pygame.transform.scale(_base(name), size)
+
+
 def draw_unit(surf, name, center, radius, facing, white=False, alpha=255):
     """Рисует спрайт по центру круга попадания radius; facing=-1 — смотрит влево."""
     size = max(8, round(radius * 2 * SPRITE_TO_HITBOX))

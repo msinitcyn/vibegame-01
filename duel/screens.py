@@ -22,6 +22,7 @@ from .config import (
 from .items import HELP_SECTIONS, ITEMS, item_help
 from .icons import draw_icon
 from .gamepad import PAD_ITEM_COLORS, PAD_ITEM_LABELS, PAD_ITEM_LAYOUT
+from .sprites import sprite_image
 
 
 class ScreensMixin:
@@ -200,14 +201,26 @@ class ScreensMixin:
                     else img.get_rect(midright=(WIDTH - 10, cy))
                 s.blit(img, rect)
 
+    def field_background(self):
+        """Поле: слева лёд (синий), справа лава (красный), вертикали игроков. Рисуется один раз."""
+        bg = getattr(self, "_field_bg", None)
+        if bg is None:
+            h = BOTTOM - TOP
+            bg = pygame.Surface((WIDTH, h))
+            half = WIDTH // 2
+            bg.blit(sprite_image("bg_ice", (half, h)), (0, 0))
+            bg.blit(sprite_image("bg_lava", (WIDTH - half, h)), (half, 0))
+            # вертикали игроков — по ним ходят и на них появляются артефакты
+            lines = pygame.Surface((WIDTH, h), pygame.SRCALPHA)
+            for p in self.players:
+                pygame.draw.line(lines, (255, 255, 255, 28), (p.x, 0), (p.x, h))
+            bg.blit(lines, (0, 0))
+            self._field_bg = bg
+        return bg
+
     def draw(self):
         s = self.screen
-        s.fill(BG)
-        # центральная линия и вертикали игроков
-        for y in range(TOP, BOTTOM, 20):
-            pygame.draw.line(s, (40, 44, 58), (WIDTH // 2, y), (WIDTH // 2, y + 10))
-        for p in self.players:
-            pygame.draw.line(s, (32, 36, 50), (p.x, TOP), (p.x, BOTTOM))
+        s.blit(self.field_background(), (0, TOP))
         for w in self.walls:
             w.draw(s)
         for a in self.artifacts:
