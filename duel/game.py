@@ -35,6 +35,7 @@ from .ai import AI, AI_LEVELS
 from .gamepad import Gamepads, PAD_DOWN, PAD_FIRE, PAD_ITEM_BUTTONS, PAD_UP
 from .audio import Audio
 from .screens import ScreensMixin
+from .sprites import reload_all
 
 
 class Game(ScreensMixin):
@@ -146,6 +147,10 @@ class Game(ScreensMixin):
 
     def on_key(self, sc):
         """Нажатие клавиши (физической или «виртуальной» от геймпада)."""
+        if sc == pygame.KSCAN_F5:
+            # перечитать картинки с диска — удобно, пока рисуешь в редакторе
+            reload_all()
+            self._field_bg = None
         if sc == pygame.KSCAN_F11:
             pygame.display.toggle_fullscreen()
             self.held.clear()

@@ -1,17 +1,49 @@
-"""Пиксельные спрайты из assets/sprites/: загрузка, масштаб без размытия, кэш."""
+"""Пиксельные спрайты из assets/sprites/: загрузка, перекраска команды, масштаб без размытия.
+
+Источник — PNG-файлы, их можно править в любом пиксель-редакторе.
+Маг нарисован один раз (mage.png, ледяные цвета); красный получается заменой
+цветов команды из MAGE_RED_PALETTE. В игре F5 перечитывает картинки с диска.
+"""
 from functools import lru_cache
 
 import pygame
 
-from .config import SPRITES_DIR
+from .config import MAGE_RED_PALETTE, SPRITES_DIR
 
 # во сколько раз спрайт больше диаметра круга попадания (у спрайта есть прозрачные поля)
 SPRITE_TO_HITBOX = 1.15
 
+# имя спрайта в игре -> (файл, замена цветов)
+VARIANTS = {
+    "mage_blue": ("mage", {}),
+    "mage_red": ("mage", MAGE_RED_PALETTE),
+}
+
+
+def hex_rgb(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def recolor(img, palette):
+    """Заменяет цвета пикселей по словарю {"#исходный": "#новый"}, прозрачность сохраняется."""
+    img = img.copy()
+    if not palette:
+        return img
+    swap = {hex_rgb(a): hex_rgb(b) for a, b in palette.items()}
+    for y in range(img.get_height()):
+        for x in range(img.get_width()):
+            r, g, b, a = img.get_at((x, y))
+            new = swap.get((r, g, b))
+            if new and a:
+                img.set_at((x, y), (*new, a))
+    return img
+
 
 @lru_cache(maxsize=None)
 def _base(name):
-    return pygame.image.load(SPRITES_DIR / f"{name}.png")
+    file, palette = VARIANTS.get(name, (name, {}))
+    return recolor(pygame.image.load(SPRITES_DIR / f"{file}.png"), palette)
 
 
 @lru_cache(maxsize=256)
@@ -33,6 +65,12 @@ def sprite(name, size, flip=False, white=False, alpha=255):
 def sprite_image(name, size):
     """Картинка (например, фон) растянутая до size=(w, h) по пикселям."""
     return pygame.transform.scale(_base(name), size)
+
+
+def reload_all():
+    """Сбросить кэш — следующая отрисовка перечитает PNG с диска."""
+    for f in (_base, sprite, sprite_image):
+        f.cache_clear()
 
 
 def draw_unit(surf, name, center, radius, facing, white=False, alpha=255):

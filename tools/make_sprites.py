@@ -1,11 +1,15 @@
-"""Рисует пиксельные спрайты и фоны игры и сохраняет их в assets/sprites/.
+"""Начальная версия пиксельной графики: рисует PNG в assets/sprites/.
 
-Маг с автоматом, 32×32, смотрит вправо. Синий (ледяной) и красный (огненный) —
-один и тот же рисунок, отличаются только цвета команды.
-Фоны половин поля: лёд у синего, лава у красного — в низком разрешении,
-игра увеличивает их без размытия. Перезапуск скрипта перерисовывает PNG.
+Главный источник графики — сами PNG: их правят в пиксель-редакторе, а этот скрипт
+нужен только чтобы создать их с нуля. Существующие файлы он НЕ перезаписывает.
 
-    .venv/bin/python tools/make_sprites.py
+    .venv/bin/python tools/make_sprites.py            # создать недостающие PNG
+    .venv/bin/python tools/make_sprites.py --force    # перерисовать всё заново (правки пропадут!)
+    .venv/bin/python tools/make_sprites.py --preview out.png   # крупный предпросмотр текущих PNG
+
+mage.png — маг с автоматом 32×32 в ледяных цветах, смотрит вправо; красного игра
+получает заменой цветов (MAGE_RED_PALETTE в duel/config.py).
+bg_ice.png / bg_lava.png — фоны половин поля 125×160, игра увеличивает их в 4 раза.
 """
 import os
 import sys
@@ -193,34 +197,42 @@ def draw_background(kind):
     return surf
 
 
-def main(preview=None):
+def main(argv):
     pygame.init()
     OUT.mkdir(parents=True, exist_ok=True)
-    sprites = {}
-    for team in TEAMS:
-        s = draw_mage(team)
-        pygame.image.save(s, OUT / f"mage_{team}.png")
-        sprites[team] = s
-        print(f"сохранён {OUT / f'mage_{team}.png'}")
-    for kind in ("ice", "lava"):
-        bg = draw_background(kind)
-        pygame.image.save(bg, OUT / f"bg_{kind}.png")
-        sprites[kind] = bg
-        print(f"сохранён {OUT / f'bg_{kind}.png'}")
-    if preview:
-        # крупный предпросмотр: синий смотрит вправо, красный — влево, как в игре
-        k = 10
-        img = pygame.Surface((SIZE * k * 2 + 3 * 20, SIZE * k + 40))
-        img.blit(pygame.transform.scale(sprites["ice"], (img.get_width() // 2, img.get_height())), (0, 0))
-        img.blit(pygame.transform.scale(sprites["lava"], (img.get_width() // 2, img.get_height())),
-                 (img.get_width() // 2, 0))
-        big_b = pygame.transform.scale(sprites["blue"], (SIZE * k, SIZE * k))
-        big_r = pygame.transform.flip(pygame.transform.scale(sprites["red"], (SIZE * k, SIZE * k)), True, False)
-        img.blit(big_b, (20, 20))
-        img.blit(big_r, (40 + SIZE * k, 20))
-        pygame.image.save(img, preview)
-        print(f"предпросмотр {preview}")
+    force = "--force" in argv
+    files = {
+        "mage.png": lambda: draw_mage("blue"),
+        "bg_ice.png": lambda: draw_background("ice"),
+        "bg_lava.png": lambda: draw_background("lava"),
+    }
+    for fname, make in files.items():
+        path = OUT / fname
+        if path.exists() and not force:
+            print(f"есть, не трогаю: {path}")
+            continue
+        pygame.image.save(make(), path)
+        print(f"нарисован: {path}")
+    if "--preview" in argv:
+        preview(argv[argv.index("--preview") + 1])
+
+
+def preview(path):
+    """Крупный предпросмотр того, что сейчас в PNG: оба мага на своих фонах, как в игре."""
+    sys.path.insert(0, str(ROOT))
+    pygame.display.set_mode((1, 1))
+    from duel.sprites import _base
+    k = 10
+    img = pygame.Surface((SIZE * k * 2 + 3 * 20, SIZE * k + 40))
+    half = img.get_width() // 2
+    img.blit(pygame.transform.scale(_base("bg_ice"), (half, img.get_height())), (0, 0))
+    img.blit(pygame.transform.scale(_base("bg_lava"), (half, img.get_height())), (half, 0))
+    img.blit(pygame.transform.scale(_base("mage_blue"), (SIZE * k, SIZE * k)), (20, 20))
+    red = pygame.transform.scale(_base("mage_red"), (SIZE * k, SIZE * k))
+    img.blit(pygame.transform.flip(red, True, False), (40 + SIZE * k, 20))
+    pygame.image.save(img, path)
+    print(f"предпросмотр: {path}")
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else None)
+    main(sys.argv[1:])
