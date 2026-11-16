@@ -18,8 +18,8 @@ from pathlib import Path
 import pygame
 from pygame._sdl2 import controller
 
-WIDTH, HEIGHT = 1000, 700
-HUD_H = 60                       # верхняя полоса с информацией
+WIDTH, HEIGHT = 1000, 724
+HUD_H = 84                       # верхняя полоса с информацией
 TOP, BOTTOM = HUD_H, HEIGHT      # границы игрового поля
 FPS = 60
 
@@ -752,6 +752,10 @@ PAD_ITEM_BUTTONS = (pygame.CONTROLLER_BUTTON_X,   # □
                     pygame.CONTROLLER_BUTTON_B,   # ○
                     pygame.CONTROLLER_BUTTON_A)   # ✕
 PAD_ITEM_LABELS = "□△○✕"
+# цвета значков, как на кнопках PlayStation
+PAD_ITEM_COLORS = ((255, 130, 200), (80, 220, 170), (255, 95, 95), (120, 165, 255))
+# ромб, как кнопки на геймпаде: □ слева, △ сверху, ○ справа, ✕ снизу (смещения в ячейках)
+PAD_ITEM_LAYOUT = ((-1, 0), (0, -1), (1, 0), (0, 1))
 PAD_FIRE = "fire"                # условная кнопка: R1 или нажатый R2
 PAD_UP, PAD_DOWN = "up", "down"  # условные кнопки: стик вверх/вниз (для меню)
 
@@ -1328,30 +1332,59 @@ class Game:
                         a.alive = b.alive = False
                         break
 
+    def inventory_rects(self, left, pad):
+        """Ячейки инвентаря: ромбом, как кнопки геймпада, или в ряд для клавиатуры.
+
+        Инвентарь стоит ближе к центру экрана. Возвращает (прямоугольники, ширина блока).
+        """
+        if pad:
+            size, gap = 36, 2
+            width = 3 * size + 2 * gap
+            x0 = WIDTH // 2 - 16 - width if left else WIDTH // 2 + 16
+            cx, cy = x0 + width // 2, HUD_H // 2
+            step_x, step_y = size + gap, (HUD_H - size) // 2 - 2
+            rects = []
+            for dx, dy in PAD_ITEM_LAYOUT:
+                r = pygame.Rect(0, 0, size, size)
+                r.center = (cx + dx * step_x, cy + dy * step_y)
+                rects.append(r)
+            return rects, width
+        size, gap = 44, 6
+        width = INVENTORY_SIZE * size + (INVENTORY_SIZE - 1) * gap
+        x0 = WIDTH // 2 - 16 - width if left else WIDTH // 2 + 16
+        y = (HUD_H - size) // 2
+        return [pygame.Rect(x0 + i * (size + gap), y, size, size) for i in range(INVENTORY_SIZE)], width
+
     def draw_hud(self):
         s = self.screen
         pygame.draw.rect(s, (30, 33, 45), (0, 0, WIDTH, HUD_H))
         pygame.draw.line(s, GREY, (0, HUD_H), (WIDTH, HUD_H), 2)
-        slot, gap = 44, 6
-        inv_w = INVENTORY_SIZE * slot + (INVENTORY_SIZE - 1) * gap
         for p in self.players:
             left = p is self.blue
-            # инвентарь — ближе к центру экрана
-            inv_x = WIDTH // 2 - 16 - inv_w if left else WIDTH // 2 + 16
-            for i, kind in enumerate(p.items):
-                rect = pygame.Rect(inv_x + i * (slot + gap), (HUD_H - slot) // 2, slot, slot)
+            is_ai = bool(self.ai and p is self.ai.me)
+            has_pad = not is_ai and self.players.index(p) < len(self.pads.pads)
+            rects, inv_w = self.inventory_rects(left, has_pad)
+            for i, (kind, rect) in enumerate(zip(p.items, rects)):
                 pygame.draw.rect(s, (22, 24, 34), rect, border_radius=6)
                 pygame.draw.rect(s, p.color if kind else GREY, rect, 1, border_radius=6)
                 if kind:
-                    draw_icon(s, kind, rect.center, slot // 2 - 5)
+                    draw_icon(s, kind, rect.center, rect.w // 2 - 4)
                     if "noitems" in p.effects and kind != "cleanse":
                         pygame.draw.line(s, ITEMS["foe_noitems"][2], rect.bottomleft, rect.topright, 2)
-                if self.ai and p is self.ai.me:
+                if is_ai:
                     continue              # у компьютера клавиш нет
-                has_pad = self.players.index(p) < len(self.pads.pads)
-                label = PAD_ITEM_LABELS[i] if has_pad else self.key_names[p][i]
-                key = self.tiny.render(label, True, WHITE)
-                s.blit(key, (rect.right - key.get_width() - 3, rect.bottom - key.get_height() - 1))
+                if has_pad:
+                    color = PAD_ITEM_COLORS[i]
+                    if kind:              # значок кнопки в углу
+                        key = self.tiny.render(PAD_ITEM_LABELS[i], True, color)
+                        s.blit(key, (rect.right - key.get_width() - 2, rect.bottom - key.get_height()))
+                    else:                 # пустая ячейка — крупный значок кнопки по центру
+                        key = self.font.render(PAD_ITEM_LABELS[i], True, color)
+                        key.set_alpha(140)
+                        s.blit(key, key.get_rect(center=rect.center))
+                else:
+                    key = self.tiny.render(self.key_names[p][i], True, WHITE)
+                    s.blit(key, (rect.right - key.get_width() - 3, rect.bottom - key.get_height() - 1))
 
             # жизни и эффекты — у края экрана
             avail = WIDTH // 2 - 16 - inv_w - 20
@@ -1371,7 +1404,7 @@ class Game:
             if n:
                 parts.append(f"двойники {n}")
             line2 = self.small.render("  ·  ".join(parts), True, WHITE)
-            for img, cy in ((line1, 18), (line2, 42)):
+            for img, cy in ((line1, HUD_H // 2 - 12), (line2, HUD_H // 2 + 14)):
                 if img.get_width() > avail:
                     img = pygame.transform.smoothscale(
                         img, (avail, img.get_height()))
