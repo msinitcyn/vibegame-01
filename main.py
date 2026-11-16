@@ -32,6 +32,8 @@ BULLET_SPEED = 520
 BULLET_R = 5
 SHOT_COOLDOWN = 0.25             # минимальная пауза между выстрелами
 MAX_HP = 10
+TEST_HP = 1000                   # жизни в тестовом режиме
+HEARTS_SHOWN = 5                 # больше — рисуем 5 сердечек и «+остаток»
 HEAL_AMOUNT = 3
 TRIPLE_SHOTS = 5
 
@@ -76,17 +78,52 @@ ITEMS = {
     "foe_invert": ("соперник: управление наоборот", "foe", (255, 200, 90)),
 }
 
+# Справка: категория и описание каждого артефакта (экран «Артефакты» в меню)
+HELP_SECTIONS = [
+    ("Защита", ["shield", "heal", "shrink", "speed", "clearfoe", "slowfoe"]),
+    ("Дебаффы на соперника", ["foe_grow", "foe_freeze", "foe_nofire", "foe_invert"]),
+    ("Атака", ["triple", "rapid", "wavy", "clones", "breaker", "wall"]),
+]
+
+
+def item_help(kind):
+    d = DURATION
+    return {
+        "shield": f"Гасит {SHIELD_HITS} пуль или держится {d['shield']} с — что кончится раньше. "
+                  "Над шариком видно, сколько ударов и секунд осталось.",
+        "heal": f"+{HEAL_AMOUNT} жизни сразу при подборе, в инвентарь не кладётся.",
+        "shrink": f"Ты меньше в 2 раза на {d['shrink']} с — в тебя труднее попасть.",
+        "speed": f"Движение ×1,8 на {d['speed']} с: легче уворачиваться и собирать артефакты.",
+        "clearfoe": "Все пули соперника, что сейчас на экране, исчезают.",
+        "slowfoe": f"Пули соперника летят примерно вдвое медленнее, {d['slowfoe']} с.",
+        "foe_grow": f"Соперник больше в 2 раза на {d['grow2']} с — по нему легче попасть.",
+        "foe_freeze": f"Соперник не может двигаться {d['freeze']} с. Стрелять может.",
+        "foe_nofire": f"Соперник не может стрелять {d['nofire']} с.",
+        "foe_invert": f"У соперника вверх и вниз меняются местами на {d['invert']} с.",
+        "triple": f"Следующие {TRIPLE_SHOTS} выстрелов летят веером в три стороны.",
+        "rapid": f"Пауза между выстрелами {SHOT_COOLDOWN * RAPID_FACTOR:.1f} с вместо "
+                 f"{SHOT_COOLDOWN} с, на {d['rapid']} с.",
+        "wavy": f"Твои пули летят синусоидой {d['wavy']} с — их трудно предугадать.",
+        "clones": f"{CLONE_COUNT} двойника сами ходят и стреляют. Умирают с одного попадания, "
+                  f"живут до {CLONE_TIME:.0f} с.",
+        "breaker": f"{d['breaker']} с твои пули сбивают встречные пули соперника.",
+        "wall": f"Стена перед тобой на {WALL_TIME:.0f} с: пули соперника отражаются и становятся "
+                "твоими, свои — поглощаются.",
+    }[kind]
+
+
 INSTANT_ITEMS = ("heal",)         # срабатывают сразу при подборе, минуя инвентарь
 
 # эффекты на игроке: длительность и короткая подпись для панели
 DURATION = {"grow2": 7, "shrink": 7, "freeze": 2.5, "speed": 7, "rapid": 7,
-            "nofire": 4, "slowfoe": 7, "shield": 6, "breaker": 8, "wavy": 7, "invert": 5}
+            "nofire": 4, "slowfoe": 7, "shield": 7, "breaker": 8, "wavy": 7, "invert": 5}
 EFFECT_LABEL = {"grow2": "×2", "shrink": "мал", "freeze": "мороз", "speed": "скор",
                 "rapid": "очередь", "nofire": "без огня", "slowfoe": "замедл",
                 "shield": "щит", "breaker": "сбив", "wavy": "волна", "invert": "инверсия"}
 RAPID_FACTOR = 0.4               # пауза между выстрелами x0.4
 SLOW_BULLET_FACTOR = 0.45        # пули соперника летят в ~2 раза медленнее
 SHIELD_GAP = 10                  # щит на столько пикселей шире шарика
+SHIELD_HITS = 5                  # щит гасит столько пуль (или исчезает по времени)
 WAVE_AMP = (25, 55)              # размах волны пули, пикс (случайно для каждой пули)
 WAVE_FREQ = (1.2, 2.4)           # частота волны, раз в секунду (случайно)
 
@@ -97,6 +134,8 @@ CLONE_RADIUS = BASE_RADIUS * 0.8
 CLONE_SPEED = BASE_SPEED * 0.7
 CLONE_SHOT_EVERY = (0.6, 1.5)    # пауза между выстрелами двойника, сек
 CLONE_TURN_EVERY = (0.4, 1.4)    # как часто двойник меняет направление
+# эффекты хозяина, которые действуют и на его двойников (плюс веер)
+CLONE_EFFECTS = ("shield", "wavy", "rapid", "grow2", "shrink", "breaker", "speed", "nofire")
 
 
 def draw_icon(surf, kind, center, r):
@@ -176,7 +215,7 @@ def draw_icon(surf, kind, center, r):
         pygame.draw.polygon(surf, color, [P(0.22, 0.6), P(0.42, 0.3), P(0.02, 0.3)])
 
 
-def make_bullets(owner, x, y, direction, radius, angles):
+def make_bullets(owner, x, y, direction, radius, angles, wavy=False):
     """Пули из точки (x, y): угол -1 — 45° вверх, 0 — прямо, 1 — 45° вниз."""
     bullets = []
     for a in angles:
@@ -185,7 +224,7 @@ def make_bullets(owner, x, y, direction, radius, angles):
         vy = BULLET_SPEED * math.sin(ang)
         bx = x + direction * (radius + BULLET_R + 2)
         b = Bullet(bx, y, vx, vy, owner)
-        if "wavy" in owner.effects:
+        if wavy:
             b.wave_amp = random.uniform(*WAVE_AMP)
             b.wave_w = 2 * math.pi * random.uniform(*WAVE_FREQ)
             b.wave_phase = random.uniform(0, 2 * math.pi)
@@ -193,7 +232,98 @@ def make_bullets(owner, x, y, direction, radius, angles):
     return bullets
 
 
-class Player:
+class Unit:
+    """Общее для игрока и двойника: эффекты, веер, щит, размер."""
+
+    base_radius = BASE_RADIUS
+
+    def reset_effects(self):
+        self.effects = {}             # имя эффекта -> оставшееся время
+        self.triple_shots = 0
+        self.shield_hits = 0
+
+    @property
+    def radius(self):
+        # эффекты перемножаются: ×2 и уменьшение вместе дают обычный размер
+        r = self.base_radius
+        if "grow2" in self.effects:
+            r *= 2
+        if "shrink" in self.effects:
+            r *= 0.5
+        return r
+
+    @property
+    def speed_mult(self):
+        return 1.8 if "speed" in self.effects else 1.0
+
+    @property
+    def frozen(self):
+        return "freeze" in self.effects
+
+    @property
+    def can_fire(self):
+        return "nofire" not in self.effects
+
+    def apply(self, effect):
+        """Эффекты складываются: разные действуют одновременно, повтор того же добавляет время."""
+        self.effects[effect] = self.effects.get(effect, 0) + DURATION[effect]
+        if effect == "shield":
+            self.shield_hits += SHIELD_HITS
+
+    def add_triple(self, n=TRIPLE_SHOTS):
+        self.triple_shots += n
+
+    def tick_effects(self, dt):
+        for name in list(self.effects):
+            self.effects[name] -= dt
+            if self.effects[name] <= 0:
+                del self.effects[name]
+        if "shield" not in self.effects:
+            self.shield_hits = 0
+
+    def shot_angles(self, moving):
+        if self.triple_shots > 0:
+            self.triple_shots -= 1
+            return (-1, 0, 1)
+        return (moving,)
+
+    def shield_blocks(self, b):
+        """Щит гасит пулю, если она в него попала. Возвращает True, если погасил."""
+        if "shield" not in self.effects:
+            return False
+        if math.hypot(b.x - self.x, b.y - self.y) >= self.radius + SHIELD_GAP + BULLET_R:
+            return False
+        self.shield_hits -= 1
+        if self.shield_hits <= 0:
+            del self.effects["shield"]
+            self.shield_hits = 0
+        return True
+
+    def draw_effects(self, surf, font=None):
+        r = int(self.radius)
+        pos = (int(self.x), int(self.y))
+        if self.frozen:
+            pygame.draw.circle(surf, ITEMS["foe_freeze"][2], pos, r + 4, 3)
+        if "speed" in self.effects:
+            pygame.draw.circle(surf, ITEMS["speed"][2], pos, r + 8, 1)
+        if "shield" in self.effects:
+            t = self.effects["shield"]
+            if t > 1.5 or int(t * 8) % 2:
+                pygame.draw.circle(surf, ITEMS["shield"][2], pos, r + SHIELD_GAP, 3)
+            if font:
+                # сколько ударов и секунд осталось у щита
+                txt = font.render(f"{self.shield_hits}× · {t:.0f}с", True, ITEMS["shield"][2])
+                surf.blit(txt, txt.get_rect(midbottom=(pos[0], pos[1] - r - SHIELD_GAP - 2)))
+        if self.triple_shots:
+            pygame.draw.circle(surf, ITEMS["triple"][2], pos, max(3, r // 3))
+        if "nofire" in self.effects:
+            d = int(r * 0.7)
+            cx, cy = pos
+            pygame.draw.line(surf, (30, 30, 30), (cx - d, cy - d), (cx + d, cy + d), 4)
+            pygame.draw.line(surf, (30, 30, 30), (cx - d, cy + d), (cx + d, cy - d), 4)
+
+
+class Player(Unit):
     def __init__(self, x, color, up_key, down_key, shoot_keys, item_keys, direction, name):
         self.x = x
         self.color = color
@@ -205,42 +335,25 @@ class Player:
         self.name = name
         self.reset()
 
-    def reset(self):
+    def reset(self, hp=MAX_HP):
         self.y = (TOP + BOTTOM) / 2
-        self.hp = MAX_HP
+        self.hp = self.max_hp = hp
         self.cooldown = 0.0
-        self.triple_shots = 0
-        self.effects = {}             # имя эффекта -> оставшееся время
+        self.reset_effects()
         self.items = [None] * INVENTORY_SIZE
         self.moving = 0               # -1 вверх, +1 вниз, 0 стоит
         self.hit_flash = 0.0
 
     @property
-    def radius(self):
-        r = BASE_RADIUS
-        if "grow2" in self.effects:
-            r *= 2
-        if "shrink" in self.effects:
-            r *= 0.5
-        return r
-
-    @property
     def speed(self):
-        return BASE_SPEED * (1.8 if "speed" in self.effects else 1.0)
-
-    @property
-    def frozen(self):
-        return "freeze" in self.effects
+        return BASE_SPEED * self.speed_mult
 
     @property
     def inventory_full(self):
         return None not in self.items
 
     def update(self, dt, keys):
-        for name in list(self.effects):
-            self.effects[name] -= dt
-            if self.effects[name] <= 0:
-                del self.effects[name]
+        self.tick_effects(dt)
         self.cooldown = max(0.0, self.cooldown - dt)
         self.hit_flash = max(0.0, self.hit_flash - dt)
 
@@ -258,44 +371,20 @@ class Player:
         self.y = max(TOP + r, min(BOTTOM - r, self.y))
 
     def shoot(self):
-        if self.frozen or "nofire" in self.effects or self.cooldown > 0:
+        # заморозка мешает только двигаться — стрелять можно
+        if not self.can_fire or self.cooldown > 0:
             return []
         self.cooldown = SHOT_COOLDOWN * (RAPID_FACTOR if "rapid" in self.effects else 1)
         # угол наклона: вверх/вниз — 45°, стоя — прямо
-        if self.triple_shots > 0:
-            self.triple_shots -= 1
-            angles = (-1, 0, 1)
-        else:
-            angles = (self.moving,)
-        return make_bullets(self, self.x, self.y, self.dir, self.radius, angles)
+        return make_bullets(self, self.x, self.y, self.dir, self.radius,
+                            self.shot_angles(self.moving), "wavy" in self.effects)
 
-    def apply(self, effect):
-        if effect in ("grow2", "shrink"):
-            # размерные эффекты заменяют друг друга
-            for k in ("grow2", "shrink"):
-                self.effects.pop(k, None)
-        self.effects[effect] = DURATION[effect]
-
-    def draw(self, surf):
+    def draw(self, surf, font=None):
         r = int(self.radius)
         pos = (int(self.x), int(self.y))
         color = WHITE if self.hit_flash > 0 else self.color
         pygame.draw.circle(surf, color, pos, r)
-        if self.frozen:
-            pygame.draw.circle(surf, ITEMS["foe_freeze"][2], pos, r + 4, 3)
-        if "speed" in self.effects:
-            pygame.draw.circle(surf, ITEMS["speed"][2], pos, r + 8, 1)
-        if "shield" in self.effects:
-            t = self.effects["shield"]
-            if t > 1.5 or int(t * 8) % 2:
-                pygame.draw.circle(surf, ITEMS["shield"][2], pos, r + SHIELD_GAP, 3)
-        if self.triple_shots:
-            pygame.draw.circle(surf, ITEMS["triple"][2], pos, max(3, r // 3))
-        if "nofire" in self.effects:
-            d = int(r * 0.7)
-            cx, cy = pos
-            pygame.draw.line(surf, (30, 30, 30), (cx - d, cy - d), (cx + d, cy + d), 4)
-            pygame.draw.line(surf, (30, 30, 30), (cx - d, cy + d), (cx + d, cy - d), 4)
+        self.draw_effects(surf, font)
 
 
 class Bullet:
@@ -334,13 +423,24 @@ class Bullet:
         pygame.draw.circle(surf, self.owner.color, (int(self.x), int(self.y)), BULLET_R)
 
 
-class Clone:
-    """Двойник: сам ходит и стреляет, умирает от первого попадания, артефакты не берёт."""
+class Clone(Unit):
+    """Двойник: сам ходит и стреляет, умирает от первого попадания, артефакты не берёт.
+
+    Получает баффы и дебаффы хозяина из CLONE_EFFECTS (и веер) — и те, что уже были
+    в момент появления, и те, что хозяину дали потом.
+    """
+
+    base_radius = CLONE_RADIUS
 
     def __init__(self, owner):
         self.owner = owner
         self.x = owner.x
-        self.radius = CLONE_RADIUS
+        self.reset_effects()
+        for name, t in owner.effects.items():
+            if name in CLONE_EFFECTS:
+                self.effects[name] = t
+        self.shield_hits = owner.shield_hits if "shield" in self.effects else 0
+        self.triple_shots = owner.triple_shots
         self.y = random.uniform(TOP + self.radius, BOTTOM - self.radius)
         self.moving = random.choice((-1, 0, 1))
         self.turn_timer = random.uniform(*CLONE_TURN_EVERY)
@@ -353,23 +453,27 @@ class Clone:
         if self.life <= 0:
             self.alive = False
             return []
+        self.tick_effects(dt)
         self.turn_timer -= dt
         if self.turn_timer <= 0:
             self.turn_timer = random.uniform(*CLONE_TURN_EVERY)
             self.moving = random.choice((-1, 0, 1))
-        self.y += self.moving * CLONE_SPEED * dt
-        if self.y < TOP + self.radius:
-            self.y, self.moving = TOP + self.radius, 1
-        elif self.y > BOTTOM - self.radius:
-            self.y, self.moving = BOTTOM - self.radius, -1
+        self.y += self.moving * CLONE_SPEED * self.speed_mult * dt
+        r = self.radius
+        if self.y < TOP + r:
+            self.y, self.moving = TOP + r, 1
+        elif self.y > BOTTOM - r:
+            self.y, self.moving = BOTTOM - r, -1
         self.shot_timer -= dt
         if self.shot_timer <= 0:
-            self.shot_timer = random.uniform(*CLONE_SHOT_EVERY)
-            return make_bullets(self.owner, self.x, self.y, self.owner.dir,
-                                self.radius, (self.moving,))
+            pause = random.uniform(*CLONE_SHOT_EVERY)
+            self.shot_timer = pause * (RAPID_FACTOR if "rapid" in self.effects else 1)
+            if self.can_fire:
+                return make_bullets(self.owner, self.x, self.y, self.owner.dir, r,
+                                    self.shot_angles(self.moving), "wavy" in self.effects)
         return []
 
-    def draw(self, surf):
+    def draw(self, surf, font=None):
         if self.life < 2 and int(self.life * 8) % 2 == 0:
             return
         pos = (int(self.x), int(self.y))
@@ -377,6 +481,7 @@ class Clone:
         faded = tuple(c // 2 for c in self.owner.color)
         pygame.draw.circle(surf, faded, pos, r)
         pygame.draw.circle(surf, self.owner.color, pos, r, 2)
+        self.draw_effects(surf, font)
 
 
 class Artifact:
@@ -597,7 +702,7 @@ class AI:
         for i in slots:
             k = me.items[i]
             if k == "heal":
-                if me.hp <= MAX_HP - HEAL_AMOUNT:
+                if me.hp <= me.max_hp - HEAL_AMOUNT:
                     choice = i
                     break
             elif k not in DEFENSIVE_ITEMS:
@@ -719,6 +824,7 @@ class Game:
         self.font = pygame.font.SysFont("dejavusans", 18, bold=True)
         self.small = pygame.font.SysFont("dejavusans", 14)
         self.tiny = pygame.font.SysFont("dejavusans", 11, bold=True)
+        self.tiny_text = pygame.font.SysFont("dejavusans", 12)
         self.big = pygame.font.SysFont("dejavusans", 56, bold=True)
 
         # управление по физическим клавишам (scancode) — работает в любой раскладке
@@ -733,16 +839,21 @@ class Game:
         self.held = set()             # зажатые физические клавиши
         self.pads = Gamepads()
         self.players = (self.blue, self.red)
-        self.modes = [(None, "Два игрока")] + \
-            [(lvl, f"Против компьютера: {cfg['title']}") for lvl, cfg in AI_LEVELS.items()]
+        # пункты меню: (действие, уровень компьютера, подпись)
+        self.menu = [("play", None, "Два игрока")] + \
+            [("play", lvl, f"Против компьютера: {cfg['title']}") for lvl, cfg in AI_LEVELS.items()] + \
+            [("test", None, f"Тестовый режим: по {TEST_HP} жизней"),
+             ("help", None, "Артефакты: что делает каждый")]
         self.menu_index = 0
         self.state = "menu"
         self.ai_level = None          # None — два игрока
+        self.start_hp = MAX_HP
         self.restart()
 
-    def start(self, level):
+    def start(self, level, hp=MAX_HP):
         """level=None — два игрока, иначе уровень компьютера за правого."""
         self.ai_level = level
+        self.start_hp = hp
         self.red.name = "Компьютер" if level else "Красный"
         self.state = "play"
         self.held.clear()
@@ -753,7 +864,7 @@ class Game:
 
     def restart(self):
         for p in self.players:
-            p.reset()
+            p.reset(self.start_hp)
         self.bullets = []
         self.artifacts = []
         self.walls = {}               # игрок -> его стена
@@ -794,6 +905,9 @@ class Game:
             if self.state == "menu":
                 self.draw_menu()
                 continue
+            if self.state == "help":
+                self.draw_help()
+                continue
             if not self.winner:
                 self.update(dt)
             self.draw()
@@ -805,6 +919,11 @@ class Game:
             self.held.clear()
         if self.state == "menu":
             self.menu_key(sc)
+            return
+        if self.state == "help":
+            if sc in (pygame.KSCAN_ESCAPE, pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER,
+                      pygame.KSCAN_SPACE, pygame.KSCAN_BACKSPACE):
+                self.state = "menu"
             return
         if sc == pygame.KSCAN_ESCAPE:
             self.state = "menu"
@@ -832,6 +951,10 @@ class Game:
                 self.on_key(B.KSCAN_DOWN)
             elif btn in (B.CONTROLLER_BUTTON_A, B.CONTROLLER_BUTTON_START):
                 self.on_key(B.KSCAN_RETURN)
+            return
+        if self.state == "help":
+            if btn in (B.CONTROLLER_BUTTON_A, B.CONTROLLER_BUTTON_B, B.CONTROLLER_BUTTON_START):
+                self.state = "menu"
             return
         if btn == B.CONTROLLER_BUTTON_START:
             self.on_key(B.KSCAN_ESCAPE)
@@ -862,31 +985,41 @@ class Game:
         up = (pygame.KSCAN_W, pygame.KSCAN_UP)
         down = (pygame.KSCAN_S, pygame.KSCAN_DOWN)
         ok = (pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER, pygame.KSCAN_SPACE)
-        digits = (pygame.KSCAN_1, pygame.KSCAN_2, pygame.KSCAN_3, pygame.KSCAN_4)
+        digits = (pygame.KSCAN_1, pygame.KSCAN_2, pygame.KSCAN_3, pygame.KSCAN_4, pygame.KSCAN_5,
+                  pygame.KSCAN_6)
         if sc in up:
-            self.menu_index = (self.menu_index - 1) % len(self.modes)
+            self.menu_index = (self.menu_index - 1) % len(self.menu)
         elif sc in down:
-            self.menu_index = (self.menu_index + 1) % len(self.modes)
-        elif sc in digits and digits.index(sc) < len(self.modes):
+            self.menu_index = (self.menu_index + 1) % len(self.menu)
+        elif sc in digits and digits.index(sc) < len(self.menu):
             self.menu_index = digits.index(sc)
-            self.start(self.modes[self.menu_index][0])
+            self.menu_select()
         elif sc in ok:
-            self.start(self.modes[self.menu_index][0])
+            self.menu_select()
+
+    def menu_select(self):
+        action, level, _ = self.menu[self.menu_index]
+        if action == "help":
+            self.state = "help"
+        elif action == "test":
+            self.start(None, TEST_HP)
+        else:
+            self.start(level)
 
     def draw_menu(self):
         s = self.screen
         s.fill(BG)
         t = self.big.render("Дуэль шариков", True, WHITE)
-        s.blit(t, t.get_rect(center=(WIDTH // 2, 150)))
-        for i, (_, title) in enumerate(self.modes):
+        s.blit(t, t.get_rect(center=(WIDTH // 2, 110)))
+        for i, (_, _, title) in enumerate(self.menu):
             sel = i == self.menu_index
-            rect = pygame.Rect(0, 0, 440, 52)
-            rect.center = (WIDTH // 2, 270 + i * 66)
+            rect = pygame.Rect(0, 0, 440, 44)
+            rect.center = (WIDTH // 2, 215 + i * 52)
             pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=10)
             pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
             txt = self.font.render(f"{i + 1}.  {title}", True, WHITE if sel else GREY)
             s.blit(txt, txt.get_rect(center=rect.center))
-        hint = self.small.render("W/S или ↑/↓ — выбор,  Enter/Пробел или 1-4 — начать,  Esc — выход",
+        hint = self.small.render("W/S или ↑/↓ — выбор,  Enter/Пробел или 1-6 — выбрать,  Esc — выход",
                                  True, GREY)
         s.blit(hint, hint.get_rect(center=(WIDTH // 2, 560)))
         hint = self.small.render("Против компьютера: вы играете синим слева (W/S, Пробел, 1-4)",
@@ -904,6 +1037,63 @@ class Game:
             s.blit(hint, hint.get_rect(center=(WIDTH // 2, 650)))
         pygame.display.flip()
 
+    def draw_help(self):
+        s = self.screen
+        s.fill(BG)
+        t = self.font.render("Артефакты", True, WHITE)
+        s.blit(t, t.get_rect(center=(WIDTH // 2, 24)))
+        name_font = self.font
+        row_h, col_w = 50, 470
+        cols = {0: [HELP_SECTIONS[0], HELP_SECTIONS[1]], 1: [HELP_SECTIONS[2]]}
+        for col, sections in cols.items():
+            x0 = 20 + col * (col_w + 20)
+            y = 50
+            for title, kinds in sections:
+                h = self.font.render(title, True, (200, 205, 220))
+                s.blit(h, (x0, y))
+                pygame.draw.line(s, GREY, (x0, y + 24), (x0 + col_w, y + 24), 1)
+                y += 32
+                for kind in kinds:
+                    draw_icon(s, kind, (x0 + 20, y + 20), 18)
+                    name = name_font.render(ITEMS[kind][0], True, ITEMS[kind][2])
+                    s.blit(name, (x0 + 48, y))
+                    for j, line in enumerate(self.wrap(item_help(kind), col_w - 50)):
+                        s.blit(self.tiny_text.render(line, True, WHITE), (x0 + 48, y + 21 + j * 14))
+                    y += row_h
+                y += 6
+        # пояснения в свободном месте правой колонки
+        x0, y = 20 + col_w + 20, 50 + 32 + 6 * row_h + 20
+        notes = [
+            "Зелёная рамка — артефакт для тебя, оранжевая — бьёт по сопернику.",
+            "Эффекты складываются: например, волна + веер + скорость действуют вместе. "
+            "Повтор того же эффекта добавляет ему время (щиту — и удары).",
+            "На двойников переходят: щит, волна, веер, скорострельность, ×2, уменьшение, "
+            "сбивание пуль, скорость и «не стреляет».",
+            "Пока инвентарь (4 ячейки) полон, новые артефакты на твоей стороне не появляются.",
+        ]
+        for note in notes:
+            for line in self.wrap(note, col_w):
+                s.blit(self.tiny_text.render(line, True, GREY), (x0, y))
+                y += 15
+            y += 8
+        hint = self.small.render("Esc, Enter, Пробел или ✕/○ на геймпаде — назад", True, GREY)
+        s.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 16)))
+        pygame.display.flip()
+
+    def wrap(self, text, width):
+        """Разбивает текст на строки, чтобы влезали в width пикселей."""
+        lines, cur = [], ""
+        for word in text.split():
+            test = f"{cur} {word}".strip()
+            if self.tiny_text.size(test)[0] <= width:
+                cur = test
+            else:
+                lines.append(cur)
+                cur = word
+        if cur:
+            lines.append(cur)
+        return lines
+
     def fire(self, p):
         shots = p.shoot()
         if shots:
@@ -920,12 +1110,23 @@ class Game:
         p.items[slot] = None
         self.apply_item(p, kind)
 
+    def clones_of(self, p):
+        return [c for c in self.clones if c.owner is p]
+
+    def give(self, p, effect):
+        """Эффект игроку и, если положено, его двойникам."""
+        p.apply(effect)
+        if effect in CLONE_EFFECTS:
+            for c in self.clones_of(p):
+                c.apply(effect)
+
     def apply_item(self, p, kind):
         foe = self.other(p)
         if kind == "triple":
-            p.triple_shots = TRIPLE_SHOTS
+            for u in [p] + self.clones_of(p):
+                u.add_triple()
         elif kind == "heal":
-            p.hp = min(MAX_HP, p.hp + HEAL_AMOUNT)
+            p.hp = min(p.max_hp, p.hp + HEAL_AMOUNT)
         elif kind == "wall":
             self.walls[p] = Wall(p)       # новая стена заменяет старую
         elif kind == "clearfoe":
@@ -937,11 +1138,11 @@ class Game:
             for _ in range(max(0, min(CLONE_COUNT, MAX_CLONES - have))):
                 self.clones.append(Clone(p))
         elif kind == "foe_grow":
-            foe.apply("grow2")
+            self.give(foe, "grow2")
         elif kind.startswith("foe_"):
-            foe.apply(kind[4:])           # foe_freeze -> freeze и т.д.
+            self.give(foe, kind[4:])      # foe_freeze -> freeze и т.д.
         else:
-            p.apply(kind)
+            self.give(p, kind)
         target = foe if ITEMS[kind][1] == "foe" else p
         self.popup(ITEMS[kind][0] + "!", target, ITEMS[kind][2])
 
@@ -1002,18 +1203,21 @@ class Game:
             if not b.alive:
                 continue
             target = self.other(b.owner)      # владелец мог смениться после зеркала
-            dist = math.hypot(b.x - target.x, b.y - target.y)
-            if "shield" in target.effects and dist < target.radius + SHIELD_GAP + BULLET_R:
+            if target.shield_blocks(b):
                 b.alive = False                   # щит поглощает пулю
                 continue
-            if dist < target.radius + BULLET_R:
+            if math.hypot(b.x - target.x, b.y - target.y) < target.radius + BULLET_R:
                 b.alive = False
                 target.hp -= 1
                 target.hit_flash = 0.12
                 continue
             for c in self.clones:
-                if c.alive and c.owner is target and \
-                        math.hypot(b.x - c.x, b.y - c.y) < c.radius + BULLET_R:
+                if not c.alive or c.owner is not target:
+                    continue
+                if c.shield_blocks(b):
+                    b.alive = False
+                    break
+                if math.hypot(b.x - c.x, b.y - c.y) < c.radius + BULLET_R:
                     b.alive = False
                     c.alive = False               # двойник умирает с первого попадания
                     break
@@ -1073,8 +1277,12 @@ class Game:
 
             # жизни и эффекты — у края экрана
             avail = WIDTH // 2 - 16 - inv_w - 20
-            line1 = self.font.render(f"{p.name}  {'♥' * p.hp}", True, p.color)
-            parts = [f"{EFFECT_LABEL[n]} {t:.0f}" for n, t in p.effects.items()]
+            hearts = '♥' * min(p.hp, HEARTS_SHOWN)
+            if p.hp > HEARTS_SHOWN:
+                hearts += f" +{p.hp - HEARTS_SHOWN}"
+            line1 = self.font.render(f"{p.name}  {hearts}", True, p.color)
+            parts = [f"щит {p.shield_hits}×/{t:.0f}с" if n == "shield" else f"{EFFECT_LABEL[n]} {t:.0f}"
+                     for n, t in p.effects.items()]
             if p.triple_shots:
                 parts.append(f"веер {p.triple_shots}")
             if p in self.walls:
@@ -1104,11 +1312,11 @@ class Game:
         for a in self.artifacts:
             a.draw(s)
         for c in self.clones:
-            c.draw(s)
+            c.draw(s, self.tiny)
         for b in self.bullets:
             b.draw(s)
         for p in self.players:
-            p.draw(s)
+            p.draw(s, self.small)
         for text, x, y, t, color in self.popups:
             img = self.font.render(text, True, color)
             img.set_alpha(int(255 * min(1, t / 0.5)))
