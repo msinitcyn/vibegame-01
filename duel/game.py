@@ -39,6 +39,7 @@ from .config import (
     POPUP_TIME,
     RED,
     RED_LAND,
+    FAST_BULLET_FACTOR,
     SLOW_BULLET_FACTOR,
     TEST_HP,
     TOP,
@@ -93,6 +94,7 @@ class Game(ScreensMixin):
             [("test", None), ("help", None), ("settings", None)]
         self.menu_index = 0
         self.settings_rows = ["lang", "back"]
+        self.help_page = 0
         self.settings_index = 0
         self.state = "menu"
         self.ai_level = None          # None — два игрока
@@ -190,6 +192,8 @@ class Game(ScreensMixin):
             if sc in (pygame.KSCAN_ESCAPE, pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER,
                       pygame.KSCAN_SPACE, pygame.KSCAN_BACKSPACE):
                 self.state = "menu"
+            elif sc in (pygame.KSCAN_A, pygame.KSCAN_D, pygame.KSCAN_LEFT, pygame.KSCAN_RIGHT):
+                self.help_page = 1 - self.help_page        # две страницы — листаем по кругу
             return
         if self.state == "settings":
             self.settings_key(sc)
@@ -224,6 +228,8 @@ class Game(ScreensMixin):
         if self.state == "help":
             if btn in (B.CONTROLLER_BUTTON_A, B.CONTROLLER_BUTTON_B, B.CONTROLLER_BUTTON_START):
                 self.state = "menu"
+            elif btn in (B.CONTROLLER_BUTTON_DPAD_LEFT, B.CONTROLLER_BUTTON_DPAD_RIGHT):
+                self.on_key(B.KSCAN_RIGHT)
             return
         if self.state == "settings":
             keys = {B.CONTROLLER_BUTTON_DPAD_UP: B.KSCAN_UP, PAD_UP: B.KSCAN_UP,
@@ -322,6 +328,7 @@ class Game(ScreensMixin):
         action, level = self.menu[self.menu_index]
         if action == "help":
             self.state = "help"
+            self.help_page = 0
         elif action == "settings":
             self.state = "settings"
             self.settings_index = 0
@@ -448,7 +455,7 @@ class Game(ScreensMixin):
             prev_x = b.x
             target = self.other(b.owner)
             # если у цели «пули соперника медленнее» — эта пуля тормозит
-            b.update(dt * (SLOW_BULLET_FACTOR if "slowfoe" in target.effects else 1))
+            b.update(dt * self.bullet_speed(b.owner))
             for w in self.walls:
                 if b.alive:
                     w.hit(b, prev_x)
@@ -503,6 +510,18 @@ class Game(ScreensMixin):
         self.artifacts.append(art)
         self.popups.append([t("popup.mobdead"), mob.x, mob.y, POPUP_TIME, MOB_IDLE_COLOR])
 
+    def bullet_speed(self, owner):
+        """Множитель скорости пуль owner: «быстрые пули» у него, «пули соперника медленнее» у цели."""
+        k = FAST_BULLET_FACTOR if "fastshots" in owner.effects else 1.0
+        if "slowfoe" in self.other(owner).effects:
+            k *= SLOW_BULLET_FACTOR
+        return k
+
+    def chaser_speed(self, target):
+        """Множитель скорости моба, идущего на target: то же правило, что и для пуль —
+        моб «на стороне» соперника target."""
+        return self.bullet_speed(self.other(target))
+
     def update_mobs(self, dt):
         """Мобы: волнами в середину поля, идут на обидчика, бьют при касании."""
         self.match_time += dt
@@ -512,7 +531,7 @@ class Game(ScreensMixin):
                 self.wave_interval = max(MOB_EVERY_MIN, self.wave_interval - MOB_SPEEDUP)
             self.next_wave += self.wave_interval
         for m in self.mobs:
-            p = m.update(dt)
+            p = m.update(dt, self.chaser_speed(m.target) if m.target else 1.0)
             if p and not p.shield_absorb():   # щит гасит и удар моба
                 p.hp -= MOB_DAMAGE
                 p.hit_flash = 0.12

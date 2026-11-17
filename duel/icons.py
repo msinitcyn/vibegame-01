@@ -52,6 +52,10 @@ def draw_icon(surf, kind, center, r):
         for u in (-0.45, 0, 0.45):
             pygame.draw.circle(surf, color, P(u, 0), r * 0.15)
         pygame.draw.line(surf, color, P(-0.6, 0.35), P(0.6, 0.35), max(1, w // 2))
+    elif kind == "fastshots":                     # пуля и полосы скорости
+        pygame.draw.circle(surf, color, P(0.3, 0), r * 0.22)
+        for dy, ln in ((-0.25, 0.45), (0, 0.65), (0.25, 0.45)):
+            pygame.draw.line(surf, color, P(0.05 - ln, dy), P(0.0, dy), max(1, w - 1))
     elif kind == "slowfoe":                       # песочные часы
         pygame.draw.polygon(surf, color, [P(-0.4, -0.55), P(0.4, -0.55), P(0, 0)])
         pygame.draw.polygon(surf, color, [P(-0.4, 0.55), P(0.4, 0.55), P(0, 0)], 2)

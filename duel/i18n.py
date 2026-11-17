@@ -55,7 +55,9 @@ TEXTS = {
         "settings.hint": "W/S — выбор,  A/D или Enter — изменить,  Esc — назад",
 
         "help.title": "Артефакты",
-        "help.back": "Esc, Enter, Пробел или ✕/○ на геймпаде — назад",
+        "help.rules": "Правила",
+        "help.pages": "A/D или ←/→ — страница {page}/{pages}",
+        "help.back": "Esc, Enter, Пробел, ✕/○ — назад",
         "sec.defense": "Защита",
         "sec.weapon": "Оружие: на {t} с",
         "sec.attack": "Атака",
@@ -101,6 +103,8 @@ TEXTS = {
         "item.foe_nofire": "соперник не стреляет",
         "item.foe_invert": "соперник: управление наоборот",
         "item.foe_noitems": "соперник без артефактов",
+        "item.fastshots": "быстрые пули",
+        "decimal": ",",
 
         "help.shield": "Гасит {shield_hits} пуль или держится {shield} с — что кончится раньше. "
                        "В статусе видно, сколько ударов и секунд осталось.",
@@ -108,7 +112,10 @@ TEXTS = {
         "help.shrink": "Ты меньше в 2 раза на {shrink} с — в тебя труднее попасть.",
         "help.speed": "Движение ×1,8 на {speed} с: легче уворачиваться и собирать артефакты.",
         "help.clearfoe": "Все пули соперника, что сейчас на экране, исчезают.",
-        "help.slowfoe": "Пули соперника летят примерно вдвое медленнее, {slowfoe} с.",
+        "help.slowfoe": "Пули соперника и мобы, которые идут на тебя, примерно вдвое медленнее, "
+                        "{slowfoe} с.",
+        "help.fastshots": "Твои пули летят в {fast} раза быстрее {fastshots} с, и мобы, "
+                          "которые идут на соперника, — тоже.",
         "help.foe_grow": "Соперник больше в 2 раза на {grow2} с — по нему легче попасть.",
         "help.foe_freeze": "Соперник не может двигаться {freeze} с. Стрелять может.",
         "help.foe_nofire": "Соперник не может стрелять {nofire} с.",
@@ -157,7 +164,9 @@ TEXTS = {
         "settings.hint": "W/S — move,  A/D or Enter — change,  Esc — back",
 
         "help.title": "Artifacts",
-        "help.back": "Esc, Enter, Space or ✕/○ on gamepad — back",
+        "help.rules": "Rules",
+        "help.pages": "A/D or ←/→ — page {page}/{pages}",
+        "help.back": "Esc, Enter, Space, ✕/○ — back",
         "sec.defense": "Defense",
         "sec.weapon": "Weapon: {t} s",
         "sec.attack": "Attack",
@@ -203,6 +212,8 @@ TEXTS = {
         "item.foe_nofire": "opponent can't shoot",
         "item.foe_invert": "opponent: reversed controls",
         "item.foe_noitems": "opponent: no artifacts",
+        "item.fastshots": "fast bullets",
+        "decimal": ".",
 
         "help.shield": "Blocks {shield_hits} bullets or lasts {shield} s — whichever ends first. "
                        "Hits and seconds left are shown in the status.",
@@ -210,7 +221,9 @@ TEXTS = {
         "help.shrink": "You are 2× smaller for {shrink} s — harder to hit.",
         "help.speed": "Movement ×1.8 for {speed} s: easier to dodge and collect artifacts.",
         "help.clearfoe": "All opponent bullets currently on screen disappear.",
-        "help.slowfoe": "Opponent bullets fly about twice as slow, {slowfoe} s.",
+        "help.slowfoe": "Opponent bullets and mobs coming at you are about twice as slow, {slowfoe} s.",
+        "help.fastshots": "Your bullets fly {fast}× faster for {fastshots} s, and so do mobs "
+                          "going after the opponent.",
         "help.foe_grow": "The opponent is 2× bigger for {grow2} s — easier to hit.",
         "help.foe_freeze": "The opponent can't move for {freeze} s. Can still shoot.",
         "help.foe_nofire": "The opponent can't shoot for {nofire} s.",
@@ -260,7 +273,9 @@ TEXTS = {
         "settings.hint": "W/S — liiku,  A/D tai Enter — vaihda,  Esc — takaisin",
 
         "help.title": "Artefaktit",
-        "help.back": "Esc, Enter, välilyönti tai ✕/○ ohjaimessa — takaisin",
+        "help.rules": "Säännöt",
+        "help.pages": "A/D tai ←/→ — sivu {page}/{pages}",
+        "help.back": "Esc, Enter, välilyönti, ✕/○ — takaisin",
         "sec.defense": "Puolustus",
         "sec.weapon": "Ase: {t} s",
         "sec.attack": "Hyökkäys",
@@ -306,6 +321,8 @@ TEXTS = {
         "item.foe_nofire": "vastustaja ei voi ampua",
         "item.foe_invert": "vastustaja: käänteinen ohjaus",
         "item.foe_noitems": "vastustaja ilman artefakteja",
+        "item.fastshots": "nopeat luodit",
+        "decimal": ",",
 
         "help.shield": "Torjuu {shield_hits} luotia tai kestää {shield} s — kumpi loppuu ensin. "
                        "Jäljellä olevat osumat ja sekunnit näkyvät tilarivillä.",
@@ -313,7 +330,10 @@ TEXTS = {
         "help.shrink": "Olet 2× pienempi {shrink} s — sinuun on vaikeampi osua.",
         "help.speed": "Liike ×1,8 {speed} s: helpompi väistää ja kerätä artefakteja.",
         "help.clearfoe": "Kaikki ruudulla olevat vastustajan luodit katoavat.",
-        "help.slowfoe": "Vastustajan luodit lentävät noin puolet hitaammin, {slowfoe} s.",
+        "help.slowfoe": "Vastustajan luodit ja sinua kohti tulevat hirviöt ovat noin puolet "
+                        "hitaampia, {slowfoe} s.",
+        "help.fastshots": "Luotisi lentävät {fast}× nopeammin {fastshots} s, samoin vastustajaa "
+                          "kohti menevät hirviöt.",
         "help.foe_grow": "Vastustaja on 2× suurempi {grow2} s — häneen on helpompi osua.",
         "help.foe_freeze": "Vastustaja ei voi liikkua {freeze} s. Ampua voi.",
         "help.foe_nofire": "Vastustaja ei voi ampua {nofire} s.",

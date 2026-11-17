@@ -226,3 +226,39 @@ def test_mob_killable_while_player_moves(game):
         if not game.mobs:
             break
     assert game.mobs == [], f"моб жив: hp={m.hp}, dx={m.x - b.x:.0f}, dy={m.y - b.y:.0f}"
+
+
+# --- замедление и быстрые пули действуют и на мобов
+
+def mob_on(game, target, x):
+    m = spawn(game)[0]
+    game.mobs = [m]
+    m.target = target
+    m.x, m.y = x, target.y
+    return m
+
+
+def moved_in(game, m, seconds=0.5):
+    x0 = m.x
+    step(game, seconds)
+    return abs(m.x - x0)
+
+
+def test_slowfoe_slows_mobs_coming_at_me(game):
+    from duel.config import SLOW_BULLET_FACTOR
+    normal = moved_in(game, mob_on(game, game.blue, 450))
+    game.give(game.blue, "slowfoe")
+    slow = moved_in(game, mob_on(game, game.blue, 450))
+    assert slow == pytest.approx(normal * SLOW_BULLET_FACTOR, rel=0.05)
+    # на моба, который идёт на соперника, замедление синего не действует
+    assert moved_in(game, mob_on(game, game.red, 450)) == pytest.approx(normal, rel=0.05)
+
+
+def test_fastshots_speeds_mobs_going_after_opponent(game):
+    from duel.config import FAST_BULLET_FACTOR
+    normal = moved_in(game, mob_on(game, game.red, 550))
+    game.give(game.blue, "fastshots")
+    fast = moved_in(game, mob_on(game, game.red, 550))
+    assert fast == pytest.approx(normal * FAST_BULLET_FACTOR, rel=0.05)
+    # моба, который идёт на самого синего, быстрые пули синего не ускоряют
+    assert moved_in(game, mob_on(game, game.blue, 450)) == pytest.approx(normal, rel=0.05)

@@ -44,6 +44,9 @@ def test_all_screens_draw_in_every_language(game, lang, lang_restore):
     for state, draw in (("menu", game.draw_menu), ("help", game.draw_help), ("settings", game.draw_settings)):
         game.state = state
         draw()
+    game.state = "help"
+    game.help_page = 1                          # вторая страница справки — правила
+    game.draw_help()
     game.winner = game.blue
     game.draw()
 

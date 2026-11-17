@@ -333,3 +333,40 @@ def test_ammo_pack_picked_with_full_inventory(game):
     game.ammo_packs = [pack]
     step(game)
     assert b.ammo == START_AMMO + AMMO_PACK and game.ammo_packs == []
+
+
+# --- быстрые пули
+
+def bullet_path(game, owner, seconds=0.2):
+    game.bullets = []
+    owner.cooldown = 0
+    game.fire(owner)
+    b = game.bullets[0]
+    x0 = b.x
+    step(game, seconds)
+    return abs(b.x - x0)
+
+
+def test_fastshots_speeds_own_bullets(game):
+    from duel.config import FAST_BULLET_FACTOR
+    b = game.blue
+    normal = bullet_path(game, b)
+    game.apply_item(b, "fastshots")
+    assert bullet_path(game, b) == pytest.approx(normal * FAST_BULLET_FACTOR, rel=0.05)
+    assert bullet_path(game, game.red) == pytest.approx(normal, rel=0.05)   # чужие — как были
+
+
+def test_fastshots_and_slowfoe_multiply(game):
+    from duel.config import FAST_BULLET_FACTOR, SLOW_BULLET_FACTOR
+    b, r = game.blue, game.red
+    normal = bullet_path(game, b)
+    game.apply_item(b, "fastshots")
+    game.apply_item(r, "slowfoe")
+    assert bullet_path(game, b) == pytest.approx(normal * FAST_BULLET_FACTOR * SLOW_BULLET_FACTOR, rel=0.05)
+
+
+def test_fastshots_also_for_clone_bullets(game):
+    from duel.config import FAST_BULLET_FACTOR
+    b = game.blue
+    game.apply_item(b, "fastshots")
+    assert game.bullet_speed(b) == pytest.approx(FAST_BULLET_FACTOR)  # пули двойников — тоже пули синего

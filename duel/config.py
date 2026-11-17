@@ -106,11 +106,12 @@ ICON_BG = (35, 38, 52)
 
 # эффекты на игроке: длительность
 DURATION = {"grow2": 7, "shrink": 7, "freeze": 2.5, "speed": 7, "nofire": 4, "slowfoe": 7,
-            "shield": 7, "invert": 5, "noitems": 5,
+            "shield": 7, "invert": 5, "noitems": 5, "fastshots": 7,
             # улучшения оружия
             "triple": WEAPON_TIME, "wavy": WEAPON_TIME, "rapid": WEAPON_TIME, "breaker": WEAPON_TIME}
 RAPID_FACTOR = 0.4               # пауза между выстрелами x0.4
-SLOW_BULLET_FACTOR = 0.45        # пули соперника летят в ~2 раза медленнее
+SLOW_BULLET_FACTOR = 0.45        # «пули соперника медленнее»: его пули и мобы, идущие на тебя
+FAST_BULLET_FACTOR = 1.6         # «быстрые пули»: твои пули и мобы, идущие на соперника
 SHIELD_GAP = 10                  # щит на столько пикселей шире шарика
 SHIELD_HITS = 5                  # щит гасит столько пуль (или исчезает по времени)
 WAVE_AMP = (25, 55)              # размах волны пули, пикс (случайно для каждой пули)

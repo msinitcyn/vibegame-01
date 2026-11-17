@@ -86,50 +86,64 @@ class ScreensMixin:
         pygame.display.flip()
 
     def draw_help(self):
+        """Справка в две страницы: 1 — артефакты (значок, название, описание), 2 — правила."""
         s = self.screen
         s.fill(BG)
-        img = self.font.render(tr("help.title"), True, WHITE)
+        title = tr("help.title") if self.help_page == 0 else tr("help.rules")
+        img = self.font.render(title, True, WHITE)
         s.blit(img, img.get_rect(center=(WIDTH // 2, 24)))
-        name_font = self.font
+        if self.help_page == 0:
+            self.draw_help_items()
+        else:
+            self.draw_help_rules()
+        hint = self.small.render(f"{tr('help.pages', page=self.help_page + 1, pages=2)}    "
+                                 f"{tr('help.back')}", True, GREY)
+        s.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 16)))
+        pygame.display.flip()
+
+    def draw_help_items(self):
+        s = self.screen
         row_h, col_w = 48, 470
-        cols = {0: HELP_SECTIONS[:1], 1: HELP_SECTIONS[1:]}
-        for col, sections in cols.items():
+        sections = dict(HELP_SECTIONS)
+        cols = {0: ["defense", "attack"], 1: ["weapon", "debuff"]}
+        for col, ids in cols.items():
             x0 = 20 + col * (col_w + 20)
             y = 50
-            for section, kinds in sections:
+            for section in ids:
                 h = self.font.render(section_title(section), True, (200, 205, 220))
                 s.blit(h, (x0, y))
                 pygame.draw.line(s, GREY, (x0, y + 24), (x0 + col_w, y + 24), 1)
                 y += 32
-                for kind in kinds:
+                for kind in sections[section]:
                     draw_icon(s, kind, (x0 + 20, y + 20), 18)
-                    name = name_font.render(item_name(kind), True, ITEMS[kind][1])
+                    name = self.font.render(item_name(kind), True, ITEMS[kind][1])
                     s.blit(name, (x0 + 48, y))
                     for j, line in enumerate(self.wrap(item_help(kind), col_w - 50)):
                         s.blit(self.tiny_text.render(line, True, WHITE), (x0 + 48, y + 21 + j * 14))
                     y += row_h
                 y += 6
-        # пояснения в свободном месте левой колонки
-        x0, y = 20, 50 + 32 + len(HELP_SECTIONS[0][1]) * row_h + 20
+
+    def draw_help_rules(self):
+        s = self.screen
         numbers = dict(queue=QUEUE_SHOWN, weapon=f"{WEAPON_TIME:.0f}", wmax=WEAPON_MAX,
                        ammo=START_AMMO, pack=AMMO_PACK, every=f"{MOB_EVERY:.0f}",
                        mmax=MOB_MAX, mhp=MOB_MAX_HP)
-        notes = [tr(f"note.{i}", **numbers) for i in range(1, 9)]
-        for note in notes:
-            for line in self.wrap(note, col_w):
-                s.blit(self.tiny_text.render(line, True, GREY), (x0, y))
-                y += 15
-            y += 5
-        hint = self.small.render(tr("help.back"), True, GREY)
-        s.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 16)))
-        pygame.display.flip()
+        x0, y, width = 80, 70, WIDTH - 160
+        for i in range(1, 9):
+            lines = self.wrap(tr(f"note.{i}", **numbers), width, self.small)
+            for j, line in enumerate(lines):
+                prefix = "•  " if j == 0 else "    "
+                s.blit(self.small.render(prefix + line, True, WHITE), (x0, y))
+                y += 22
+            y += 14
 
-    def wrap(self, text, width):
-        """Разбивает текст на строки, чтобы влезали в width пикселей."""
+    def wrap(self, text, width, font=None):
+        """Разбивает текст на строки, чтобы влезали в width пикселей (по умолчанию — мелкий шрифт)."""
+        font = font or self.tiny_text
         lines, cur = [], ""
         for word in text.split():
             test = f"{cur} {word}".strip()
-            if self.tiny_text.size(test)[0] <= width:
+            if font.size(test)[0] <= width:
                 cur = test
             else:
                 lines.append(cur)

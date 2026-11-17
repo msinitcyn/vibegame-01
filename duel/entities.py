@@ -405,8 +405,9 @@ class Mob:
         if self.hp <= 0:
             self.alive = False
 
-    def update(self, dt):
-        """Двигается к цели. Возвращает игрока, которого ударил в этом кадре, иначе None."""
+    def update(self, dt, speed=1.0):
+        """Двигается к цели (speed — множитель скорости от «быстрых пуль»/«замедления»).
+        Возвращает игрока, которого ударил в этом кадре, иначе None."""
         self.flash = max(0.0, self.flash - dt)
         self.hit_cd = max(0.0, self.hit_cd - dt)
         p = self.target
@@ -419,7 +420,7 @@ class Mob:
         dx, dy = spot_x - self.x, p.y - self.y
         dist = math.hypot(dx, dy)
         if dist > 0:
-            step = min(MOB_SPEED * dt, dist)
+            step = min(MOB_SPEED * speed * dt, dist)
             self.x += dx / dist * step
             self.y += dy / dist * step
         self.facing = -p.dir                  # лицом к игроку

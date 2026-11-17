@@ -3,7 +3,7 @@
 import math
 import random
 
-from .config import BOTTOM, BULLET_R, BULLET_SPEED, HEAL_AMOUNT, SLOW_BULLET_FACTOR, TOP
+from .config import BOTTOM, BULLET_R, BULLET_SPEED, HEAL_AMOUNT, TOP
 from .items import BAD_EFFECTS
 
 
@@ -67,7 +67,7 @@ class AI:
         """Пули соперника, летящие в нас: список (время до нас, высота в этот момент)."""
         me, cfg = self.me, self.cfg
         foe = self.game.other(me)
-        slow = SLOW_BULLET_FACTOR if "slowfoe" in me.effects else 1
+        slow = self.game.bullet_speed(foe)       # «быстрые пули» соперника и наше «замедление»
         out = []
         for b in self.game.bullets:
             if b.owner is not foe or b.vx * (me.x - b.x) <= 0:

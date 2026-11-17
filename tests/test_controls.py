@@ -138,3 +138,15 @@ def test_vs_computer_ignores_right_player_keys(game):
     game.start("easy")
     game.on_key(pygame.KSCAN_RETURN)
     assert game.bullets == []
+
+
+def test_help_pages(game):
+    game.state = "menu"
+    game.on_key(pygame.KSCAN_6)
+    assert game.state == "help" and game.help_page == 0
+    game.on_key(pygame.KSCAN_D)
+    assert game.help_page == 1
+    game.on_key(pygame.KSCAN_LEFT)
+    assert game.help_page == 0
+    game.on_key(pygame.KSCAN_ESCAPE)
+    assert game.state == "menu"

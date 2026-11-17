@@ -5,6 +5,7 @@ from .config import (
     CLONE_COUNT,
     CLONE_TIME,
     DURATION,
+    FAST_BULLET_FACTOR,
     FOE_RING,
     HEAL_AMOUNT,
     RAPID_FACTOR,
@@ -25,6 +26,7 @@ ITEMS = {
     "wall": ("self", (225, 235, 255)),
     "rapid": ("self", (255, 160, 40)),
     "slowfoe": ("self", (120, 210, 170)),
+    "fastshots": ("self", (255, 150, 70)),
     "shield": ("self", (120, 200, 255)),
     "heal": ("self", (255, 90, 120)),
     "clones": ("self", (200, 200, 210)),
@@ -43,7 +45,7 @@ ITEMS = {
 HELP_SECTIONS = [
     ("defense", ["shield", "heal", "cleanse", "shrink", "speed", "clearfoe", "slowfoe"]),
     ("weapon", ["triple", "wavy", "rapid", "breaker"]),
-    ("attack", ["clones", "wall"]),
+    ("attack", ["clones", "wall", "fastshots"]),
     ("debuff", ["foe_grow", "foe_freeze", "foe_nofire", "foe_invert", "foe_noitems"]),
 ]
 
@@ -66,6 +68,7 @@ def item_help(kind):
         rapid_cd=f"{SHOT_COOLDOWN * RAPID_FACTOR:.1f}", cd=f"{SHOT_COOLDOWN:g}",
         rapid=f"{d['rapid']:.0f}", wavy=f"{d['wavy']:.0f}", clones=CLONE_COUNT,
         clone_time=f"{CLONE_TIME:.0f}", breaker=f"{d['breaker']:.0f}", wall_time=f"{WALL_TIME:.0f}",
+        fastshots=f"{d['fastshots']:g}", fast=f"{FAST_BULLET_FACTOR:g}".replace(".", t("decimal")),
     )
     return t(f"help.{kind}", **numbers)
 
