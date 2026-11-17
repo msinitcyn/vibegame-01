@@ -115,7 +115,6 @@ def test_mob_dies_after_three_hits(game):
 
 def test_computer_shoots_mob_that_chases_it(game):
     game.start("hard")
-    game.spawn_timer = {p: 1e9 for p in game.players}
     m = spawn(game)[0]
     game.mobs = [m]
     m.target = game.red
@@ -125,3 +124,37 @@ def test_computer_shoots_mob_that_chases_it(game):
         if not game.mobs:
             break
     assert game.mobs == [], f"моб жив, hp={m.hp}, расстояние {math.hypot(m.x - game.red.x, m.y - game.red.y):.0f}"
+
+
+# --- артефакты только из мобов
+
+def test_no_artifacts_without_mob_kills(game):
+    game.match_time = -1e9                      # мобы не придут
+    step(game, 60)
+    assert game.artifacts == []
+
+
+def test_killed_mob_drops_artifact_on_killers_line(game):
+    m = spawn(game)[0]
+    y = m.y
+    for _ in range(MOB_HP):
+        shoot_mob(game, m, game.red)
+    assert len(game.artifacts) == 1
+    art = game.artifacts[0]
+    assert art.x == game.red.x and abs(art.y - y) < 60
+
+
+def test_full_inventory_gets_only_instant_drops(game):
+    from duel.items import INSTANT_ITEMS
+    b = game.blue
+    b.items = ["shield"] * 4
+    kinds = set()
+    for _ in range(30):
+        game.mobs = []
+        game.artifacts = []
+        game.spawn_mob_wave()
+        m = game.mobs[0]
+        m.hp = 1
+        shoot_mob(game, m, b)
+        kinds |= {a.kind for a in game.artifacts}
+    assert kinds and kinds <= set(INSTANT_ITEMS)

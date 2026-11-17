@@ -10,7 +10,6 @@ from .config import (
     AMMO_PACK,
     AMMO_SPAWN,
     ARTIFACT_R,
-    ARTIFACT_SPAWN,
     BAD_TEXT,
     BLUE,
     BOTTOM,
@@ -20,7 +19,6 @@ from .config import (
     FPS,
     HEAL_AMOUNT,
     HEIGHT,
-    MAX_ARTIFACTS_PER_SIDE,
     MAX_CLONES,
     MAX_HP,
     MOB_COUNT,
@@ -34,11 +32,10 @@ from .config import (
     RED,
     SLOW_BULLET_FACTOR,
     TEST_HP,
-    WEAPON_SPAWN,
     TOP,
     WIDTH,
 )
-from .items import BAD_EFFECTS, INSTANT_ITEMS, INVENTORY_ITEMS, ITEMS, WEAPON_ITEMS, ring_color
+from .items import BAD_EFFECTS, INSTANT_ITEMS, ITEMS, ring_color
 from .entities import AmmoPack, Artifact, Clone, Mob, Player, Wall
 from .ai import AI, AI_LEVELS
 from .gamepad import Gamepads, PAD_DOWN, PAD_FIRE, PAD_ITEM_BUTTONS, PAD_UP
@@ -106,13 +103,9 @@ class Game(ScreensMixin):
         self.walls = []               # стены могут стоять одновременно, у каждой свой таймер
         self.clones = []
         self.popups = []              # [текст, x, y, время, цвет]
-        self.spawn_timer = {p: random.uniform(*ARTIFACT_SPAWN) for p in self.players}
         self.ammo_packs = []
         self.ammo_timer = {p: random.uniform(*AMMO_SPAWN) for p in self.players}
         self.no_ammo_shown = {p: -10_000 for p in self.players}
-        # улучшения оружия: по одному на сторону, следующее — через WEAPON_SPAWN после предыдущего
-        self.weapon_timer = {p: WEAPON_SPAWN for p in self.players}
-        self.weapon_art = {p: None for p in self.players}
         self.mobs = []
         self.match_time = 0.0         # секунд с начала партии
         self.mob_wave = 0             # сколько волн мобов уже пришло
@@ -333,16 +326,7 @@ class Game(ScreensMixin):
             p.update(dt, keys)
         self.update_mobs(dt)
 
-        # артефакты появляются на вертикали игрока, пока у него есть место в инвентаре
-        for p in self.players:
-            self.spawn_timer[p] -= dt
-            if self.spawn_timer[p] <= 0:
-                self.spawn_timer[p] = random.uniform(*ARTIFACT_SPAWN)
-                on_side = sum(1 for a in self.artifacts if a.x == p.x and a.kind not in WEAPON_ITEMS)
-                if not p.inventory_full and on_side < MAX_ARTIFACTS_PER_SIDE:
-                    self.artifacts.append(Artifact(p.x, random.choice(INVENTORY_ITEMS)))
-        self.spawn_weapons(dt)
-
+        # артефакты сами не появляются — только выпадают из убитых мобов (drop_artifact)
         for a in self.artifacts:
             a.life -= dt
         for p in self.players:
@@ -422,7 +406,7 @@ class Game(ScreensMixin):
         self.clones = [c for c in self.clones if c.alive]
         for m in self.mobs:
             if not m.alive:
-                self.popups.append(["моб повержен", m.x, m.y, POPUP_TIME, MOB_IDLE_COLOR])
+                self.drop_artifact(m)
         self.mobs = [m for m in self.mobs if m.alive]
         self.collide_bullets()
         self.bullets = [b for b in self.bullets if b.alive]
@@ -431,22 +415,17 @@ class Game(ScreensMixin):
             if p.hp <= 0:
                 self.winner = self.other(p)
 
-    def spawn_weapons(self, dt):
-        """Улучшение оружия: одно на стороне; следующее — через WEAPON_SPAWN после того,
-        как предыдущее подобрали или оно исчезло. Так подборы не чаще раза в 10 с,
-        а при длительности 30 с одновременно активных улучшений не больше трёх."""
-        for p in self.players:
-            art = self.weapon_art[p]
-            if art is not None:
-                if art in self.artifacts:
-                    continue                  # ещё лежит
-                self.weapon_art[p] = None     # подобрали или исчезло — отсчёт заново
-                self.weapon_timer[p] = WEAPON_SPAWN
-            self.weapon_timer[p] -= dt
-            if self.weapon_timer[p] <= 0:
-                art = Artifact(p.x, random.choice(WEAPON_ITEMS))
-                self.artifacts.append(art)
-                self.weapon_art[p] = art
+    def drop_artifact(self, mob):
+        """Убитый моб роняет случайный артефакт на вертикаль того, кто его добил,
+        на высоте, где моб погиб. При полном инвентаре — только то, что срабатывает сразу."""
+        killer = mob.target
+        if killer is None:
+            return
+        pool = list(INSTANT_ITEMS) if killer.inventory_full else list(ITEMS)
+        art = Artifact(killer.x, random.choice(pool))
+        art.y = max(TOP + ARTIFACT_R, min(BOTTOM - ARTIFACT_R, mob.y))
+        self.artifacts.append(art)
+        self.popups.append(["моб повержен", mob.x, mob.y, POPUP_TIME, MOB_IDLE_COLOR])
 
     def update_mobs(self, dt):
         """Мобы: волнами в середину поля, идут на обидчика, бьют при касании."""

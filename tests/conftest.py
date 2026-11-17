@@ -25,8 +25,7 @@ def game(_game):
     _game.pads.pads = []
     _game.start(None)
     _game.held = set()
-    # артефакты и патроны сами не появляются — тесты кладут их явно
-    _game.spawn_timer = {p: 1e9 for p in _game.players}
+    # пачки патронов сами не появляются — тесты кладут их явно
     _game.ammo_timer = {p: 1e9 for p in _game.players}
     return _game
 

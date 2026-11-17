@@ -11,7 +11,6 @@ from .config import (
     BG,
     BLUE,
     BOTTOM,
-    EFFECT_LABEL,
     GREY,
     HEARTS_SHOWN,
     HEIGHT,
@@ -20,11 +19,11 @@ from .config import (
     START_AMMO,
     TOP,
     WHITE,
-    WEAPON_SPAWN,
+    WEAPON_MAX,
     WEAPON_TIME,
     WIDTH,
 )
-from .items import HELP_SECTIONS, ITEMS, WEAPON_ITEMS, item_help
+from .items import EFFECT_ICON, HELP_SECTIONS, ITEMS, WEAPON_ITEMS, item_help
 from .icons import draw_icon
 from .gamepad import PAD_ITEM_COLORS, PAD_ITEM_LABELS, PAD_ITEM_LAYOUT
 from .sprites import sprite_image
@@ -92,15 +91,17 @@ class ScreensMixin:
         x0, y = 20, 50 + 32 + len(HELP_SECTIONS[0][1]) * row_h + 20
         notes = [
             "Рамка: зелёная — защита, синяя — атака, оранжевая — по сопернику.",
-            f"Оружие: по одному раз в {WEAPON_SPAWN:.0f} с, срабатывает сразу, держится "
-            f"{WEAPON_TIME:.0f} с, повтор обновляет таймер. Больше трёх сразу не бывает. Видно в углу поля.",
-            "Эффекты складываются; повтор того же добавляет время (щиту — и удары).",
-            "На двойников переходят: щит, оружие, ×2, уменьшение, скорость, «не стреляет».",
-            "Полный инвентарь (4 ячейки) — новые артефакты на твоей стороне не появляются.",
-            f"Патроны: в начале {START_AMMO}, выстрел тратит 1. Пачки по {AMMO_PACK} подбираются сразу.",
-            f"Мобы: каждые {MOB_EVERY:.0f} с волна в середине — {MOB_COUNT} по {MOB_HP} жизни, "
-            "дальше каждый раз +1 моб и +1 жизнь всем. Попал — идёт на тебя и бьёт.",
-            "Дебаффы снимаются только временем или очищением. Стен может быть несколько.",
+            "Статус под именем игрока — всё, что действует сейчас, с таймерами.",
+            "Артефакты — только из убитых мобов, у того, кто добил. При полном инвентаре "
+            "выпадает только то, что срабатывает сразу.",
+            f"Оружие: сразу, на {WEAPON_TIME:.0f} с, не больше {WEAPON_MAX} — новое вытесняет "
+            "старое; повтор обновляет таймер.",
+            "Эффекты складываются, повтор добавляет время. Двойникам передаются щит, оружие, "
+            "размер, скорость, «не стреляет».",
+            f"Патроны: в начале {START_AMMO}, выстрел — 1. Пачки по {AMMO_PACK} подбираются сразу.",
+            f"Мобы: волна каждые {MOB_EVERY:.0f} с — {MOB_COUNT} по {MOB_HP} жизни, дальше +1 моб "
+            "и +1 жизнь всем. Попал — идёт на тебя.",
+            "Дебаффы снимает только время или очищение.",
         ]
         for note in notes:
             for line in self.wrap(note, col_w):
@@ -186,17 +187,7 @@ class ScreensMixin:
                 hearts += f" +{p.hp - HEARTS_SHOWN}"
             line1 = self.font.render(f"{p.name}  {hearts}    патроны {p.ammo}", True,
                                      p.color if p.ammo > 0 else BAD_TEXT)
-            # улучшения оружия — не здесь, а в панели в углу поля
-            parts = [f"щит {p.shield_hits}×/{t:.0f}с" if n == "shield" else f"{EFFECT_LABEL[n]} {t:.0f}"
-                     for n, t in p.effects.items() if n not in WEAPON_ITEMS]
-            mine = [w.life for w in self.walls if w.owner is p]
-            if mine:
-                parts.append(f"стена {max(mine):.0f}" if len(mine) == 1 else
-                             f"стены {len(mine)} (до {max(mine):.0f})")
-            n = sum(1 for c in self.clones if c.owner is p)
-            if n:
-                parts.append(f"двойники {n}")
-            line2 = self.small.render("  ·  ".join(parts), True, WHITE)
+            line2 = self.status_chips(p)
             for img, cy in ((line1, HUD_H // 2 - 12), (line2, HUD_H // 2 + 14)):
                 if img.get_width() > avail:
                     img = pygame.transform.smoothscale(
@@ -222,32 +213,35 @@ class ScreensMixin:
             self._field_bg = bg
         return bg
 
-    def draw_weapon_status(self):
-        """Активные улучшения оружия в углу поля: значок, секунды, полоска. Синий — слева, красный — справа."""
-        s = self.screen
-        row_h, w = 30, 96
-        for p in self.players:
-            active = sorted(((t, n) for n, t in p.effects.items() if n in WEAPON_ITEMS), reverse=True)
-            if not active:
-                continue
-            left = p is self.blue
-            x0 = 8 if left else WIDTH - 8 - w
-            box = pygame.Rect(x0, TOP + 8, w, len(active) * row_h + 6)
-            panel = pygame.Surface(box.size, pygame.SRCALPHA)
-            panel.fill((10, 10, 16, 170))
-            s.blit(panel, box)
-            pygame.draw.rect(s, p.color, box, 1, border_radius=4)
-            for i, (t, kind) in enumerate(active):
-                y = box.top + 4 + i * row_h
-                draw_icon(s, kind, (box.left + 16, y + 12), 11)
-                txt = self.small.render(f"{t:.0f} с", True, ITEMS[kind][2])
-                s.blit(txt, (box.left + 32, y + 1))
-                # полоска: сколько осталось из WEAPON_TIME (при стаке — больше полной)
-                bar = pygame.Rect(box.left + 32, y + 19, w - 40, 4)
-                pygame.draw.rect(s, (50, 50, 60), bar)
-                fill = bar.copy()
-                fill.w = round(bar.w * min(1.0, t / WEAPON_TIME))
-                pygame.draw.rect(s, ITEMS[kind][2], fill)
+    def status_chips(self, p):
+        """Вторая строка статуса: значки всех действующих на игрока артефактов с таймерами.
+
+        Сначала улучшения оружия, потом остальные эффекты, стены и двойники.
+        """
+        chips = []                    # (вид артефакта для значка, подпись, цвет подписи)
+        effects = sorted(p.effects.items(), key=lambda e: (e[0] not in WEAPON_ITEMS, -e[1]))
+        for name, t in effects:
+            kind = EFFECT_ICON.get(name, name)
+            label = f"{p.shield_hits}×{t:.0f}" if name == "shield" else f"{t:.0f}"
+            chips.append((kind, label, ITEMS[kind][2]))
+        walls = [w.life for w in self.walls if w.owner is p]
+        if walls:
+            label = f"{max(walls):.0f}" if len(walls) == 1 else f"{len(walls)}×{max(walls):.0f}"
+            chips.append(("wall", label, ITEMS["wall"][2]))
+        clones = len(self.clones_of(p))
+        if clones:
+            chips.append(("clones", f"×{clones}", ITEMS["clones"][2]))
+
+        r, gap = 9, 10
+        rendered = [(kind, self.small.render(label, True, color)) for kind, label, color in chips]
+        width = sum(2 * r + 3 + t.get_width() for _, t in rendered) + gap * max(0, len(rendered) - 1)
+        surf = pygame.Surface((max(1, width), 2 * r + 2), pygame.SRCALPHA)
+        x = 0
+        for kind, txt in rendered:
+            draw_icon(surf, kind, (x + r, r + 1), r)
+            surf.blit(txt, (x + 2 * r + 3, r + 1 - txt.get_height() // 2))
+            x += 2 * r + 3 + txt.get_width() + gap
+        return surf
 
     def draw(self):
         s = self.screen
@@ -259,20 +253,19 @@ class ScreensMixin:
         for a in self.ammo_packs:
             a.draw(s, self.tiny)
         for c in self.clones:
-            c.draw(s, self.tiny)
+            c.draw(s)
         for m in self.mobs:
             m.draw(s, self.tiny)
         for b in self.bullets:
             b.draw(s)
         for p in self.players:
-            p.draw(s, self.small)
+            p.draw(s)
         for text, x, y, t, color in self.popups:
             img = self.font.render(text, True, color)
             img.set_alpha(int(255 * min(1, t / 0.5)))
             rect = img.get_rect(center=(int(x), int(y)))
             rect.clamp_ip(pygame.Rect(0, TOP, WIDTH, BOTTOM - TOP))
             s.blit(img, rect)
-        self.draw_weapon_status()
         self.draw_hud()
 
         if self.winner:

@@ -50,7 +50,7 @@ def item_help(kind):
     d = DURATION
     return {
         "shield": f"Гасит {SHIELD_HITS} пуль или держится {d['shield']} с — что кончится раньше. "
-                  "Над шариком видно, сколько ударов и секунд осталось.",
+                  "В статусе видно, сколько ударов и секунд осталось.",
         "heal": f"+{HEAL_AMOUNT} жизни сразу при подборе, в инвентарь не кладётся.",
         "shrink": f"Ты меньше в 2 раза на {d['shrink']} с — в тебя труднее попасть.",
         "speed": f"Движение ×1,8 на {d['speed']} с: легче уворачиваться и собирать артефакты.",
@@ -78,8 +78,10 @@ def item_help(kind):
 
 WEAPON_ITEMS = ("triple", "wavy", "rapid", "breaker")      # улучшения оружия: сразу, на 30 с
 ATTACK_ITEMS = WEAPON_ITEMS + tuple(next(kinds for title, kinds in HELP_SECTIONS if title == "Атака"))
+# эффект на игроке -> артефакт, чей значок показывать в статусе (если имена различаются)
+EFFECT_ICON = {"grow2": "foe_grow", "freeze": "foe_freeze", "nofire": "foe_nofire",
+               "invert": "foe_invert", "noitems": "foe_noitems"}
 INSTANT_ITEMS = ("heal",) + WEAPON_ITEMS                  # срабатывают при подборе, минуя инвентарь
-INVENTORY_ITEMS = [k for k in ITEMS if k not in WEAPON_ITEMS]  # обычные артефакты на поле
 # дебаффы: снимаются только временем или очищением, ничем другим
 BAD_EFFECTS = ("grow2", "freeze", "nofire", "invert", "noitems")
 

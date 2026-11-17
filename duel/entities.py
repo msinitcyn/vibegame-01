@@ -6,6 +6,7 @@ import random
 import pygame
 
 from .config import (
+    WEAPON_MAX,
     MOB_HIT_COOLDOWN,
     MOB_HP,
     MOB_IDLE_COLOR,
@@ -100,10 +101,14 @@ class Unit:
     def apply(self, effect):
         """Эффекты складываются: разные действуют одновременно, повтор того же добавляет время.
 
-        Исключение — улучшения оружия: повтор обновляет таймер до полного, а не добавляет.
-        Иначе одно улучшение «переживало» бы несколько подборов и их могло стать больше трёх.
+        Исключение — улучшения оружия: повтор обновляет таймер до полного, а не добавляет,
+        и одновременно их не больше WEAPON_MAX.
         """
         if effect in WEAPON_ITEMS:
+            active = [n for n in self.effects if n in WEAPON_ITEMS]
+            if effect not in active and len(active) >= WEAPON_MAX:
+                # не больше WEAPON_MAX улучшений: вытесняем то, у которого меньше всего времени
+                del self.effects[min(active, key=self.effects.get)]
             self.effects[effect] = max(self.effects.get(effect, 0), DURATION[effect])
         else:
             self.effects[effect] = self.effects.get(effect, 0) + DURATION[effect]
@@ -141,7 +146,8 @@ class Unit:
             self.shield_hits = 0
         return True
 
-    def draw_effects(self, surf, font=None):
+    def draw_effects(self, surf):
+        """Кольца и значки эффектов на самом маге. Таймеры — в статусе, не на поле."""
         r = int(self.radius)
         pos = (int(self.x), int(self.y))
         if self.frozen:
@@ -152,10 +158,6 @@ class Unit:
             t = self.effects["shield"]
             if t > 1.5 or int(t * 8) % 2:
                 pygame.draw.circle(surf, ITEMS["shield"][2], pos, r + SHIELD_GAP, 3)
-            if font:
-                # сколько ударов и секунд осталось у щита
-                txt = font.render(f"{self.shield_hits}× · {t:.0f}с", True, ITEMS["shield"][2])
-                surf.blit(txt, txt.get_rect(midbottom=(pos[0], pos[1] - r - SHIELD_GAP - 2)))
         if "triple" in self.effects:
             pygame.draw.circle(surf, ITEMS["triple"][2], pos, max(3, r // 3))
         if "nofire" in self.effects:
@@ -224,10 +226,10 @@ class Player(Unit):
         return make_bullets(self, self.x, self.y, self.dir, self.radius,
                             self.shot_angles(self.moving), "wavy" in self.effects)
 
-    def draw(self, surf, font=None):
+    def draw(self, surf):
         pos = (int(self.x), int(self.y))
         draw_unit(surf, self.sprite, pos, self.radius, self.dir, white=self.hit_flash > 0)
-        self.draw_effects(surf, font)
+        self.draw_effects(surf)
 
 
 class Bullet:
@@ -319,13 +321,13 @@ class Clone(Unit):
                                     self.shot_angles(self.moving), "wavy" in self.effects)
         return []
 
-    def draw(self, surf, font=None):
+    def draw(self, surf):
         if self.life < 2 and int(self.life * 8) % 2 == 0:
             return
         pos = (int(self.x), int(self.y))
         # двойник — полупрозрачная копия хозяина
         draw_unit(surf, self.owner.sprite, pos, self.radius, self.owner.dir, alpha=140)
-        self.draw_effects(surf, font)
+        self.draw_effects(surf)
 
 
 class Artifact:
