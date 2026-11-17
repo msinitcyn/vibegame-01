@@ -149,15 +149,15 @@ class Unit:
         r = int(self.radius)
         pos = (int(self.x), int(self.y))
         if self.frozen:
-            pygame.draw.circle(surf, ITEMS["foe_freeze"][2], pos, r + 4, 3)
+            pygame.draw.circle(surf, ITEMS["foe_freeze"][1], pos, r + 4, 3)
         if "speed" in self.effects:
-            pygame.draw.circle(surf, ITEMS["speed"][2], pos, r + 8, 1)
+            pygame.draw.circle(surf, ITEMS["speed"][1], pos, r + 8, 1)
         if "shield" in self.effects:
             t = self.effects["shield"]
             if t > 1.5 or int(t * 8) % 2:
-                pygame.draw.circle(surf, ITEMS["shield"][2], pos, r + SHIELD_GAP, 3)
+                pygame.draw.circle(surf, ITEMS["shield"][1], pos, r + SHIELD_GAP, 3)
         if "triple" in self.effects:
-            pygame.draw.circle(surf, ITEMS["triple"][2], pos, max(3, r // 3))
+            pygame.draw.circle(surf, ITEMS["triple"][1], pos, max(3, r // 3))
         if "nofire" in self.effects:
             d = int(r * 0.7)
             cx, cy = pos

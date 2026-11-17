@@ -23,7 +23,7 @@ def draw_ammo_icon(surf, center, r):
 def draw_icon(surf, kind, center, r):
     """Значок артефакта — одинаковый на поле и в инвентаре."""
     cx, cy = center
-    color = ITEMS[kind][2]
+    color = ITEMS[kind][1]
     ring = ring_color(kind)
 
     def P(u, v):

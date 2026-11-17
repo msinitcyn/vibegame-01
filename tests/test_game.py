@@ -25,22 +25,21 @@ def test_computer_plays_without_errors(game, level):
 
 
 def test_hard_beats_easy(game):
-    random.seed(1)
-    game.start("hard")
-    bot = AI(game, game.blue, "easy")
-    wins = games = 0
-    for _ in range(60 * 60 * 10):               # до 10 минут игрового времени
-        bot.update(DT)
-        game.held = bot.keys()
-        game.update(DT)
-        if game.winner:
-            games += 1
-            wins += game.winner is game.red
-            if games == 3:
+    """8 отдельных партий: сложный компьютер (справа) должен выиграть у лёгкого хотя бы 6."""
+    wins = 0
+    for seed in range(8):
+        random.seed(seed)
+        game.start("hard")
+        bot = AI(game, game.blue, "easy")
+        for _ in range(60 * 60 * 5):            # до 5 минут игрового времени
+            bot.update(DT)
+            game.held = bot.keys()
+            game.update(DT)
+            if game.winner:
                 break
-            game.restart()
-            bot = AI(game, game.blue, "easy")
-    assert games == 3 and wins >= 2
+        assert game.winner, f"партия {seed} не закончилась за 5 минут"
+        wins += game.winner is game.red
+    assert wins >= 6, f"сложный выиграл только {wins} из 8"
 
 
 def test_all_screens_draw(game):

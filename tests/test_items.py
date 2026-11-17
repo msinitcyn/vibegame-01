@@ -43,15 +43,9 @@ def test_every_item_has_help_and_ring(kind):
 
 def test_ring_colors_follow_groups():
     from duel.config import ATTACK_RING, FOE_RING, SELF_RING
-    for title, kinds in HELP_SECTIONS:
-        colors = {ring_color(k) for k in kinds}
-        if title == "Защита":
-            expected = SELF_RING
-        elif title.startswith("Дебаффы"):
-            expected = FOE_RING
-        else:                                     # оружие и атака
-            expected = ATTACK_RING
-        assert colors == {expected}, title
+    expected = {"defense": SELF_RING, "weapon": ATTACK_RING, "attack": ATTACK_RING, "debuff": FOE_RING}
+    for section, kinds in HELP_SECTIONS:
+        assert {ring_color(k) for k in kinds} == {expected[section]}, section
 
 
 # --- инвентарь

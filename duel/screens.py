@@ -28,7 +28,9 @@ from .config import (
     WEAPON_TIME,
     WIDTH,
 )
-from .items import EFFECT_ICON, HELP_SECTIONS, ITEMS, WEAPON_ITEMS, item_help
+from .items import EFFECT_ICON, HELP_SECTIONS, ITEMS, WEAPON_ITEMS, item_help, item_name, section_title
+from .i18n import LANGS, get_lang
+from .i18n import t as tr
 from .icons import draw_ammo_icon, draw_icon
 from .gamepad import PAD_ITEM_COLORS, PAD_ITEM_LABELS, PAD_ITEM_LAYOUT
 from .sprites import draw_unit, sprite_image
@@ -40,53 +42,68 @@ class ScreensMixin:
     def draw_menu(self):
         s = self.screen
         s.fill(BG)
-        t = self.big.render("Дуэль шариков", True, WHITE)
-        s.blit(t, t.get_rect(center=(WIDTH // 2, 110)))
-        for i, (_, _, title) in enumerate(self.menu):
+        img = self.big.render(tr("title"), True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 100)))
+        for i in range(len(self.menu)):
             sel = i == self.menu_index
-            rect = pygame.Rect(0, 0, 440, 44)
-            rect.center = (WIDTH // 2, 215 + i * 52)
+            rect = pygame.Rect(0, 0, 460, 40)
+            rect.center = (WIDTH // 2, 190 + i * 47)
             pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=10)
             pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
-            txt = self.font.render(f"{i + 1}.  {title}", True, WHITE if sel else GREY)
+            txt = self.font.render(f"{i + 1}.  {self.menu_label(i)}", True, WHITE if sel else GREY)
             s.blit(txt, txt.get_rect(center=rect.center))
-        hint = self.small.render("W/S или ↑/↓ — выбор,  Enter/Пробел или 1-6 — выбрать,  Esc — выход",
-                                 True, GREY)
-        s.blit(hint, hint.get_rect(center=(WIDTH // 2, 560)))
-        hint = self.small.render("Против компьютера: вы играете синим слева (W/A/S/D, Пробел, 1-4)",
-                                 True, GREY)
-        s.blit(hint, hint.get_rect(center=(WIDTH // 2, 585)))
+        hints = [(tr("menu.hint", n=len(self.menu)), GREY), (tr("menu.hint_vs"), GREY)]
         n = len(self.pads.pads)
-        pads = "Геймпады не подключены" if n == 0 else \
-            "Геймпады: " + ",  ".join(f"{c.name} — {'синий' if i == 0 else 'красный' if i == 1 else 'запасной'}"
-                                     for i, (_, c) in enumerate(self.pads.pads))
-        hint = self.small.render(pads, True, WHITE if n else GREY)
-        s.blit(hint, hint.get_rect(center=(WIDTH // 2, 625)))
         if n:
-            hint = self.small.render("Геймпад: стик/крестовина — движение, R1/R2 — огонь, "
-                                     "□ △ ○ ✕ — артефакты, Options — меню", True, GREY)
-            s.blit(hint, hint.get_rect(center=(WIDTH // 2, 650)))
+            roles = [tr("pads.blue"), tr("pads.red")]
+            names = ",  ".join(f"{c.name} — {roles[i] if i < 2 else tr('pads.spare')}"
+                               for i, (_, c) in enumerate(self.pads.pads))
+            hints += [(tr("pads.list", list=names), WHITE), (tr("pads.hint"), GREY)]
+        else:
+            hints.append((tr("pads.none"), GREY))
+        for i, (text, color) in enumerate(hints):
+            img = self.small.render(text, True, color)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 560 + i * 25)))
+        pygame.display.flip()
+
+    def draw_settings(self):
+        s = self.screen
+        s.fill(BG)
+        img = self.big.render(tr("settings.title"), True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 120)))
+        labels = {"lang": f"◀  {tr('settings.lang', lang=LANGS[get_lang()])}  ▶",
+                  "back": tr("settings.back")}
+        for i, row in enumerate(self.settings_rows):
+            sel = i == self.settings_index
+            rect = pygame.Rect(0, 0, 460, 48)
+            rect.center = (WIDTH // 2, 260 + i * 64)
+            pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=10)
+            pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
+            txt = self.font.render(labels[row], True, WHITE if sel else GREY)
+            s.blit(txt, txt.get_rect(center=rect.center))
+        img = self.small.render(tr("settings.hint"), True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 560)))
         pygame.display.flip()
 
     def draw_help(self):
         s = self.screen
         s.fill(BG)
-        t = self.font.render("Артефакты", True, WHITE)
-        s.blit(t, t.get_rect(center=(WIDTH // 2, 24)))
+        img = self.font.render(tr("help.title"), True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 24)))
         name_font = self.font
         row_h, col_w = 48, 470
         cols = {0: HELP_SECTIONS[:1], 1: HELP_SECTIONS[1:]}
         for col, sections in cols.items():
             x0 = 20 + col * (col_w + 20)
             y = 50
-            for title, kinds in sections:
-                h = self.font.render(title, True, (200, 205, 220))
+            for section, kinds in sections:
+                h = self.font.render(section_title(section), True, (200, 205, 220))
                 s.blit(h, (x0, y))
                 pygame.draw.line(s, GREY, (x0, y + 24), (x0 + col_w, y + 24), 1)
                 y += 32
                 for kind in kinds:
                     draw_icon(s, kind, (x0 + 20, y + 20), 18)
-                    name = name_font.render(ITEMS[kind][0], True, ITEMS[kind][2])
+                    name = name_font.render(item_name(kind), True, ITEMS[kind][1])
                     s.blit(name, (x0 + 48, y))
                     for j, line in enumerate(self.wrap(item_help(kind), col_w - 50)):
                         s.blit(self.tiny_text.render(line, True, WHITE), (x0 + 48, y + 21 + j * 14))
@@ -94,25 +111,16 @@ class ScreensMixin:
                 y += 6
         # пояснения в свободном месте левой колонки
         x0, y = 20, 50 + 32 + len(HELP_SECTIONS[0][1]) * row_h + 20
-        notes = [
-            "Рамка: зелёная — защита, синяя — атака, оранжевая — по сопернику.",
-            "Статус под именем игрока — всё, что действует сейчас, с таймерами.",
-            "Артефакты — только из убитых мобов, у того, кто добил. Ячейки заняты — "
-            f"в очередь; рядом с ячейками видно {QUEUE_SHOWN} следующих.",
-            f"Оружие: на {WEAPON_TIME:.0f} с, разных не больше {WEAPON_MAX} — новое вытесняет старое.",
-            "Повтор любого эффекта добавляет время (щиту — и удары). Двойникам передаются щит, "
-            "оружие, размер, скорость, «не стреляет».",
-            f"Патроны: в начале {START_AMMO}, выстрел — 1. Пачки по {AMMO_PACK} подбираются сразу.",
-            f"Мобы: волна каждые {MOB_EVERY:.0f} с в случайных местах, +1 моб и +1 жизнь; "
-            f"максимум {MOB_MAX} мобов по {MOB_MAX_HP}, дальше волны всё чаще.",
-            "Дебаффы снимает только время или очищение.",
-        ]
+        numbers = dict(queue=QUEUE_SHOWN, weapon=f"{WEAPON_TIME:.0f}", wmax=WEAPON_MAX,
+                       ammo=START_AMMO, pack=AMMO_PACK, every=f"{MOB_EVERY:.0f}",
+                       mmax=MOB_MAX, mhp=MOB_MAX_HP)
+        notes = [tr(f"note.{i}", **numbers) for i in range(1, 9)]
         for note in notes:
             for line in self.wrap(note, col_w):
                 s.blit(self.tiny_text.render(line, True, GREY), (x0, y))
                 y += 15
             y += 5
-        hint = self.small.render("Esc, Enter, Пробел или ✕/○ на геймпаде — назад", True, GREY)
+        hint = self.small.render(tr("help.back"), True, GREY)
         s.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 16)))
         pygame.display.flip()
 
@@ -194,11 +202,11 @@ class ScreensMixin:
         pygame.draw.rect(s, (20, 18, 30), box, border_radius=6)
         pygame.draw.rect(s, (90, 80, 120), box, 1, border_radius=6)
         left = max(0.0, self.next_wave - self.match_time)
-        title = f"волна {max(1, self.mob_wave)}"
+        title = tr("wave.title", n=max(1, self.mob_wave))
         draw_unit(s, "mob", (box.centerx, box.top + 16), 11, 1)
         t1 = self.small.render(title, True, MOB_IDLE_COLOR)
-        t2 = self.small.render(f"через {left:.0f} с" if self.mob_wave == 0 else f"след. {left:.0f} с",
-                               True, WHITE)
+        when = tr("wave.in", s=f"{left:.0f}") if self.mob_wave == 0 else tr("wave.next", s=f"{left:.0f}")
+        t2 = self.small.render(when, True, WHITE)
         s.blit(t1, t1.get_rect(midtop=(box.centerx, box.top + 30)))
         s.blit(t2, t2.get_rect(midtop=(box.centerx, box.top + 47)))
 
@@ -218,7 +226,7 @@ class ScreensMixin:
                 if kind:
                     draw_icon(s, kind, rect.center, rect.w // 2 - 4)
                     if "noitems" in p.effects and kind != "cleanse":
-                        pygame.draw.line(s, ITEMS["foe_noitems"][2], rect.bottomleft, rect.topright, 2)
+                        pygame.draw.line(s, ITEMS["foe_noitems"][1], rect.bottomleft, rect.topright, 2)
                 if is_ai:
                     continue              # у компьютера клавиш нет
                 if has_pad:
@@ -272,14 +280,14 @@ class ScreensMixin:
         for name, t in effects:
             kind = EFFECT_ICON.get(name, name)
             label = f"{p.shield_hits}×{t:.0f}" if name == "shield" else f"{t:.0f}"
-            chips.append((kind, label, ITEMS[kind][2]))
+            chips.append((kind, label, ITEMS[kind][1]))
         walls = [w.life for w in self.walls if w.owner is p]
         if walls:
             label = f"{max(walls):.0f}" if len(walls) == 1 else f"{len(walls)}×{max(walls):.0f}"
-            chips.append(("wall", label, ITEMS["wall"][2]))
+            chips.append(("wall", label, ITEMS["wall"][1]))
         clones = len(self.clones_of(p))
         if clones:
-            chips.append(("clones", f"×{clones}", ITEMS["clones"][2]))
+            chips.append(("clones", f"×{clones}", ITEMS["clones"][1]))
 
         r, gap = 9, 10
         rendered = [(kind, self.small.render(label, True, color)) for kind, label, color in chips]
@@ -324,8 +332,8 @@ class ScreensMixin:
             shade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
             shade.fill((0, 0, 0, 150))
             s.blit(shade, (0, 0))
-            t = self.big.render(f"{self.winner.name} победил!", True, self.winner.color)
+            t = self.big.render(tr("win", name=self.winner.name), True, self.winner.color)
             s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 20)))
-            t = self.font.render("R — ещё раз, Esc — в меню", True, WHITE)
+            t = self.font.render(tr("win.hint"), True, WHITE)
             s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 40)))
         pygame.display.flip()

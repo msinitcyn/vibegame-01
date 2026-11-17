@@ -10,7 +10,6 @@ from .items import BAD_EFFECTS
 # Параметры компьютерного соперника по уровням сложности
 AI_LEVELS = {
     "easy": dict(
-        title="легко",
         think=0.40,            # как часто компьютер принимает решения (реакция), сек
         dodge=0.5,             # вероятность заметить летящую пулю
         horizon=0.45,          # на сколько секунд вперёд следит за пулями
@@ -22,12 +21,10 @@ AI_LEVELS = {
         smart_items=False,     # тратит артефакты как попало
     ),
     "medium": dict(
-        title="средне",
         think=0.18, dodge=0.75, horizon=0.8, aim_noise=40, aim_tol=30,
         fire_chance=0.8, spray=0.3, item_delay=(2.5, 5), smart_items=True,
     ),
     "hard": dict(
-        title="сложно",
         think=0.05, dodge=1.0, horizon=1.2, aim_noise=8, aim_tol=16,
         fire_chance=1.0, spray=0.15, item_delay=(0.6, 1.8), smart_items=True,
     ),

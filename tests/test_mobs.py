@@ -67,7 +67,7 @@ def test_waves_grow_and_cap(game):
     game.spawn_mob_wave()
     assert len(game.mobs) == MOB_COUNT
     game.spawn_mob_wave()
-    assert len(game.mobs) == MOB_COUNT + (MOB_COUNT + 1)
+    assert len(game.mobs) == min(MOB_MAX, MOB_COUNT + (MOB_COUNT + 1))
     assert all(m.hp == MOB_HP + 1 for m in game.mobs)
     for _ in range(10):
         game.spawn_mob_wave()

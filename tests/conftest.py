@@ -4,6 +4,9 @@ import random
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+# настройки тестов — во временный файл, а не в ~/.config
+import tempfile  # noqa: E402
+os.environ["DUEL_SETTINGS"] = os.path.join(tempfile.mkdtemp(), "settings.json")
 
 import pytest  # noqa: E402
 

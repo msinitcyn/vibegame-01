@@ -44,7 +44,9 @@ from .config import (
     TOP,
     WIDTH,
 )
-from .items import BAD_EFFECTS, INSTANT_ITEMS, ITEMS, ring_color
+from .items import BAD_EFFECTS, INSTANT_ITEMS, ITEMS, item_name, ring_color
+from .i18n import LANGS, get_lang, set_lang, t
+from . import settings
 from .entities import AmmoPack, Artifact, Clone, Mob, Player, Wall
 from .ai import AI, AI_LEVELS
 from .gamepad import Gamepads, PAD_DOWN, PAD_FIRE, PAD_ITEM_BUTTONS, PAD_UP
@@ -58,8 +60,10 @@ class Game(ScreensMixin):
 
     def __init__(self):
         pygame.init()
+        self.settings = settings.load()
+        set_lang(self.settings["lang"])
         self.audio = Audio()
-        pygame.display.set_caption("Дуэль шариков")
+        pygame.display.set_caption(t("title"))
         # SCALED: поле остаётся WIDTH×HEIGHT, а на экран растягивается с сохранением пропорций
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.SCALED | pygame.FULLSCREEN)
         self.clock = pygame.time.Clock()
@@ -74,22 +78,22 @@ class Game(ScreensMixin):
         self.blue = Player(60, BLUE, (pygame.KSCAN_W, pygame.KSCAN_S, pygame.KSCAN_A, pygame.KSCAN_D),
                            (pygame.KSCAN_SPACE,),
                            (pygame.KSCAN_1, pygame.KSCAN_2, pygame.KSCAN_3, pygame.KSCAN_4),
-                           1, "Синий", BLUE_LAND)
+                           1, t("name.blue"), BLUE_LAND)
         self.red = Player(WIDTH - 60, RED,
                           (pygame.KSCAN_UP, pygame.KSCAN_DOWN, pygame.KSCAN_LEFT, pygame.KSCAN_RIGHT),
                           (pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER),
                           (pygame.KSCAN_9, pygame.KSCAN_0, pygame.KSCAN_MINUS, pygame.KSCAN_EQUALS),
-                          -1, "Красный", RED_LAND)
+                          -1, t("name.red"), RED_LAND)
         self.key_names = {self.blue: "1234", self.red: "90-="}
         self.held = set()             # зажатые физические клавиши
         self.pads = Gamepads()
         self.players = (self.blue, self.red)
-        # пункты меню: (действие, уровень компьютера, подпись)
-        self.menu = [("play", None, "Два игрока")] + \
-            [("play", lvl, f"Против компьютера: {cfg['title']}") for lvl, cfg in AI_LEVELS.items()] + \
-            [("test", None, f"Тестовый режим: по {TEST_HP} жизней"),
-             ("help", None, "Артефакты: что делает каждый")]
+        # пункты меню: (действие, уровень компьютера); подписи — menu_label()
+        self.menu = [("play", None)] + [("play", lvl) for lvl in AI_LEVELS] + \
+            [("test", None), ("help", None), ("settings", None)]
         self.menu_index = 0
+        self.settings_rows = ["lang", "back"]
+        self.settings_index = 0
         self.state = "menu"
         self.ai_level = None          # None — два игрока
         self.start_hp = MAX_HP
@@ -99,7 +103,7 @@ class Game(ScreensMixin):
         """level=None — два игрока, иначе уровень компьютера за правого."""
         self.ai_level = level
         self.start_hp = hp
-        self.red.name = "Компьютер" if level else "Красный"
+        self.red.name = t("name.cpu") if level else t("name.red")
         self.state = "play"
         self.held.clear()
         self.restart()
@@ -163,6 +167,9 @@ class Game(ScreensMixin):
             if self.state == "help":
                 self.draw_help()
                 continue
+            if self.state == "settings":
+                self.draw_settings()
+                continue
             if not self.winner:
                 self.update(dt)
             self.draw()
@@ -183,6 +190,9 @@ class Game(ScreensMixin):
             if sc in (pygame.KSCAN_ESCAPE, pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER,
                       pygame.KSCAN_SPACE, pygame.KSCAN_BACKSPACE):
                 self.state = "menu"
+            return
+        if self.state == "settings":
+            self.settings_key(sc)
             return
         if sc == pygame.KSCAN_ESCAPE:
             self.state = "menu"
@@ -215,6 +225,15 @@ class Game(ScreensMixin):
             if btn in (B.CONTROLLER_BUTTON_A, B.CONTROLLER_BUTTON_B, B.CONTROLLER_BUTTON_START):
                 self.state = "menu"
             return
+        if self.state == "settings":
+            keys = {B.CONTROLLER_BUTTON_DPAD_UP: B.KSCAN_UP, PAD_UP: B.KSCAN_UP,
+                    B.CONTROLLER_BUTTON_DPAD_DOWN: B.KSCAN_DOWN, PAD_DOWN: B.KSCAN_DOWN,
+                    B.CONTROLLER_BUTTON_DPAD_LEFT: B.KSCAN_LEFT, B.CONTROLLER_BUTTON_DPAD_RIGHT: B.KSCAN_RIGHT,
+                    B.CONTROLLER_BUTTON_A: B.KSCAN_RETURN, B.CONTROLLER_BUTTON_B: B.KSCAN_ESCAPE,
+                    B.CONTROLLER_BUTTON_START: B.KSCAN_ESCAPE}
+            if btn in keys:
+                self.on_key(keys[btn])
+            return
         if btn == B.CONTROLLER_BUTTON_START:
             self.on_key(B.KSCAN_ESCAPE)
         elif self.winner:
@@ -225,6 +244,34 @@ class Game(ScreensMixin):
             self.on_key(p.shoot_keys[0])
         elif btn in PAD_ITEM_BUTTONS:
             self.on_key(p.item_keys[PAD_ITEM_BUTTONS.index(btn)])
+
+    def settings_key(self, sc):
+        """Экран настроек: W/S — строка, A/D или Enter — изменить, Esc — назад."""
+        K = pygame
+        row = self.settings_rows[self.settings_index]
+        if sc in (K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE):
+            self.state = "menu"
+        elif sc in (K.KSCAN_W, K.KSCAN_UP):
+            self.settings_index = (self.settings_index - 1) % len(self.settings_rows)
+        elif sc in (K.KSCAN_S, K.KSCAN_DOWN):
+            self.settings_index = (self.settings_index + 1) % len(self.settings_rows)
+        elif row == "back" and sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
+            self.state = "menu"
+        elif row == "lang":
+            step = {K.KSCAN_A: -1, K.KSCAN_LEFT: -1, K.KSCAN_D: 1, K.KSCAN_RIGHT: 1,
+                    K.KSCAN_RETURN: 1, K.KSCAN_KP_ENTER: 1, K.KSCAN_SPACE: 1}.get(sc)
+            if step:
+                codes = list(LANGS)
+                self.set_language(codes[(codes.index(get_lang()) + step) % len(codes)])
+
+    def set_language(self, code):
+        """Сменить язык сразу и запомнить его между запусками."""
+        set_lang(code)
+        self.settings["lang"] = get_lang()
+        settings.save(self.settings)
+        pygame.display.set_caption(t("title"))
+        self.blue.name = t("name.blue")
+        self.red.name = t("name.cpu") if self.ai_level else t("name.red")
 
     def pad_held(self):
         """Направления с геймпадов в виде «зажатых» клавиш игроков."""
@@ -242,7 +289,7 @@ class Game(ScreensMixin):
         return out
 
     def update_music(self):
-        in_menu = self.state in ("menu", "help")
+        in_menu = self.state in ("menu", "help", "settings")
         self.audio.music("menu" if in_menu else "game")
 
     def humans(self):
@@ -253,7 +300,7 @@ class Game(ScreensMixin):
         down = (pygame.KSCAN_S, pygame.KSCAN_DOWN)
         ok = (pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER, pygame.KSCAN_SPACE)
         digits = (pygame.KSCAN_1, pygame.KSCAN_2, pygame.KSCAN_3, pygame.KSCAN_4, pygame.KSCAN_5,
-                  pygame.KSCAN_6)
+                  pygame.KSCAN_6, pygame.KSCAN_7)
         if sc in up:
             self.menu_index = (self.menu_index - 1) % len(self.menu)
         elif sc in down:
@@ -264,10 +311,20 @@ class Game(ScreensMixin):
         elif sc in ok:
             self.menu_select()
 
+    def menu_label(self, i):
+        action, level = self.menu[i]
+        if action == "play":
+            return t("menu.vs", level=t(f"level.{level}")) if level else t("menu.two")
+        return {"test": t("menu.test", hp=TEST_HP), "help": t("menu.help"),
+                "settings": t("menu.settings")}[action]
+
     def menu_select(self):
-        action, level, _ = self.menu[self.menu_index]
+        action, level = self.menu[self.menu_index]
         if action == "help":
             self.state = "help"
+        elif action == "settings":
+            self.state = "settings"
+            self.settings_index = 0
         elif action == "test":
             self.start(None, TEST_HP)
         else:
@@ -278,7 +335,7 @@ class Game(ScreensMixin):
             now = pygame.time.get_ticks()
             if now - self.no_ammo_shown[p] > 1000:
                 self.no_ammo_shown[p] = now
-                self.popup("нет патронов", p, BAD_TEXT)
+                self.popup(t("popup.noammo"), p, BAD_TEXT)
             return
         shots = p.shoot()
         if shots:
@@ -333,8 +390,8 @@ class Game(ScreensMixin):
             self.give(foe, kind[4:])      # foe_freeze -> freeze и т.д.
         else:
             self.give(p, kind)
-        target = foe if ITEMS[kind][1] == "foe" else p
-        self.popup(ITEMS[kind][0] + "!", target, ITEMS[kind][2])
+        target = foe if ITEMS[kind][0] == "foe" else p
+        self.popup(item_name(kind) + "!", target, ITEMS[kind][1])
 
     def update(self, dt):
         if self.ai:
@@ -357,8 +414,7 @@ class Game(ScreensMixin):
                     else:
                         p.add_item(a.kind)            # в ячейку или в очередь
                     a.life = 0
-                    name, target, _ = ITEMS[a.kind]
-                    self.popup(name, p, ring_color(a.kind))
+                    self.popup(item_name(a.kind), p, ring_color(a.kind))
         self.artifacts = [a for a in self.artifacts if a.life > 0]
 
         # патроны: пачки в случайном месте земли игрока, подбираются всегда
@@ -373,7 +429,7 @@ class Game(ScreensMixin):
                 if a.life > 0 and math.hypot(a.x - p.x, a.y - p.y) < p.radius + ARTIFACT_R:
                     p.ammo += AMMO_PACK
                     a.life = 0
-                    self.popup(f"+{AMMO_PACK} патронов", p, AMMO_COLOR)
+                    self.popup(t("popup.ammo", n=AMMO_PACK), p, AMMO_COLOR)
         self.ammo_packs = [a for a in self.ammo_packs if a.life > 0]
 
         for w in self.walls:
@@ -445,7 +501,7 @@ class Game(ScreensMixin):
         y = max(TOP + m, min(BOTTOM - m, mob.y))
         art = Artifact(x, random.choice(list(ITEMS)), y)
         self.artifacts.append(art)
-        self.popups.append(["моб повержен", mob.x, mob.y, POPUP_TIME, MOB_IDLE_COLOR])
+        self.popups.append([t("popup.mobdead"), mob.x, mob.y, POPUP_TIME, MOB_IDLE_COLOR])
 
     def update_mobs(self, dt):
         """Мобы: волнами в середину поля, идут на обидчика, бьют при касании."""
@@ -474,7 +530,7 @@ class Game(ScreensMixin):
         for _ in range(count):
             x, y = self.free_mob_spot()
             self.mobs.append(Mob(x, y, hp))
-        text = f"волна {k + 1}: +{count} по {hp} жизней" if count else f"волна {k + 1}: мобы сильнее"
+        text = t("wave.popup", n=k + 1, count=count, hp=hp) if count else t("wave.stronger", n=k + 1)
         self.popups.append([text, WIDTH / 2, TOP + 60, POPUP_TIME * 2, MOB_IDLE_COLOR])
         return want >= MOB_MAX and MOB_HP + k >= MOB_MAX_HP
 
