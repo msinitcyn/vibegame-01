@@ -26,6 +26,8 @@ from .config import (
     MOB_COUNT,
     MOB_DAMAGE,
     MOB_DELAY,
+    MOB_EVERY,
+    MOB_HP,
     MOB_IDLE_COLOR,
     MUSIC_END,
     POPUP_TIME,
@@ -113,7 +115,8 @@ class Game(ScreensMixin):
         self.weapon_art = {p: None for p in self.players}
         self.mobs = []
         self.match_time = 0.0         # секунд с начала партии
-        self.mobs_spawned = False
+        self.mob_wave = 0             # сколько волн мобов уже пришло
+        self.next_wave = MOB_DELAY
         self.winner = None
         self.win_time = 0
         self.ai = AI(self, self.red, self.ai_level) if self.ai_level else None
@@ -446,19 +449,29 @@ class Game(ScreensMixin):
                 self.weapon_art[p] = art
 
     def update_mobs(self, dt):
-        """Мобы: появляются в середине поля через MOB_DELAY секунд, идут на обидчика, бьют при касании."""
+        """Мобы: волнами в середину поля, идут на обидчика, бьют при касании."""
         self.match_time += dt
-        if not self.mobs_spawned and self.match_time >= MOB_DELAY:
-            self.mobs_spawned = True
-            h = BOTTOM - TOP
-            for i in range(MOB_COUNT):
-                self.mobs.append(Mob(WIDTH / 2, TOP + h * (i + 1) / (MOB_COUNT + 1)))
-            self.popups.append(["мобы!", WIDTH / 2, TOP + 30, POPUP_TIME * 2, MOB_IDLE_COLOR])
+        if self.match_time >= self.next_wave:
+            self.spawn_mob_wave()
+            self.next_wave += MOB_EVERY
         for m in self.mobs:
             p = m.update(dt)
             if p and not p.shield_absorb():   # щит гасит и удар моба
                 p.hp -= MOB_DAMAGE
                 p.hit_flash = 0.12
+
+    def spawn_mob_wave(self):
+        """Волна k (с нуля): MOB_COUNT + k мобов по MOB_HP + k жизней; живым мобам +1 жизнь."""
+        k = self.mob_wave
+        self.mob_wave += 1
+        for m in self.mobs:
+            m.grow()
+        count, hp = MOB_COUNT + k, MOB_HP + k
+        h = BOTTOM - TOP
+        for i in range(count):
+            self.mobs.append(Mob(WIDTH / 2, TOP + h * (i + 1) / (count + 1), hp))
+        self.popups.append([f"волна {k + 1}: {count} мобов по {hp} жизней", WIDTH / 2, TOP + 30,
+                            POPUP_TIME * 2, MOB_IDLE_COLOR])
 
     def collide_bullets(self):
         """Пули игрока с «сбиваешь пули» уничтожают пули соперника (обе пропадают)."""

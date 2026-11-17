@@ -370,9 +370,9 @@ class Mob:
     """Моб в середине поля. Стоит, пока в него не попадут; потом идёт на того,
     кто попал последним, и бьёт при касании. Артефакты не берёт, эффекты на него не действуют."""
 
-    def __init__(self, x, y):
+    def __init__(self, x, y, hp=MOB_HP):
         self.x, self.y = x, y
-        self.hp = MOB_HP
+        self.hp = self.max_hp = hp
         self.radius = MOB_RADIUS
         self.target = None            # игрок, на которого злится
         self.hit_cd = 0.0
@@ -408,18 +408,25 @@ class Mob:
             return p
         return None
 
-    def draw(self, surf):
+    def grow(self, n=1):
+        """Новая волна: всем живым мобам +n жизней."""
+        self.hp += n
+        self.max_hp += n
+
+    def draw(self, surf, font=None):
         pos = (int(self.x), int(self.y))
         draw_unit(surf, "mob", pos, self.radius, self.facing, white=self.flash > 0)
-        # жизни над головой; цвет — того, на кого моб злится
+        # полоска жизней над головой и число; цвет — того, на кого моб злится
         color = self.target.color if self.target else MOB_IDLE_COLOR
-        top = pos[1] - self.radius - 9
-        for i in range(MOB_HP):
-            r = pygame.Rect(0, 0, 6, 6)
-            r.center = (pos[0] + (i - (MOB_HP - 1) / 2) * 9, top)
-            pygame.draw.rect(surf, (16, 12, 20), r.inflate(2, 2))
-            if i < self.hp:
-                pygame.draw.rect(surf, color, r)
+        bar = pygame.Rect(0, 0, 28, 5)
+        bar.midbottom = (pos[0], pos[1] - self.radius - 2)
+        pygame.draw.rect(surf, (16, 12, 20), bar.inflate(2, 2))
+        fill = bar.copy()
+        fill.w = max(1, round(bar.w * self.hp / self.max_hp))
+        pygame.draw.rect(surf, color, fill)
+        if font:
+            txt = font.render(str(self.hp), True, color)
+            surf.blit(txt, txt.get_rect(midbottom=(pos[0], bar.top - 1)))
 
 
 class Wall:

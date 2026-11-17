@@ -1,7 +1,16 @@
-"""Мобы: появляются через MOB_DELAY секунд, стоят, идут на обидчика, бьют при касании."""
+"""Мобы: волнами в середине поля, стоят, идут на обидчика, бьют при касании."""
 import math
 
-from duel.config import BULLET_SPEED, MAX_HP, MOB_COUNT, MOB_DELAY, MOB_HP, SHIELD_HITS, WIDTH
+from duel.config import (
+    BULLET_SPEED,
+    MAX_HP,
+    MOB_COUNT,
+    MOB_DELAY,
+    MOB_EVERY,
+    MOB_HP,
+    SHIELD_HITS,
+    WIDTH,
+)
 from duel.entities import Bullet
 from tests.conftest import DT, step
 
@@ -33,8 +42,30 @@ def test_mobs_appear_in_middle_and_stand(game):
     before = [(m.x, m.y) for m in mobs]
     step(game, 2.0)
     assert [(m.x, m.y) for m in game.mobs] == before
-    step(game, 120)
-    assert len(game.mobs) == MOB_COUNT          # появляются один раз
+
+
+def test_waves_add_mob_and_hp(game):
+    """Волны каждые MOB_EVERY с: +1 моб в волне и +1 жизнь всем живым мобам."""
+    spawn(game)
+    assert [m.hp for m in game.mobs] == [MOB_HP] * MOB_COUNT
+    step(game, MOB_EVERY - 1)
+    assert len(game.mobs) == MOB_COUNT          # до второй волны — без изменений
+    step(game, 1.0)
+    assert len(game.mobs) == MOB_COUNT + (MOB_COUNT + 1)
+    assert all(m.hp == MOB_HP + 1 for m in game.mobs)
+    step(game, MOB_EVERY)
+    assert len(game.mobs) == MOB_COUNT + (MOB_COUNT + 1) + (MOB_COUNT + 2)
+    assert all(m.hp == MOB_HP + 2 for m in game.mobs)
+    assert game.mob_wave == 3
+
+
+def test_wounded_mob_also_grows(game):
+    m = spawn(game)[0]
+    shoot_mob(game, m, game.blue)
+    assert m.hp == MOB_HP - 1
+    game.match_time = MOB_DELAY + MOB_EVERY - DT / 2
+    step(game)
+    assert m.hp == MOB_HP and m.max_hp == MOB_HP + 1
 
 
 def test_mob_blocks_bullets_and_goes_for_shooter(game):

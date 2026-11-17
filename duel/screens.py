@@ -4,7 +4,7 @@ import pygame
 
 from .config import (
     MOB_COUNT,
-    MOB_DELAY,
+    MOB_EVERY,
     MOB_HP,
     AMMO_PACK,
     BAD_TEXT,
@@ -98,8 +98,8 @@ class ScreensMixin:
             "На двойников переходят: щит, оружие, ×2, уменьшение, скорость, «не стреляет».",
             "Полный инвентарь (4 ячейки) — новые артефакты на твоей стороне не появляются.",
             f"Патроны: в начале {START_AMMO}, выстрел тратит 1. Пачки по {AMMO_PACK} подбираются сразу.",
-            f"Через {MOB_DELAY:.0f} с в середине — {MOB_COUNT} моба ({MOB_HP} жизни). "
-            "Попал — идёт на тебя и бьёт при касании.",
+            f"Мобы: каждые {MOB_EVERY:.0f} с волна в середине — {MOB_COUNT} по {MOB_HP} жизни, "
+            "дальше каждый раз +1 моб и +1 жизнь всем. Попал — идёт на тебя и бьёт.",
             "Дебаффы снимаются только временем или очищением. Стен может быть несколько.",
         ]
         for note in notes:
@@ -261,7 +261,7 @@ class ScreensMixin:
         for c in self.clones:
             c.draw(s, self.tiny)
         for m in self.mobs:
-            m.draw(s)
+            m.draw(s, self.tiny)
         for b in self.bullets:
             b.draw(s)
         for p in self.players:
