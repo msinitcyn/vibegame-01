@@ -3,6 +3,9 @@
 import pygame
 
 from .config import (
+    MOB_COUNT,
+    MOB_DELAY,
+    MOB_HP,
     AMMO_PACK,
     BAD_TEXT,
     BG,
@@ -94,6 +97,8 @@ class ScreensMixin:
             "Пока инвентарь (4 ячейки) полон, новые артефакты на твоей стороне не появляются.",
             f"Патроны: в начале {START_AMMO}, выстрел (и веер) тратит 1. Пачки по {AMMO_PACK} "
             "появляются на твоей вертикали и подбираются сразу, даже при полном инвентаре.",
+            f"Через {MOB_DELAY:.0f} с в середине поля появляются {MOB_COUNT} моба: стоят и ловят пули. "
+            f"Попал в моба — он идёт на тебя и бьёт при касании. У моба {MOB_HP} жизни.",
             "Дебаффы соперника снимаются только временем или очищением. Стен можно "
             "поставить несколько — каждая стоит своё время.",
         ]
@@ -229,6 +234,8 @@ class ScreensMixin:
             a.draw(s, self.tiny)
         for c in self.clones:
             c.draw(s, self.tiny)
+        for m in self.mobs:
+            m.draw(s)
         for b in self.bullets:
             b.draw(s)
         for p in self.players:

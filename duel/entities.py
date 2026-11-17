@@ -6,6 +6,11 @@ import random
 import pygame
 
 from .config import (
+    MOB_HIT_COOLDOWN,
+    MOB_HP,
+    MOB_IDLE_COLOR,
+    MOB_RADIUS,
+    MOB_SPEED,
     AMMO_COLOR,
     AMMO_LIFETIME,
     AMMO_PACK,
@@ -122,6 +127,12 @@ class Unit:
         if "shield" not in self.effects:
             return False
         if math.hypot(b.x - self.x, b.y - self.y) >= self.radius + SHIELD_GAP + BULLET_R:
+            return False
+        return self.shield_absorb()
+
+    def shield_absorb(self):
+        """Щит гасит один удар (пулю или моба). Возвращает True, если щит был."""
+        if "shield" not in self.effects:
             return False
         self.shield_hits -= 1
         if self.shield_hits <= 0:
@@ -353,6 +364,62 @@ class AmmoPack:
             pygame.draw.rect(surf, AMMO_COLOR, (bx - 2, box.top + 4, 4, 9), border_radius=2)
         txt = font.render(str(AMMO_PACK), True, AMMO_COLOR)
         surf.blit(txt, txt.get_rect(midbottom=(box.centerx, box.bottom + 1)))
+
+
+class Mob:
+    """Моб в середине поля. Стоит, пока в него не попадут; потом идёт на того,
+    кто попал последним, и бьёт при касании. Артефакты не берёт, эффекты на него не действуют."""
+
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+        self.hp = MOB_HP
+        self.radius = MOB_RADIUS
+        self.target = None            # игрок, на которого злится
+        self.hit_cd = 0.0
+        self.flash = 0.0
+        self.facing = 1
+        self.alive = True
+
+    def hurt(self, attacker):
+        self.hp -= 1
+        self.flash = 0.12
+        self.target = attacker
+        if self.hp <= 0:
+            self.alive = False
+
+    def update(self, dt):
+        """Двигается к цели. Возвращает игрока, которого ударил в этом кадре, иначе None."""
+        self.flash = max(0.0, self.flash - dt)
+        self.hit_cd = max(0.0, self.hit_cd - dt)
+        p = self.target
+        if p is None:
+            return None
+        dx, dy = p.x - self.x, p.y - self.y
+        dist = math.hypot(dx, dy)
+        reach = p.radius + self.radius
+        if dist > reach - 2:
+            step = min(MOB_SPEED * dt, dist - (reach - 2))
+            self.x += dx / dist * step
+            self.y += dy / dist * step
+        if dx:
+            self.facing = 1 if dx > 0 else -1
+        if dist <= reach + 1 and self.hit_cd == 0:
+            self.hit_cd = MOB_HIT_COOLDOWN
+            return p
+        return None
+
+    def draw(self, surf):
+        pos = (int(self.x), int(self.y))
+        draw_unit(surf, "mob", pos, self.radius, self.facing, white=self.flash > 0)
+        # жизни над головой; цвет — того, на кого моб злится
+        color = self.target.color if self.target else MOB_IDLE_COLOR
+        top = pos[1] - self.radius - 9
+        for i in range(MOB_HP):
+            r = pygame.Rect(0, 0, 6, 6)
+            r.center = (pos[0] + (i - (MOB_HP - 1) / 2) * 9, top)
+            pygame.draw.rect(surf, (16, 12, 20), r.inflate(2, 2))
+            if i < self.hp:
+                pygame.draw.rect(surf, color, r)
 
 
 class Wall:

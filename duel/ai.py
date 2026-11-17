@@ -91,9 +91,17 @@ class AI:
                 d += 1 / (t + 0.1)
         return d
 
+    def chasing_mob(self):
+        """Ближайший моб, который идёт на нас (или None)."""
+        mobs = [m for m in self.game.mobs if m.alive and m.target is self.me]
+        return min(mobs, key=lambda m: abs(m.x - self.me.x), default=None)
+
     def goal_y(self):
         me = self.me
         foe = self.game.other(me)
+        mob = self.chasing_mob()
+        if mob:
+            return mob.y              # встать напротив моба и отстреливаться
         packs = [a for a in self.game.ammo_packs if a.x == me.x]
         if packs and me.ammo < 30:
             return min(packs, key=lambda a: abs(a.y - me.y)).y
@@ -103,13 +111,12 @@ class AI:
                 return min(mine, key=lambda a: abs(a.y - me.y)).y
         return foe.y + self.noise
 
-    def predicted_hit(self, angle):
+    def predicted_hit(self, angle, target):
         me = self.me
-        foe = self.game.other(me)
         ang = angle * math.pi / 4
         vx = BULLET_SPEED * math.cos(ang)
         vy = BULLET_SPEED * math.sin(ang)
-        t = abs(foe.x - me.x) / vx
+        t = abs(target.x - me.x) / vx
         return reflect_y(me.y + vy * t)
 
     def update(self, dt):
@@ -136,10 +143,12 @@ class AI:
         self.move = options[0]
         self.danger = self.danger_of(self.move, threats)
 
-        # 2. стрельба: если пуля с текущим наклоном долетит до соперника
+        # 2. стрельба: если пуля с текущим наклоном долетит до цели —
+        #    моба, который идёт на нас, иначе соперника
+        target = self.chasing_mob() or foe
         if me.cooldown == 0 and me.ammo > 0:
             angles = (-1, 0, 1) if me.triple_shots else (me.moving,)
-            aimed = any(abs(self.predicted_hit(a) - foe.y) < foe.radius + cfg["aim_tol"]
+            aimed = any(abs(self.predicted_hit(a, target) - target.y) < target.radius + cfg["aim_tol"]
                         for a in angles)
             spray = cfg["spray"] if me.ammo > 15 else 0     # мало патронов — только прицельно
             if (aimed and random.random() < cfg["fire_chance"]) or random.random() < spray:

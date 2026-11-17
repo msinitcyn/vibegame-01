@@ -153,6 +153,52 @@ def walk(rng, w, h, put, length, color, core=None, core_every=3):
         x, y = (x + dx) % w, (y + dy) % h
 
 
+MOB_SIZE = 16
+
+
+def draw_mob():
+    """Обсидиановый голем 16×16, смотрит вправо: тёмный камень, светящиеся трещины и глаза."""
+    body, dark, light = (74, 64, 96), (46, 40, 64), (112, 100, 140)
+    glow, eye = (200, 120, 255), (255, 236, 140)
+    px = {}
+
+    def put(x, y, c):
+        if 0 <= x < MOB_SIZE and 0 <= y < MOB_SIZE:
+            px[(x, y)] = c
+
+    # туловище — округлая глыба
+    rows = {3: (5, 10), 4: (4, 11), 5: (3, 12), 6: (2, 13), 7: (2, 13), 8: (2, 13), 9: (2, 13),
+            10: (2, 13), 11: (3, 12), 12: (3, 12), 13: (4, 11)}
+    for y, (x0, x1) in rows.items():
+        for x in range(x0, x1 + 1):
+            put(x, y, dark if x <= x0 + 1 or y >= 12 else light if y <= 4 else body)
+    # рожки
+    put(5, 2, dark)
+    put(10, 2, dark)
+    put(10, 1, dark)
+    # ноги
+    for x in (4, 5, 10, 11):
+        put(x, 14, dark)
+    # глаза — сдвинуты вправо, туда он смотрит
+    for x in (8, 11):
+        put(x, 7, eye)
+        put(x, 8, eye)
+    # светящиеся трещины
+    for x, y in ((5, 6), (6, 7), (5, 8), (6, 10), (7, 11), (9, 10), (10, 11), (12, 9)):
+        put(x, y, glow)
+
+    filled = set(px)
+    for (x, y) in list(filled):
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            n = (x + dx, y + dy)
+            if n not in filled and 0 <= n[0] < MOB_SIZE and 0 <= n[1] < MOB_SIZE:
+                px.setdefault(n, OUTLINE)
+    surf = pygame.Surface((MOB_SIZE, MOB_SIZE), pygame.SRCALPHA)
+    for (x, y), c in px.items():
+        surf.set_at((x, y), c)
+    return surf
+
+
 def draw_background(kind):
     """Тёмный фон половины поля: пули на нём должны хорошо читаться."""
     import random
@@ -205,6 +251,7 @@ def main(argv):
         "mage.png": lambda: draw_mage("blue"),
         "bg_ice.png": lambda: draw_background("ice"),
         "bg_lava.png": lambda: draw_background("lava"),
+        "mob.png": draw_mob,
     }
     for fname, make in files.items():
         path = OUT / fname

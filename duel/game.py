@@ -13,6 +13,7 @@ from .config import (
     ARTIFACT_SPAWN,
     BAD_TEXT,
     BLUE,
+    BOTTOM,
     BULLET_R,
     CLONE_COUNT,
     CLONE_EFFECTS,
@@ -22,15 +23,20 @@ from .config import (
     MAX_ARTIFACTS_PER_SIDE,
     MAX_CLONES,
     MAX_HP,
+    MOB_COUNT,
+    MOB_DAMAGE,
+    MOB_DELAY,
+    MOB_IDLE_COLOR,
     MUSIC_END,
     POPUP_TIME,
     RED,
     SLOW_BULLET_FACTOR,
     TEST_HP,
+    TOP,
     WIDTH,
 )
 from .items import BAD_EFFECTS, INSTANT_ITEMS, ITEMS, ring_color
-from .entities import AmmoPack, Artifact, Clone, Player, Wall
+from .entities import AmmoPack, Artifact, Clone, Mob, Player, Wall
 from .ai import AI, AI_LEVELS
 from .gamepad import Gamepads, PAD_DOWN, PAD_FIRE, PAD_ITEM_BUTTONS, PAD_UP
 from .audio import Audio
@@ -101,6 +107,9 @@ class Game(ScreensMixin):
         self.ammo_packs = []
         self.ammo_timer = {p: random.uniform(*AMMO_SPAWN) for p in self.players}
         self.no_ammo_shown = {p: -10_000 for p in self.players}
+        self.mobs = []
+        self.match_time = 0.0         # секунд с начала партии
+        self.mobs_spawned = False
         self.winner = None
         self.win_time = 0
         self.ai = AI(self, self.red, self.ai_level) if self.ai_level else None
@@ -318,6 +327,7 @@ class Game(ScreensMixin):
         for p in self.players:
             keys = self.ai.keys() if self.ai and p is self.ai.me else held
             p.update(dt, keys)
+        self.update_mobs(dt)
 
         # артефакты появляются на вертикали игрока, пока у него есть место в инвентаре
         for p in self.players:
@@ -379,6 +389,10 @@ class Game(ScreensMixin):
             for w in self.walls:
                 if b.alive:
                     w.hit(b, prev_x)
+            for m in self.mobs:
+                if b.alive and m.alive and math.hypot(b.x - m.x, b.y - m.y) < m.radius + BULLET_R:
+                    b.alive = False
+                    m.hurt(b.owner)           # моб злится на того, чья пуля
             if not b.alive:
                 continue
             target = self.other(b.owner)      # владелец мог смениться после зеркала
@@ -401,12 +415,31 @@ class Game(ScreensMixin):
                     c.alive = False               # двойник умирает с первого попадания
                     break
         self.clones = [c for c in self.clones if c.alive]
+        for m in self.mobs:
+            if not m.alive:
+                self.popups.append(["моб повержен", m.x, m.y, POPUP_TIME, MOB_IDLE_COLOR])
+        self.mobs = [m for m in self.mobs if m.alive]
         self.collide_bullets()
         self.bullets = [b for b in self.bullets if b.alive]
 
         for p in self.players:
             if p.hp <= 0:
                 self.winner = self.other(p)
+
+    def update_mobs(self, dt):
+        """Мобы: появляются в середине поля через MOB_DELAY секунд, идут на обидчика, бьют при касании."""
+        self.match_time += dt
+        if not self.mobs_spawned and self.match_time >= MOB_DELAY:
+            self.mobs_spawned = True
+            h = BOTTOM - TOP
+            for i in range(MOB_COUNT):
+                self.mobs.append(Mob(WIDTH / 2, TOP + h * (i + 1) / (MOB_COUNT + 1)))
+            self.popups.append(["мобы!", WIDTH / 2, TOP + 30, POPUP_TIME * 2, MOB_IDLE_COLOR])
+        for m in self.mobs:
+            p = m.update(dt)
+            if p and not p.shield_absorb():   # щит гасит и удар моба
+                p.hp -= MOB_DAMAGE
+                p.hit_flash = 0.12
 
     def collide_bullets(self):
         """Пули игрока с «сбиваешь пули» уничтожают пули соперника (обе пропадают)."""
