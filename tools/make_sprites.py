@@ -9,7 +9,8 @@
 
 mage.png — маг с автоматом 32×32 в ледяных цветах, смотрит вправо; красного игра
 получает заменой цветов (MAGE_RED_PALETTE в duel/config.py).
-bg_ice.png / bg_lava.png — фоны половин поля 125×160, игра увеличивает их в 4 раза.
+bg_ice.png / bg_lava.png — фоны земель магов 125×160, игра увеличивает их в 4 раза.
+bg_mob.png — полоса мобов посередине 50×160, тоже ×4.
 """
 import os
 import sys
@@ -243,6 +244,41 @@ def draw_background(kind):
     return surf
 
 
+MOB_ZONE_W = 200 // BG_SCALE      # полоса мобов: 20% ширины поля (1000 px) в «больших пикселях»
+
+
+def draw_mob_zone():
+    """Полоса мобов посередине: тёмный обсидиан с фиолетовыми прожилками;
+    слева кромка льда, справа — раскалённая кромка лавы."""
+    import random
+    rng = random.Random(5)
+    w, h = MOB_ZONE_W, BG_H
+    surf = pygame.Surface((w, h))
+    surf.fill((26, 20, 38))
+
+    def put(x, y, c):
+        if 0 <= x < w and 0 <= y < h:
+            surf.set_at((x, y), c)
+
+    for _ in range(90):                          # пятна камня
+        c = rng.choice([(34, 26, 50), (20, 15, 30), (40, 30, 58)])
+        x, y = rng.randrange(w), rng.randrange(h)
+        for _ in range(rng.randint(4, 12)):
+            put(x, y, c)
+            x += rng.choice((-1, 0, 1))
+            y += rng.choice((-1, 0, 1))
+    for _ in range(10):                          # фиолетовые прожилки
+        walk(rng, w, h, put, rng.randint(6, 18), (78, 46, 110), core=(120, 70, 170), core_every=5)
+    for _ in range(18):                          # тусклые кристаллы
+        put(rng.randrange(w), rng.randrange(h), (96, 70, 140))
+    for y in range(h):                           # кромки: лёд слева, лава справа
+        depth = 1 + (y * 5 + (y // 4) * 3) % 3
+        for i in range(depth):
+            put(i, y, (110, 160, 215) if i == 0 else (52, 84, 124))
+            put(w - 1 - i, y, (150, 50, 15) if i == 0 else (120, 40, 14))
+    return surf
+
+
 def main(argv):
     pygame.init()
     OUT.mkdir(parents=True, exist_ok=True)
@@ -252,6 +288,7 @@ def main(argv):
         "bg_ice.png": lambda: draw_background("ice"),
         "bg_lava.png": lambda: draw_background("lava"),
         "mob.png": draw_mob,
+        "bg_mob.png": draw_mob_zone,
     }
     for fname, make in files.items():
         path = OUT / fname

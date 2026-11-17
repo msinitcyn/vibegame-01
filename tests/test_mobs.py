@@ -8,7 +8,7 @@ from duel.config import (
     BOTTOM,
     BULLET_SPEED,
     MAX_HP,
-    MOB_AREA,
+    MOB_ZONE,
     MOB_COUNT,
     MOB_DELAY,
     MOB_EVERY,
@@ -47,7 +47,7 @@ def test_first_wave_right_at_start(game):
 
 
 def test_mobs_appear_in_random_places_and_stand(game):
-    lo, hi = WIDTH * MOB_AREA[0], WIDTH * MOB_AREA[1]
+    lo, hi = WIDTH * MOB_ZONE[0], WIDTH * MOB_ZONE[1]
     places = []
     for seed in range(5):
         random.seed(seed)
@@ -173,14 +173,19 @@ def test_no_artifacts_without_mob_kills(game):
     assert game.artifacts == []
 
 
-def test_killed_mob_drops_artifact_on_killers_line(game):
+def test_killed_mob_drops_artifact_on_killers_land(game):
+    """Артефакт падает на землю добившего, в точке, ближайшей к месту гибели моба."""
+    r = game.red
     m = spawn(game)[0]
-    y = m.y
-    for _ in range(MOB_HP):
-        shoot_mob(game, m, game.red)
+    for _ in range(MOB_HP - 1):
+        shoot_mob(game, m, r)
+    m.target = None                             # пусть стоит на месте до последнего выстрела
+    x, y = m.x, m.y
+    shoot_mob(game, m, r)
     assert len(game.artifacts) == 1
     art = game.artifacts[0]
-    assert art.x == game.red.x and abs(art.y - y) < 60
+    assert r.land[0] <= art.x <= r.land[0] + 30  # у края лавы, ближе всего к полосе мобов
+    assert abs(art.y - y) < 30 and x < r.land[0]
 
 
 # --- баг: моб «сел» на игрока сверху или снизу, и его невозможно было убить

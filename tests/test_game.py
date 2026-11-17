@@ -65,3 +65,27 @@ def test_music_follows_screen(game):
     game.start(None)
     game.update_music()
     assert a.kind == "game" and a.track.name.startswith("background-")
+
+
+def test_computer_walks_to_artifact_anywhere_on_its_land(game):
+    from duel.entities import Artifact
+    game.start("hard")
+    game.next_wave = 1e9
+    game.ammo_timer = {p: 1e9 for p in game.players}
+    r = game.red
+    art = Artifact(r.land[0] + 40, "speed", 150)
+    game.artifacts = [art]
+    for _ in range(int(5 / DT)):
+        game.update(DT)
+        if not game.artifacts:
+            break
+    assert game.artifacts == [] and "speed" in r.items
+
+
+def test_ammo_packs_spawn_on_own_land(game):
+    game.ammo_timer = {p: 0 for p in game.players}
+    game.update(DT)
+    assert len(game.ammo_packs) == 2
+    for p in game.players:
+        mine = [a for a in game.ammo_packs if p.land[0] <= a.x <= p.land[1]]
+        assert len(mine) == 1

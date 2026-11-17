@@ -3,6 +3,10 @@
 import pygame
 
 from .config import (
+    AMMO_COLOR,
+    HUD_CENTER,
+    MOB_IDLE_COLOR,
+    MOB_ZONE,
     MOB_EVERY,
     MOB_MAX,
     MOB_MAX_HP,
@@ -25,7 +29,7 @@ from .config import (
     WIDTH,
 )
 from .items import EFFECT_ICON, HELP_SECTIONS, ITEMS, WEAPON_ITEMS, item_help
-from .icons import draw_icon
+from .icons import draw_ammo_icon, draw_icon
 from .gamepad import PAD_ITEM_COLORS, PAD_ITEM_LABELS, PAD_ITEM_LAYOUT
 from .sprites import draw_unit, sprite_image
 
@@ -49,7 +53,7 @@ class ScreensMixin:
         hint = self.small.render("W/S или ↑/↓ — выбор,  Enter/Пробел или 1-6 — выбрать,  Esc — выход",
                                  True, GREY)
         s.blit(hint, hint.get_rect(center=(WIDTH // 2, 560)))
-        hint = self.small.render("Против компьютера: вы играете синим слева (W/S, Пробел, 1-4)",
+        hint = self.small.render("Против компьютера: вы играете синим слева (W/A/S/D, Пробел, 1-4)",
                                  True, GREY)
         s.blit(hint, hint.get_rect(center=(WIDTH // 2, 585)))
         n = len(self.pads.pads)
@@ -129,12 +133,13 @@ class ScreensMixin:
     def inventory_rects(self, left, pad):
         """Ячейки инвентаря: ромбом, как кнопки геймпада, или в ряд для клавиатуры.
 
-        Инвентарь стоит ближе к центру экрана. Возвращает (прямоугольники, ширина блока).
+        Инвентарь стоит у центра статуса (посередине — таймер волн).
+        Возвращает (прямоугольники, x начала блока, ширина блока).
         """
         if pad:
             size, gap = 36, 2
             width = 3 * size + 2 * gap
-            x0 = WIDTH // 2 - 16 - width if left else WIDTH // 2 + 16
+            x0 = WIDTH // 2 - HUD_CENTER - width if left else WIDTH // 2 + HUD_CENTER
             cx, cy = x0 + width // 2, HUD_H // 2
             step_x, step_y = size + gap, (HUD_H - size) // 2 - 2
             rects = []
@@ -142,23 +147,32 @@ class ScreensMixin:
                 r = pygame.Rect(0, 0, size, size)
                 r.center = (cx + dx * step_x, cy + dy * step_y)
                 rects.append(r)
-            return rects, width
-        size, gap = 44, 6
+            return rects, x0, width
+        size, gap = 40, 4
         width = INVENTORY_SIZE * size + (INVENTORY_SIZE - 1) * gap
-        x0 = WIDTH // 2 - 16 - width if left else WIDTH // 2 + 16
-        y = (HUD_H - size) // 2
-        return [pygame.Rect(x0 + i * (size + gap), y, size, size) for i in range(INVENTORY_SIZE)], width
+        x0 = WIDTH // 2 - HUD_CENTER - width if left else WIDTH // 2 + HUD_CENTER
+        return [pygame.Rect(x0 + i * (size + gap), 4, size, size) for i in range(INVENTORY_SIZE)], x0, width
 
-    def draw_queue(self, p, left, inv_w):
-        """Очередь артефактов: следующие QUEUE_SHOWN столбиком снаружи от ячеек, «+N» — если больше.
-        Возвращает занятую ширину."""
+    def draw_queue(self, p, left, x0, inv_w, pad):
+        """Очередь: следующие QUEUE_SHOWN артефактов в ряд, «+N» — если больше.
+
+        С клавиатурой — под ячейками, с геймпадом — снаружи от ромба.
+        Возвращает, сколько ширины она заняла сбоку от ячеек.
+        """
         s = self.screen
-        size, gap, pad = 22, 2, 6
-        col_h = QUEUE_SHOWN * size + (QUEUE_SHOWN - 1) * gap
-        x = WIDTH // 2 - 16 - inv_w - pad - size if left else WIDTH // 2 + 16 + inv_w + pad
-        y0 = (HUD_H - col_h) // 2
+        size, gap = 22, 3
+        row_w = QUEUE_SHOWN * size + (QUEUE_SHOWN - 1) * gap
+        if pad:
+            side = 6
+            x = x0 - side - row_w if left else x0 + inv_w + side
+            y = (HUD_H - size) // 2
+            used = row_w + side
+        else:
+            x = x0 if left else x0 + inv_w - row_w
+            y = HUD_H - size - 6
+            used = 0
         for i in range(QUEUE_SHOWN):
-            rect = pygame.Rect(x, y0 + i * (size + gap), size, size)
+            rect = pygame.Rect(x + i * (size + gap), y, size, size)
             pygame.draw.rect(s, (22, 24, 34), rect, border_radius=4)
             pygame.draw.rect(s, (70, 72, 86), rect, 1, border_radius=4)
             if i < len(p.queue):
@@ -166,36 +180,38 @@ class ScreensMixin:
         extra = len(p.queue) - QUEUE_SHOWN
         if extra > 0:
             txt = self.tiny.render(f"+{extra}", True, WHITE)
-            last = pygame.Rect(x, y0 + (QUEUE_SHOWN - 1) * (size + gap), size, size)
+            last = pygame.Rect(x + (QUEUE_SHOWN - 1) * (size + gap), y, size, size)
             back = txt.get_rect(bottomright=(last.right + 2, last.bottom + 3)).inflate(2, 0)
             pygame.draw.rect(s, (22, 24, 34), back)
             s.blit(txt, txt.get_rect(center=back.center))
-        return size + pad
+        return used
 
     def draw_wave_timer(self):
-        """Вверху поля по центру: номер волны мобов и сколько секунд до следующей."""
+        """В центре статуса: номер волны мобов и сколько секунд до следующей."""
         s = self.screen
+        box = pygame.Rect(0, 0, 2 * HUD_CENTER - 12, HUD_H - 16)
+        box.center = (WIDTH // 2, HUD_H // 2)
+        pygame.draw.rect(s, (20, 18, 30), box, border_radius=6)
+        pygame.draw.rect(s, (90, 80, 120), box, 1, border_radius=6)
         left = max(0.0, self.next_wave - self.match_time)
-        text = f"волна {self.mob_wave + 1} через {left:.0f} с" if self.mob_wave == 0 else \
-            f"волна {self.mob_wave} · следующая через {left:.0f} с"
-        txt = self.small.render(text, True, WHITE)
-        box = txt.get_rect(midtop=(WIDTH // 2, TOP + 6)).inflate(34, 8)
-        panel = pygame.Surface(box.size, pygame.SRCALPHA)
-        panel.fill((10, 10, 16, 190))
-        s.blit(panel, box)
-        pygame.draw.rect(s, (90, 80, 120), box, 1, border_radius=4)
-        draw_unit(s, "mob", (box.left + 12, box.centery), 8, 1)
-        s.blit(txt, txt.get_rect(midleft=(box.left + 24, box.centery)))
+        title = f"волна {max(1, self.mob_wave)}"
+        draw_unit(s, "mob", (box.centerx, box.top + 16), 11, 1)
+        t1 = self.small.render(title, True, MOB_IDLE_COLOR)
+        t2 = self.small.render(f"через {left:.0f} с" if self.mob_wave == 0 else f"след. {left:.0f} с",
+                               True, WHITE)
+        s.blit(t1, t1.get_rect(midtop=(box.centerx, box.top + 30)))
+        s.blit(t2, t2.get_rect(midtop=(box.centerx, box.top + 47)))
 
     def draw_hud(self):
         s = self.screen
         pygame.draw.rect(s, (30, 33, 45), (0, 0, WIDTH, HUD_H))
         pygame.draw.line(s, GREY, (0, HUD_H), (WIDTH, HUD_H), 2)
+        self.draw_wave_timer()
         for p in self.players:
             left = p is self.blue
             is_ai = bool(self.ai and p is self.ai.me)
             has_pad = not is_ai and self.players.index(p) < len(self.pads.pads)
-            rects, inv_w = self.inventory_rects(left, has_pad)
+            rects, x0, inv_w = self.inventory_rects(left, has_pad)
             for i, (kind, rect) in enumerate(zip(p.items, rects)):
                 pygame.draw.rect(s, (22, 24, 34), rect, border_radius=6)
                 pygame.draw.rect(s, p.color if kind else GREY, rect, 1, border_radius=6)
@@ -217,17 +233,16 @@ class ScreensMixin:
                 else:
                     key = self.tiny.render(self.key_names[p][i], True, WHITE)
                     s.blit(key, (rect.right - key.get_width() - 3, rect.bottom - key.get_height() - 1))
-            q_w = self.draw_queue(p, left, inv_w)
+            q_w = self.draw_queue(p, left, x0, inv_w, has_pad)
 
-            # жизни и эффекты — у края экрана
-            avail = WIDTH // 2 - 16 - inv_w - q_w - 20
+            # имя и жизни; ниже — патроны и всё, что действует, с таймерами
+            avail = WIDTH // 2 - HUD_CENTER - inv_w - q_w - 20
             hearts = '♥' * min(p.hp, HEARTS_SHOWN)
             if p.hp > HEARTS_SHOWN:
                 hearts += f" +{p.hp - HEARTS_SHOWN}"
-            line1 = self.font.render(f"{p.name}  {hearts}    патроны {p.ammo}", True,
-                                     p.color if p.ammo > 0 else BAD_TEXT)
+            line1 = self.font.render(f"{p.name}  {hearts}", True, p.color)
             line2 = self.status_chips(p)
-            for img, cy in ((line1, HUD_H // 2 - 12), (line2, HUD_H // 2 + 14)):
+            for img, cy in ((line1, HUD_H // 2 - 14), (line2, HUD_H // 2 + 14)):
                 if img.get_width() > avail:
                     img = pygame.transform.smoothscale(
                         img, (avail, img.get_height()))
@@ -236,7 +251,7 @@ class ScreensMixin:
                 s.blit(img, rect)
 
     def field_background(self):
-        """Поле: слева лёд (синий), справа лава (красный), вертикали игроков. Рисуется один раз."""
+        """Поле: земля синего (лёд), полоса мобов (обсидиан), земля красного (лава). Рисуется один раз."""
         bg = getattr(self, "_field_bg", None)
         if bg is None:
             h = BOTTOM - TOP
@@ -244,20 +259,15 @@ class ScreensMixin:
             half = WIDTH // 2
             bg.blit(sprite_image("bg_ice", (half, h)), (0, 0))
             bg.blit(sprite_image("bg_lava", (WIDTH - half, h)), (half, 0))
-            # вертикали игроков — по ним ходят и на них появляются артефакты
-            lines = pygame.Surface((WIDTH, h), pygame.SRCALPHA)
-            for p in self.players:
-                pygame.draw.line(lines, (255, 255, 255, 28), (p.x, 0), (p.x, h))
-            bg.blit(lines, (0, 0))
+            x0, x1 = round(WIDTH * MOB_ZONE[0]), round(WIDTH * MOB_ZONE[1])
+            bg.blit(sprite_image("bg_mob", (x1 - x0, h)), (x0, 0))
             self._field_bg = bg
         return bg
 
     def status_chips(self, p):
-        """Вторая строка статуса: значки всех действующих на игрока артефактов с таймерами.
-
-        Сначала улучшения оружия, потом остальные эффекты, стены и двойники.
-        """
-        chips = []                    # (вид артефакта для значка, подпись, цвет подписи)
+        """Вторая строка статуса: патроны и значки всех действующих на игрока артефактов
+        с таймерами. Сначала патроны, потом оружие, остальные эффекты, стены, двойники."""
+        chips = [("ammo", str(p.ammo), AMMO_COLOR if p.ammo > 0 else BAD_TEXT)]
         effects = sorted(p.effects.items(), key=lambda e: (e[0] not in WEAPON_ITEMS, -e[1]))
         for name, t in effects:
             kind = EFFECT_ICON.get(name, name)
@@ -277,7 +287,10 @@ class ScreensMixin:
         surf = pygame.Surface((max(1, width), 2 * r + 2), pygame.SRCALPHA)
         x = 0
         for kind, txt in rendered:
-            draw_icon(surf, kind, (x + r, r + 1), r)
+            if kind == "ammo":
+                draw_ammo_icon(surf, (x + r, r + 1), r)
+            else:
+                draw_icon(surf, kind, (x + r, r + 1), r)
             surf.blit(txt, (x + 2 * r + 3, r + 1 - txt.get_height() // 2))
             x += 2 * r + 3 + txt.get_width() + gap
         return surf
@@ -305,7 +318,6 @@ class ScreensMixin:
             rect = img.get_rect(center=(int(x), int(y)))
             rect.clamp_ip(pygame.Rect(0, TOP, WIDTH, BOTTOM - TOP))
             s.blit(img, rect)
-        self.draw_wave_timer()
         self.draw_hud()
 
         if self.winner:

@@ -4,8 +4,20 @@ import math
 
 import pygame
 
-from .config import ICON_BG, RED, WHITE
+from .config import AMMO_COLOR, ICON_BG, RED, WHITE
 from .items import ITEMS, ring_color
+
+
+def draw_ammo_icon(surf, center, r):
+    """Значок патронов для статуса: коробка с тремя патронами."""
+    cx, cy = center
+    box = pygame.Rect(0, 0, round(r * 2), round(r * 1.5))
+    box.center = (cx, cy)
+    pygame.draw.rect(surf, (60, 50, 20), box, border_radius=2)
+    pygame.draw.rect(surf, AMMO_COLOR, box, 1, border_radius=2)
+    for i in (-1, 0, 1):
+        x = cx + i * r * 0.55
+        pygame.draw.line(surf, AMMO_COLOR, (x, box.top + 3), (x, box.bottom - 3), 2)
 
 
 def draw_icon(surf, kind, center, r):

@@ -50,7 +50,8 @@ class AI:
         self.me = me
         self.cfg = AI_LEVELS[level]
         self.think_timer = 0.0
-        self.move = 0
+        self.move = 0                 # по вертикали: -1, 0, 1
+        self.move_x = 0               # по горизонтали: -1, 0, 1
         self.noise = 0.0
         self.noise_timer = 0.0
         self.item_timer = random.uniform(*self.cfg["item_delay"])
@@ -58,11 +59,12 @@ class AI:
 
     def keys(self):
         """Виртуально зажатые клавиши для Player.update."""
-        if self.move < 0:
-            return {self.me.up_key}
-        if self.move > 0:
-            return {self.me.down_key}
-        return set()
+        me, keys = self.me, set()
+        if self.move:
+            keys.add(me.up_key if self.move < 0 else me.down_key)
+        if self.move_x:
+            keys.add(me.left_key if self.move_x < 0 else me.right_key)
+        return keys
 
     def threats(self):
         """Пули соперника, летящие в нас: список (время до нас, высота в этот момент)."""
@@ -96,19 +98,28 @@ class AI:
         mobs = [m for m in self.game.mobs if m.alive and m.target is self.me]
         return min(mobs, key=lambda m: abs(m.x - self.me.x), default=None)
 
-    def goal_y(self):
+    def on_my_land(self, things):
+        lo, hi = self.me.land
+        return [a for a in things if lo <= a.x <= hi]
+
+    def goal(self):
+        """Куда идти: (x, y). Моб на нас — встать напротив; иначе патроны, артефакты;
+        иначе держаться у своего края напротив соперника."""
         me = self.me
         foe = self.game.other(me)
+        nearest = lambda things: min(things, key=lambda a: math.hypot(a.x - me.x, a.y - me.y))  # noqa: E731
         mob = self.chasing_mob()
         if mob:
-            return mob.y              # встать напротив моба и отстреливаться
-        packs = [a for a in self.game.ammo_packs if a.x == me.x]
+            return me.x, mob.y        # встать напротив моба и отстреливаться
+        packs = self.on_my_land(self.game.ammo_packs)
         if packs and me.ammo < 30:
-            return min(packs, key=lambda a: abs(a.y - me.y)).y
-        mine = [a for a in self.game.artifacts if a.x == me.x]
-        if mine:
-            return min(mine, key=lambda a: abs(a.y - me.y)).y
-        return foe.y + self.noise
+            a = nearest(packs)
+            return a.x, a.y
+        arts = self.on_my_land(self.game.artifacts)
+        if arts:
+            a = nearest(arts)
+            return a.x, a.y
+        return me.start_x, foe.y + self.noise
 
     def predicted_hit(self, angle, target):
         me = self.me
@@ -134,10 +145,12 @@ class AI:
 
         # 1. движение: к цели, но в сторону, где не попадут
         threats = [th for th in self.threats() if random.random() < cfg["dodge"]]
-        gy = self.goal_y()
+        gx, gy = self.goal()
         want = 0 if abs(gy - me.y) < 8 else (1 if gy > me.y else -1)
+        self.move_x = 0 if abs(gx - me.x) < 8 else (1 if gx > me.x else -1)
         if "invert" in me.effects:
             want = -want
+            self.move_x = -self.move_x
         options = sorted((-1, 0, 1), key=lambda m: (self.danger_of(m, threats), m != want))
         self.move = options[0]
         self.danger = self.danger_of(self.move, threats)

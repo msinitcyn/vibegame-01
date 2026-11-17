@@ -43,6 +43,7 @@ class FakePad:
 
     def __init__(self):
         self.buttons = set()
+        self.stick_x = 0
         self.stick_y = 0
 
     def get_button(self, b):
@@ -50,4 +51,5 @@ class FakePad:
 
     def get_axis(self, axis):
         import pygame
-        return self.stick_y if axis == pygame.CONTROLLER_AXIS_LEFTY else 0
+        return {pygame.CONTROLLER_AXIS_LEFTY: self.stick_y,
+                pygame.CONTROLLER_AXIS_LEFTX: self.stick_x}.get(axis, 0)

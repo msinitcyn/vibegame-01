@@ -12,6 +12,7 @@ from .config import (
     ARTIFACT_R,
     BAD_TEXT,
     BLUE,
+    BLUE_LAND,
     BOTTOM,
     BULLET_R,
     CLONE_COUNT,
@@ -25,9 +26,9 @@ from .config import (
     MOB_COUNT,
     MOB_DAMAGE,
     MOB_DELAY,
-    MOB_AREA,
     MOB_EVERY,
     MOB_EVERY_MIN,
+    MOB_ZONE,
     MOB_HP,
     MOB_IDLE_COLOR,
     MOB_MAX,
@@ -37,6 +38,7 @@ from .config import (
     MUSIC_END,
     POPUP_TIME,
     RED,
+    RED_LAND,
     SLOW_BULLET_FACTOR,
     TEST_HP,
     TOP,
@@ -68,13 +70,16 @@ class Game(ScreensMixin):
         self.big = pygame.font.SysFont("dejavusans", 56, bold=True)
 
         # управление по физическим клавишам (scancode) — работает в любой раскладке
-        self.blue = Player(60, BLUE, pygame.KSCAN_W, pygame.KSCAN_S, (pygame.KSCAN_SPACE,),
+        # клавиши движения — вверх, вниз, влево, вправо
+        self.blue = Player(60, BLUE, (pygame.KSCAN_W, pygame.KSCAN_S, pygame.KSCAN_A, pygame.KSCAN_D),
+                           (pygame.KSCAN_SPACE,),
                            (pygame.KSCAN_1, pygame.KSCAN_2, pygame.KSCAN_3, pygame.KSCAN_4),
-                           1, "Синий")
-        self.red = Player(WIDTH - 60, RED, pygame.KSCAN_UP, pygame.KSCAN_DOWN,
+                           1, "Синий", BLUE_LAND)
+        self.red = Player(WIDTH - 60, RED,
+                          (pygame.KSCAN_UP, pygame.KSCAN_DOWN, pygame.KSCAN_LEFT, pygame.KSCAN_RIGHT),
                           (pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER),
                           (pygame.KSCAN_9, pygame.KSCAN_0, pygame.KSCAN_MINUS, pygame.KSCAN_EQUALS),
-                          -1, "Красный")
+                          -1, "Красный", RED_LAND)
         self.key_names = {self.blue: "1234", self.red: "90-="}
         self.held = set()             # зажатые физические клавиши
         self.pads = Gamepads()
@@ -225,11 +230,15 @@ class Game(ScreensMixin):
         """Направления с геймпадов в виде «зажатых» клавиш игроков."""
         out = set()
         for i, p in enumerate(self.players):
-            d = self.pads.direction(i)
-            if d < 0:
+            dx, dy = self.pads.direction(i)
+            if dy < 0:
                 out.add(p.up_key)
-            elif d > 0:
+            elif dy > 0:
                 out.add(p.down_key)
+            if dx < 0:
+                out.add(p.left_key)
+            elif dx > 0:
+                out.add(p.right_key)
         return out
 
     def update_music(self):
@@ -342,8 +351,7 @@ class Game(ScreensMixin):
         for p in self.players:
             for a in self.artifacts:
                 instant = a.kind in INSTANT_ITEMS
-                if a.x == p.x and a.life > 0 \
-                        and abs(a.y - p.y) < p.radius + ARTIFACT_R:
+                if a.life > 0 and math.hypot(a.x - p.x, a.y - p.y) < p.radius + ARTIFACT_R:
                     if instant:
                         self.apply_item(p, a.kind)    # сразу, в инвентарь не кладём
                     else:
@@ -353,16 +361,16 @@ class Game(ScreensMixin):
                     self.popup(name, p, ring_color(a.kind))
         self.artifacts = [a for a in self.artifacts if a.life > 0]
 
-        # патроны: пачки на вертикали игрока, подбираются всегда
+        # патроны: пачки в случайном месте земли игрока, подбираются всегда
         for p in self.players:
             self.ammo_timer[p] -= dt
             if self.ammo_timer[p] <= 0:
                 self.ammo_timer[p] = random.uniform(*AMMO_SPAWN)
-                self.ammo_packs.append(AmmoPack(p.x))
+                self.ammo_packs.append(AmmoPack(*p.random_spot(ARTIFACT_R + 5)))
         for a in self.ammo_packs:
             a.life -= dt
             for p in self.players:
-                if a.x == p.x and a.life > 0 and abs(a.y - p.y) < p.radius + ARTIFACT_R:
+                if a.life > 0 and math.hypot(a.x - p.x, a.y - p.y) < p.radius + ARTIFACT_R:
                     p.ammo += AMMO_PACK
                     a.life = 0
                     self.popup(f"+{AMMO_PACK} патронов", p, AMMO_COLOR)
@@ -426,13 +434,16 @@ class Game(ScreensMixin):
                 self.winner = self.other(p)
 
     def drop_artifact(self, mob):
-        """Убитый моб роняет случайный артефакт на вертикаль того, кто его добил,
-        на высоте, где моб погиб."""
+        """Убитый моб роняет случайный артефакт на землю того, кто его добил,
+        в точке, ближайшей к месту гибели моба."""
         killer = mob.target
         if killer is None:
             return
-        art = Artifact(killer.x, random.choice(list(ITEMS)))
-        art.y = max(TOP + ARTIFACT_R, min(BOTTOM - ARTIFACT_R, mob.y))
+        # на землю добившего, в точке, ближайшей к месту гибели моба
+        m = ARTIFACT_R + 4
+        x = max(killer.land[0] + m, min(killer.land[1] - m, mob.x))
+        y = max(TOP + m, min(BOTTOM - m, mob.y))
+        art = Artifact(x, random.choice(list(ITEMS)), y)
         self.artifacts.append(art)
         self.popups.append(["моб повержен", mob.x, mob.y, POPUP_TIME, MOB_IDLE_COLOR])
 
@@ -471,7 +482,7 @@ class Game(ScreensMixin):
         """Случайное место в средней части поля, по возможности не на другом мобе."""
         r = MOB_RADIUS
         for _ in range(20):
-            x = random.uniform(WIDTH * MOB_AREA[0], WIDTH * MOB_AREA[1])
+            x = random.uniform(WIDTH * MOB_ZONE[0] + r + 4, WIDTH * MOB_ZONE[1] - r - 4)
             y = random.uniform(TOP + r + 4, BOTTOM - r - 4)
             if all(math.hypot(x - m.x, y - m.y) > 2 * r + 6 for m in self.mobs):
                 return x, y

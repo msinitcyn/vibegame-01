@@ -335,8 +335,7 @@ def test_no_ammo_no_shot(game):
 def test_ammo_pack_picked_with_full_inventory(game):
     b = game.blue
     b.items = ["speed"] * 4
-    pack = AmmoPack(b.x)
-    pack.y = b.y
+    pack = AmmoPack(b.x, b.y)
     game.ammo_packs = [pack]
     step(game)
     assert b.ammo == START_AMMO + AMMO_PACK and game.ammo_packs == []

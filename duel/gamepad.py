@@ -48,14 +48,20 @@ class Gamepads:
         return None
 
     def direction(self, i):
-        """-1 вверх, 1 вниз, 0 — для геймпада номер i."""
+        """(dx, dy) геймпада номер i: каждое -1, 0 или 1 — стик или крестовина."""
         if i >= len(self.pads):
-            return 0
+            return 0, 0
         c = self.pads[i][1]
-        y = c.get_axis(pygame.CONTROLLER_AXIS_LEFTY) / 32767
-        up = c.get_button(pygame.CONTROLLER_BUTTON_DPAD_UP) or y < -PAD_DEAD
-        down = c.get_button(pygame.CONTROLLER_BUTTON_DPAD_DOWN) or y > PAD_DEAD
-        return -1 if up and not down else (1 if down and not up else 0)
+        B = pygame
+
+        def axis(neg_btn, pos_btn, axis_id):
+            v = c.get_axis(axis_id) / 32767
+            neg = c.get_button(neg_btn) or v < -PAD_DEAD
+            pos = c.get_button(pos_btn) or v > PAD_DEAD
+            return -1 if neg and not pos else (1 if pos and not neg else 0)
+
+        return (axis(B.CONTROLLER_BUTTON_DPAD_LEFT, B.CONTROLLER_BUTTON_DPAD_RIGHT, B.CONTROLLER_AXIS_LEFTX),
+                axis(B.CONTROLLER_BUTTON_DPAD_UP, B.CONTROLLER_BUTTON_DPAD_DOWN, B.CONTROLLER_AXIS_LEFTY))
 
     def axis_event(self, e):
         """Превращает R2 и стик в «нажатия». Возвращает условную кнопку или None."""

@@ -166,11 +166,12 @@ class Unit:
 
 
 class Player(Unit):
-    def __init__(self, x, color, up_key, down_key, shoot_keys, item_keys, direction, name):
-        self.x = x
+    def __init__(self, x, color, keys, shoot_keys, item_keys, direction, name, land):
+        self.start_x = x
         self.color = color
-        self.up_key = up_key
-        self.down_key = down_key
+        # клавиши движения: вверх, вниз, влево, вправо
+        self.up_key, self.down_key, self.left_key, self.right_key = keys
+        self.land = land              # (x_min, x_max) своей земли — дальше маг не заходит
         self.shoot_keys = shoot_keys
         self.item_keys = item_keys    # клавиши ячеек инвентаря
         self.dir = direction          # +1 стреляет вправо, -1 влево
@@ -179,6 +180,7 @@ class Player(Unit):
         self.reset()
 
     def reset(self, hp=MAX_HP):
+        self.x = self.start_x
         self.y = (TOP + BOTTOM) / 2
         self.hp = self.max_hp = hp
         self.ammo = START_AMMO
@@ -186,7 +188,8 @@ class Player(Unit):
         self.reset_effects()
         self.items = [None] * INVENTORY_SIZE
         self.queue = []               # собранные артефакты, ждущие свободной ячейки
-        self.moving = 0               # -1 вверх, +1 вниз, 0 стоит
+        self.moving = 0               # -1 вверх, +1 вниз, 0 — по вертикали стоит (от этого наклон выстрела)
+        self.moving_x = 0             # -1 влево, +1 вправо
         self.hit_flash = 0.0
 
     @property
@@ -211,18 +214,24 @@ class Player(Unit):
         self.cooldown = max(0.0, self.cooldown - dt)
         self.hit_flash = max(0.0, self.hit_flash - dt)
 
-        self.moving = 0
+        self.moving = self.moving_x = 0
         if not self.frozen:
-            up, down = self.up_key in keys, self.down_key in keys
-            if "invert" in self.effects:
-                up, down = down, up
-            if up and not down:
-                self.moving = -1
-            elif down and not up:
-                self.moving = 1
-            self.y += self.moving * self.speed * dt
+            dy = (self.down_key in keys) - (self.up_key in keys)
+            dx = (self.right_key in keys) - (self.left_key in keys)
+            if "invert" in self.effects:  # управление наоборот — по обеим осям
+                dx, dy = -dx, -dy
+            self.moving, self.moving_x = dy, dx
+            k = self.speed * dt * (0.7071 if dx and dy else 1)    # по диагонали не быстрее
+            self.x += dx * k
+            self.y += dy * k
         r = self.radius
+        self.x = max(self.land[0] + r, min(self.land[1] - r, self.x))
         self.y = max(TOP + r, min(BOTTOM - r, self.y))
+
+    def random_spot(self, margin):
+        """Случайная точка на своей земле (для патронов, двойников)."""
+        return (random.uniform(self.land[0] + margin, self.land[1] - margin),
+                random.uniform(TOP + margin, BOTTOM - margin))
 
     def shoot(self):
         # заморозка мешает только двигаться — стрелять можно
@@ -291,7 +300,7 @@ class Clone(Unit):
 
     def __init__(self, owner):
         self.owner = owner
-        self.x = owner.x
+        self.x = owner.random_spot(CLONE_RADIUS + 4)[0]   # на своей земле; ходит вверх-вниз
         self.reset_effects()
         for name, t in owner.effects.items():
             if name in CLONE_EFFECTS:
@@ -339,9 +348,9 @@ class Clone(Unit):
 
 
 class Artifact:
-    def __init__(self, x, kind):
+    def __init__(self, x, kind, y=None):
         self.x = x
-        self.y = random.uniform(TOP + ARTIFACT_R + 5, BOTTOM - ARTIFACT_R - 5)
+        self.y = y if y is not None else random.uniform(TOP + ARTIFACT_R + 5, BOTTOM - ARTIFACT_R - 5)
         self.kind = kind
         self.life = ARTIFACT_LIFETIME
 
@@ -353,11 +362,10 @@ class Artifact:
 
 
 class AmmoPack:
-    """Пачка патронов на вертикали игрока: подбирается сразу, в инвентарь не идёт."""
+    """Пачка патронов в случайном месте земли игрока: подбирается сразу, в инвентарь не идёт."""
 
-    def __init__(self, x):
-        self.x = x
-        self.y = random.uniform(TOP + ARTIFACT_R + 5, BOTTOM - ARTIFACT_R - 5)
+    def __init__(self, x, y):
+        self.x, self.y = x, y
         self.life = AMMO_LIFETIME
 
     def draw(self, surf, font):

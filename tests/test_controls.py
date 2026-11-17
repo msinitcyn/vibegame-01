@@ -1,5 +1,8 @@
 """Управление: клавиши в любой раскладке, геймпады, меню."""
+import math
+
 import pygame
+import pytest
 
 from duel.gamepad import PAD_FIRE, PAD_ITEM_BUTTONS
 from tests.conftest import FakePad, step
@@ -11,6 +14,45 @@ def test_keyboard_moves_by_scancode(game):
     game.held = {pygame.KSCAN_W, pygame.KSCAN_DOWN}
     step(game, 0.2)
     assert b.y < yb and r.y > yr
+
+
+def test_keyboard_moves_in_all_directions(game):
+    b, r = game.blue, game.red
+    b.x, r.x = 200, 800
+    xb, xr = b.x, r.x
+    game.held = {pygame.KSCAN_D, pygame.KSCAN_LEFT}
+    step(game, 0.2)
+    assert b.x > xb and r.x < xr
+
+
+def test_diagonal_not_faster(game):
+    b = game.blue
+    b.x, b.y = 200, 300
+    game.held = {pygame.KSCAN_D, pygame.KSCAN_S}
+    step(game, 0.1)
+    dist = math.hypot(b.x - 200, b.y - 300)
+    assert dist == pytest.approx(b.speed * 0.1, rel=0.05)
+
+
+def test_mages_stay_on_own_land(game):
+    from duel.config import MOB_ZONE, WIDTH
+    b, r = game.blue, game.red
+    game.held = {pygame.KSCAN_D, pygame.KSCAN_LEFT}
+    step(game, 5)
+    assert b.x + b.radius <= WIDTH * MOB_ZONE[0] + 0.01
+    assert r.x - r.radius >= WIDTH * MOB_ZONE[1] - 0.01
+    game.held = {pygame.KSCAN_A, pygame.KSCAN_RIGHT}
+    step(game, 5)
+    assert b.x - b.radius >= -0.01 and r.x + r.radius <= WIDTH + 0.01
+
+
+def test_invert_swaps_both_axes(game):
+    b = game.blue
+    b.x, b.y = 200, 300
+    b.apply("invert")
+    game.held = {pygame.KSCAN_D, pygame.KSCAN_W}
+    step(game, 0.1)
+    assert b.x < 200 and b.y > 300
 
 
 def test_keyboard_fire_and_items(game):
@@ -54,6 +96,11 @@ def test_pads_move_players(game):
     p1.buttons = {pygame.CONTROLLER_BUTTON_DPAD_DOWN}
     step(game, 0.2)
     assert b.y < yb and r.y > yr
+    xb, xr = b.x, r.x
+    p0.stick_y, p0.stick_x = 0, 30000
+    p1.buttons = {pygame.CONTROLLER_BUTTON_DPAD_LEFT}
+    step(game, 0.2)
+    assert b.x > xb and r.x < xr
 
 
 def test_pads_fire_and_items(game):
