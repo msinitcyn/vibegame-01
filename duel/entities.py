@@ -396,16 +396,18 @@ class Mob:
         p = self.target
         if p is None:
             return None
-        dx, dy = p.x - self.x, p.y - self.y
-        dist = math.hypot(dx, dy)
         reach = p.radius + self.radius
-        if dist > reach - 2:
-            step = min(MOB_SPEED * dt, dist - (reach - 2))
+        # Встаёт прямо перед игроком, со стороны поля, а не на него: игрок стреляет вперёд,
+        # и моб, «севший» сверху или снизу, был бы неуязвим.
+        spot_x = p.x + p.dir * (reach - 4)
+        dx, dy = spot_x - self.x, p.y - self.y
+        dist = math.hypot(dx, dy)
+        if dist > 0:
+            step = min(MOB_SPEED * dt, dist)
             self.x += dx / dist * step
             self.y += dy / dist * step
-        if dx:
-            self.facing = 1 if dx > 0 else -1
-        if dist <= reach + 1 and self.hit_cd == 0:
+        self.facing = -p.dir                  # лицом к игроку
+        if math.hypot(p.x - self.x, p.y - self.y) <= reach + 1 and self.hit_cd == 0:
             self.hit_cd = MOB_HIT_COOLDOWN
             return p
         return None

@@ -1,6 +1,8 @@
 """Мобы: волнами в середине поля, стоят, идут на обидчика, бьют при касании."""
 import math
 
+import pytest
+
 from duel.config import (
     BULLET_SPEED,
     MAX_HP,
@@ -158,3 +160,43 @@ def test_full_inventory_gets_only_instant_drops(game):
         shoot_mob(game, m, b)
         kinds |= {a.kind for a in game.artifacts}
     assert kinds and kinds <= set(INSTANT_ITEMS)
+
+
+# --- баг: моб «сел» на игрока сверху или снизу, и его невозможно было убить
+
+@pytest.mark.parametrize("dy", [-40, 40])
+def test_mob_sitting_on_player_can_be_killed(game, dy):
+    """Моб пришёл сверху или снизу. Игрок стоит и стреляет прямо — моб должен умереть."""
+    b = game.blue
+    b.ammo = 100
+    m = spawn(game)[0]
+    game.mobs = [m]
+    m.target = b
+    m.x, m.y = b.x, b.y + dy
+    for _ in range(int(6 / DT)):
+        b.cooldown = 0
+        game.fire(b)
+        game.update(DT)
+        if not game.mobs:
+            break
+    assert game.mobs == [], f"моб жив: hp={m.hp}, dx={m.x - b.x:.0f}, dy={m.y - b.y:.0f}"
+
+
+def test_mob_killable_while_player_moves(game):
+    """Игрок бегает вверх-вниз и стреляет прямо — моб всё равно должен быть убиваемым."""
+    b = game.blue
+    b.ammo = 200
+    m = spawn(game)[0]
+    game.mobs = [m]
+    m.target = b
+    m.x, m.y = b.x + 40, b.y
+    for i in range(int(10 / DT)):
+        game.held = {b.up_key} if (i // 60) % 2 else {b.down_key}
+        b.cooldown = 0
+        b.moving = 0
+        bullets = b.shoot()                     # прямо, независимо от движения
+        game.bullets.extend(bullets)
+        game.update(DT)
+        if not game.mobs:
+            break
+    assert game.mobs == [], f"моб жив: hp={m.hp}, dx={m.x - b.x:.0f}, dy={m.y - b.y:.0f}"
