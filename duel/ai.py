@@ -4,7 +4,7 @@ import math
 import random
 
 from .config import BOTTOM, BULLET_R, BULLET_SPEED, HEAL_AMOUNT, SLOW_BULLET_FACTOR, TOP
-from .items import BAD_EFFECTS, INSTANT_ITEMS
+from .items import BAD_EFFECTS
 
 
 # Параметры компьютерного соперника по уровням сложности
@@ -105,9 +105,7 @@ class AI:
         packs = [a for a in self.game.ammo_packs if a.x == me.x]
         if packs and me.ammo < 30:
             return min(packs, key=lambda a: abs(a.y - me.y)).y
-        # улучшения оружия и лечение подбираются всегда, остальное — если есть место
-        mine = [a for a in self.game.artifacts if a.x == me.x
-                 and (a.kind in INSTANT_ITEMS or not me.inventory_full)]
+        mine = [a for a in self.game.artifacts if a.x == me.x]
         if mine:
             return min(mine, key=lambda a: abs(a.y - me.y)).y
         return foe.y + self.noise
@@ -192,8 +190,8 @@ class AI:
             elif k not in DEFENSIVE_ITEMS:
                 choice = i
                 break
-        if choice is None and me.inventory_full:
-            # всё забито защитой/лечением — потратить что-нибудь, чтобы собирать новое
+        if choice is None and me.queue:
+            # ячейки забиты защитой/лечением, а очередь ждёт — потратить что-нибудь
             choice = next((i for i in slots if me.items[i] != "heal"), slots[0])
         if choice is not None:
             game.use_item(me, choice)

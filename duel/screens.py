@@ -3,9 +3,9 @@
 import pygame
 
 from .config import (
-    MOB_COUNT,
     MOB_EVERY,
-    MOB_HP,
+    MOB_MAX,
+    MOB_MAX_HP,
     AMMO_PACK,
     BAD_TEXT,
     BG,
@@ -16,6 +16,7 @@ from .config import (
     HEIGHT,
     HUD_H,
     INVENTORY_SIZE,
+    QUEUE_SHOWN,
     START_AMMO,
     TOP,
     WHITE,
@@ -26,7 +27,7 @@ from .config import (
 from .items import EFFECT_ICON, HELP_SECTIONS, ITEMS, WEAPON_ITEMS, item_help
 from .icons import draw_icon
 from .gamepad import PAD_ITEM_COLORS, PAD_ITEM_LABELS, PAD_ITEM_LAYOUT
-from .sprites import sprite_image
+from .sprites import draw_unit, sprite_image
 
 
 class ScreensMixin:
@@ -92,15 +93,14 @@ class ScreensMixin:
         notes = [
             "Рамка: зелёная — защита, синяя — атака, оранжевая — по сопернику.",
             "Статус под именем игрока — всё, что действует сейчас, с таймерами.",
-            "Артефакты — только из убитых мобов, у того, кто добил. При полном инвентаре "
-            "выпадает только то, что срабатывает сразу.",
-            f"Оружие: сразу, на {WEAPON_TIME:.0f} с, не больше {WEAPON_MAX} — новое вытесняет "
-            "старое; повтор обновляет таймер.",
-            "Эффекты складываются, повтор добавляет время. Двойникам передаются щит, оружие, "
-            "размер, скорость, «не стреляет».",
+            "Артефакты — только из убитых мобов, у того, кто добил. Ячейки заняты — "
+            f"в очередь; рядом с ячейками видно {QUEUE_SHOWN} следующих.",
+            f"Оружие: на {WEAPON_TIME:.0f} с, разных не больше {WEAPON_MAX} — новое вытесняет старое.",
+            "Повтор любого эффекта добавляет время (щиту — и удары). Двойникам передаются щит, "
+            "оружие, размер, скорость, «не стреляет».",
             f"Патроны: в начале {START_AMMO}, выстрел — 1. Пачки по {AMMO_PACK} подбираются сразу.",
-            f"Мобы: волна каждые {MOB_EVERY:.0f} с — {MOB_COUNT} по {MOB_HP} жизни, дальше +1 моб "
-            "и +1 жизнь всем. Попал — идёт на тебя.",
+            f"Мобы: волна каждые {MOB_EVERY:.0f} с в случайных местах, +1 моб и +1 жизнь; "
+            f"максимум {MOB_MAX} мобов по {MOB_MAX_HP}, дальше волны всё чаще.",
             "Дебаффы снимает только время или очищение.",
         ]
         for note in notes:
@@ -149,6 +149,44 @@ class ScreensMixin:
         y = (HUD_H - size) // 2
         return [pygame.Rect(x0 + i * (size + gap), y, size, size) for i in range(INVENTORY_SIZE)], width
 
+    def draw_queue(self, p, left, inv_w):
+        """Очередь артефактов: следующие QUEUE_SHOWN столбиком снаружи от ячеек, «+N» — если больше.
+        Возвращает занятую ширину."""
+        s = self.screen
+        size, gap, pad = 22, 2, 6
+        col_h = QUEUE_SHOWN * size + (QUEUE_SHOWN - 1) * gap
+        x = WIDTH // 2 - 16 - inv_w - pad - size if left else WIDTH // 2 + 16 + inv_w + pad
+        y0 = (HUD_H - col_h) // 2
+        for i in range(QUEUE_SHOWN):
+            rect = pygame.Rect(x, y0 + i * (size + gap), size, size)
+            pygame.draw.rect(s, (22, 24, 34), rect, border_radius=4)
+            pygame.draw.rect(s, (70, 72, 86), rect, 1, border_radius=4)
+            if i < len(p.queue):
+                draw_icon(s, p.queue[i], rect.center, size // 2 - 2)
+        extra = len(p.queue) - QUEUE_SHOWN
+        if extra > 0:
+            txt = self.tiny.render(f"+{extra}", True, WHITE)
+            last = pygame.Rect(x, y0 + (QUEUE_SHOWN - 1) * (size + gap), size, size)
+            back = txt.get_rect(bottomright=(last.right + 2, last.bottom + 3)).inflate(2, 0)
+            pygame.draw.rect(s, (22, 24, 34), back)
+            s.blit(txt, txt.get_rect(center=back.center))
+        return size + pad
+
+    def draw_wave_timer(self):
+        """Вверху поля по центру: номер волны мобов и сколько секунд до следующей."""
+        s = self.screen
+        left = max(0.0, self.next_wave - self.match_time)
+        text = f"волна {self.mob_wave + 1} через {left:.0f} с" if self.mob_wave == 0 else \
+            f"волна {self.mob_wave} · следующая через {left:.0f} с"
+        txt = self.small.render(text, True, WHITE)
+        box = txt.get_rect(midtop=(WIDTH // 2, TOP + 6)).inflate(34, 8)
+        panel = pygame.Surface(box.size, pygame.SRCALPHA)
+        panel.fill((10, 10, 16, 190))
+        s.blit(panel, box)
+        pygame.draw.rect(s, (90, 80, 120), box, 1, border_radius=4)
+        draw_unit(s, "mob", (box.left + 12, box.centery), 8, 1)
+        s.blit(txt, txt.get_rect(midleft=(box.left + 24, box.centery)))
+
     def draw_hud(self):
         s = self.screen
         pygame.draw.rect(s, (30, 33, 45), (0, 0, WIDTH, HUD_H))
@@ -179,9 +217,10 @@ class ScreensMixin:
                 else:
                     key = self.tiny.render(self.key_names[p][i], True, WHITE)
                     s.blit(key, (rect.right - key.get_width() - 3, rect.bottom - key.get_height() - 1))
+            q_w = self.draw_queue(p, left, inv_w)
 
             # жизни и эффекты — у края экрана
-            avail = WIDTH // 2 - 16 - inv_w - 20
+            avail = WIDTH // 2 - 16 - inv_w - q_w - 20
             hearts = '♥' * min(p.hp, HEARTS_SHOWN)
             if p.hp > HEARTS_SHOWN:
                 hearts += f" +{p.hp - HEARTS_SHOWN}"
@@ -266,6 +305,7 @@ class ScreensMixin:
             rect = img.get_rect(center=(int(x), int(y)))
             rect.clamp_ip(pygame.Rect(0, TOP, WIDTH, BOTTOM - TOP))
             s.blit(img, rect)
+        self.draw_wave_timer()
         self.draw_hud()
 
         if self.winner:

@@ -10,6 +10,7 @@ from .config import (
     MOB_HIT_COOLDOWN,
     MOB_HP,
     MOB_IDLE_COLOR,
+    MOB_MAX_HP,
     MOB_RADIUS,
     MOB_SPEED,
     AMMO_COLOR,
@@ -101,17 +102,14 @@ class Unit:
     def apply(self, effect):
         """Эффекты складываются: разные действуют одновременно, повтор того же добавляет время.
 
-        Исключение — улучшения оружия: повтор обновляет таймер до полного, а не добавляет,
-        и одновременно их не больше WEAPON_MAX.
+        Разных улучшений оружия одновременно не больше WEAPON_MAX.
         """
         if effect in WEAPON_ITEMS:
             active = [n for n in self.effects if n in WEAPON_ITEMS]
             if effect not in active and len(active) >= WEAPON_MAX:
-                # не больше WEAPON_MAX улучшений: вытесняем то, у которого меньше всего времени
+                # новое улучшение вытесняет то, у которого меньше всего времени
                 del self.effects[min(active, key=self.effects.get)]
-            self.effects[effect] = max(self.effects.get(effect, 0), DURATION[effect])
-        else:
-            self.effects[effect] = self.effects.get(effect, 0) + DURATION[effect]
+        self.effects[effect] = self.effects.get(effect, 0) + DURATION[effect]
         if effect == "shield":
             self.shield_hits += SHIELD_HITS
 
@@ -187,6 +185,7 @@ class Player(Unit):
         self.cooldown = 0.0
         self.reset_effects()
         self.items = [None] * INVENTORY_SIZE
+        self.queue = []               # собранные артефакты, ждущие свободной ячейки
         self.moving = 0               # -1 вверх, +1 вниз, 0 стоит
         self.hit_flash = 0.0
 
@@ -194,9 +193,18 @@ class Player(Unit):
     def speed(self):
         return BASE_SPEED * self.speed_mult
 
-    @property
-    def inventory_full(self):
-        return None not in self.items
+    def add_item(self, kind):
+        """Подобранный артефакт: в первую свободную ячейку, иначе в конец очереди."""
+        if None in self.items:
+            self.items[self.items.index(None)] = kind
+        else:
+            self.queue.append(kind)
+
+    def take_item(self, slot):
+        """Достать артефакт из ячейки; на его место сразу встаёт первый из очереди."""
+        kind = self.items[slot]
+        self.items[slot] = self.queue.pop(0) if self.queue else None
+        return kind
 
     def update(self, dt, keys):
         self.tick_effects(dt)
@@ -412,10 +420,10 @@ class Mob:
             return p
         return None
 
-    def grow(self, n=1):
-        """Новая волна: всем живым мобам +n жизней."""
-        self.hp += n
-        self.max_hp += n
+    def grow(self, n=1, cap=MOB_MAX_HP):
+        """Новая волна: всем живым мобам +n жизней, но не больше cap."""
+        self.max_hp = min(cap, self.max_hp + n)
+        self.hp = min(self.max_hp, self.hp + n)
 
     def draw(self, surf, font=None):
         pos = (int(self.x), int(self.y))

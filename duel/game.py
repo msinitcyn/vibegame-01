@@ -16,6 +16,7 @@ from .config import (
     BULLET_R,
     CLONE_COUNT,
     CLONE_EFFECTS,
+    CLONE_TIME,
     FPS,
     HEAL_AMOUNT,
     HEIGHT,
@@ -24,9 +25,15 @@ from .config import (
     MOB_COUNT,
     MOB_DAMAGE,
     MOB_DELAY,
+    MOB_AREA,
     MOB_EVERY,
+    MOB_EVERY_MIN,
     MOB_HP,
     MOB_IDLE_COLOR,
+    MOB_MAX,
+    MOB_MAX_HP,
+    MOB_RADIUS,
+    MOB_SPEEDUP,
     MUSIC_END,
     POPUP_TIME,
     RED,
@@ -109,7 +116,8 @@ class Game(ScreensMixin):
         self.mobs = []
         self.match_time = 0.0         # секунд с начала партии
         self.mob_wave = 0             # сколько волн мобов уже пришло
-        self.next_wave = MOB_DELAY
+        self.next_wave = MOB_DELAY    # когда придёт следующая (секунды партии)
+        self.wave_interval = MOB_EVERY
         self.winner = None
         self.win_time = 0
         self.ai = AI(self, self.red, self.ai_level) if self.ai_level else None
@@ -277,8 +285,7 @@ class Game(ScreensMixin):
             return
         if "noitems" in p.effects and kind != "cleanse":
             return                            # запрет артефактов: ячейка не тратится
-        p.items[slot] = None
-        self.apply_item(p, kind)
+        self.apply_item(p, p.take_item(slot))
 
     def clones_of(self, p):
         return [c for c in self.clones if c.owner is p]
@@ -301,8 +308,11 @@ class Game(ScreensMixin):
                 if b.owner is foe:
                     b.alive = False
         elif kind == "clones":
-            have = sum(1 for c in self.clones if c.owner is p)
-            for _ in range(max(0, min(CLONE_COUNT, MAX_CLONES - have))):
+            # повтор: новые двойники до лимита, а живущим — ещё столько же жизни
+            mine = self.clones_of(p)
+            for c in mine:
+                c.life += CLONE_TIME
+            for _ in range(max(0, min(CLONE_COUNT, MAX_CLONES - len(mine)))):
                 self.clones.append(Clone(p))
         elif kind == "cleanse":
             for u in [p] + self.clones_of(p):
@@ -332,12 +342,12 @@ class Game(ScreensMixin):
         for p in self.players:
             for a in self.artifacts:
                 instant = a.kind in INSTANT_ITEMS
-                if a.x == p.x and a.life > 0 and (instant or not p.inventory_full) \
+                if a.x == p.x and a.life > 0 \
                         and abs(a.y - p.y) < p.radius + ARTIFACT_R:
                     if instant:
                         self.apply_item(p, a.kind)    # сразу, в инвентарь не кладём
                     else:
-                        p.items[p.items.index(None)] = a.kind
+                        p.add_item(a.kind)            # в ячейку или в очередь
                     a.life = 0
                     name, target, _ = ITEMS[a.kind]
                     self.popup(name, p, ring_color(a.kind))
@@ -417,12 +427,11 @@ class Game(ScreensMixin):
 
     def drop_artifact(self, mob):
         """Убитый моб роняет случайный артефакт на вертикаль того, кто его добил,
-        на высоте, где моб погиб. При полном инвентаре — только то, что срабатывает сразу."""
+        на высоте, где моб погиб."""
         killer = mob.target
         if killer is None:
             return
-        pool = list(INSTANT_ITEMS) if killer.inventory_full else list(ITEMS)
-        art = Artifact(killer.x, random.choice(pool))
+        art = Artifact(killer.x, random.choice(list(ITEMS)))
         art.y = max(TOP + ARTIFACT_R, min(BOTTOM - ARTIFACT_R, mob.y))
         self.artifacts.append(art)
         self.popups.append(["моб повержен", mob.x, mob.y, POPUP_TIME, MOB_IDLE_COLOR])
@@ -431,8 +440,10 @@ class Game(ScreensMixin):
         """Мобы: волнами в середину поля, идут на обидчика, бьют при касании."""
         self.match_time += dt
         if self.match_time >= self.next_wave:
-            self.spawn_mob_wave()
-            self.next_wave += MOB_EVERY
+            maxed = self.spawn_mob_wave()
+            if maxed:                         # дошли до максимума — дальше волны всё чаще
+                self.wave_interval = max(MOB_EVERY_MIN, self.wave_interval - MOB_SPEEDUP)
+            self.next_wave += self.wave_interval
         for m in self.mobs:
             p = m.update(dt)
             if p and not p.shield_absorb():   # щит гасит и удар моба
@@ -440,17 +451,31 @@ class Game(ScreensMixin):
                 p.hit_flash = 0.12
 
     def spawn_mob_wave(self):
-        """Волна k (с нуля): MOB_COUNT + k мобов по MOB_HP + k жизней; живым мобам +1 жизнь."""
+        """Волна k (с нуля): MOB_COUNT + k мобов по MOB_HP + k жизней, живым мобам +1 жизнь.
+        Не больше MOB_MAX мобов на поле и MOB_MAX_HP жизней. Возвращает True, если волна
+        дошла до максимума (дальше волны будут приходить всё чаще)."""
         k = self.mob_wave
         self.mob_wave += 1
         for m in self.mobs:
             m.grow()
-        count, hp = MOB_COUNT + k, MOB_HP + k
-        h = BOTTOM - TOP
-        for i in range(count):
-            self.mobs.append(Mob(WIDTH / 2, TOP + h * (i + 1) / (count + 1), hp))
-        self.popups.append([f"волна {k + 1}: {count} мобов по {hp} жизней", WIDTH / 2, TOP + 30,
-                            POPUP_TIME * 2, MOB_IDLE_COLOR])
+        want, hp = MOB_COUNT + k, min(MOB_HP + k, MOB_MAX_HP)
+        count = max(0, min(want, MOB_MAX - len(self.mobs)))
+        for _ in range(count):
+            x, y = self.free_mob_spot()
+            self.mobs.append(Mob(x, y, hp))
+        text = f"волна {k + 1}: +{count} по {hp} жизней" if count else f"волна {k + 1}: мобы сильнее"
+        self.popups.append([text, WIDTH / 2, TOP + 60, POPUP_TIME * 2, MOB_IDLE_COLOR])
+        return want >= MOB_MAX and MOB_HP + k >= MOB_MAX_HP
+
+    def free_mob_spot(self):
+        """Случайное место в средней части поля, по возможности не на другом мобе."""
+        r = MOB_RADIUS
+        for _ in range(20):
+            x = random.uniform(WIDTH * MOB_AREA[0], WIDTH * MOB_AREA[1])
+            y = random.uniform(TOP + r + 4, BOTTOM - r - 4)
+            if all(math.hypot(x - m.x, y - m.y) > 2 * r + 6 for m in self.mobs):
+                return x, y
+        return x, y
 
     def collide_bullets(self):
         """Пули игрока с «сбиваешь пули» уничтожают пули соперника (обе пропадают)."""

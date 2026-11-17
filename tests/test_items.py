@@ -64,14 +64,54 @@ def test_pickup_goes_to_inventory_and_used_by_slot(game):
     assert b.items[0] is None and "shield" in b.effects
 
 
-def test_full_inventory_blocks_pickup_but_not_heal(game):
+def test_full_inventory_goes_to_queue_heal_is_instant(game):
     b = game.blue
     b.items = ["speed"] * 4
     pick(game, b, "wall")
-    assert len(game.artifacts) == 1           # остался лежать
+    assert game.artifacts == [] and b.queue == ["wall"]      # подобран — в очередь
     b.hp = 4
     pick(game, b, "heal")
-    assert b.hp == 4 + HEAL_AMOUNT and b.items == ["speed"] * 4
+    assert b.hp == 4 + HEAL_AMOUNT and b.queue == ["wall"]
+
+
+def test_freed_slot_takes_first_from_queue(game):
+    b = game.blue
+    for kind in ("speed", "shield", "wall", "shrink", "rapid", "wavy", "triple"):
+        b.add_item(kind)
+    assert b.items == ["speed", "shield", "wall", "shrink"]
+    assert b.queue == ["rapid", "wavy", "triple"]
+    game.use_item(b, 2)                        # стена
+    assert b.items == ["speed", "shield", "rapid", "shrink"]
+    assert b.queue == ["wavy", "triple"]
+    game.use_item(b, 2)                        # скорострельность из очереди
+    assert b.items[2] == "wavy" and "rapid" in b.effects
+
+
+def test_queue_waits_under_noitems(game):
+    b = game.blue
+    for kind in ("speed", "shield", "wall", "shrink", "rapid"):
+        b.add_item(kind)
+    game.apply_item(game.red, "foe_noitems")
+    game.use_item(b, 0)
+    assert b.items[0] == "speed" and b.queue == ["rapid"]
+
+
+def test_two_shields_stack_time_and_hits(game):
+    b = game.blue
+    game.give(b, "shield")
+    game.give(b, "shield")
+    assert b.effects["shield"] == 2 * DURATION["shield"] and b.shield_hits == 2 * SHIELD_HITS
+
+
+def test_second_clones_extend_life_and_add_up_to_cap(game):
+    from duel.config import CLONE_COUNT, CLONE_TIME, MAX_CLONES
+    b = game.blue
+    game.apply_item(b, "clones")
+    first = game.clones_of(b)
+    assert len(first) == CLONE_COUNT
+    game.apply_item(b, "clones")
+    assert len(game.clones_of(b)) == min(MAX_CLONES, 2 * CLONE_COUNT)
+    assert all(c.life == 2 * CLONE_TIME for c in first)
 
 
 def test_heal_capped_by_max_hp(game):

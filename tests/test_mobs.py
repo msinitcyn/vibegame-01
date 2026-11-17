@@ -1,16 +1,24 @@
 """Мобы: волнами в середине поля, стоят, идут на обидчика, бьют при касании."""
 import math
+import random
 
 import pytest
 
 from duel.config import (
+    BOTTOM,
     BULLET_SPEED,
     MAX_HP,
+    MOB_AREA,
     MOB_COUNT,
     MOB_DELAY,
     MOB_EVERY,
+    MOB_EVERY_MIN,
     MOB_HP,
+    MOB_MAX,
+    MOB_MAX_HP,
+    MOB_SPEEDUP,
     SHIELD_HITS,
+    TOP,
     WIDTH,
 )
 from duel.entities import Bullet
@@ -18,8 +26,10 @@ from tests.conftest import DT, step
 
 
 def spawn(game):
-    game.match_time = MOB_DELAY - DT / 2
+    """Одна волна прямо сейчас; следующие не придут, пока тест сам не вызовет."""
+    game.next_wave = game.match_time
     step(game)
+    game.next_wave = 1e9
     return game.mobs
 
 
@@ -30,44 +40,72 @@ def shoot_mob(game, mob, shooter):
     step(game, 0.1)
 
 
-def test_no_mobs_before_delay(game):
-    step(game, 1.0)
-    game.match_time = MOB_DELAY - 1
-    step(game, 0.5)
-    assert game.mobs == []
+def test_first_wave_right_at_start(game):
+    game.next_wave = MOB_DELAY                  # как в настоящей игре
+    step(game)
+    assert len(game.mobs) == MOB_COUNT and all(m.hp == MOB_HP for m in game.mobs)
 
 
-def test_mobs_appear_in_middle_and_stand(game):
-    mobs = spawn(game)
-    assert len(mobs) == MOB_COUNT
-    assert all(m.x == WIDTH / 2 for m in mobs)
-    before = [(m.x, m.y) for m in mobs]
+def test_mobs_appear_in_random_places_and_stand(game):
+    lo, hi = WIDTH * MOB_AREA[0], WIDTH * MOB_AREA[1]
+    places = []
+    for seed in range(5):
+        random.seed(seed)
+        game.restart()
+        game.ammo_timer = {p: 1e9 for p in game.players}
+        mobs = spawn(game)
+        assert all(lo <= m.x <= hi and TOP < m.y < BOTTOM for m in mobs)
+        places.append(tuple((round(m.x), round(m.y)) for m in mobs))
+    assert len(set(places)) == len(places)      # каждый раз в других местах
+    before = [(m.x, m.y) for m in game.mobs]
     step(game, 2.0)
     assert [(m.x, m.y) for m in game.mobs] == before
 
 
-def test_waves_add_mob_and_hp(game):
-    """Волны каждые MOB_EVERY с: +1 моб в волне и +1 жизнь всем живым мобам."""
-    spawn(game)
-    assert [m.hp for m in game.mobs] == [MOB_HP] * MOB_COUNT
-    step(game, MOB_EVERY - 1)
-    assert len(game.mobs) == MOB_COUNT          # до второй волны — без изменений
-    step(game, 1.0)
+def test_waves_grow_and_cap(game):
+    """+1 моб в волне и +1 жизнь всем — но не больше MOB_MAX мобов и MOB_MAX_HP жизней."""
+    game.spawn_mob_wave()
+    assert len(game.mobs) == MOB_COUNT
+    game.spawn_mob_wave()
     assert len(game.mobs) == MOB_COUNT + (MOB_COUNT + 1)
     assert all(m.hp == MOB_HP + 1 for m in game.mobs)
-    step(game, MOB_EVERY)
-    assert len(game.mobs) == MOB_COUNT + (MOB_COUNT + 1) + (MOB_COUNT + 2)
-    assert all(m.hp == MOB_HP + 2 for m in game.mobs)
-    assert game.mob_wave == 3
+    for _ in range(10):
+        game.spawn_mob_wave()
+        assert len(game.mobs) <= MOB_MAX
+        assert all(m.hp <= MOB_MAX_HP and m.max_hp <= MOB_MAX_HP for m in game.mobs)
+    assert len(game.mobs) == MOB_MAX
+    assert all(m.hp == MOB_MAX_HP for m in game.mobs)
+
+
+def test_waves_speed_up_after_max(game):
+    """До максимума — каждые MOB_EVERY с; потом каждая следующая на MOB_SPEEDUP с раньше, до MOB_EVERY_MIN."""
+    game.next_wave = 0
+    times, wave = [], 0
+    for _ in range(int(260 / DT)):
+        game.update(DT)
+        game.blue.hp = game.red.hp = 10
+        if game.mob_wave != wave:
+            wave = game.mob_wave
+            times.append(game.match_time)
+    gaps = [round(b - a) for a, b in zip(times, times[1:])]
+    k_max = max(MOB_MAX - MOB_COUNT, MOB_MAX_HP - MOB_HP)     # волна, на которой дошли до максимума
+    assert gaps[:k_max] == [MOB_EVERY] * k_max
+    after = gaps[k_max:]
+    expected = [max(MOB_EVERY_MIN, MOB_EVERY - MOB_SPEEDUP * (i + 1)) for i in range(len(after))]
+    assert after == expected and after[-1] == MOB_EVERY_MIN
 
 
 def test_wounded_mob_also_grows(game):
     m = spawn(game)[0]
     shoot_mob(game, m, game.blue)
     assert m.hp == MOB_HP - 1
-    game.match_time = MOB_DELAY + MOB_EVERY - DT / 2
-    step(game)
+    game.spawn_mob_wave()
     assert m.hp == MOB_HP and m.max_hp == MOB_HP + 1
+
+
+def test_wave_timer_draws(game):
+    spawn(game)
+    game.draw()
 
 
 def test_mob_blocks_bullets_and_goes_for_shooter(game):
@@ -131,8 +169,7 @@ def test_computer_shoots_mob_that_chases_it(game):
 # --- артефакты только из мобов
 
 def test_no_artifacts_without_mob_kills(game):
-    game.match_time = -1e9                      # мобы не придут
-    step(game, 60)
+    step(game, 60)                              # мобов нет (фикстура их отключила)
     assert game.artifacts == []
 
 
@@ -144,22 +181,6 @@ def test_killed_mob_drops_artifact_on_killers_line(game):
     assert len(game.artifacts) == 1
     art = game.artifacts[0]
     assert art.x == game.red.x and abs(art.y - y) < 60
-
-
-def test_full_inventory_gets_only_instant_drops(game):
-    from duel.items import INSTANT_ITEMS
-    b = game.blue
-    b.items = ["shield"] * 4
-    kinds = set()
-    for _ in range(30):
-        game.mobs = []
-        game.artifacts = []
-        game.spawn_mob_wave()
-        m = game.mobs[0]
-        m.hp = 1
-        shoot_mob(game, m, b)
-        kinds |= {a.kind for a in game.artifacts}
-    assert kinds and kinds <= set(INSTANT_ITEMS)
 
 
 # --- баг: моб «сел» на игрока сверху или снизу, и его невозможно было убить

@@ -12,6 +12,7 @@ from .config import (
     SHIELD_HITS,
     SHOT_COOLDOWN,
     WALL_TIME,
+    WEAPON_TIME,
 )
 
 
@@ -40,7 +41,7 @@ ITEMS = {
 # Справка: категория и описание каждого артефакта (экран «Артефакты» в меню)
 HELP_SECTIONS = [
     ("Защита", ["shield", "heal", "cleanse", "shrink", "speed", "clearfoe", "slowfoe"]),
-    ("Оружие: сразу, на 30 с", ["triple", "wavy", "rapid", "breaker"]),
+    (f"Оружие: на {WEAPON_TIME:.0f} с", ["triple", "wavy", "rapid", "breaker"]),
     ("Атака", ["clones", "wall"]),
     ("Дебаффы на соперника", ["foe_grow", "foe_freeze", "foe_nofire", "foe_invert", "foe_noitems"]),
 ]
@@ -64,7 +65,7 @@ def item_help(kind):
                        "(кроме очищения). Подбирать может.",
         "cleanse": "Снимает с тебя и твоих двойников все дебаффы соперника. "
                    "Работает даже под запретом артефактов.",
-        "triple": f"Каждый выстрел — веер из трёх пуль, {d['triple']:.0f} с. Патрон тратится один.",
+        "triple": f"Каждый выстрел — веер из трёх пуль, {d['triple']:.0f} с. Патрон один.",
         "rapid": f"Пауза между выстрелами {SHOT_COOLDOWN * RAPID_FACTOR:.1f} с вместо "
                  f"{SHOT_COOLDOWN} с, {d['rapid']:.0f} с.",
         "wavy": f"Твои пули летят синусоидой {d['wavy']:.0f} с — их трудно предугадать.",
@@ -76,12 +77,12 @@ def item_help(kind):
     }[kind]
 
 
-WEAPON_ITEMS = ("triple", "wavy", "rapid", "breaker")      # улучшения оружия: сразу, на 30 с
+WEAPON_ITEMS = ("triple", "wavy", "rapid", "breaker")      # улучшения оружия: на WEAPON_TIME
 ATTACK_ITEMS = WEAPON_ITEMS + tuple(next(kinds for title, kinds in HELP_SECTIONS if title == "Атака"))
 # эффект на игроке -> артефакт, чей значок показывать в статусе (если имена различаются)
 EFFECT_ICON = {"grow2": "foe_grow", "freeze": "foe_freeze", "nofire": "foe_nofire",
                "invert": "foe_invert", "noitems": "foe_noitems"}
-INSTANT_ITEMS = ("heal",) + WEAPON_ITEMS                  # срабатывают при подборе, минуя инвентарь
+INSTANT_ITEMS = ("heal",)                                  # срабатывают при подборе, минуя инвентарь
 # дебаффы: снимаются только временем или очищением, ничем другим
 BAD_EFFECTS = ("grow2", "freeze", "nofire", "invert", "noitems")
 
