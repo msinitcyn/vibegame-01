@@ -20,9 +20,11 @@ from .config import (
     START_AMMO,
     TOP,
     WHITE,
+    WEAPON_SPAWN,
+    WEAPON_TIME,
     WIDTH,
 )
-from .items import HELP_SECTIONS, ITEMS, item_help
+from .items import HELP_SECTIONS, ITEMS, WEAPON_ITEMS, item_help
 from .icons import draw_icon
 from .gamepad import PAD_ITEM_COLORS, PAD_ITEM_LABELS, PAD_ITEM_LAYOUT
 from .sprites import sprite_image
@@ -69,7 +71,7 @@ class ScreensMixin:
         s.blit(t, t.get_rect(center=(WIDTH // 2, 24)))
         name_font = self.font
         row_h, col_w = 48, 470
-        cols = {0: [HELP_SECTIONS[0]], 1: [HELP_SECTIONS[1], HELP_SECTIONS[2]]}
+        cols = {0: HELP_SECTIONS[:1], 1: HELP_SECTIONS[1:]}
         for col, sections in cols.items():
             x0 = 20 + col * (col_w + 20)
             y = 50
@@ -89,24 +91,22 @@ class ScreensMixin:
         # пояснения в свободном месте левой колонки
         x0, y = 20, 50 + 32 + len(HELP_SECTIONS[0][1]) * row_h + 20
         notes = [
-            "Рамка: зелёная — защита, синяя — атака, оранжевая — бьёт по сопернику.",
-            "Эффекты складываются: например, волна + веер + скорость действуют вместе. "
-            "Повтор того же эффекта добавляет ему время (щиту — и удары).",
-            "На двойников переходят: щит, волна, веер, скорострельность, ×2, уменьшение, "
-            "сбивание пуль, скорость и «не стреляет».",
-            "Пока инвентарь (4 ячейки) полон, новые артефакты на твоей стороне не появляются.",
-            f"Патроны: в начале {START_AMMO}, выстрел (и веер) тратит 1. Пачки по {AMMO_PACK} "
-            "появляются на твоей вертикали и подбираются сразу, даже при полном инвентаре.",
-            f"Через {MOB_DELAY:.0f} с в середине поля появляются {MOB_COUNT} моба: стоят и ловят пули. "
-            f"Попал в моба — он идёт на тебя и бьёт при касании. У моба {MOB_HP} жизни.",
-            "Дебаффы соперника снимаются только временем или очищением. Стен можно "
-            "поставить несколько — каждая стоит своё время.",
+            "Рамка: зелёная — защита, синяя — атака, оранжевая — по сопернику.",
+            f"Оружие: по одному раз в {WEAPON_SPAWN:.0f} с, срабатывает сразу, держится "
+            f"{WEAPON_TIME:.0f} с, повтор обновляет таймер. Больше трёх сразу не бывает. Видно в углу поля.",
+            "Эффекты складываются; повтор того же добавляет время (щиту — и удары).",
+            "На двойников переходят: щит, оружие, ×2, уменьшение, скорость, «не стреляет».",
+            "Полный инвентарь (4 ячейки) — новые артефакты на твоей стороне не появляются.",
+            f"Патроны: в начале {START_AMMO}, выстрел тратит 1. Пачки по {AMMO_PACK} подбираются сразу.",
+            f"Через {MOB_DELAY:.0f} с в середине — {MOB_COUNT} моба ({MOB_HP} жизни). "
+            "Попал — идёт на тебя и бьёт при касании.",
+            "Дебаффы снимаются только временем или очищением. Стен может быть несколько.",
         ]
         for note in notes:
             for line in self.wrap(note, col_w):
                 s.blit(self.tiny_text.render(line, True, GREY), (x0, y))
                 y += 15
-            y += 8
+            y += 5
         hint = self.small.render("Esc, Enter, Пробел или ✕/○ на геймпаде — назад", True, GREY)
         s.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 16)))
         pygame.display.flip()
@@ -186,10 +186,9 @@ class ScreensMixin:
                 hearts += f" +{p.hp - HEARTS_SHOWN}"
             line1 = self.font.render(f"{p.name}  {hearts}    патроны {p.ammo}", True,
                                      p.color if p.ammo > 0 else BAD_TEXT)
+            # улучшения оружия — не здесь, а в панели в углу поля
             parts = [f"щит {p.shield_hits}×/{t:.0f}с" if n == "shield" else f"{EFFECT_LABEL[n]} {t:.0f}"
-                     for n, t in p.effects.items()]
-            if p.triple_shots:
-                parts.append(f"веер {p.triple_shots}")
+                     for n, t in p.effects.items() if n not in WEAPON_ITEMS]
             mine = [w.life for w in self.walls if w.owner is p]
             if mine:
                 parts.append(f"стена {max(mine):.0f}" if len(mine) == 1 else
@@ -223,6 +222,33 @@ class ScreensMixin:
             self._field_bg = bg
         return bg
 
+    def draw_weapon_status(self):
+        """Активные улучшения оружия в углу поля: значок, секунды, полоска. Синий — слева, красный — справа."""
+        s = self.screen
+        row_h, w = 30, 96
+        for p in self.players:
+            active = sorted(((t, n) for n, t in p.effects.items() if n in WEAPON_ITEMS), reverse=True)
+            if not active:
+                continue
+            left = p is self.blue
+            x0 = 8 if left else WIDTH - 8 - w
+            box = pygame.Rect(x0, TOP + 8, w, len(active) * row_h + 6)
+            panel = pygame.Surface(box.size, pygame.SRCALPHA)
+            panel.fill((10, 10, 16, 170))
+            s.blit(panel, box)
+            pygame.draw.rect(s, p.color, box, 1, border_radius=4)
+            for i, (t, kind) in enumerate(active):
+                y = box.top + 4 + i * row_h
+                draw_icon(s, kind, (box.left + 16, y + 12), 11)
+                txt = self.small.render(f"{t:.0f} с", True, ITEMS[kind][2])
+                s.blit(txt, (box.left + 32, y + 1))
+                # полоска: сколько осталось из WEAPON_TIME (при стаке — больше полной)
+                bar = pygame.Rect(box.left + 32, y + 19, w - 40, 4)
+                pygame.draw.rect(s, (50, 50, 60), bar)
+                fill = bar.copy()
+                fill.w = round(bar.w * min(1.0, t / WEAPON_TIME))
+                pygame.draw.rect(s, ITEMS[kind][2], fill)
+
     def draw(self):
         s = self.screen
         s.blit(self.field_background(), (0, TOP))
@@ -246,6 +272,7 @@ class ScreensMixin:
             rect = img.get_rect(center=(int(x), int(y)))
             rect.clamp_ip(pygame.Rect(0, TOP, WIDTH, BOTTOM - TOP))
             s.blit(img, rect)
+        self.draw_weapon_status()
         self.draw_hud()
 
         if self.winner:

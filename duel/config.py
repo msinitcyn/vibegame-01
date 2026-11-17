@@ -42,7 +42,11 @@ MAX_HP = 10
 TEST_HP = 1000                   # жизни в тестовом режиме
 HEARTS_SHOWN = 5                 # больше — рисуем 5 сердечек и «+остаток»
 HEAL_AMOUNT = 3
-TRIPLE_SHOTS = 5
+# Улучшения оружия (веер, волна, скорострельность, сбивание): срабатывают сразу,
+# держатся WEAPON_TIME. Следующее появляется через WEAPON_SPAWN после того, как
+# предыдущее подобрали или оно исчезло — поэтому больше трёх сразу не бывает.
+WEAPON_TIME = 30.0
+WEAPON_SPAWN = 10.0
 
 INVENTORY_SIZE = 4
 ARTIFACT_R = 16
@@ -83,10 +87,11 @@ ATTACK_RING = (80, 170, 255)     # синяя рамка — артефакт у
 ICON_BG = (35, 38, 52)
 
 # эффекты на игроке: длительность и короткая подпись для панели
-DURATION = {"grow2": 7, "shrink": 7, "freeze": 2.5, "speed": 7, "rapid": 7,
-            "nofire": 4, "slowfoe": 7, "shield": 7, "breaker": 8, "wavy": 7, "invert": 5,
-            "noitems": 5}
-EFFECT_LABEL = {"grow2": "×2", "shrink": "мал", "freeze": "мороз", "speed": "скор",
+DURATION = {"grow2": 7, "shrink": 7, "freeze": 2.5, "speed": 7, "nofire": 4, "slowfoe": 7,
+            "shield": 7, "invert": 5, "noitems": 5,
+            # улучшения оружия
+            "triple": WEAPON_TIME, "wavy": WEAPON_TIME, "rapid": WEAPON_TIME, "breaker": WEAPON_TIME}
+EFFECT_LABEL = {"triple": "веер", "grow2": "×2", "shrink": "мал", "freeze": "мороз", "speed": "скор",
                 "rapid": "очередь", "nofire": "без огня", "slowfoe": "замедл",
                 "shield": "щит", "breaker": "сбив", "wavy": "волна", "invert": "инверсия",
                 "noitems": "без артеф."}
@@ -104,5 +109,5 @@ CLONE_RADIUS = BASE_RADIUS * 0.8
 CLONE_SPEED = BASE_SPEED * 0.7
 CLONE_SHOT_EVERY = (0.6, 1.5)    # пауза между выстрелами двойника, сек
 CLONE_TURN_EVERY = (0.4, 1.4)    # как часто двойник меняет направление
-# эффекты хозяина, которые действуют и на его двойников (плюс веер)
-CLONE_EFFECTS = ("shield", "wavy", "rapid", "grow2", "shrink", "breaker", "speed", "nofire")
+# эффекты хозяина, которые действуют и на его двойников
+CLONE_EFFECTS = ("shield", "triple", "wavy", "rapid", "grow2", "shrink", "breaker", "speed", "nofire")

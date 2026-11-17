@@ -32,10 +32,11 @@ from .config import (
     RED,
     SLOW_BULLET_FACTOR,
     TEST_HP,
+    WEAPON_SPAWN,
     TOP,
     WIDTH,
 )
-from .items import BAD_EFFECTS, INSTANT_ITEMS, ITEMS, ring_color
+from .items import BAD_EFFECTS, INSTANT_ITEMS, INVENTORY_ITEMS, ITEMS, WEAPON_ITEMS, ring_color
 from .entities import AmmoPack, Artifact, Clone, Mob, Player, Wall
 from .ai import AI, AI_LEVELS
 from .gamepad import Gamepads, PAD_DOWN, PAD_FIRE, PAD_ITEM_BUTTONS, PAD_UP
@@ -107,6 +108,9 @@ class Game(ScreensMixin):
         self.ammo_packs = []
         self.ammo_timer = {p: random.uniform(*AMMO_SPAWN) for p in self.players}
         self.no_ammo_shown = {p: -10_000 for p in self.players}
+        # улучшения оружия: по одному на сторону, следующее — через WEAPON_SPAWN после предыдущего
+        self.weapon_timer = {p: WEAPON_SPAWN for p in self.players}
+        self.weapon_art = {p: None for p in self.players}
         self.mobs = []
         self.match_time = 0.0         # секунд с начала партии
         self.mobs_spawned = False
@@ -292,10 +296,7 @@ class Game(ScreensMixin):
 
     def apply_item(self, p, kind):
         foe = self.other(p)
-        if kind == "triple":
-            for u in [p] + self.clones_of(p):
-                u.add_triple()
-        elif kind == "heal":
+        if kind == "heal":
             p.hp = min(p.max_hp, p.hp + HEAL_AMOUNT)
         elif kind == "wall":
             self.walls.append(Wall(p))
@@ -334,9 +335,10 @@ class Game(ScreensMixin):
             self.spawn_timer[p] -= dt
             if self.spawn_timer[p] <= 0:
                 self.spawn_timer[p] = random.uniform(*ARTIFACT_SPAWN)
-                on_side = sum(1 for a in self.artifacts if a.x == p.x)
+                on_side = sum(1 for a in self.artifacts if a.x == p.x and a.kind not in WEAPON_ITEMS)
                 if not p.inventory_full and on_side < MAX_ARTIFACTS_PER_SIDE:
-                    self.artifacts.append(Artifact(p.x, random.choice(list(ITEMS))))
+                    self.artifacts.append(Artifact(p.x, random.choice(INVENTORY_ITEMS)))
+        self.spawn_weapons(dt)
 
         for a in self.artifacts:
             a.life -= dt
@@ -425,6 +427,23 @@ class Game(ScreensMixin):
         for p in self.players:
             if p.hp <= 0:
                 self.winner = self.other(p)
+
+    def spawn_weapons(self, dt):
+        """Улучшение оружия: одно на стороне; следующее — через WEAPON_SPAWN после того,
+        как предыдущее подобрали или оно исчезло. Так подборы не чаще раза в 10 с,
+        а при длительности 30 с одновременно активных улучшений не больше трёх."""
+        for p in self.players:
+            art = self.weapon_art[p]
+            if art is not None:
+                if art in self.artifacts:
+                    continue                  # ещё лежит
+                self.weapon_art[p] = None     # подобрали или исчезло — отсчёт заново
+                self.weapon_timer[p] = WEAPON_SPAWN
+            self.weapon_timer[p] -= dt
+            if self.weapon_timer[p] <= 0:
+                art = Artifact(p.x, random.choice(WEAPON_ITEMS))
+                self.artifacts.append(art)
+                self.weapon_art[p] = art
 
     def update_mobs(self, dt):
         """Мобы: появляются в середине поля через MOB_DELAY секунд, идут на обидчика, бьют при касании."""

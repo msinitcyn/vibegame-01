@@ -4,7 +4,7 @@ import math
 import random
 
 from .config import BOTTOM, BULLET_R, BULLET_SPEED, HEAL_AMOUNT, SLOW_BULLET_FACTOR, TOP
-from .items import BAD_EFFECTS
+from .items import BAD_EFFECTS, INSTANT_ITEMS
 
 
 # Параметры компьютерного соперника по уровням сложности
@@ -105,10 +105,11 @@ class AI:
         packs = [a for a in self.game.ammo_packs if a.x == me.x]
         if packs and me.ammo < 30:
             return min(packs, key=lambda a: abs(a.y - me.y)).y
-        if not me.inventory_full:
-            mine = [a for a in self.game.artifacts if a.x == me.x]
-            if mine:
-                return min(mine, key=lambda a: abs(a.y - me.y)).y
+        # улучшения оружия и лечение подбираются всегда, остальное — если есть место
+        mine = [a for a in self.game.artifacts if a.x == me.x
+                 and (a.kind in INSTANT_ITEMS or not me.inventory_full)]
+        if mine:
+            return min(mine, key=lambda a: abs(a.y - me.y)).y
         return foe.y + self.noise
 
     def predicted_hit(self, angle, target):
@@ -147,7 +148,7 @@ class AI:
         #    моба, который идёт на нас, иначе соперника
         target = self.chasing_mob() or foe
         if me.cooldown == 0 and me.ammo > 0:
-            angles = (-1, 0, 1) if me.triple_shots else (me.moving,)
+            angles = (-1, 0, 1) if "triple" in me.effects else (me.moving,)
             aimed = any(abs(self.predicted_hit(a, target) - target.y) < target.radius + cfg["aim_tol"]
                         for a in angles)
             spray = cfg["spray"] if me.ammo > 15 else 0     # мало патронов — только прицельно

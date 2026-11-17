@@ -29,7 +29,7 @@ def test_hard_beats_easy(game):
     game.start("hard")
     bot = AI(game, game.blue, "easy")
     wins = games = 0
-    for _ in range(60 * 60 * 6):
+    for _ in range(60 * 60 * 10):               # до 10 минут игрового времени
         bot.update(DT)
         game.held = bot.keys()
         game.update(DT)

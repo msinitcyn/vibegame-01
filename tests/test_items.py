@@ -9,10 +9,9 @@ from duel.config import (
     SHIELD_HITS,
     START_AMMO,
     TEST_HP,
-    TRIPLE_SHOTS,
 )
 from duel.entities import AmmoPack, Artifact, Bullet
-from duel.items import ATTACK_ITEMS, BAD_EFFECTS, HELP_SECTIONS, ITEMS, item_help, ring_color
+from duel.items import BAD_EFFECTS, HELP_SECTIONS, ITEMS, item_help, ring_color
 from tests.conftest import step
 
 
@@ -46,9 +45,13 @@ def test_ring_colors_follow_groups():
     from duel.config import ATTACK_RING, FOE_RING, SELF_RING
     for title, kinds in HELP_SECTIONS:
         colors = {ring_color(k) for k in kinds}
-        expected = {"Защита": SELF_RING, "Атака": ATTACK_RING}.get(title, FOE_RING)
+        if title == "Защита":
+            expected = SELF_RING
+        elif title.startswith("Дебаффы"):
+            expected = FOE_RING
+        else:                                     # оружие и атака
+            expected = ATTACK_RING
         assert colors == {expected}, title
-    assert set(ATTACK_ITEMS) == set(dict(HELP_SECTIONS)["Атака"])
 
 
 # --- инвентарь
@@ -139,7 +142,10 @@ def test_wavy_triple_speed_stack(game):
     game.give(b, "speed")
     shots = b.shoot()
     assert len(shots) == 3 and all(s.wave_amp for s in shots)
-    assert b.triple_shots == TRIPLE_SHOTS - 1
+    assert {"triple", "wavy", "speed"} <= set(b.effects)
+    assert len(b.shoot()) == 0                  # пауза между выстрелами
+    b.cooldown = 0
+    assert len(b.shoot()) == 3                  # веер не «кончается» после выстрелов
 
 
 def test_invert_swaps_controls(game):
@@ -232,7 +238,7 @@ def test_clones_copy_and_receive_effects(game):
     game.apply_item(game.red, "foe_freeze")
     assert {"wavy", "grow2", "breaker", "speed", "nofire"} <= set(c.effects)
     assert "freeze" not in c.effects          # заморозка на двойников не переходит
-    assert c.triple_shots == TRIPLE_SHOTS
+    assert "triple" in c.effects
 
 
 def still_clone(game, y):

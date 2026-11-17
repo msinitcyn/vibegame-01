@@ -36,7 +36,6 @@ from .config import (
     SHOT_COOLDOWN,
     START_AMMO,
     TOP,
-    TRIPLE_SHOTS,
     WALL_H,
     WALL_OFFSET,
     WALL_TIME,
@@ -45,7 +44,7 @@ from .config import (
     WAVE_FREQ,
     WIDTH,
 )
-from .items import ITEMS
+from .items import ITEMS, WEAPON_ITEMS
 from .icons import draw_icon
 from .sprites import draw_unit
 
@@ -74,7 +73,6 @@ class Unit:
 
     def reset_effects(self):
         self.effects = {}             # имя эффекта -> оставшееся время
-        self.triple_shots = 0
         self.shield_hits = 0
 
     @property
@@ -100,13 +98,17 @@ class Unit:
         return "nofire" not in self.effects
 
     def apply(self, effect):
-        """Эффекты складываются: разные действуют одновременно, повтор того же добавляет время."""
-        self.effects[effect] = self.effects.get(effect, 0) + DURATION[effect]
+        """Эффекты складываются: разные действуют одновременно, повтор того же добавляет время.
+
+        Исключение — улучшения оружия: повтор обновляет таймер до полного, а не добавляет.
+        Иначе одно улучшение «переживало» бы несколько подборов и их могло стать больше трёх.
+        """
+        if effect in WEAPON_ITEMS:
+            self.effects[effect] = max(self.effects.get(effect, 0), DURATION[effect])
+        else:
+            self.effects[effect] = self.effects.get(effect, 0) + DURATION[effect]
         if effect == "shield":
             self.shield_hits += SHIELD_HITS
-
-    def add_triple(self, n=TRIPLE_SHOTS):
-        self.triple_shots += n
 
     def tick_effects(self, dt):
         for name in list(self.effects):
@@ -117,8 +119,7 @@ class Unit:
             self.shield_hits = 0
 
     def shot_angles(self, moving):
-        if self.triple_shots > 0:
-            self.triple_shots -= 1
+        if "triple" in self.effects:
             return (-1, 0, 1)
         return (moving,)
 
@@ -155,7 +156,7 @@ class Unit:
                 # сколько ударов и секунд осталось у щита
                 txt = font.render(f"{self.shield_hits}× · {t:.0f}с", True, ITEMS["shield"][2])
                 surf.blit(txt, txt.get_rect(midbottom=(pos[0], pos[1] - r - SHIELD_GAP - 2)))
-        if self.triple_shots:
+        if "triple" in self.effects:
             pygame.draw.circle(surf, ITEMS["triple"][2], pos, max(3, r // 3))
         if "nofire" in self.effects:
             d = int(r * 0.7)
@@ -286,7 +287,6 @@ class Clone(Unit):
             if name in CLONE_EFFECTS:
                 self.effects[name] = t
         self.shield_hits = owner.shield_hits if "shield" in self.effects else 0
-        self.triple_shots = owner.triple_shots
         self.y = random.uniform(TOP + self.radius, BOTTOM - self.radius)
         self.moving = random.choice((-1, 0, 1))
         self.turn_timer = random.uniform(*CLONE_TURN_EVERY)

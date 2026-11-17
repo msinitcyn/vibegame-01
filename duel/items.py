@@ -11,14 +11,13 @@ from .config import (
     SELF_RING,
     SHIELD_HITS,
     SHOT_COOLDOWN,
-    TRIPLE_SHOTS,
     WALL_TIME,
 )
 
 
 # Все артефакты полезные. kind: (название, на кого действует, цвет значка)
 ITEMS = {
-    "triple": ("веер: 5 выстрелов", "self", (255, 210, 60)),
+    "triple": ("веер", "self", (255, 210, 60)),
     "shrink": ("уменьшение", "self", (90, 230, 230)),
     "speed": ("скорость", "self", (120, 255, 120)),
     "wall": ("стена-зеркало", "self", (225, 235, 255)),
@@ -41,7 +40,8 @@ ITEMS = {
 # Справка: категория и описание каждого артефакта (экран «Артефакты» в меню)
 HELP_SECTIONS = [
     ("Защита", ["shield", "heal", "cleanse", "shrink", "speed", "clearfoe", "slowfoe"]),
-    ("Атака", ["triple", "rapid", "wavy", "clones", "breaker", "wall"]),
+    ("Оружие: сразу, на 30 с", ["triple", "wavy", "rapid", "breaker"]),
+    ("Атака", ["clones", "wall"]),
     ("Дебаффы на соперника", ["foe_grow", "foe_freeze", "foe_nofire", "foe_invert", "foe_noitems"]),
 ]
 
@@ -64,20 +64,22 @@ def item_help(kind):
                        "(кроме очищения). Подбирать может.",
         "cleanse": "Снимает с тебя и твоих двойников все дебаффы соперника. "
                    "Работает даже под запретом артефактов.",
-        "triple": f"Следующие {TRIPLE_SHOTS} выстрелов летят веером в три стороны.",
+        "triple": f"Каждый выстрел — веер из трёх пуль, {d['triple']:.0f} с. Патрон тратится один.",
         "rapid": f"Пауза между выстрелами {SHOT_COOLDOWN * RAPID_FACTOR:.1f} с вместо "
-                 f"{SHOT_COOLDOWN} с, на {d['rapid']} с.",
-        "wavy": f"Твои пули летят синусоидой {d['wavy']} с — их трудно предугадать.",
+                 f"{SHOT_COOLDOWN} с, {d['rapid']:.0f} с.",
+        "wavy": f"Твои пули летят синусоидой {d['wavy']:.0f} с — их трудно предугадать.",
         "clones": f"{CLONE_COUNT} двойника сами ходят и стреляют. Умирают с одного попадания, "
                   f"живут до {CLONE_TIME:.0f} с.",
-        "breaker": f"{d['breaker']} с твои пули сбивают встречные пули соперника.",
+        "breaker": f"{d['breaker']:.0f} с твои пули сбивают встречные пули соперника.",
         "wall": f"Стена перед тобой на {WALL_TIME:.0f} с: пули соперника отражаются и становятся "
                 "твоими, свои — поглощаются.",
     }[kind]
 
 
-ATTACK_ITEMS = next(kinds for title, kinds in HELP_SECTIONS if title == "Атака")
-INSTANT_ITEMS = ("heal",)
+WEAPON_ITEMS = ("triple", "wavy", "rapid", "breaker")      # улучшения оружия: сразу, на 30 с
+ATTACK_ITEMS = WEAPON_ITEMS + tuple(next(kinds for title, kinds in HELP_SECTIONS if title == "Атака"))
+INSTANT_ITEMS = ("heal",) + WEAPON_ITEMS                  # срабатывают при подборе, минуя инвентарь
+INVENTORY_ITEMS = [k for k in ITEMS if k not in WEAPON_ITEMS]  # обычные артефакты на поле
 # дебаффы: снимаются только временем или очищением, ничем другим
 BAD_EFFECTS = ("grow2", "freeze", "nofire", "invert", "noitems")
 
