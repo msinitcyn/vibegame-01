@@ -16,11 +16,13 @@ context: |
   step(dt, команды) -> события, свой генератор match.rng, номера объектов),
   gamepad.py, audio.py, screens.py (отрисовка), game.py (приложение: окно, меню,
   ввод -> команды, события -> звук и надписи, фиксированный такт 60 Гц),
+  snapshot.py (снимок матча простыми данными, JSON-совместимый), render.py (отрисовка
+  объектов поля по снимку; экран читает только game.snap),
   i18n.py (все тексты на ru/en/fi), settings.py, sprites.py; assets/ — музыка, звуки,
   спрайты (PNG редактируемые); tools/make_sprites.py; tests/ — pytest.
 
   Conventions:
-  - Правила — только в match.py/entities.py (без pygame-ввода, звука, текста); вид и звук —
+  - Правила — только в match.py/entities.py (без pygame вообще, звука, текста); вид и звук —
     в game.py/screens.py через события матча. Случайность — только match.rng.
   - Намеренное изменение правил — перезаписать эталон tools/fingerprint.py --save tests/data/fingerprint.json.
   - Числа баланса — константы в duel/config.py, не «магические числа» в коде.

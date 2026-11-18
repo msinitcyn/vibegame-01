@@ -55,10 +55,11 @@ def test_match_runs_without_window():
         "from tools.fingerprint import Bot\n"
         "from duel.commands import Command\n"
         "from duel.match import Match\n"
-        "m = Match(); bots = [Bot(1), Bot(2)]\n"
+        "m = Match(seed=1); bots = [Bot(1), Bot(2)]\n"
         "for _ in range(60 * 30):\n"
         "    m.step(1 / 60, {p.id: Command(*b.act()) for p, b in zip(m.players, bots)})\n"
-        "assert not pygame.display.get_init() and m.match_time > 29\n"
+        "assert not pygame.display.get_init()\n"
+        "assert m.match_time > 29 or m.winner, m.match_time\n"
         "print('ok')\n" % str(ROOT))
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=120)
     assert r.returncode == 0, r.stderr

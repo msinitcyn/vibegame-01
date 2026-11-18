@@ -18,8 +18,8 @@
 
 ## 4. Документация и итог
 
-- [ ] 4.1 `RUNBOOK.md` (снимок, где рисовать новые объекты: правила → снимок → `render.py`), `docs/network-roadmap.md` (этап 1 выполнен), структура в `openspec/config.yaml`; проверка: описанное совпадает с файлами
-- [ ] 4.2 `pyflakes main.py duel tests tools`, `pytest -q` без ошибок, отпечаток партии совпадает с эталоном; игра запускается, партия случайных нажатий через настоящий цикл проходит; `openspec validate render-from-snapshot --strict`
+- [x] 4.1 `RUNBOOK.md` (снимок, где рисовать новые объекты: правила → снимок → `render.py`), `docs/network-roadmap.md` (этап 1 выполнен), структура в `openspec/config.yaml`; проверка: описанное совпадает с файлами
+- [x] 4.2 `pyflakes main.py duel tests tools`, `pytest -q` без ошибок, отпечаток партии совпадает с эталоном; игра запускается, партия случайных нажатий через настоящий цикл проходит; `openspec validate render-from-snapshot --strict`
 
 ## Workflow follow-up
 
