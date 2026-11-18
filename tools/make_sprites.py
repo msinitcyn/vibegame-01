@@ -11,6 +11,7 @@ mage.png — маг с автоматом 32×32 в ледяных цветах,
 получает заменой цветов (MAGE_RED_PALETTE в duel/config.py).
 bg_ice.png / bg_lava.png — фоны земель магов 125×160, игра увеличивает их в 4 раза.
 bg_mob.png — полоса мобов посередине 50×160, тоже ×4.
+mob.png / mob_ranged.png — обычный и дальнобойный моб 16×16, смотрят вправо.
 """
 import os
 import sys
@@ -157,10 +158,15 @@ def walk(rng, w, h, put, length, color, core=None, core_every=3):
 MOB_SIZE = 16
 
 
-def draw_mob():
-    """Обсидиановый голем 16×16, смотрит вправо: тёмный камень, светящиеся трещины и глаза."""
-    body, dark, light = (74, 64, 96), (46, 40, 64), (112, 100, 140)
-    glow, eye = (200, 120, 255), (255, 236, 140)
+def draw_mob(ranged=False):
+    """Голем 16×16, смотрит вправо. Обычный — обсидиановый, с рожками и двумя глазами.
+    Дальнобойный — замшелый зелёный, с ядовитым кристаллом на голове и одним большим глазом."""
+    if ranged:
+        body, dark, light = (56, 70, 44), (34, 44, 28), (88, 108, 66)
+        glow, eye = (190, 255, 90), (235, 255, 170)
+    else:
+        body, dark, light = (74, 64, 96), (46, 40, 64), (112, 100, 140)
+        glow, eye = (200, 120, 255), (255, 236, 140)
     px = {}
 
     def put(x, y, c):
@@ -173,17 +179,28 @@ def draw_mob():
     for y, (x0, x1) in rows.items():
         for x in range(x0, x1 + 1):
             put(x, y, dark if x <= x0 + 1 or y >= 12 else light if y <= 4 else body)
-    # рожки
-    put(5, 2, dark)
-    put(10, 2, dark)
-    put(10, 1, dark)
+    if ranged:
+        # кристалл на голове — им он и стреляет
+        for x, y in ((7, 0), (7, 1), (8, 1), (6, 2), (7, 2), (8, 2), (9, 2)):
+            put(x, y, glow)
+        put(7, 1, eye)
+    else:
+        # рожки
+        put(5, 2, dark)
+        put(10, 2, dark)
+        put(10, 1, dark)
     # ноги
     for x in (4, 5, 10, 11):
         put(x, 14, dark)
     # глаза — сдвинуты вправо, туда он смотрит
-    for x in (8, 11):
-        put(x, 7, eye)
-        put(x, 8, eye)
+    if ranged:
+        for x, y in ((9, 6), (10, 6), (9, 7), (10, 7), (11, 7), (10, 8)):
+            put(x, y, eye)
+        put(10, 7, OUTLINE)                  # зрачок
+    else:
+        for x in (8, 11):
+            put(x, 7, eye)
+            put(x, 8, eye)
     # светящиеся трещины
     for x, y in ((5, 6), (6, 7), (5, 8), (6, 10), (7, 11), (9, 10), (10, 11), (12, 9)):
         put(x, y, glow)
@@ -288,6 +305,7 @@ def main(argv):
         "bg_ice.png": lambda: draw_background("ice"),
         "bg_lava.png": lambda: draw_background("lava"),
         "mob.png": draw_mob,
+        "mob_ranged.png": lambda: draw_mob(ranged=True),
         "bg_mob.png": draw_mob_zone,
     }
     for fname, make in files.items():

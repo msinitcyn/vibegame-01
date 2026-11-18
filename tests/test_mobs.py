@@ -173,19 +173,66 @@ def test_no_artifacts_without_mob_kills(game):
     assert game.artifacts == []
 
 
-def test_killed_mob_drops_artifact_on_killers_land(game):
-    """Артефакт падает на землю добившего, в точке, ближайшей к месту гибели моба."""
-    r = game.red
+def kill_mob_at(game, killer, x, y):
+    """Поставить моба в (x, y) и добить его пулями killer; моб стоит на месте."""
     m = spawn(game)[0]
-    for _ in range(MOB_HP - 1):
-        shoot_mob(game, m, r)
-    m.target = None                             # пусть стоит на месте до последнего выстрела
-    x, y = m.x, m.y
-    shoot_mob(game, m, r)
+    game.mobs = [m]
+    m.x, m.y = x, y
+    m.hp = 1                                    # одного выстрела хватит; моб ещё спокоен и стоит
+    shoot_mob(game, m, killer)
+    assert m not in game.mobs
+    return m
+
+
+def test_drop_on_own_land_at_death_spot(game):
+    """Моб добит на земле добившего — артефакт падает ровно на месте гибели."""
+    r = game.red
+    x, y = r.land[0] + 150, 300
+    kill_mob_at(game, r, x, y)
     assert len(game.artifacts) == 1
     art = game.artifacts[0]
-    assert r.land[0] <= art.x <= r.land[0] + 30  # у края лавы, ближе всего к полосе мобов
-    assert abs(art.y - y) < 30 and x < r.land[0]
+    assert (art.x, art.y) == (x, y)
+
+
+def test_no_drop_on_neutral_strip(game):
+    kill_mob_at(game, game.red, WIDTH / 2, 300)
+    assert game.artifacts == []
+
+
+def test_no_drop_on_foe_land(game):
+    b = game.blue
+    kill_mob_at(game, game.red, b.land[1] - 100, 300)   # красный добивает моба на льду синего
+    assert game.artifacts == []
+
+
+def test_drop_near_land_edge_pulled_inside(game):
+    """Моб погиб у самой границы своей земли — артефакт подтянут внутрь, чтобы его можно было достать."""
+    from duel.config import ARTIFACT_R
+    r = game.red
+    kill_mob_at(game, r, r.land[0] + 2, 300)
+    art = game.artifacts[0]
+    assert art.x - ARTIFACT_R >= r.land[0]
+
+
+def test_artifact_stays_until_picked(game):
+    from duel.entities import Artifact
+    r = game.red
+    art = Artifact(r.land[0] + 150, "speed", 150)
+    game.artifacts = [art]
+    step(game, 60)
+    assert game.artifacts == [art]              # минута — лежит
+    r.x, r.y = art.x, art.y
+    step(game)
+    assert game.artifacts == [] and "speed" in r.items
+
+
+def test_ammo_packs_still_expire(game):
+    from duel.config import AMMO_LIFETIME
+    from duel.entities import AmmoPack
+    pack = AmmoPack(game.blue.land[1] - 50, 150)
+    game.ammo_packs = [pack]
+    step(game, AMMO_LIFETIME + 0.5)
+    assert game.ammo_packs == []
 
 
 # --- баг: моб «сел» на игрока сверху или снизу, и его невозможно было убить
@@ -262,3 +309,107 @@ def test_fastshots_speeds_mobs_going_after_opponent(game):
     assert fast == pytest.approx(normal * FAST_BULLET_FACTOR, rel=0.05)
     # моба, который идёт на самого синего, быстрые пули синего не ускоряют
     assert moved_in(game, mob_on(game, game.blue, 450)) == pytest.approx(normal, rel=0.05)
+
+
+# --- дальнобойные мобы
+
+def ranged_on(game, target, x, y):
+    from duel.entities import Mob
+    m = Mob(x, y, 5, ranged=True)
+    m.target = target
+    game.mobs = [m]
+    return m
+
+
+def test_every_third_mob_of_wave_is_ranged(game):
+    from duel.config import MOB_RANGED_EVERY
+    game.spawn_mob_wave()                       # первая волна: 4 моба
+    assert sum(m.ranged for m in game.mobs) == MOB_COUNT // MOB_RANGED_EVERY == 1
+
+
+def test_calm_ranged_mob_does_not_shoot_or_move(game):
+    from duel.entities import Mob
+    m = Mob(500, 300, 5, ranged=True)
+    game.mobs = [m]
+    game.blue.x, game.blue.y = 300, 300
+    step(game, 3)
+    assert game.mob_shots == [] and (m.x, m.y) == (500, 300)
+
+
+def test_ranged_mob_walks_while_far_and_holds_distance(game):
+    from duel.config import MOB_KEEP_DISTANCE, MOB_RANGE
+    b = game.blue
+    b.x, b.y = 60, 300
+    m = ranged_on(game, b, 560, 300)
+    step(game, 0.5)
+    assert m.x < 560 and game.mob_shots == []   # далеко — идёт и не стреляет
+    step(game, 5)
+    dist = math.hypot(m.x - b.x, m.y - b.y)
+    assert dist == pytest.approx(MOB_RANGE * MOB_KEEP_DISTANCE, abs=3)   # остановился на дистанции
+
+
+def test_ranged_mob_shoots_on_cooldown(game):
+    from duel.config import MOB_SHOT_COOLDOWN
+    b = game.blue
+    b.x, b.y = 200, 300
+    ranged_on(game, b, 400, 300)
+    b.hp = 1000
+    # выстрелы на 1,5 / 3,0 / 4,5 с, полёт 200 px ≈ 0,8 с — к 5,5 с долетают три, четвёртый ещё не выпущен
+    step(game, MOB_SHOT_COOLDOWN * 3 + 1.0)
+    assert b.hp == 1000 - 3
+
+
+def test_mob_shot_flies_limited_range(game):
+    from duel.config import MOB_RANGE
+    from duel.entities import MobShot
+    b = game.blue
+    b.x, b.y = 100, 300
+    shot = MobShot(380, 300, b)
+    b.y = 600                                    # маг отбежал — снаряд летит в пустую точку
+    game.mob_shots = [shot]
+    step(game, 3)
+    assert game.mob_shots == [] and b.hp == MAX_HP
+    assert shot.travelled == pytest.approx(MOB_RANGE, abs=10)
+
+
+def test_mob_shot_blocked_by_shield(game):
+    from duel.entities import MobShot
+    b = game.blue
+    b.x, b.y = 200, 300
+    game.give(b, "shield")
+    game.mob_shots = [MobShot(320, 300, b)]
+    step(game, 1)
+    assert b.hp == MAX_HP and b.shield_hits == SHIELD_HITS - 1
+
+
+def test_mob_shot_speed_follows_slow_and_fast(game):
+    from duel.config import FAST_BULLET_FACTOR, SLOW_BULLET_FACTOR
+    from duel.entities import MobShot
+    b, r = game.blue, game.red
+
+    def flown(seconds=0.3):
+        s = MobShot(380, 100, b)
+        game.mob_shots = [s]
+        step(game, seconds)
+        return s.travelled
+
+    b.x, b.y = 100, 600
+    normal = flown()
+    game.give(b, "slowfoe")
+    assert flown() == pytest.approx(normal * SLOW_BULLET_FACTOR, rel=0.05)
+    b.effects.clear()
+    game.give(r, "fastshots")                    # «быстрые пули» у соперника цели
+    assert flown() == pytest.approx(normal * FAST_BULLET_FACTOR, rel=0.05)
+
+
+def test_mob_shots_ignore_walls_and_breaker(game):
+    from duel.entities import Bullet, MobShot
+    from duel.config import BULLET_SPEED
+    b = game.blue
+    b.x, b.y = 100, 300
+    game.apply_item(b, "wall")                   # стена между магом и снарядом
+    game.give(b, "breaker")
+    game.mob_shots = [MobShot(400, 300, b)]
+    game.bullets = [Bullet(150, 300, BULLET_SPEED, 0, b)]   # пуля синего навстречу
+    step(game, 1.5)
+    assert b.hp == MAX_HP - 1                    # снаряд прошёл и стену, и пулю

@@ -6,6 +6,12 @@ import random
 import pygame
 
 from .config import (
+    MOB_KEEP_DISTANCE,
+    MOB_RANGE,
+    MOB_SHOT_COLOR,
+    MOB_SHOT_COOLDOWN,
+    MOB_SHOT_R,
+    MOB_SHOT_SPEED,
     WEAPON_MAX,
     MOB_HIT_COOLDOWN,
     MOB_HP,
@@ -16,7 +22,6 @@ from .config import (
     AMMO_COLOR,
     AMMO_LIFETIME,
     AMMO_PACK,
-    ARTIFACT_LIFETIME,
     ARTIFACT_R,
     BASE_RADIUS,
     BASE_SPEED,
@@ -352,12 +357,9 @@ class Artifact:
         self.x = x
         self.y = y if y is not None else random.uniform(TOP + ARTIFACT_R + 5, BOTTOM - ARTIFACT_R - 5)
         self.kind = kind
-        self.life = ARTIFACT_LIFETIME
+        self.taken = False            # лежит, пока маг сам не подберёт — по времени не исчезает
 
     def draw(self, surf):
-        # мигает перед исчезновением
-        if self.life < 2 and int(self.life * 8) % 2 == 0:
-            return
         draw_icon(surf, self.kind, (int(self.x), int(self.y)), ARTIFACT_R)
 
 
@@ -386,11 +388,14 @@ class AmmoPack:
 
 class Mob:
     """Моб в середине поля. Стоит, пока в него не попадут; потом идёт на того,
-    кто попал последним, и бьёт при касании. Артефакты не берёт, эффекты на него не действуют."""
+    кто попал последним, и бьёт при касании. Дальнобойный (ranged) вместо этого держится
+    на расстоянии и стреляет снарядами. Артефакты не берёт, эффекты на него не действуют."""
 
-    def __init__(self, x, y, hp=MOB_HP):
+    def __init__(self, x, y, hp=MOB_HP, ranged=False):
         self.x, self.y = x, y
         self.hp = self.max_hp = hp
+        self.ranged = ranged
+        self.shot_cd = MOB_SHOT_COOLDOWN
         self.radius = MOB_RADIUS
         self.target = None            # игрок, на которого злится
         self.hit_cd = 0.0
@@ -414,13 +419,20 @@ class Mob:
         if p is None:
             return None
         reach = p.radius + self.radius
-        # Встаёт прямо перед игроком, со стороны поля, а не на него: игрок стреляет вперёд,
-        # и моб, «севший» сверху или снизу, был бы неуязвим.
-        spot_x = p.x + p.dir * (reach - 4)
-        dx, dy = spot_x - self.x, p.y - self.y
-        dist = math.hypot(dx, dy)
+        if self.ranged:
+            # дальнобойный: идёт прямо к цели, пока она дальше части дальности, потом стоит
+            dx, dy = p.x - self.x, p.y - self.y
+            dist = max(0.0, math.hypot(dx, dy) - MOB_RANGE * MOB_KEEP_DISTANCE)
+        else:
+            # Встаёт прямо перед игроком, со стороны поля, а не на него: игрок стреляет вперёд,
+            # и моб, «севший» сверху или снизу, был бы неуязвим.
+            spot_x = p.x + p.dir * (reach - 4)
+            dx, dy = spot_x - self.x, p.y - self.y
+            dist = math.hypot(dx, dy)
         if dist > 0:
+            norm = math.hypot(dx, dy)
             step = min(MOB_SPEED * speed * dt, dist)
+            dx, dy = dx / norm * dist, dy / norm * dist
             self.x += dx / dist * step
             self.y += dy / dist * step
         self.facing = -p.dir                  # лицом к игроку
@@ -429,6 +441,18 @@ class Mob:
             return p
         return None
 
+    def shoot(self, dt):
+        """Дальнобойный злой моб: снаряд в цель, если она не дальше MOB_RANGE и прошла
+        перезарядка. Возвращает MobShot или None."""
+        self.shot_cd = max(0.0, self.shot_cd - dt)
+        p = self.target
+        if not self.ranged or p is None or self.shot_cd > 0:
+            return None
+        if math.hypot(p.x - self.x, p.y - self.y) > MOB_RANGE:
+            return None
+        self.shot_cd = MOB_SHOT_COOLDOWN
+        return MobShot(self.x, self.y, p)
+
     def grow(self, n=1, cap=MOB_MAX_HP):
         """Новая волна: всем живым мобам +n жизней, но не больше cap."""
         self.max_hp = min(cap, self.max_hp + n)
@@ -436,7 +460,8 @@ class Mob:
 
     def draw(self, surf, font=None):
         pos = (int(self.x), int(self.y))
-        draw_unit(surf, "mob", pos, self.radius, self.facing, white=self.flash > 0)
+        draw_unit(surf, "mob_ranged" if self.ranged else "mob", pos, self.radius, self.facing,
+                  white=self.flash > 0)
         # полоска жизней над головой и число; цвет — того, на кого моб злится
         color = self.target.color if self.target else MOB_IDLE_COLOR
         bar = pygame.Rect(0, 0, 28, 5)
@@ -448,6 +473,33 @@ class Mob:
         if font:
             txt = font.render(str(self.hp), True, color)
             surf.blit(txt, txt.get_rect(midbottom=(pos[0], bar.top - 1)))
+
+
+class MobShot:
+    """Снаряд дальнобойного моба: летит прямо в точку, где была цель в момент выстрела,
+    исчезает, пролетев MOB_RANGE или у края поля. Стены и «сбиваешь пули» на него не действуют."""
+
+    def __init__(self, x, y, target):
+        self.x, self.y = x, y
+        self.target = target
+        d = math.hypot(target.x - x, target.y - y) or 1.0
+        self.dx, self.dy = (target.x - x) / d, (target.y - y) / d
+        self.travelled = 0.0
+        self.alive = True
+
+    def update(self, dt, speed=1.0):
+        step = MOB_SHOT_SPEED * speed * dt
+        self.x += self.dx * step
+        self.y += self.dy * step
+        self.travelled += step
+        if self.travelled >= MOB_RANGE or not (0 <= self.x <= WIDTH and TOP <= self.y <= BOTTOM):
+            self.alive = False
+
+    def draw(self, surf):
+        pos = (int(self.x), int(self.y))
+        pygame.draw.circle(surf, (16, 12, 20), pos, MOB_SHOT_R + 1)
+        pygame.draw.circle(surf, MOB_SHOT_COLOR, pos, MOB_SHOT_R)
+        pygame.draw.circle(surf, (250, 255, 230), pos, MOB_SHOT_R // 2)
 
 
 class Wall:

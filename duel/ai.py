@@ -3,7 +3,7 @@
 import math
 import random
 
-from .config import BOTTOM, BULLET_R, BULLET_SPEED, HEAL_AMOUNT, TOP
+from .config import BOTTOM, BULLET_R, BULLET_SPEED, HEAL_AMOUNT, MOB_RANGE, MOB_SHOT_R, MOB_SHOT_SPEED, TOP
 from .items import BAD_EFFECTS
 
 
@@ -64,7 +64,7 @@ class AI:
         return keys
 
     def threats(self):
-        """Пули соперника, летящие в нас: список (время до нас, высота в этот момент)."""
+        """Пули соперника и снаряды мобов, летящие в нас: (время до нас, высота в этот момент, размах волны)."""
         me, cfg = self.me, self.cfg
         foe = self.game.other(me)
         slow = self.game.bullet_speed(foe)       # «быстрые пули» соперника и наше «замедление»
@@ -76,6 +76,21 @@ class AI:
             if t > cfg["horizon"]:
                 continue
             out.append((t, reflect_y(b.y + b.vy * slow * t), b.wave_amp))
+        # снаряды мобов: прямо, без отскоков, и только если долетят (дальность ограничена)
+        for shot in self.game.mob_shots:
+            k = MOB_SHOT_SPEED * self.game.chaser_speed(shot.target)
+            vx = shot.dx * k
+            ahead = me.x - shot.x
+            # пролетевший центр снаряд ещё опасен, пока он в пределах ширины мага
+            if abs(vx) < 1e-6 or (vx * ahead <= 0 and abs(ahead) > me.radius + MOB_SHOT_R):
+                continue
+            t = max(0.0, ahead / vx)
+            if t > cfg["horizon"] or shot.travelled + k * t > MOB_RANGE:
+                continue
+            out.append((t, shot.y + shot.dy * k * t, 0))
+            # снаряд медленный и пересекает мага не мгновенно: опасен и момент, когда он уходит
+            t_out = t + (me.radius + MOB_SHOT_R) / abs(vx)
+            out.append((t_out, shot.y + shot.dy * k * t_out, 0))
         return out
 
     def danger_of(self, move, threats):

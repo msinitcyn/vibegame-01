@@ -10,6 +10,8 @@ from .config import (
     MOB_EVERY,
     MOB_MAX,
     MOB_MAX_HP,
+    MOB_RANGE,
+    MOB_RANGED_EVERY,
     AMMO_PACK,
     BAD_TEXT,
     BG,
@@ -127,7 +129,7 @@ class ScreensMixin:
         s = self.screen
         numbers = dict(queue=QUEUE_SHOWN, weapon=f"{WEAPON_TIME:.0f}", wmax=WEAPON_MAX,
                        ammo=START_AMMO, pack=AMMO_PACK, every=f"{MOB_EVERY:.0f}",
-                       mmax=MOB_MAX, mhp=MOB_MAX_HP)
+                       mmax=MOB_MAX, mhp=MOB_MAX_HP, ranged=MOB_RANGED_EVERY, range=MOB_RANGE)
         x0, y, width = 80, 70, WIDTH - 160
         for i in range(1, 9):
             lines = self.wrap(tr(f"note.{i}", **numbers), width, self.small)
@@ -330,6 +332,8 @@ class ScreensMixin:
             c.draw(s)
         for m in self.mobs:
             m.draw(s, self.tiny)
+        for shot in self.mob_shots:
+            shot.draw(s)
         for b in self.bullets:
             b.draw(s)
         for p in self.players:

@@ -88,3 +88,22 @@ def test_ammo_packs_spawn_on_own_land(game):
     for p in game.players:
         mine = [a for a in game.ammo_packs if p.land[0] <= a.x <= p.land[1]]
         assert len(mine) == 1
+
+
+def test_computer_dodges_mob_shot(game):
+    """Снаряд моба летит в красного (сложный компьютер) — тот уходит с линии."""
+    from duel.entities import MobShot
+    game.start("hard")
+    game.next_wave = 1e9
+    game.ammo_timer = {p: 1e9 for p in game.players}
+    r = game.red
+    r.x, r.y = 900, 400
+    game.blue.y = 100                            # соперник далеко по высоте — не мешает
+    hits = 0
+    for _ in range(5):
+        r.hp = 10
+        game.mob_shots = [MobShot(r.x - 250, r.y, r)]
+        for _ in range(int(1.5 / DT)):
+            game.update(DT)
+        hits += r.hp < 10
+    assert hits <= 1, f"компьютер не увернулся {hits} раз из 5"

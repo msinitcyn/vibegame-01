@@ -34,6 +34,9 @@ from .config import (
     MOB_MAX,
     MOB_MAX_HP,
     MOB_RADIUS,
+    MOB_RANGED_EVERY,
+    MOB_SHOT_R,
+    SHIELD_GAP,
     MOB_SPEEDUP,
     MUSIC_END,
     POPUP_TIME,
@@ -125,6 +128,7 @@ class Game(ScreensMixin):
         self.ammo_timer = {p: random.uniform(*AMMO_SPAWN) for p in self.players}
         self.no_ammo_shown = {p: -10_000 for p in self.players}
         self.mobs = []
+        self.mob_shots = []           # снаряды дальнобойных мобов
         self.match_time = 0.0         # секунд с начала партии
         self.mob_wave = 0             # сколько волн мобов уже пришло
         self.next_wave = MOB_DELAY    # когда придёт следующая (секунды партии)
@@ -410,19 +414,17 @@ class Game(ScreensMixin):
         self.update_mobs(dt)
 
         # артефакты сами не появляются — только выпадают из убитых мобов (drop_artifact)
-        for a in self.artifacts:
-            a.life -= dt
         for p in self.players:
             for a in self.artifacts:
                 instant = a.kind in INSTANT_ITEMS
-                if a.life > 0 and math.hypot(a.x - p.x, a.y - p.y) < p.radius + ARTIFACT_R:
+                if not a.taken and math.hypot(a.x - p.x, a.y - p.y) < p.radius + ARTIFACT_R:
                     if instant:
                         self.apply_item(p, a.kind)    # сразу, в инвентарь не кладём
                     else:
                         p.add_item(a.kind)            # в ячейку или в очередь
-                    a.life = 0
+                    a.taken = True
                     self.popup(item_name(a.kind), p, ring_color(a.kind))
-        self.artifacts = [a for a in self.artifacts if a.life > 0]
+        self.artifacts = [a for a in self.artifacts if not a.taken]
 
         # патроны: пачки в случайном месте земли игрока, подбираются всегда
         for p in self.players:
@@ -497,18 +499,17 @@ class Game(ScreensMixin):
                 self.winner = self.other(p)
 
     def drop_artifact(self, mob):
-        """Убитый моб роняет случайный артефакт на землю того, кто его добил,
-        в точке, ближайшей к месту гибели моба."""
+        """Убитый моб роняет случайный артефакт в месте гибели — только если погиб
+        на земле того, кто его добил. На полосе мобов и на чужой земле — ничего."""
+        self.popups.append([t("popup.mobdead"), mob.x, mob.y, POPUP_TIME, MOB_IDLE_COLOR])
         killer = mob.target
-        if killer is None:
+        if killer is None or not killer.land[0] <= mob.x <= killer.land[1]:
             return
-        # на землю добившего, в точке, ближайшей к месту гибели моба
+        # на месте гибели; чуть внутрь земли, чтобы артефакт целиком был досягаем
         m = ARTIFACT_R + 4
         x = max(killer.land[0] + m, min(killer.land[1] - m, mob.x))
         y = max(TOP + m, min(BOTTOM - m, mob.y))
-        art = Artifact(x, random.choice(list(ITEMS)), y)
-        self.artifacts.append(art)
-        self.popups.append([t("popup.mobdead"), mob.x, mob.y, POPUP_TIME, MOB_IDLE_COLOR])
+        self.artifacts.append(Artifact(x, random.choice(list(ITEMS)), y))
 
     def bullet_speed(self, owner):
         """Множитель скорости пуль owner: «быстрые пули» у него, «пули соперника медленнее» у цели."""
@@ -535,6 +536,26 @@ class Game(ScreensMixin):
             if p and not p.shield_absorb():   # щит гасит и удар моба
                 p.hp -= MOB_DAMAGE
                 p.hit_flash = 0.12
+            shot = m.shoot(dt)
+            if shot:
+                self.mob_shots.append(shot)
+        self.update_mob_shots(dt)
+
+    def update_mob_shots(self, dt):
+        """Снаряды мобов: скорость — как у движения мобов на эту цель; попадают в любого мага."""
+        for s in self.mob_shots:
+            s.update(dt, self.chaser_speed(s.target))
+            if not s.alive:
+                continue
+            for p in self.players:
+                guard = SHIELD_GAP if "shield" in p.effects else 0
+                if math.hypot(s.x - p.x, s.y - p.y) < p.radius + guard + MOB_SHOT_R:
+                    s.alive = False
+                    if not p.shield_absorb():
+                        p.hp -= MOB_DAMAGE
+                        p.hit_flash = 0.12
+                    break
+        self.mob_shots = [s for s in self.mob_shots if s.alive]
 
     def spawn_mob_wave(self):
         """Волна k (с нуля): MOB_COUNT + k мобов по MOB_HP + k жизней, живым мобам +1 жизнь.
@@ -546,9 +567,10 @@ class Game(ScreensMixin):
             m.grow()
         want, hp = MOB_COUNT + k, min(MOB_HP + k, MOB_MAX_HP)
         count = max(0, min(want, MOB_MAX - len(self.mobs)))
-        for _ in range(count):
+        for i in range(count):
             x, y = self.free_mob_spot()
-            self.mobs.append(Mob(x, y, hp))
+            # каждый MOB_RANGED_EVERY-й моб волны — дальнобойный
+            self.mobs.append(Mob(x, y, hp, ranged=(i + 1) % MOB_RANGED_EVERY == 0))
         text = t("wave.popup", n=k + 1, count=count, hp=hp) if count else t("wave.stronger", n=k + 1)
         self.popups.append([text, WIDTH / 2, TOP + 60, POPUP_TIME * 2, MOB_IDLE_COLOR])
         return want >= MOB_MAX and MOB_HP + k >= MOB_MAX_HP

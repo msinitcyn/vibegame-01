@@ -64,14 +64,17 @@ TEXTS = {
         "sec.debuff": "Дебаффы на соперника",
         "note.1": "Рамка: зелёная — защита, синяя — атака, оранжевая — по сопернику.",
         "note.2": "Статус под именем игрока — всё, что действует сейчас, с таймерами.",
-        "note.3": "Артефакты — только из убитых мобов, у того, кто добил. Ячейки заняты — "
-                  "в очередь; рядом с ячейками видно {queue} следующих.",
+        "note.3": "Артефакт выпадает, только если моб добит на твоей земле, — на месте гибели, "
+                  "и лежит, пока не подберёшь. Ячейки заняты — в очередь; рядом с ячейками "
+                  "видно {queue} следующих.",
         "note.4": "Оружие: на {weapon} с, разных не больше {wmax} — новое вытесняет старое.",
         "note.5": "Повтор любого эффекта добавляет время (щиту — и удары). Двойникам передаются щит, "
                   "оружие, размер, скорость, «не стреляет».",
         "note.6": "Патроны: в начале {ammo}, выстрел — 1. Пачки по {pack} подбираются сразу.",
         "note.7": "Мобы: волна каждые {every} с в случайных местах, +1 моб и +1 жизнь; "
-                  "максимум {mmax} мобов по {mhp}, дальше волны всё чаще.",
+                  "максимум {mmax} мобов по {mhp}, дальше волны всё чаще. Каждый {ranged}-й моб — "
+                  "дальнобойный (зелёный, с кристаллом): держится на расстоянии и стреляет "
+                  "не дальше {range} px.",
         "note.8": "Дебаффы снимает только время или очищение.",
 
         "wave.title": "волна {n}",
@@ -173,14 +176,16 @@ TEXTS = {
         "sec.debuff": "Debuffs on the opponent",
         "note.1": "Frame: green — defense, blue — attack, orange — against the opponent.",
         "note.2": "The status under a player's name shows everything active right now, with timers.",
-        "note.3": "Artifacts drop only from killed mobs, for whoever finished them. Slots full — "
-                  "into the queue; the next {queue} are shown next to the slots.",
+        "note.3": "An artifact drops only if the mob dies on your land — right where it fell — "
+                  "and stays until you pick it up. Slots full — into the queue; the next {queue} "
+                  "are shown next to the slots.",
         "note.4": "Weapons: {weapon} s, at most {wmax} different at once — a new one replaces the oldest.",
         "note.5": "Repeating any effect adds time (and hits for the shield). Clones get the shield, "
                   "weapons, size, speed and \"can't shoot\".",
         "note.6": "Ammo: {ammo} at start, 1 per shot. Packs of {pack} are picked up instantly.",
         "note.7": "Mobs: a wave every {every} s in random spots, +1 mob and +1 life; "
-                  "at most {mmax} mobs with {mhp} lives, then waves come faster.",
+                  "at most {mmax} mobs with {mhp} lives, then waves come faster. One mob in {ranged} "
+                  "is ranged (green, with a crystal): it keeps its distance and shoots up to {range} px.",
         "note.8": "Debuffs are removed only by time or cleanse.",
 
         "wave.title": "wave {n}",
@@ -282,14 +287,17 @@ TEXTS = {
         "sec.debuff": "Heikennykset vastustajalle",
         "note.1": "Kehys: vihreä — puolustus, sininen — hyökkäys, oranssi — vastustajaa vastaan.",
         "note.2": "Pelaajan nimen alla näkyy kaikki voimassa oleva ajastimineen.",
-        "note.3": "Artefakteja saa vain kaatuneista hirviöistä, viimeisen osuman tehneelle. "
-                  "Paikat täynnä — jonoon; seuraavat {queue} näkyvät paikkojen vieressä.",
+        "note.3": "Artefakti putoaa vain, jos hirviö kaatuu omalla alueellasi — kaatumispaikkaan — "
+                  "ja odottaa, kunnes poimit sen. Paikat täynnä — jonoon; seuraavat {queue} "
+                  "näkyvät paikkojen vieressä.",
         "note.4": "Aseet: {weapon} s, enintään {wmax} erilaista kerralla — uusi korvaa vanhimman.",
         "note.5": "Saman vaikutuksen toisto lisää aikaa (kilvelle myös osumia). Kloonit saavat kilven, "
                   "aseet, koon, nopeuden ja \"ei voi ampua\".",
         "note.6": "Ammukset: alussa {ammo}, laukaus vie 1. {pack} ammuksen laatikot poimitaan heti.",
         "note.7": "Hirviöt: aalto {every} s välein satunnaisiin paikkoihin, +1 hirviö ja +1 elämä; "
-                  "enintään {mmax} hirviötä, {mhp} elämää, sitten aallot tihenevät.",
+                  "enintään {mmax} hirviötä, {mhp} elämää, sitten aallot tihenevät. Joka {ranged}. "
+                  "hirviö ampuu kaukaa (vihreä, kristallipäinen): pysyy etäällä ja ampuu enintään "
+                  "{range} px päähän.",
         "note.8": "Heikennykset poistuvat vain ajan kanssa tai puhdistuksella.",
 
         "wave.title": "aalto {n}",
