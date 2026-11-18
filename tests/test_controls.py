@@ -5,11 +5,11 @@ import pygame
 import pytest
 
 from duel.gamepad import PAD_FIRE, PAD_ITEM_BUTTONS
-from tests.conftest import FakePad, step
+from tests.conftest import DT, FakePad, step
 
 
 def test_keyboard_moves_by_scancode(game):
-    b, r = game.blue, game.red
+    b, r = game.match.blue, game.match.red
     yb, yr = b.y, r.y
     game.held = {pygame.KSCAN_W, pygame.KSCAN_DOWN}
     step(game, 0.2)
@@ -17,7 +17,7 @@ def test_keyboard_moves_by_scancode(game):
 
 
 def test_keyboard_moves_in_all_directions(game):
-    b, r = game.blue, game.red
+    b, r = game.match.blue, game.match.red
     b.x, r.x = 200, 800
     xb, xr = b.x, r.x
     game.held = {pygame.KSCAN_D, pygame.KSCAN_LEFT}
@@ -26,7 +26,7 @@ def test_keyboard_moves_in_all_directions(game):
 
 
 def test_diagonal_not_faster(game):
-    b = game.blue
+    b = game.match.blue
     b.x, b.y = 200, 300
     game.held = {pygame.KSCAN_D, pygame.KSCAN_S}
     step(game, 0.1)
@@ -36,7 +36,7 @@ def test_diagonal_not_faster(game):
 
 def test_mages_stay_on_own_land(game):
     from duel.config import MOB_ZONE, WIDTH
-    b, r = game.blue, game.red
+    b, r = game.match.blue, game.match.red
     game.held = {pygame.KSCAN_D, pygame.KSCAN_LEFT}
     step(game, 5)
     assert b.x + b.radius <= WIDTH * MOB_ZONE[0] + 0.01
@@ -47,7 +47,7 @@ def test_mages_stay_on_own_land(game):
 
 
 def test_invert_swaps_both_axes(game):
-    b = game.blue
+    b = game.match.blue
     b.x, b.y = 200, 300
     b.apply("invert")
     game.held = {pygame.KSCAN_D, pygame.KSCAN_W}
@@ -56,13 +56,15 @@ def test_invert_swaps_both_axes(game):
 
 
 def test_keyboard_fire_and_items(game):
-    b, r = game.blue, game.red
+    b, r = game.match.blue, game.match.red
     game.on_key(pygame.KSCAN_SPACE)
     game.on_key(pygame.KSCAN_RETURN)
-    assert [x.owner for x in game.bullets] == [b, r]
+    game.update(DT)                             # нажатия применяются в ближайшем такте
+    assert [x.owner for x in game.match.bullets] == [b, r]
     r.items = ["speed"] * 4
     for sc in (pygame.KSCAN_9, pygame.KSCAN_0, pygame.KSCAN_MINUS, pygame.KSCAN_EQUALS):
         game.on_key(sc)
+        game.update(DT)
     assert r.items == [None] * 4
 
 
@@ -71,7 +73,7 @@ def test_menu_keys(game):
     game.menu_index = 0
     assert game.menu == ["play", "test", "help", "settings"]   # режимов против компьютера нет
     game.on_key(pygame.KSCAN_RETURN)
-    assert game.state == "play" and game.blue.hp == 10
+    assert game.state == "play" and game.match.blue.hp == 10
     game.on_key(pygame.KSCAN_ESCAPE)
     assert game.state == "menu"
     game.on_key(pygame.KSCAN_3)
@@ -79,7 +81,7 @@ def test_menu_keys(game):
     game.on_key(pygame.KSCAN_ESCAPE)
     assert game.state == "menu"
     game.on_key(pygame.KSCAN_2)
-    assert game.state == "play" and game.blue.hp == 1000
+    assert game.state == "play" and game.match.blue.hp == 1000
 
 
 def with_pads(game):
@@ -90,7 +92,7 @@ def with_pads(game):
 
 def test_pads_move_players(game):
     p0, p1 = with_pads(game)
-    b, r = game.blue, game.red
+    b, r = game.match.blue, game.match.red
     yb, yr = b.y, r.y
     p0.stick_y = -30000
     p1.buttons = {pygame.CONTROLLER_BUTTON_DPAD_DOWN}
@@ -105,13 +107,15 @@ def test_pads_move_players(game):
 
 def test_pads_fire_and_items(game):
     with_pads(game)
-    b, r = game.blue, game.red
+    b, r = game.match.blue, game.match.red
     game.on_pad(100, pygame.CONTROLLER_BUTTON_RIGHTSHOULDER)
     game.on_pad(101, PAD_FIRE)
-    assert [x.owner for x in game.bullets] == [b, r]
+    game.update(DT)
+    assert [x.owner for x in game.match.bullets] == [b, r]
     r.items = ["speed"] * 4
     for btn in PAD_ITEM_BUTTONS:
         game.on_pad(101, btn)
+        game.update(DT)
     assert r.items == [None] * 4
 
 
@@ -129,7 +133,7 @@ def test_pad_menu_navigation(game):
     game.menu_index = 0
     game.on_pad(101, pygame.CONTROLLER_BUTTON_DPAD_DOWN)
     game.on_pad(101, pygame.CONTROLLER_BUTTON_A)
-    assert game.state == "play" and game.blue.hp == 1000      # второй пункт — тестовый режим
+    assert game.state == "play" and game.match.blue.hp == 1000      # второй пункт — тестовый режим
     game.on_pad(100, pygame.CONTROLLER_BUTTON_START)
     assert game.state == "menu"
 

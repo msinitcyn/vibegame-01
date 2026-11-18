@@ -14,7 +14,7 @@ from duel.config import (
 )
 from duel.entities import AmmoPack, Artifact, Bullet
 from duel.items import BAD_EFFECTS, HELP_SECTIONS, ITEMS, item_help, ring_color
-from tests.conftest import DT, step
+from tests.conftest import DT, new_match, step
 
 
 def bullet_at(target, shooter, dx=200):
@@ -23,11 +23,11 @@ def bullet_at(target, shooter, dx=200):
     return Bullet(target.x + target.dir * dx, target.y, -target.dir * BULLET_SPEED, 0, shooter)
 
 
-def pick(game, p, kind):
+def pick(match, p, kind):
     a = Artifact(p.x, kind)
     a.y = p.y
-    game.artifacts = [a]
-    step(game)
+    match.artifacts = [a]
+    step(match)
 
 
 # --- таблица и справка
@@ -52,76 +52,76 @@ def test_ring_colors_follow_groups():
 
 # --- инвентарь
 
-def test_pickup_goes_to_inventory_and_used_by_slot(game):
-    b = game.blue
-    pick(game, b, "shield")
+def test_pickup_goes_to_inventory_and_used_by_slot(match):
+    b = match.blue
+    pick(match, b, "shield")
     assert b.items[0] == "shield" and "shield" not in b.effects
-    game.use_item(b, 0)
+    match.use_item(b, 0)
     assert b.items[0] is None and "shield" in b.effects
 
 
-def test_full_inventory_goes_to_queue_heal_is_instant(game):
-    b = game.blue
+def test_full_inventory_goes_to_queue_heal_is_instant(match):
+    b = match.blue
     b.items = ["speed"] * 4
-    pick(game, b, "wall")
-    assert game.artifacts == [] and b.queue == ["wall"]      # подобран — в очередь
+    pick(match, b, "wall")
+    assert match.artifacts == [] and b.queue == ["wall"]      # подобран — в очередь
     b.hp = 4
-    pick(game, b, "heal")
+    pick(match, b, "heal")
     assert b.hp == 4 + HEAL_AMOUNT and b.queue == ["wall"]
 
 
-def test_freed_slot_takes_first_from_queue(game):
-    b = game.blue
+def test_freed_slot_takes_first_from_queue(match):
+    b = match.blue
     for kind in ("speed", "shield", "wall", "shrink", "rapid", "wavy", "triple"):
         b.add_item(kind)
     assert b.items == ["speed", "shield", "wall", "shrink"]
     assert b.queue == ["rapid", "wavy", "triple"]
-    game.use_item(b, 2)                        # стена
+    match.use_item(b, 2)                        # стена
     assert b.items == ["speed", "shield", "rapid", "shrink"]
     assert b.queue == ["wavy", "triple"]
-    game.use_item(b, 2)                        # скорострельность из очереди
+    match.use_item(b, 2)                        # скорострельность из очереди
     assert b.items[2] == "wavy" and "rapid" in b.effects
 
 
-def test_queue_waits_under_noitems(game):
-    b = game.blue
+def test_queue_waits_under_noitems(match):
+    b = match.blue
     for kind in ("speed", "shield", "wall", "shrink", "rapid"):
         b.add_item(kind)
-    game.apply_item(game.red, "foe_noitems")
-    game.use_item(b, 0)
+    match.apply_item(match.red, "foe_noitems")
+    match.use_item(b, 0)
     assert b.items[0] == "speed" and b.queue == ["rapid"]
 
 
-def test_two_shields_stack_time_and_hits(game):
-    b = game.blue
-    game.give(b, "shield")
-    game.give(b, "shield")
+def test_two_shields_stack_time_and_hits(match):
+    b = match.blue
+    match.give(b, "shield")
+    match.give(b, "shield")
     assert b.effects["shield"] == 2 * DURATION["shield"] and b.shield_hits == 2 * SHIELD_HITS
 
 
-def test_second_clones_extend_life_and_add_up_to_cap(game):
+def test_second_clones_extend_life_and_add_up_to_cap(match):
     from duel.config import CLONE_COUNT, CLONE_TIME, MAX_CLONES
-    b = game.blue
-    game.apply_item(b, "clones")
-    first = game.clones_of(b)
+    b = match.blue
+    match.apply_item(b, "clones")
+    first = match.clones_of(b)
     assert len(first) == CLONE_COUNT
-    game.apply_item(b, "clones")
-    assert len(game.clones_of(b)) == min(MAX_CLONES, 2 * CLONE_COUNT)
+    match.apply_item(b, "clones")
+    assert len(match.clones_of(b)) == min(MAX_CLONES, 2 * CLONE_COUNT)
     assert all(c.life == 2 * CLONE_TIME for c in first)
 
 
-def test_heal_capped_by_max_hp(game):
-    b = game.blue
+def test_heal_capped_by_max_hp(match):
+    b = match.blue
     b.hp = MAX_HP - 1
-    game.apply_item(b, "heal")
+    match.apply_item(b, "heal")
     assert b.hp == MAX_HP
 
 
-def test_heal_in_test_mode_not_capped_to_10(game):
-    game.start(TEST_HP)
-    b = game.blue
+def test_heal_in_test_mode_not_capped_to_10():
+    match = new_match(TEST_HP)
+    b = match.blue
     b.hp = 500
-    game.apply_item(b, "heal")
+    match.apply_item(b, "heal")
     assert b.hp == 500 + HEAL_AMOUNT
 
 
@@ -131,51 +131,50 @@ def test_heal_in_test_mode_not_capped_to_10(game):
     ("foe_grow", "grow2"), ("foe_freeze", "freeze"), ("foe_nofire", "nofire"),
     ("foe_invert", "invert"), ("foe_noitems", "noitems"),
 ])
-def test_foe_items_hit_opponent(game, kind, effect):
-    game.apply_item(game.blue, kind)
-    assert effect in game.red.effects and effect not in game.blue.effects
+def test_foe_items_hit_opponent(match, kind, effect):
+    match.apply_item(match.blue, kind)
+    assert effect in match.red.effects and effect not in match.blue.effects
 
 
 # --- эффекты
 
-def test_freeze_blocks_moving_not_shooting(game):
-    r = game.red
+def test_freeze_blocks_moving_not_shooting(match):
+    r = match.red
     r.apply("freeze")
     y0 = r.y
-    game.held = {r.down_key}
-    step(game, 0.2)
+    step(match, 0.2, moves={"red": (0, 1)})
     assert r.y == y0
     assert r.shoot()
 
 
-def test_freeze_and_nofire_stack(game):
-    r = game.red
-    game.give(r, "freeze")
-    game.give(r, "nofire")
+def test_freeze_and_nofire_stack(match):
+    r = match.red
+    match.give(r, "freeze")
+    match.give(r, "nofire")
     assert {"freeze", "nofire"} <= set(r.effects)
     assert r.shoot() == []
 
 
-def test_same_effect_adds_time(game):
-    b = game.blue
-    game.give(b, "speed")
-    game.give(b, "speed")
+def test_same_effect_adds_time(match):
+    b = match.blue
+    match.give(b, "speed")
+    match.give(b, "speed")
     assert b.effects["speed"] == 2 * DURATION["speed"]
 
 
-def test_grow_and_shrink_cancel_out(game):
-    b = game.blue
+def test_grow_and_shrink_cancel_out(match):
+    b = match.blue
     r0 = b.radius
-    game.give(b, "grow2")
-    game.give(b, "shrink")
+    match.give(b, "grow2")
+    match.give(b, "shrink")
     assert b.radius == r0
 
 
-def test_wavy_triple_speed_stack(game):
-    b = game.blue
-    game.give(b, "wavy")
-    game.apply_item(b, "triple")
-    game.give(b, "speed")
+def test_wavy_triple_speed_stack(match):
+    b = match.blue
+    match.give(b, "wavy")
+    match.apply_item(b, "triple")
+    match.give(b, "speed")
     shots = b.shoot()
     assert len(shots) == 3 and all(s.wave_amp for s in shots)
     assert {"triple", "wavy", "speed"} <= set(b.effects)
@@ -184,243 +183,242 @@ def test_wavy_triple_speed_stack(game):
     assert len(b.shoot()) == 3                  # веер не «кончается» после выстрелов
 
 
-def test_invert_swaps_controls(game):
-    b = game.blue
+def test_invert_swaps_controls(match):
+    b = match.blue
     b.apply("invert")
     y0 = b.y
-    game.held = {b.up_key}
-    step(game, 0.2)
+    step(match, 0.2, moves={"blue": (0, -1)})
     assert b.y > y0
 
 
-def test_nofire_survives_all_other_items(game):
-    b = game.blue
-    game.apply_item(game.red, "foe_nofire")
+def test_nofire_survives_all_other_items(match):
+    b = match.blue
+    match.apply_item(match.red, "foe_nofire")
     for kind in ITEMS:
         if kind != "cleanse":
-            game.apply_item(b, kind)
+            match.apply_item(b, kind)
     assert "nofire" in b.effects
 
 
-def test_cleanse_removes_all_debuffs_even_under_noitems(game):
-    b = game.blue
+def test_cleanse_removes_all_debuffs_even_under_noitems(match):
+    b = match.blue
     b.items = ["speed", "cleanse", None, None]
-    game.apply_item(b, "clones")
+    match.apply_item(b, "clones")
     for kind in ("foe_nofire", "foe_freeze", "foe_invert", "foe_grow", "foe_noitems"):
-        game.apply_item(game.red, kind)
-    game.give(b, "shield")
-    game.use_item(b, 0)                       # под запретом — не тратится
+        match.apply_item(match.red, kind)
+    match.give(b, "shield")
+    match.use_item(b, 0)                       # под запретом — не тратится
     assert b.items[0] == "speed" and "speed" not in b.effects
-    game.use_item(b, 1)
+    match.use_item(b, 1)
     assert not set(BAD_EFFECTS) & set(b.effects)
     assert "shield" in b.effects
-    for c in game.clones_of(b):
+    for c in match.clones_of(b):
         assert not set(BAD_EFFECTS) & set(c.effects)
 
 
 # --- щит
 
-def test_shield_blocks_five_bullets(game):
-    b, r = game.blue, game.red
-    game.give(b, "shield")
-    game.bullets = [bullet_at(b, r, 200 + i * 40) for i in range(SHIELD_HITS + 2)]
-    step(game, 1.0)
+def test_shield_blocks_five_bullets(match):
+    b, r = match.blue, match.red
+    match.give(b, "shield")
+    match.bullets = [bullet_at(b, r, 200 + i * 40) for i in range(SHIELD_HITS + 2)]
+    step(match, 1.0)
     assert b.hp == MAX_HP - 2
     assert "shield" not in b.effects
 
 
-def test_shield_expires_by_time(game):
-    game.give(game.blue, "shield")
-    step(game, DURATION["shield"] + 0.2)
-    assert "shield" not in game.blue.effects
+def test_shield_expires_by_time(match):
+    match.give(match.blue, "shield")
+    step(match, DURATION["shield"] + 0.2)
+    assert "shield" not in match.blue.effects
 
 
 # --- стены
 
-def test_walls_do_not_replace_each_other(game):
-    b = game.blue
-    game.apply_item(b, "wall")
+def test_walls_do_not_replace_each_other(match):
+    b = match.blue
+    match.apply_item(b, "wall")
     b.y = 200
-    game.apply_item(b, "wall")
-    step(game, 1.0)
-    assert len(game.walls) == 2
+    match.apply_item(b, "wall")
+    step(match, 1.0)
+    assert len(match.walls) == 2
 
 
-def test_wall_reflects_foe_bullet(game):
+def test_wall_reflects_foe_bullet(match):
     from duel.config import BULLET_SPEED
-    b, r = game.blue, game.red
-    game.apply_item(b, "wall")
-    w = game.walls[0]
-    game.bullets = [Bullet(400, b.y, -BULLET_SPEED, 0, r)]
-    step(game, 0.5)
-    assert len(game.bullets) == 1
-    reflected = game.bullets[0]
+    b, r = match.blue, match.red
+    match.apply_item(b, "wall")
+    w = match.walls[0]
+    match.bullets = [Bullet(400, b.y, -BULLET_SPEED, 0, r)]
+    step(match, 0.5)
+    assert len(match.bullets) == 1
+    reflected = match.bullets[0]
     assert reflected.owner is b and reflected.vx > 0 and reflected.x > w.x
 
 
-def test_own_bullet_passes_own_wall(game):
+def test_own_bullet_passes_own_wall(match):
     from duel.config import BULLET_SPEED
-    b = game.blue
-    game.apply_item(b, "wall")
-    w = game.walls[0]
+    b = match.blue
+    match.apply_item(b, "wall")
+    w = match.walls[0]
     shot = Bullet(b.x + 30, b.y, BULLET_SPEED, 0, b)
-    game.bullets = [shot]
-    step(game, 0.3)
-    assert game.bullets == [shot] and shot.x > w.x and shot.owner is b
+    match.bullets = [shot]
+    step(match, 0.3)
+    assert match.bullets == [shot] and shot.x > w.x and shot.owner is b
 
 
-def mob_vs_wall(game, wall_y, mob_y, seconds):
+def mob_vs_wall(match, wall_y, mob_y, seconds):
     """Синий за своей стеной (стена на высоте wall_y), моб идёт на синего с высоты mob_y."""
     from duel.entities import Mob
-    b = game.blue
+    b = match.blue
     b.x, b.y = 80, wall_y
-    game.apply_item(b, "wall")
-    w = game.walls[0]
+    match.apply_item(b, "wall")
+    w = match.walls[0]
     m = Mob(w.x + 120, mob_y, 50)
     m.target = b
-    game.mobs = [m]
+    match.mobs = [m]
     xs = []
     for _ in range(int(seconds / DT)):
-        game.update(DT)
+        match.step(DT)
         b.hp = 10
         xs.append((m.x, m.y))
     return w, m, xs
 
 
-def test_mob_cannot_pass_through_wall(game):
+def test_mob_cannot_pass_through_wall(match):
     from duel.config import MOB_RADIUS, WALL_W
-    w, m, path = mob_vs_wall(game, 360, 360, 1.0)
+    w, m, path = mob_vs_wall(match, 360, 360, 1.0)
     for x, y in path:                           # ни в один момент моб не внутри стены
         assert not (abs(x - w.x) < WALL_W / 2 + MOB_RADIUS and w.y1 - MOB_RADIUS < y < w.y2 + MOB_RADIUS)
 
 
-def test_mob_goes_around_wall(game):
+def test_mob_goes_around_wall(match):
     """Моб упирается в стену, обходит её с торца и доходит до мага, пока стена ещё стоит."""
-    w, m, path = mob_vs_wall(game, 360, 360, 6.0)
-    b = game.blue
-    assert game.walls, "стена ещё должна стоять"
+    w, m, path = mob_vs_wall(match, 360, 360, 6.0)
+    b = match.blue
+    assert match.walls, "стена ещё должна стоять"
     assert math.hypot(m.x - b.x, m.y - b.y) < b.radius + m.radius + 10   # дошёл до мага
 
 
 # --- двойники
 
-def test_clones_copy_and_receive_effects(game):
-    b = game.blue
-    game.give(b, "shield")
-    game.give(b, "rapid")
-    game.apply_item(b, "clones")
-    c = game.clones_of(b)[0]
+def test_clones_copy_and_receive_effects(match):
+    b = match.blue
+    match.give(b, "shield")
+    match.give(b, "rapid")
+    match.apply_item(b, "clones")
+    c = match.clones_of(b)[0]
     assert {"shield", "rapid"} <= set(c.effects) and c.shield_hits == SHIELD_HITS
     for e in ("wavy", "grow2", "breaker", "speed"):
-        game.give(b, e)
-    game.apply_item(b, "triple")
-    game.apply_item(game.red, "foe_nofire")
-    game.apply_item(game.red, "foe_freeze")
+        match.give(b, e)
+    match.apply_item(b, "triple")
+    match.apply_item(match.red, "foe_nofire")
+    match.apply_item(match.red, "foe_freeze")
     assert {"wavy", "grow2", "breaker", "speed", "nofire"} <= set(c.effects)
     assert "freeze" not in c.effects          # заморозка на двойников не переходит
     assert "triple" in c.effects
 
 
-def still_clone(game, y):
+def still_clone(match, y):
     """Первый двойник синего, стоит на месте на высоте y; синий — далеко внизу."""
-    b = game.blue
-    game.apply_item(b, "clones")
-    for clone in game.clones:
+    b = match.blue
+    match.apply_item(b, "clones")
+    for clone in match.clones:
         clone.turn_timer = clone.shot_timer = 1e9
         clone.moving = 0
         clone.y = 150
-    c = game.clones_of(b)[0]
+    c = match.clones_of(b)[0]
     c.y, b.y = y, 600
     return c
 
 
-def test_clone_dies_from_one_hit(game):
+def test_clone_dies_from_one_hit(match):
     from duel.config import BULLET_SPEED
-    c = still_clone(game, 300)
-    game.bullets = [Bullet(400, 300, -BULLET_SPEED, 0, game.red)]
-    step(game, 1.0)
-    assert not c.alive and game.blue.hp == MAX_HP
+    c = still_clone(match, 300)
+    match.bullets = [Bullet(400, 300, -BULLET_SPEED, 0, match.red)]
+    step(match, 1.0)
+    assert not c.alive and match.blue.hp == MAX_HP
 
 
-def test_clone_shield_saves_it(game):
+def test_clone_shield_saves_it(match):
     from duel.config import BULLET_SPEED
-    c = still_clone(game, 300)
-    game.give(game.blue, "shield")
-    game.bullets = [Bullet(400, 300, -BULLET_SPEED, 0, game.red)]
-    step(game, 1.0)
+    c = still_clone(match, 300)
+    match.give(match.blue, "shield")
+    match.bullets = [Bullet(400, 300, -BULLET_SPEED, 0, match.red)]
+    step(match, 1.0)
     assert c.alive and c.shield_hits == SHIELD_HITS - 1
 
 
 # --- патроны
 
-def test_ammo_spent_one_per_shot_and_triple(game):
-    b = game.blue
+def test_ammo_spent_one_per_shot_and_triple(match):
+    b = match.blue
     assert b.ammo == START_AMMO
-    game.fire(b)
+    match.fire(b)
     assert b.ammo == START_AMMO - 1
     b.cooldown = 0
-    game.apply_item(b, "triple")
-    n = len(game.bullets)
-    game.fire(b)
-    assert len(game.bullets) - n == 3 and b.ammo == START_AMMO - 2
+    match.apply_item(b, "triple")
+    n = len(match.bullets)
+    match.fire(b)
+    assert len(match.bullets) - n == 3 and b.ammo == START_AMMO - 2
 
 
-def test_no_ammo_no_shot(game):
-    b = game.blue
+def test_no_ammo_no_shot(match):
+    b = match.blue
     b.ammo = 0
-    game.fire(b)
-    assert game.bullets == [] and game.popups[-1][0] == "нет патронов"
+    match.fire(b)
+    assert match.bullets == [] and ("no_ammo", "blue") in match.step(DT)
 
 
-def test_ammo_pack_picked_with_full_inventory(game):
-    b = game.blue
+def test_ammo_pack_picked_with_full_inventory(match):
+    b = match.blue
     b.items = ["speed"] * 4
     pack = AmmoPack(b.x, b.y)
-    game.ammo_packs = [pack]
-    step(game)
-    assert b.ammo == START_AMMO + AMMO_PACK and game.ammo_packs == []
+    match.ammo_packs = [pack]
+    step(match)
+    assert b.ammo == START_AMMO + AMMO_PACK and match.ammo_packs == []
 
 
 # --- быстрые пули
 
-def bullet_path(game, owner, seconds=0.2):
-    game.bullets = []
+def bullet_path(match, owner, seconds=0.2):
+    match.bullets = []
     owner.cooldown = 0
-    game.fire(owner)
-    b = game.bullets[0]
+    match.fire(owner)
+    b = match.bullets[0]
     x0 = b.x
-    step(game, seconds)
+    step(match, seconds)
     return abs(b.x - x0)
 
 
-def test_fastshots_speeds_own_bullets(game):
+def test_fastshots_speeds_own_bullets(match):
     from duel.config import FAST_BULLET_FACTOR
-    b = game.blue
-    normal = bullet_path(game, b)
-    game.apply_item(b, "fastshots")
-    assert bullet_path(game, b) == pytest.approx(normal * FAST_BULLET_FACTOR, rel=0.05)
-    assert bullet_path(game, game.red) == pytest.approx(normal, rel=0.05)   # чужие — как были
+    b = match.blue
+    normal = bullet_path(match, b)
+    match.apply_item(b, "fastshots")
+    assert bullet_path(match, b) == pytest.approx(normal * FAST_BULLET_FACTOR, rel=0.05)
+    assert bullet_path(match, match.red) == pytest.approx(normal, rel=0.05)   # чужие — как были
 
 
-def test_fastshots_and_slowfoe_multiply(game):
+def test_fastshots_and_slowfoe_multiply(match):
     from duel.config import FAST_BULLET_FACTOR, SLOW_BULLET_FACTOR
-    b, r = game.blue, game.red
-    normal = bullet_path(game, b)
-    game.apply_item(b, "fastshots")
-    game.apply_item(r, "slowfoe")
-    assert bullet_path(game, b) == pytest.approx(normal * FAST_BULLET_FACTOR * SLOW_BULLET_FACTOR, rel=0.05)
+    b, r = match.blue, match.red
+    normal = bullet_path(match, b)
+    match.apply_item(b, "fastshots")
+    match.apply_item(r, "slowfoe")
+    assert bullet_path(match, b) == pytest.approx(normal * FAST_BULLET_FACTOR * SLOW_BULLET_FACTOR, rel=0.05)
 
 
-def test_fastshots_also_for_clone_bullets(game):
+def test_fastshots_also_for_clone_bullets(match):
     from duel.config import FAST_BULLET_FACTOR
-    b = game.blue
-    game.apply_item(b, "fastshots")
-    assert game.bullet_speed(b) == pytest.approx(FAST_BULLET_FACTOR)  # пули двойников — тоже пули синего
+    b = match.blue
+    match.apply_item(b, "fastshots")
+    assert match.bullet_speed(b) == pytest.approx(FAST_BULLET_FACTOR)  # пули двойников — тоже пули синего
 
 
-def test_mob_goes_around_wall_at_field_edge(game):
+def test_mob_goes_around_wall_at_field_edge(match):
     """Стена у верхнего края поля — моб обходит её снизу, а не упирается в край."""
     from duel.config import TOP, WALL_H
-    w, m, path = mob_vs_wall(game, TOP + WALL_H / 2, TOP + 30, 6.0)
-    b = game.blue
+    w, m, path = mob_vs_wall(match, TOP + WALL_H / 2, TOP + 30, 6.0)
+    b = match.blue
     assert math.hypot(m.x - b.x, m.y - b.y) < b.radius + m.radius + 10

@@ -47,7 +47,7 @@ def test_all_screens_draw_in_every_language(game, lang, lang_restore):
     game.state = "help"
     game.help_page = 1                          # вторая страница справки — правила
     game.draw_help()
-    game.winner = game.blue
+    game.match.winner = game.match.blue
     game.draw()
 
 
@@ -57,10 +57,10 @@ def test_settings_menu_changes_and_saves_language(game, lang_restore):
     assert game.state == "settings"
     game.on_key(pygame.KSCAN_D)                 # язык → следующий
     assert i18n.get_lang() == "en"
-    assert game.blue.name == "Blue" and game.menu_label(0) == "Two players"
+    assert i18n.t("name.blue") == "Blue" and game.menu_label(0) == "Two players"
     assert json.loads(settings.path().read_text())["lang"] == "en"
     game.on_key(pygame.KSCAN_RIGHT)
-    assert i18n.get_lang() == "fi" and game.blue.name == "Sininen"
+    assert i18n.get_lang() == "fi" and i18n.t("name.blue") == "Sininen"
     game.on_key(pygame.KSCAN_A)
     game.on_key(pygame.KSCAN_LEFT)
     assert i18n.get_lang() == "ru"

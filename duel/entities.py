@@ -172,17 +172,12 @@ class Unit:
 
 
 class Player(Unit):
-    def __init__(self, x, color, keys, shoot_keys, item_keys, direction, name, land, melee_keys=()):
+    def __init__(self, pid, x, color, direction, land):
+        self.id = pid                 # постоянный номер: "blue" / "red"
         self.start_x = x
         self.color = color
-        # клавиши движения: вверх, вниз, влево, вправо
-        self.up_key, self.down_key, self.left_key, self.right_key = keys
         self.land = land              # (x_min, x_max) своей земли — дальше маг не заходит
-        self.shoot_keys = shoot_keys
-        self.item_keys = item_keys    # клавиши ячеек инвентаря
-        self.melee_keys = melee_keys  # клавиши ближнего удара
         self.dir = direction          # +1 стреляет вправо, -1 влево
-        self.name = name
         self.sprite = "mage_blue" if direction > 0 else "mage_red"
         self.reset()
 
@@ -218,7 +213,8 @@ class Player(Unit):
         self.items[slot] = self.queue.pop(0) if self.queue else None
         return kind
 
-    def update(self, dt, keys):
+    def update(self, dt, move):
+        """move — (dx, dy) из команды игрока: каждое -1, 0 или 1."""
         self.tick_effects(dt)
         self.cooldown = max(0.0, self.cooldown - dt)
         self.hit_flash = max(0.0, self.hit_flash - dt)
@@ -227,8 +223,7 @@ class Player(Unit):
 
         self.moving = self.moving_x = 0
         if not self.frozen:
-            dy = (self.down_key in keys) - (self.up_key in keys)
-            dx = (self.right_key in keys) - (self.left_key in keys)
+            dx, dy = move
             if "invert" in self.effects:  # управление наоборот — по обеим осям
                 dx, dy = -dx, -dy
             self.moving, self.moving_x = dy, dx

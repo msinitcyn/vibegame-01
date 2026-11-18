@@ -1,4 +1,9 @@
-"""Общие фикстуры: игра без окна и звука, чистое состояние перед каждым тестом."""
+"""Общие фикстуры.
+
+- `match` — матч без окна: правила проверяются на нём напрямую.
+- `game` — приложение (окно-заглушка, без звука): меню, ввод, языки, отрисовка.
+В обоих пачки патронов и волны мобов сами не появляются — тесты создают их явно.
+"""
 import os
 import random
 
@@ -10,9 +15,29 @@ os.environ["DUEL_SETTINGS"] = os.path.join(tempfile.mkdtemp(), "settings.json")
 
 import pytest  # noqa: E402
 
+from duel.commands import Command  # noqa: E402
 from duel.game import Game  # noqa: E402
+from duel.match import Match  # noqa: E402
 
 DT = 1 / 60
+
+
+def quiet(m):
+    """Без случайных пачек патронов и волн мобов — только то, что тест создаст сам."""
+    m.ammo_timer = {p: 1e9 for p in m.players}
+    m.next_wave = 1e9
+    return m
+
+
+def new_match(hp=None):
+    return quiet(Match(hp) if hp else Match())
+
+
+@pytest.fixture
+def match():
+    """Матч двух игроков без окна, с фиксированным random."""
+    random.seed(0)
+    return new_match()
 
 
 @pytest.fixture(scope="session")
@@ -23,20 +48,24 @@ def _game():
 
 @pytest.fixture
 def game(_game):
-    """Игра в режиме «два игрока», без геймпадов, с фиксированным random."""
+    """Приложение в режиме «два игрока», без геймпадов, с фиксированным random."""
     random.seed(0)
     _game.pads.pads = []
     _game.start()
     _game.held = set()
-    # пачки патронов и мобы сами не появляются — тесты создают их явно
-    _game.ammo_timer = {p: 1e9 for p in _game.players}
-    _game.next_wave = 1e9
+    quiet(_game.match)
     return _game
 
 
-def step(game, seconds=DT):
+def step(target, seconds=DT, moves=None):
+    """Прогнать матч (или приложение) на seconds по тактам DT.
+
+    moves — для матча: {"blue": (dx, dy), ...} — куда идут маги все эти такты."""
     for _ in range(max(1, round(seconds / DT))):
-        game.update(DT)
+        if isinstance(target, Match):
+            target.step(DT, {pid: Command(move=mv) for pid, mv in (moves or {}).items()})
+        else:
+            target.update(DT)
 
 
 class FakePad:

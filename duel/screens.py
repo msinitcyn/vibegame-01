@@ -220,11 +220,12 @@ class ScreensMixin:
         box.center = (WIDTH // 2, HUD_H // 2)
         pygame.draw.rect(s, (20, 18, 30), box, border_radius=6)
         pygame.draw.rect(s, (90, 80, 120), box, 1, border_radius=6)
-        left = max(0.0, self.next_wave - self.match_time)
-        title = tr("wave.title", n=max(1, self.mob_wave))
+        m = self.match
+        left = max(0.0, m.next_wave - m.match_time)
+        title = tr("wave.title", n=max(1, m.mob_wave))
         draw_unit(s, "mob", (box.centerx, box.top + 16), 11, 1)
         t1 = self.small.render(title, True, MOB_IDLE_COLOR)
-        when = tr("wave.in", s=f"{left:.0f}") if self.mob_wave == 0 else tr("wave.next", s=f"{left:.0f}")
+        when = tr("wave.in", s=f"{left:.0f}") if m.mob_wave == 0 else tr("wave.next", s=f"{left:.0f}")
         t2 = self.small.render(when, True, WHITE)
         s.blit(t1, t1.get_rect(midtop=(box.centerx, box.top + 30)))
         s.blit(t2, t2.get_rect(midtop=(box.centerx, box.top + 47)))
@@ -235,7 +236,7 @@ class ScreensMixin:
         pygame.draw.line(s, GREY, (0, HUD_H), (WIDTH, HUD_H), 2)
         self.draw_wave_timer()
         for p in self.players:
-            left = p is self.blue
+            left = p.id == "blue"
             has_pad = self.players.index(p) < len(self.pads.pads)
             rects, x0, inv_w = self.inventory_rects(left, has_pad)
             for i, (kind, rect) in enumerate(zip(p.items, rects)):
@@ -255,7 +256,7 @@ class ScreensMixin:
                         key.set_alpha(140)
                         s.blit(key, key.get_rect(center=rect.center))
                 else:
-                    key = self.tiny.render(self.key_names[p][i], True, WHITE)
+                    key = self.tiny.render(self.key_names[p.id][i], True, WHITE)
                     s.blit(key, (rect.right - key.get_width() - 3, rect.bottom - key.get_height() - 1))
             q_w = self.draw_queue(p, left, x0, inv_w, has_pad)
 
@@ -264,7 +265,7 @@ class ScreensMixin:
             hearts = '♥' * min(p.hp, HEARTS_SHOWN)
             if p.hp > HEARTS_SHOWN:
                 hearts += f" +{p.hp - HEARTS_SHOWN}"
-            line1 = self.font.render(f"{p.name}  {hearts}", True, p.color)
+            line1 = self.font.render(f"{tr('name.' + p.id)}  {hearts}", True, p.color)
             line2 = self.status_chips(p)
             for img, cy in ((line1, HUD_H // 2 - 14), (line2, HUD_H // 2 + 14)):
                 if img.get_width() > avail:
@@ -297,11 +298,11 @@ class ScreensMixin:
             kind = EFFECT_ICON.get(name, name)
             label = f"{p.shield_hits}×{t:.0f}" if name == "shield" else f"{t:.0f}"
             chips.append((kind, label, ITEMS[kind][1]))
-        walls = [w.life for w in self.walls if w.owner is p]
+        walls = [w.life for w in self.match.walls if w.owner is p]
         if walls:
             label = f"{max(walls):.0f}" if len(walls) == 1 else f"{len(walls)}×{max(walls):.0f}"
             chips.append(("wall", label, ITEMS["wall"][1]))
-        clones = len(self.clones_of(p))
+        clones = len(self.match.clones_of(p))
         if clones:
             chips.append(("clones", f"×{clones}", ITEMS["clones"][1]))
 
@@ -322,19 +323,19 @@ class ScreensMixin:
     def draw(self):
         s = self.screen
         s.blit(self.field_background(), (0, TOP))
-        for w in self.walls:
+        for w in self.match.walls:
             w.draw(s)
-        for a in self.artifacts:
+        for a in self.match.artifacts:
             a.draw(s)
-        for a in self.ammo_packs:
+        for a in self.match.ammo_packs:
             a.draw(s, self.tiny)
-        for c in self.clones:
+        for c in self.match.clones:
             c.draw(s)
-        for m in self.mobs:
+        for m in self.match.mobs:
             m.draw(s, self.tiny)
-        for shot in self.mob_shots:
+        for shot in self.match.mob_shots:
             shot.draw(s)
-        for b in self.bullets:
+        for b in self.match.bullets:
             b.draw(s)
         for p in self.players:
             p.draw(s)
@@ -346,11 +347,12 @@ class ScreensMixin:
             s.blit(img, rect)
         self.draw_hud()
 
-        if self.winner:
+        if self.match.winner:
             shade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
             shade.fill((0, 0, 0, 150))
             s.blit(shade, (0, 0))
-            t = self.big.render(tr("win", name=self.winner.name), True, self.winner.color)
+            w = self.match.winner
+            t = self.big.render(tr("win", name=tr("name." + w.id)), True, w.color)
             s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 20)))
             t = self.font.render(tr("win.hint"), True, WHITE)
             s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 40)))

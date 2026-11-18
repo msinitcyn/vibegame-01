@@ -1,7 +1,7 @@
 """Отпечаток партии: детерминированный прогон двух ботов и хеш состояния каждые 60 тактов.
 
 Нужен, чтобы доказать, что перестройка кода не изменила поведение: отпечаток до и после
-должен совпасть. Боты берут случайность из своего генератора, игра — из общего `random`
+должен совпасть. Боты берут случайность из своего генератора, матч — из общего `random`
 с фиксированным зерном (или из генератора матча, когда он появится).
 
     .venv/bin/python tools/fingerprint.py              # напечатать отпечаток
@@ -10,13 +10,10 @@
 """
 import hashlib
 import json
-import os
 import random
 import sys
 from pathlib import Path
 
-os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
-os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -77,51 +74,21 @@ class Bot:
 
 
 def run(seed):
-    """Прогон одной партии (с рестартами после победы) — список хешей."""
-    from duel.game import Game
-    game = run.game = getattr(run, "game", None) or Game()
-    game.pads.pads = []
+    """Прогон одной партии (с новой партией после победы) — список хешей. Окно не нужно."""
+    from duel.commands import Command
+    from duel.match import Match
     random.seed(seed)
-    game.start()
+    m = Match()
     bots = [Bot(seed * 100 + i) for i in range(2)]
-    new_api = hasattr(game, "match")
     out = []
     for tick in range(TICKS):
-        acts = [b.act() for b in bots]
-        if new_api:
-            from duel.commands import Command
-            cmds = {p.id: Command(move=a[0], fire=a[1], melee=a[2], use_slot=a[3])
-                    for p, a in zip(game.match.players, acts)}
-            game.match.step(DT, cmds)
-            m = game.match
-        else:
-            held = set()
-            for p, ((dx, dy), fire, melee, slot) in zip(game.players, acts):
-                if dy < 0:
-                    held.add(p.up_key)
-                elif dy > 0:
-                    held.add(p.down_key)
-                if dx < 0:
-                    held.add(p.left_key)
-                elif dx > 0:
-                    held.add(p.right_key)
-                if fire:
-                    game.fire(p)
-                if melee:
-                    game.melee(p)
-                if slot is not None:
-                    game.use_item(p, slot)
-            game.held = held
-            game.update(DT)
-            m = game
+        cmds = {p.id: Command(*b.act()) for p, b in zip(m.players, bots)}
+        m.step(DT, cmds)
         if tick % EVERY == 0:
             out.append(digest(m))
         if m.winner:
             out.append("restart:" + digest(m))
-            if new_api:
-                game.restart()
-            else:
-                game.restart()
+            m = Match()
     return out
 
 
