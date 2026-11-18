@@ -18,7 +18,6 @@ from .config import (
     MOB_HIT_COOLDOWN,
     MOB_HP,
     MOB_IDLE_COLOR,
-    MOB_MAX_HP,
     MOB_RADIUS,
     MOB_SPEED,
     AMMO_COLOR,
@@ -501,11 +500,6 @@ class Mob:
             return None
         self.shot_cd = MOB_SHOT_COOLDOWN
         return MobShot(self.x, self.y, p)
-
-    def grow(self, n=1, cap=MOB_MAX_HP):
-        """Новая волна: всем живым мобам +n жизней, но не больше cap."""
-        self.max_hp = min(cap, self.max_hp + n)
-        self.hp = min(self.max_hp, self.hp + n)
 
     def draw(self, surf, font=None):
         pos = (int(self.x), int(self.y))

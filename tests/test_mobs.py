@@ -63,18 +63,30 @@ def test_mobs_appear_in_random_places_and_stand(game):
 
 
 def test_waves_grow_and_cap(game):
-    """+1 моб в волне и +1 жизнь всем — но не больше MOB_MAX мобов и MOB_MAX_HP жизней."""
+    """Каждая волна — на 1 моба и 1 жизнь больше, но не больше MOB_MAX мобов и MOB_MAX_HP жизней.
+    Живые мобы при новой волне не меняются."""
     game.spawn_mob_wave()
-    assert len(game.mobs) == MOB_COUNT
+    first = list(game.mobs)
+    assert len(first) == MOB_COUNT and all(m.hp == MOB_HP for m in first)
     game.spawn_mob_wave()
+    new = [m for m in game.mobs if m not in first]
     assert len(game.mobs) == min(MOB_MAX, MOB_COUNT + (MOB_COUNT + 1))
-    assert all(m.hp == MOB_HP + 1 for m in game.mobs)
+    assert all(m.hp == MOB_HP for m in first)            # старые — без прибавки
+    assert all(m.hp == MOB_HP + 1 for m in new)          # новые — сильнее
     for _ in range(10):
         game.spawn_mob_wave()
         assert len(game.mobs) <= MOB_MAX
-        assert all(m.hp <= MOB_MAX_HP and m.max_hp <= MOB_MAX_HP for m in game.mobs)
+        assert all(m.hp <= MOB_MAX_HP for m in game.mobs)
     assert len(game.mobs) == MOB_MAX
-    assert all(m.hp == MOB_MAX_HP for m in game.mobs)
+
+
+def test_full_field_wave_changes_nobody(game):
+    for _ in range(3):
+        game.spawn_mob_wave()
+    assert len(game.mobs) == MOB_MAX
+    before = [(m.hp, m.max_hp) for m in game.mobs]
+    game.spawn_mob_wave()
+    assert [(m.hp, m.max_hp) for m in game.mobs] == before
 
 
 def test_waves_speed_up_after_max(game):
@@ -95,12 +107,12 @@ def test_waves_speed_up_after_max(game):
     assert after == expected and after[-1] == MOB_EVERY_MIN
 
 
-def test_wounded_mob_also_grows(game):
+def test_wounded_mob_not_healed_by_wave(game):
     m = spawn(game)[0]
     shoot_mob(game, m, game.blue)
     assert m.hp == MOB_HP - 1
     game.spawn_mob_wave()
-    assert m.hp == MOB_HP and m.max_hp == MOB_HP + 1
+    assert m.hp == MOB_HP - 1 and m.max_hp == MOB_HP
 
 
 def test_wave_timer_draws(game):

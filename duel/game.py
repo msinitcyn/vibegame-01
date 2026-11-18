@@ -564,13 +564,12 @@ class Game(ScreensMixin):
         self.mob_shots = [s for s in self.mob_shots if s.alive]
 
     def spawn_mob_wave(self):
-        """Волна k (с нуля): MOB_COUNT + k мобов по MOB_HP + k жизней, живым мобам +1 жизнь.
+        """Волна k (с нуля): MOB_COUNT + k мобов по MOB_HP + k жизней; живых мобов не трогает.
         Не больше MOB_MAX мобов на поле и MOB_MAX_HP жизней. Возвращает True, если волна
         дошла до максимума (дальше волны будут приходить всё чаще)."""
         k = self.mob_wave
         self.mob_wave += 1
-        for m in self.mobs:
-            m.grow()
+        # уже живые мобы не меняются: сильнее становятся только новые волны
         want, hp = MOB_COUNT + k, min(MOB_HP + k, MOB_MAX_HP)
         count = max(0, min(want, MOB_MAX - len(self.mobs)))
         for i in range(count):
