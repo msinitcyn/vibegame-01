@@ -203,6 +203,7 @@ duel/                игра
   settings.py        сохранение настроек между запусками
   game.py            цикл игры, ввод, правила, применение артефактов
 tests/               автотесты
+docs/                планы (сетевая версия — network-roadmap.md)
 openspec/            спецификации и изменения (OpenSpec)
 .agents/skills/      скиллы OpenSpec для Claude Code
 ```
@@ -228,6 +229,10 @@ openspec/            спецификации и изменения (OpenSpec)
 Ещё: `/openspec-explore` — обдумать идею без изменений в файлах. Полезные команды: `openspec list` (изменения), `openspec list --specs`, `openspec view` (дашборд).
 
 Телеметрия OpenSpec отключена: `openspec config set telemetry.enabled false`.
+
+## Сетевая версия
+
+План перехода к игре по сети (авторитетный сервер, этапы, зрители, портал) — в [`docs/network-roadmap.md`](docs/network-roadmap.md).
 
 ## Проверки
 
