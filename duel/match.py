@@ -2,6 +2,10 @@
 
     events = match.step(dt, {"blue": Command(...), "red": Command(...)})
 
+Вся случайность партии — из `match.rng` (зерно `seed`): одно зерно и одни и те же
+команды дают одну и ту же партию. У каждого объекта постоянный номер `id`
+(маги — "blue" / "red", остальные — числа из счётчика матча).
+
 Один шаг получает команды игроков и возвращает события (что произошло: выстрел, подбор,
 волна…). Приложение превращает события в звук и надписи на языке игрока; сервер
 сетевой версии будет отправлять их клиентам.
@@ -67,18 +71,22 @@ STEP = 1 / 60                     # фиксированный такт матч
 
 
 class Match:
-    def __init__(self, hp=MAX_HP):
+    def __init__(self, hp=MAX_HP, seed=None):
+        self.seed = random.randrange(2 ** 32) if seed is None else seed
+        self.rng = random.Random(self.seed)
+        self.last_id = 0
         self.blue = Player("blue", 60, BLUE, 1, BLUE_LAND)
         self.red = Player("red", WIDTH - 60, RED, -1, RED_LAND)
         self.players = (self.blue, self.red)
         for p in self.players:
+            p.rng = self.rng
             p.reset(hp)
         self.bullets = []
         self.artifacts = []
         self.walls = []               # стены могут стоять одновременно, у каждой свой таймер
         self.clones = []
         self.ammo_packs = []
-        self.ammo_timer = {p: random.uniform(*AMMO_SPAWN) for p in self.players}
+        self.ammo_timer = {p: self.rng.uniform(*AMMO_SPAWN) for p in self.players}
         self.no_ammo_at = {p: -10.0 for p in self.players}
         self.mobs = []
         self.mob_shots = []           # снаряды дальнобойных мобов
@@ -100,6 +108,21 @@ class Match:
     def emit(self, *event):
         self.events.append(event)
 
+    def next_id(self):
+        self.last_id += 1
+        return self.last_id
+
+    def objects(self):
+        """Все объекты поля, кроме магов."""
+        return (self.bullets + self.mobs + self.mob_shots + self.artifacts + self.ammo_packs
+                + self.walls + self.clones)
+
+    def number_new(self):
+        """Выдать номера объектам, появившимся за шаг (в порядке появления в списках)."""
+        for o in self.objects():
+            if o.id is None:
+                o.id = self.next_id()
+
     def step(self, dt, commands=None):
         """Один такт: нажатия из команд, затем движение и все правила. Возвращает события."""
         commands = commands or {}
@@ -116,6 +139,7 @@ class Match:
                 if c.use_slot is not None:
                     self.use_item(p, c.use_slot)
             self.update(dt, {p.id: commands.get(p.id, Command()).move for p in self.players})
+            self.number_new()
         events, self.events = self.events, []
         return events
 
@@ -218,7 +242,7 @@ class Match:
         for p in self.players:
             self.ammo_timer[p] -= dt
             if self.ammo_timer[p] <= 0:
-                self.ammo_timer[p] = random.uniform(*AMMO_SPAWN)
+                self.ammo_timer[p] = self.rng.uniform(*AMMO_SPAWN)
                 self.ammo_packs.append(AmmoPack(*p.random_spot(ARTIFACT_R + 5)))
         for a in self.ammo_packs:
             a.life -= dt
@@ -292,7 +316,7 @@ class Match:
         m = ARTIFACT_R + 4
         x = max(killer.land[0] + m, min(killer.land[1] - m, mob.x))
         y = max(TOP + m, min(BOTTOM - m, mob.y))
-        self.artifacts.append(Artifact(x, random.choice(list(ITEMS)), y))
+        self.artifacts.append(Artifact(x, self.rng.choice(list(ITEMS)), y))
 
     def bullet_speed(self, owner):
         """Множитель скорости пуль owner: «быстрые пули» у него, «пули соперника медленнее» у цели."""
@@ -364,8 +388,8 @@ class Match:
         """Случайное место в средней части поля, по возможности не на другом мобе."""
         r = MOB_RADIUS
         for _ in range(20):
-            x = random.uniform(WIDTH * MOB_ZONE[0] + r + 4, WIDTH * MOB_ZONE[1] - r - 4)
-            y = random.uniform(TOP + r + 4, BOTTOM - r - 4)
+            x = self.rng.uniform(WIDTH * MOB_ZONE[0] + r + 4, WIDTH * MOB_ZONE[1] - r - 4)
+            y = self.rng.uniform(TOP + r + 4, BOTTOM - r - 4)
             if all(math.hypot(x - m.x, y - m.y) > 2 * r + 6 for m in self.mobs):
                 return x, y
         return x, y

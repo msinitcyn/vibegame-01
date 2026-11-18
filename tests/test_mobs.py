@@ -1,6 +1,5 @@
 """Мобы: волнами в середине поля, стоят, идут на обидчика, бьют при касании."""
 import math
-import random
 
 import pytest
 
@@ -51,8 +50,7 @@ def test_mobs_appear_in_random_places_and_stand():
     lo, hi = WIDTH * MOB_ZONE[0], WIDTH * MOB_ZONE[1]
     places = []
     for seed in range(5):
-        random.seed(seed)
-        match = new_match()
+        match = new_match(seed=seed)
         mobs = spawn(match)
         assert all(lo <= m.x <= hi and TOP < m.y < BOTTOM for m in mobs)
         places.append(tuple((round(m.x), round(m.y)) for m in mobs))

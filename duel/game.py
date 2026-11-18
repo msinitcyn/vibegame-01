@@ -100,8 +100,8 @@ class Game(ScreensMixin):
         self.held.clear()
         self.restart()
 
-    def restart(self):
-        self.match = Match(self.start_hp)
+    def restart(self, seed=None):
+        self.match = Match(self.start_hp, seed)       # без зерна — каждый раз новая партия
         self.popups = []              # [текст, x, y, время, цвет]
         self.pending = {pid: Command() for pid in PLAYER_IDS}   # нажатия до следующего такта
         self.time_acc = 0.0           # накопленное время кадров для фиксированного такта

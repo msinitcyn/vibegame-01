@@ -66,8 +66,47 @@ def test_match_runs_without_window():
 
 
 def test_fingerprint_matches_reference():
-    """Поведение партии не изменилось: отпечаток совпадает с записанным эталоном."""
+    """Поведение партии не изменилось: отпечаток совпадает с записанным эталоном.
+    Если правила меняются намеренно — перезаписать: tools/fingerprint.py --save tests/data/fingerprint.json"""
     sys.path.insert(0, str(ROOT))
     from tools.fingerprint import fingerprint
-    saved = json.loads((ROOT / "tests/data/fingerprint_before.json").read_text())
+    saved = json.loads((ROOT / "tests/data/fingerprint.json").read_text())
     assert fingerprint() == saved
+
+
+def test_same_seed_same_game_other_seed_other_game():
+    sys.path.insert(0, str(ROOT))
+    from tools.fingerprint import run
+    a, b, c = run(5), run(5), run(6)
+    assert a == b
+    assert a != c
+
+
+def test_match_ignores_global_random():
+    """Общий random не влияет на партию: вся случайность — из генератора матча."""
+    import random
+    sys.path.insert(0, str(ROOT))
+    from tools.fingerprint import run
+    random.seed(1)
+    a = run(5)
+    random.seed(2)
+    assert run(5) == a
+
+
+def test_object_ids_unique_and_permanent():
+    """Номера объектов за партию не повторяются и у объекта не меняются."""
+    sys.path.insert(0, str(ROOT))
+    from tools.fingerprint import Bot
+    from duel.match import Match
+    m = Match(seed=3)
+    bots = [Bot(1), Bot(2)]
+    seen = {}                                   # id -> объект
+    for _ in range(60 * 90):
+        m.step(DT, {p.id: Command(*b.act()) for p, b in zip(m.players, bots)})
+        for o in m.objects():
+            assert isinstance(o.id, int)
+            assert seen.setdefault(o.id, o) is o
+        if m.winner:
+            break
+    assert len(seen) > 50                       # пули, мобы, снаряды, пачки…
+    assert {p.id for p in m.players} == {"blue", "red"}

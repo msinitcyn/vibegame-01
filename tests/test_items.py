@@ -24,8 +24,7 @@ def bullet_at(target, shooter, dx=200):
 
 
 def pick(match, p, kind):
-    a = Artifact(p.x, kind)
-    a.y = p.y
+    a = Artifact(p.x, kind, p.y)
     match.artifacts = [a]
     step(match)
 

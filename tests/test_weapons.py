@@ -9,8 +9,7 @@ from tests.conftest import step
 
 
 def pick(match, p, kind):
-    a = Artifact(p.x, kind)
-    a.y = p.y
+    a = Artifact(p.x, kind, p.y)
     match.artifacts.append(a)
     step(match)
 

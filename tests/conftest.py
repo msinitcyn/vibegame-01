@@ -29,13 +29,13 @@ def quiet(m):
     return m
 
 
-def new_match(hp=None):
-    return quiet(Match(hp) if hp else Match())
+def new_match(hp=None, seed=0):
+    return quiet(Match(hp, seed=seed) if hp else Match(seed=seed))
 
 
 @pytest.fixture
 def match():
-    """Матч двух игроков без окна, с фиксированным random."""
+    """Матч двух игроков без окна, с фиксированным зерном."""
     random.seed(0)
     return new_match()
 

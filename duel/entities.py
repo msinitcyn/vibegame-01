@@ -1,7 +1,6 @@
 """Объекты на поле: игрок, двойник, пуля, стена, артефакт, пачка патронов."""
 
 import math
-import random
 
 import pygame
 
@@ -67,9 +66,10 @@ def make_bullets(owner, x, y, direction, radius, angles, wavy=False):
         bx = x + direction * (radius + BULLET_R + 2)
         b = Bullet(bx, y, vx, vy, owner)
         if wavy:
-            b.wave_amp = random.uniform(*WAVE_AMP)
-            b.wave_w = 2 * math.pi * random.uniform(*WAVE_FREQ)
-            b.wave_phase = random.uniform(0, 2 * math.pi)
+            rng = owner.rng
+            b.wave_amp = rng.uniform(*WAVE_AMP)
+            b.wave_w = 2 * math.pi * rng.uniform(*WAVE_FREQ)
+            b.wave_phase = rng.uniform(0, 2 * math.pi)
         bullets.append(b)
     return bullets
 
@@ -174,6 +174,7 @@ class Unit:
 class Player(Unit):
     def __init__(self, pid, x, color, direction, land):
         self.id = pid                 # постоянный номер: "blue" / "red"
+        self.rng = None               # генератор случайных чисел матча (ставит Match)
         self.start_x = x
         self.color = color
         self.land = land              # (x_min, x_max) своей земли — дальше маг не заходит
@@ -236,8 +237,8 @@ class Player(Unit):
 
     def random_spot(self, margin):
         """Случайная точка на своей земле (для патронов, двойников)."""
-        return (random.uniform(self.land[0] + margin, self.land[1] - margin),
-                random.uniform(TOP + margin, BOTTOM - margin))
+        return (self.rng.uniform(self.land[0] + margin, self.land[1] - margin),
+                self.rng.uniform(TOP + margin, BOTTOM - margin))
 
     def shoot(self):
         # заморозка мешает только двигаться — стрелять можно
@@ -265,6 +266,7 @@ class Player(Unit):
 
 class Bullet:
     def __init__(self, x, y, vx, vy, owner):
+        self.id = None
         self.x, self.y, self.vx, self.vy = x, y, vx, vy
         self.owner = owner
         self.alive = True
@@ -313,6 +315,7 @@ class Clone(Unit):
     base_radius = CLONE_RADIUS
 
     def __init__(self, owner):
+        self.id = None
         self.owner = owner
         self.x = owner.random_spot(CLONE_RADIUS + 4)[0]   # на своей земле; ходит вверх-вниз
         self.reset_effects()
@@ -320,10 +323,11 @@ class Clone(Unit):
             if name in CLONE_EFFECTS:
                 self.effects[name] = t
         self.shield_hits = owner.shield_hits if "shield" in self.effects else 0
-        self.y = random.uniform(TOP + self.radius, BOTTOM - self.radius)
-        self.moving = random.choice((-1, 0, 1))
-        self.turn_timer = random.uniform(*CLONE_TURN_EVERY)
-        self.shot_timer = random.uniform(*CLONE_SHOT_EVERY)
+        rng = owner.rng
+        self.y = rng.uniform(TOP + self.radius, BOTTOM - self.radius)
+        self.moving = rng.choice((-1, 0, 1))
+        self.turn_timer = rng.uniform(*CLONE_TURN_EVERY)
+        self.shot_timer = rng.uniform(*CLONE_SHOT_EVERY)
         self.life = CLONE_TIME
         self.alive = True
 
@@ -335,8 +339,8 @@ class Clone(Unit):
         self.tick_effects(dt)
         self.turn_timer -= dt
         if self.turn_timer <= 0:
-            self.turn_timer = random.uniform(*CLONE_TURN_EVERY)
-            self.moving = random.choice((-1, 0, 1))
+            self.turn_timer = self.owner.rng.uniform(*CLONE_TURN_EVERY)
+            self.moving = self.owner.rng.choice((-1, 0, 1))
         self.y += self.moving * CLONE_SPEED * self.speed_mult * dt
         r = self.radius
         if self.y < TOP + r:
@@ -345,7 +349,7 @@ class Clone(Unit):
             self.y, self.moving = BOTTOM - r, -1
         self.shot_timer -= dt
         if self.shot_timer <= 0:
-            pause = random.uniform(*CLONE_SHOT_EVERY)
+            pause = self.owner.rng.uniform(*CLONE_SHOT_EVERY)
             self.shot_timer = pause * (RAPID_FACTOR if "rapid" in self.effects else 1)
             if self.can_fire:
                 return make_bullets(self.owner, self.x, self.y, self.owner.dir, r,
@@ -362,9 +366,10 @@ class Clone(Unit):
 
 
 class Artifact:
-    def __init__(self, x, kind, y=None):
+    def __init__(self, x, kind, y):
+        self.id = None
         self.x = x
-        self.y = y if y is not None else random.uniform(TOP + ARTIFACT_R + 5, BOTTOM - ARTIFACT_R - 5)
+        self.y = y
         self.kind = kind
         self.taken = False            # лежит, пока маг сам не подберёт — по времени не исчезает
 
@@ -376,6 +381,7 @@ class AmmoPack:
     """Пачка патронов в случайном месте земли игрока: подбирается сразу, в инвентарь не идёт."""
 
     def __init__(self, x, y):
+        self.id = None
         self.x, self.y = x, y
         self.life = AMMO_LIFETIME
 
@@ -401,6 +407,7 @@ class Mob:
     на расстоянии и стреляет снарядами. Артефакты не берёт, эффекты на него не действуют."""
 
     def __init__(self, x, y, hp=MOB_HP, ranged=False):
+        self.id = None
         self.x, self.y = x, y
         self.hp = self.max_hp = hp
         self.ranged = ranged
@@ -518,6 +525,7 @@ class MobShot:
     исчезает, пролетев MOB_RANGE или у края поля. Стены и «сбиваешь пули» на него не действуют."""
 
     def __init__(self, x, y, target):
+        self.id = None
         self.x, self.y = x, y
         self.target = target
         d = math.hypot(target.x - x, target.y - y) or 1.0
@@ -548,6 +556,7 @@ class Wall:
     """
 
     def __init__(self, owner):
+        self.id = None
         self.owner = owner
         self.x = owner.x + owner.dir * WALL_OFFSET
         half = WALL_H / 2
