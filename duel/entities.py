@@ -1,28 +1,20 @@
-"""Объекты на поле: игрок, двойник, пуля, стена, артефакт, пачка патронов."""
+"""Объекты на поле и их правила: маг, двойник, пуля, стена, артефакт, пачка патронов, моб.
+
+Здесь ничего не рисуется — экран рисует по снимку (duel/snapshot.py, duel/render.py)."""
 
 import math
 
-import pygame
-
 from .config import (
-    MELEE_FLASH,
-    MELEE_RANGE,
     MOB_KEEP_DISTANCE,
     MOB_RANGE,
-    MOB_SHOT_COLOR,
     MOB_SHOT_COOLDOWN,
-    MOB_SHOT_R,
     MOB_SHOT_SPEED,
     WEAPON_MAX,
     MOB_HIT_COOLDOWN,
     MOB_HP,
-    MOB_IDLE_COLOR,
     MOB_RADIUS,
     MOB_SPEED,
-    AMMO_COLOR,
     AMMO_LIFETIME,
-    AMMO_PACK,
-    ARTIFACT_R,
     BASE_RADIUS,
     BASE_SPEED,
     BOTTOM,
@@ -51,9 +43,7 @@ from .config import (
     WAVE_FREQ,
     WIDTH,
 )
-from .items import ITEMS, WEAPON_ITEMS
-from .icons import draw_icon
-from .sprites import draw_unit
+from .items import WEAPON_ITEMS
 
 
 def make_bullets(owner, x, y, direction, radius, angles, wavy=False):
@@ -150,26 +140,6 @@ class Unit:
             self.shield_hits = 0
         return True
 
-    def draw_effects(self, surf):
-        """Кольца и значки эффектов на самом маге. Таймеры — в статусе, не на поле."""
-        r = int(self.radius)
-        pos = (int(self.x), int(self.y))
-        if self.frozen:
-            pygame.draw.circle(surf, ITEMS["foe_freeze"][1], pos, r + 4, 3)
-        if "speed" in self.effects:
-            pygame.draw.circle(surf, ITEMS["speed"][1], pos, r + 8, 1)
-        if "shield" in self.effects:
-            t = self.effects["shield"]
-            if t > 1.5 or int(t * 8) % 2:
-                pygame.draw.circle(surf, ITEMS["shield"][1], pos, r + SHIELD_GAP, 3)
-        if "triple" in self.effects:
-            pygame.draw.circle(surf, ITEMS["triple"][1], pos, max(3, r // 3))
-        if "nofire" in self.effects:
-            d = int(r * 0.7)
-            cx, cy = pos
-            pygame.draw.line(surf, (30, 30, 30), (cx - d, cy - d), (cx + d, cy + d), 4)
-            pygame.draw.line(surf, (30, 30, 30), (cx - d, cy + d), (cx + d, cy - d), 4)
-
 
 class Player(Unit):
     def __init__(self, pid, x, color, direction, land):
@@ -179,7 +149,6 @@ class Player(Unit):
         self.color = color
         self.land = land              # (x_min, x_max) своей земли — дальше маг не заходит
         self.dir = direction          # +1 стреляет вправо, -1 влево
-        self.sprite = "mage_blue" if direction > 0 else "mage_red"
         self.reset()
 
     def reset(self, hp=MAX_HP):
@@ -250,19 +219,6 @@ class Player(Unit):
         return make_bullets(self, self.x, self.y, self.dir, self.radius,
                             self.shot_angles(self.moving), "wavy" in self.effects)
 
-    def draw(self, surf):
-        pos = (int(self.x), int(self.y))
-        draw_unit(surf, self.sprite, pos, self.radius, self.dir, white=self.hit_flash > 0)
-        if self.melee_flash > 0:
-            # взмах: светлое кольцо на дальности удара, тает
-            k = self.melee_flash / MELEE_FLASH
-            ring = pygame.Surface((2 * (int(self.radius) + MELEE_RANGE) + 4,) * 2, pygame.SRCALPHA)
-            c = ring.get_width() // 2
-            pygame.draw.circle(ring, (*self.color, int(220 * k)), (c, c), int(self.radius) + MELEE_RANGE, 4)
-            pygame.draw.circle(ring, (255, 255, 255, int(160 * k)), (c, c), int(self.radius) + MELEE_RANGE - 6, 2)
-            surf.blit(ring, ring.get_rect(center=pos))
-        self.draw_effects(surf)
-
 
 class Bullet:
     def __init__(self, x, y, vx, vy, owner):
@@ -296,13 +252,6 @@ class Bullet:
         # задняя стенка — без отскока, пуля просто улетает
         if self.x < -BULLET_R or self.x > WIDTH + BULLET_R:
             self.alive = False
-
-    def draw(self, surf):
-        # тёмная обводка — чтобы пуля читалась и на льду, и на лаве
-        pos = (int(self.x), int(self.y))
-        pygame.draw.circle(surf, (16, 12, 20), pos, BULLET_R + 1)
-        pygame.draw.circle(surf, self.owner.color, pos, BULLET_R)
-        surf.set_at((pos[0] - 1, pos[1] - 2), (255, 255, 255))
 
 
 class Clone(Unit):
@@ -356,14 +305,6 @@ class Clone(Unit):
                                     self.shot_angles(self.moving), "wavy" in self.effects)
         return []
 
-    def draw(self, surf):
-        if self.life < 2 and int(self.life * 8) % 2 == 0:
-            return
-        pos = (int(self.x), int(self.y))
-        # двойник — полупрозрачная копия хозяина
-        draw_unit(surf, self.owner.sprite, pos, self.radius, self.owner.dir, alpha=140)
-        self.draw_effects(surf)
-
 
 class Artifact:
     def __init__(self, x, kind, y):
@@ -373,9 +314,6 @@ class Artifact:
         self.kind = kind
         self.taken = False            # лежит, пока маг сам не подберёт — по времени не исчезает
 
-    def draw(self, surf):
-        draw_icon(surf, self.kind, (int(self.x), int(self.y)), ARTIFACT_R)
-
 
 class AmmoPack:
     """Пачка патронов в случайном месте земли игрока: подбирается сразу, в инвентарь не идёт."""
@@ -384,21 +322,6 @@ class AmmoPack:
         self.id = None
         self.x, self.y = x, y
         self.life = AMMO_LIFETIME
-
-    def draw(self, surf, font):
-        if self.life < 2 and int(self.life * 8) % 2 == 0:
-            return
-        r = ARTIFACT_R
-        box = pygame.Rect(0, 0, r * 2 + 4, r * 2 - 4)
-        box.center = (int(self.x), int(self.y))
-        pygame.draw.rect(surf, (60, 50, 20), box, border_radius=4)
-        pygame.draw.rect(surf, AMMO_COLOR, box, 2, border_radius=4)
-        # три патрона
-        for i in (-1, 0, 1):
-            bx = box.centerx + i * 7
-            pygame.draw.rect(surf, AMMO_COLOR, (bx - 2, box.top + 4, 4, 9), border_radius=2)
-        txt = font.render(str(AMMO_PACK), True, AMMO_COLOR)
-        surf.blit(txt, txt.get_rect(midbottom=(box.centerx, box.bottom + 1)))
 
 
 class Mob:
@@ -503,22 +426,6 @@ class Mob:
         self.shot_cd = MOB_SHOT_COOLDOWN
         return MobShot(self.x, self.y, p)
 
-    def draw(self, surf, font=None):
-        pos = (int(self.x), int(self.y))
-        draw_unit(surf, "mob_ranged" if self.ranged else "mob", pos, self.radius, self.facing,
-                  white=self.flash > 0)
-        # полоска жизней над головой и число; цвет — того, на кого моб злится
-        color = self.target.color if self.target else MOB_IDLE_COLOR
-        bar = pygame.Rect(0, 0, 28, 5)
-        bar.midbottom = (pos[0], pos[1] - self.radius - 2)
-        pygame.draw.rect(surf, (16, 12, 20), bar.inflate(2, 2))
-        fill = bar.copy()
-        fill.w = max(1, round(bar.w * self.hp / self.max_hp))
-        pygame.draw.rect(surf, color, fill)
-        if font:
-            txt = font.render(str(self.hp), True, color)
-            surf.blit(txt, txt.get_rect(midbottom=(pos[0], bar.top - 1)))
-
 
 class MobShot:
     """Снаряд дальнобойного моба: летит прямо в точку, где была цель в момент выстрела,
@@ -540,12 +447,6 @@ class MobShot:
         self.travelled += step
         if self.travelled >= MOB_RANGE or not (0 <= self.x <= WIDTH and TOP <= self.y <= BOTTOM):
             self.alive = False
-
-    def draw(self, surf):
-        pos = (int(self.x), int(self.y))
-        pygame.draw.circle(surf, (16, 12, 20), pos, MOB_SHOT_R + 1)
-        pygame.draw.circle(surf, MOB_SHOT_COLOR, pos, MOB_SHOT_R)
-        pygame.draw.circle(surf, (250, 255, 230), pos, MOB_SHOT_R // 2)
 
 
 class Wall:
@@ -579,17 +480,3 @@ class Wall:
     def blocks(self, x, y, r):
         """Пересекает ли круг (x, y, r) стену — для мобов, которым сквозь неё нельзя."""
         return abs(x - self.x) < WALL_W / 2 + r and self.y1 - r < y < self.y2 + r
-
-    def draw(self, surf):
-        if self.life < 1.5 and int(self.life * 8) % 2 == 0:
-            return
-        h = self.y2 - self.y1
-        half = WALL_W // 2
-        back = -self.owner.dir
-        back_x = self.x if back > 0 else self.x - half
-        mirror_x = self.x - half if back > 0 else self.x
-        # тыльная сторона — тёмная сталь (свои выстрелы через неё проходят)
-        pygame.draw.rect(surf, (54, 58, 74), (back_x, self.y1, half, h))
-        # зеркальная сторона
-        pygame.draw.rect(surf, (225, 235, 255), (mirror_x, self.y1, half, h))
-        pygame.draw.rect(surf, self.owner.color, (mirror_x, self.y1, half, h), 1)

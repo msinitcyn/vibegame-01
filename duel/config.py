@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import pygame
-
 
 WIDTH, HEIGHT = 1000, 724
 HUD_H = 84                       # верхняя полоса с информацией (статус)
@@ -37,7 +35,6 @@ MUSIC = {
     "game": "background-*.mp3",    # игра: все треки по очереди, вперемешку
 }
 MUSIC_FADE_MS = 800
-MUSIC_END = pygame.USEREVENT + 1
 SHOOT_VOLUME = 0.6
 
 BASE_RADIUS = 18

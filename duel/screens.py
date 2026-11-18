@@ -1,4 +1,7 @@
-"""Отрисовка: игровое поле, верхняя панель, меню, справка."""
+"""Отрисовка: игровое поле, верхняя панель, меню, справка.
+
+Поле и верхняя панель рисуются только по снимку матча `self.snap` (duel/snapshot.py),
+объекты поля — функциями duel/render.py."""
 
 import pygame
 
@@ -37,6 +40,7 @@ from .i18n import LANGS, get_lang
 from .i18n import t as tr
 from .icons import draw_ammo_icon, draw_icon
 from .gamepad import PAD_ITEM_COLORS, PAD_ITEM_LABELS, PAD_ITEM_LAYOUT
+from .render import COLOR, draw_field
 from .sprites import draw_unit, sprite_image
 
 
@@ -202,9 +206,9 @@ class ScreensMixin:
             rect = pygame.Rect(x + i * (size + gap), y, size, size)
             pygame.draw.rect(s, (22, 24, 34), rect, border_radius=4)
             pygame.draw.rect(s, (70, 72, 86), rect, 1, border_radius=4)
-            if i < len(p.queue):
-                draw_icon(s, p.queue[i], rect.center, size // 2 - 2)
-        extra = len(p.queue) - QUEUE_SHOWN
+            if i < len(p["queue"]):
+                draw_icon(s, p["queue"][i], rect.center, size // 2 - 2)
+        extra = len(p["queue"]) - QUEUE_SHOWN
         if extra > 0:
             txt = self.tiny.render(f"+{extra}", True, WHITE)
             last = pygame.Rect(x + (QUEUE_SHOWN - 1) * (size + gap), y, size, size)
@@ -220,12 +224,12 @@ class ScreensMixin:
         box.center = (WIDTH // 2, HUD_H // 2)
         pygame.draw.rect(s, (20, 18, 30), box, border_radius=6)
         pygame.draw.rect(s, (90, 80, 120), box, 1, border_radius=6)
-        m = self.match
-        left = max(0.0, m.next_wave - m.match_time)
-        title = tr("wave.title", n=max(1, m.mob_wave))
+        snap = self.snap
+        left = max(0.0, snap["next_wave"] - snap["time"])
+        title = tr("wave.title", n=max(1, snap["wave"]))
         draw_unit(s, "mob", (box.centerx, box.top + 16), 11, 1)
         t1 = self.small.render(title, True, MOB_IDLE_COLOR)
-        when = tr("wave.in", s=f"{left:.0f}") if m.mob_wave == 0 else tr("wave.next", s=f"{left:.0f}")
+        when = tr("wave.in", s=f"{left:.0f}") if snap["wave"] == 0 else tr("wave.next", s=f"{left:.0f}")
         t2 = self.small.render(when, True, WHITE)
         s.blit(t1, t1.get_rect(midtop=(box.centerx, box.top + 30)))
         s.blit(t2, t2.get_rect(midtop=(box.centerx, box.top + 47)))
@@ -235,16 +239,18 @@ class ScreensMixin:
         pygame.draw.rect(s, (30, 33, 45), (0, 0, WIDTH, HUD_H))
         pygame.draw.line(s, GREY, (0, HUD_H), (WIDTH, HUD_H), 2)
         self.draw_wave_timer()
-        for p in self.players:
-            left = p.id == "blue"
-            has_pad = self.players.index(p) < len(self.pads.pads)
+        for i_player, p in enumerate(self.snap["players"]):
+            pid = p["id"]
+            color = COLOR[pid]
+            left = pid == "blue"
+            has_pad = i_player < len(self.pads.pads)
             rects, x0, inv_w = self.inventory_rects(left, has_pad)
-            for i, (kind, rect) in enumerate(zip(p.items, rects)):
+            for i, (kind, rect) in enumerate(zip(p["items"], rects)):
                 pygame.draw.rect(s, (22, 24, 34), rect, border_radius=6)
-                pygame.draw.rect(s, p.color if kind else GREY, rect, 1, border_radius=6)
+                pygame.draw.rect(s, color if kind else GREY, rect, 1, border_radius=6)
                 if kind:
                     draw_icon(s, kind, rect.center, rect.w // 2 - 4)
-                    if "noitems" in p.effects and kind != "cleanse":
+                    if "noitems" in p["effects"] and kind != "cleanse":
                         pygame.draw.line(s, ITEMS["foe_noitems"][1], rect.bottomleft, rect.topright, 2)
                 if has_pad:
                     color = PAD_ITEM_COLORS[i]
@@ -256,17 +262,18 @@ class ScreensMixin:
                         key.set_alpha(140)
                         s.blit(key, key.get_rect(center=rect.center))
                 else:
-                    key = self.tiny.render(self.key_names[p.id][i], True, WHITE)
+                    key = self.tiny.render(self.key_names[pid][i], True, WHITE)
                     s.blit(key, (rect.right - key.get_width() - 3, rect.bottom - key.get_height() - 1))
             q_w = self.draw_queue(p, left, x0, inv_w, has_pad)
 
             # имя и жизни; ниже — патроны и всё, что действует, с таймерами
             avail = WIDTH // 2 - HUD_CENTER - inv_w - q_w - 20
-            hearts = '♥' * min(p.hp, HEARTS_SHOWN)
-            if p.hp > HEARTS_SHOWN:
-                hearts += f" +{p.hp - HEARTS_SHOWN}"
-            line1 = self.font.render(f"{tr('name.' + p.id)}  {hearts}", True, p.color)
-            line2 = self.status_chips(p)
+            hp = p["hp"]
+            hearts = '♥' * min(hp, HEARTS_SHOWN)
+            if hp > HEARTS_SHOWN:
+                hearts += f" +{hp - HEARTS_SHOWN}"
+            line1 = self.font.render(f"{tr('name.' + pid)}  {hearts}", True, color)
+            line2 = self.status_chips(p, self.snap)
             for img, cy in ((line1, HUD_H // 2 - 14), (line2, HUD_H // 2 + 14)):
                 if img.get_width() > avail:
                     img = pygame.transform.smoothscale(
@@ -289,20 +296,22 @@ class ScreensMixin:
             self._field_bg = bg
         return bg
 
-    def status_chips(self, p):
+    def status_chips(self, p, snap):
         """Вторая строка статуса: патроны и значки всех действующих на игрока артефактов
-        с таймерами. Сначала патроны, потом оружие, остальные эффекты, стены, двойники."""
-        chips = [("ammo", str(p.ammo), AMMO_COLOR if p.ammo > 0 else BAD_TEXT)]
-        effects = sorted(p.effects.items(), key=lambda e: (e[0] not in WEAPON_ITEMS, -e[1]))
+        с таймерами. Сначала патроны, потом оружие, остальные эффекты, стены, двойники.
+        p — маг из снимка snap."""
+        ammo = p["ammo"]
+        chips = [("ammo", str(ammo), AMMO_COLOR if ammo > 0 else BAD_TEXT)]
+        effects = sorted(p["effects"].items(), key=lambda e: (e[0] not in WEAPON_ITEMS, -e[1]))
         for name, t in effects:
             kind = EFFECT_ICON.get(name, name)
-            label = f"{p.shield_hits}×{t:.0f}" if name == "shield" else f"{t:.0f}"
+            label = f"{p['shield_hits']}×{t:.0f}" if name == "shield" else f"{t:.0f}"
             chips.append((kind, label, ITEMS[kind][1]))
-        walls = [w.life for w in self.match.walls if w.owner is p]
+        walls = [w["life"] for w in snap["walls"] if w["owner"] == p["id"]]
         if walls:
             label = f"{max(walls):.0f}" if len(walls) == 1 else f"{len(walls)}×{max(walls):.0f}"
             chips.append(("wall", label, ITEMS["wall"][1]))
-        clones = len(self.match.clones_of(p))
+        clones = sum(1 for c in snap["clones"] if c["owner"] == p["id"])
         if clones:
             chips.append(("clones", f"×{clones}", ITEMS["clones"][1]))
 
@@ -323,22 +332,7 @@ class ScreensMixin:
     def draw(self):
         s = self.screen
         s.blit(self.field_background(), (0, TOP))
-        for w in self.match.walls:
-            w.draw(s)
-        for a in self.match.artifacts:
-            a.draw(s)
-        for a in self.match.ammo_packs:
-            a.draw(s, self.tiny)
-        for c in self.match.clones:
-            c.draw(s)
-        for m in self.match.mobs:
-            m.draw(s, self.tiny)
-        for shot in self.match.mob_shots:
-            shot.draw(s)
-        for b in self.match.bullets:
-            b.draw(s)
-        for p in self.players:
-            p.draw(s)
+        draw_field(s, self.snap, self.tiny)
         for text, x, y, t, color in self.popups:
             img = self.font.render(text, True, color)
             img.set_alpha(int(255 * min(1, t / 0.5)))
@@ -347,12 +341,12 @@ class ScreensMixin:
             s.blit(img, rect)
         self.draw_hud()
 
-        if self.match.winner:
+        if self.snap["winner"]:
             shade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
             shade.fill((0, 0, 0, 150))
             s.blit(shade, (0, 0))
-            w = self.match.winner
-            t = self.big.render(tr("win", name=tr("name." + w.id)), True, w.color)
+            w = self.snap["winner"]
+            t = self.big.render(tr("win", name=tr("name." + w)), True, COLOR[w])
             s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 20)))
             t = self.font.render(tr("win.hint"), True, WHITE)
             s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 40)))

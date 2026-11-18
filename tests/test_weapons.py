@@ -73,6 +73,7 @@ def test_status_draws_weapons(game):
     for kind in WEAPON_ITEMS[:3]:
         m.apply_item(m.blue, kind)
     m.apply_item(m.red, "breaker")
+    game.refresh_snap()
     game.draw()
 
 
@@ -84,5 +85,8 @@ def test_every_effect_has_status_icon(game):
         b.apply(effect)
     m.apply_item(b, "wall")
     m.apply_item(b, "clones")
-    assert game.status_chips(b).get_width() > 0
+    game.refresh_snap()
+    snap_b = game.snap["players"][0]
+    assert set(snap_b["effects"]) == set(b.effects)
+    assert game.status_chips(snap_b, game.snap).get_width() > 0
     game.draw()

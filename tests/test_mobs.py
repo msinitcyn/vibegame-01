@@ -115,6 +115,7 @@ def test_wounded_mob_not_healed_by_wave(match):
 
 def test_wave_timer_draws(game):
     spawn(game.match)
+    game.refresh_snap()
     game.draw()
 
 

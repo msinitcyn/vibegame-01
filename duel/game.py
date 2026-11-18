@@ -14,7 +14,6 @@ from .config import (
     HEIGHT,
     MAX_HP,
     MOB_IDLE_COLOR,
-    MUSIC_END,
     POPUP_TIME,
     TEST_HP,
     TOP,
@@ -24,8 +23,10 @@ from .items import ITEMS, item_name, ring_color
 from .i18n import LANGS, get_lang, set_lang, t
 from . import settings
 from .match import STEP, Match
+from .snapshot import player as snap_player, snapshot
 from .gamepad import Gamepads, PAD_DOWN, PAD_FIRE, PAD_ITEM_BUTTONS, PAD_MELEE, PAD_UP
-from .audio import Audio
+from .audio import MUSIC_END, Audio
+from .render import DIR
 from .screens import ScreensMixin
 from .sprites import reload_all
 
@@ -106,6 +107,11 @@ class Game(ScreensMixin):
         self.pending = {pid: Command() for pid in PLAYER_IDS}   # нажатия до следующего такта
         self.time_acc = 0.0           # накопленное время кадров для фиксированного такта
         self.win_time = 0
+        self.refresh_snap()
+
+    def refresh_snap(self):
+        """Снимок матча — экран и надписи читают только его (как будет у клиента в сети)."""
+        self.snap = snapshot(self.match)
 
     def update(self, dt=STEP):
         """Один такт матча с текущим вводом; события → звук и надписи."""
@@ -117,7 +123,9 @@ class Game(ScreensMixin):
             cmd.move = ((c.right in held) - (c.left in held), (c.down in held) - (c.up in held))
             commands[pid] = cmd
         self.pending = {pid: Command() for pid in PLAYER_IDS}
-        self.handle_events(self.match.step(dt, commands))
+        events = self.match.step(dt, commands)
+        self.refresh_snap()
+        self.handle_events(events)
         self.tick_popups(dt)
 
     def run(self):
@@ -147,7 +155,7 @@ class Game(ScreensMixin):
                     btn = self.pads.axis_event(e)
                     if btn:
                         self.on_pad(e.instance_id, btn)
-            if self.match.winner and not self.win_time:
+            if self.snap["winner"] and not self.win_time:
                 self.win_time = pygame.time.get_ticks()
             self.update_music()
             if self.state == "menu":
@@ -159,7 +167,7 @@ class Game(ScreensMixin):
             if self.state == "settings":
                 self.draw_settings()
                 continue
-            if not self.match.winner:
+            if not self.snap["winner"]:
                 # фиксированный такт: копим время кадров, делаем целое число шагов
                 self.time_acc += dt
                 steps = 0
@@ -173,8 +181,10 @@ class Game(ScreensMixin):
 
     # ------------------------------------------------------------------ события матча
 
-    def popup(self, text, p, color):
-        self.popups.append([text, p.x + p.dir * 90, p.y, POPUP_TIME, color])
+    def popup(self, text, pid, color):
+        """Надпись рядом с магом pid (положение — из снимка), со стороны соперника."""
+        p = snap_player(self.snap, pid)
+        self.popups.append([text, p["x"] + DIR[pid] * 90, p["y"], POPUP_TIME, color])
 
     def tick_popups(self, dt):
         for pp in self.popups:
@@ -184,7 +194,6 @@ class Game(ScreensMixin):
 
     def handle_events(self, events):
         """События матча → звук и надписи на языке этого игрока."""
-        m = self.match
         for ev in events:
             kind = ev[0]
             if kind == "shot":
@@ -192,13 +201,13 @@ class Game(ScreensMixin):
             elif kind == "melee":
                 self.audio.melee()
             elif kind == "no_ammo":
-                self.popup(t("popup.noammo"), m.player(ev[1]), BAD_TEXT)
+                self.popup(t("popup.noammo"), ev[1], BAD_TEXT)
             elif kind == "pickup":
-                self.popup(item_name(ev[2]), m.player(ev[1]), ring_color(ev[2]))
+                self.popup(item_name(ev[2]), ev[1], ring_color(ev[2]))
             elif kind == "used":
-                self.popup(item_name(ev[2]) + "!", m.player(ev[1]), ITEMS[ev[2]][1])
+                self.popup(item_name(ev[2]) + "!", ev[1], ITEMS[ev[2]][1])
             elif kind == "ammo":
-                self.popup(t("popup.ammo", n=ev[2]), m.player(ev[1]), AMMO_COLOR)
+                self.popup(t("popup.ammo", n=ev[2]), ev[1], AMMO_COLOR)
             elif kind == "mob_dead":
                 self.popups.append([t("popup.mobdead"), ev[1], ev[2], POPUP_TIME, MOB_IDLE_COLOR])
             elif kind == "wave":
@@ -233,9 +242,9 @@ class Game(ScreensMixin):
         if sc == pygame.KSCAN_ESCAPE:
             self.state = "menu"
             return
-        if self.match.winner and sc == pygame.KSCAN_R:
+        if self.snap["winner"] and sc == pygame.KSCAN_R:
             self.restart()
-        if not self.match.winner:
+        if not self.snap["winner"]:
             # нажатия копятся в команду и применяются в ближайшем такте матча
             for pid, c in self.controls.items():
                 cmd = self.pending[pid]
@@ -278,7 +287,7 @@ class Game(ScreensMixin):
             return
         if btn == B.CONTROLLER_BUTTON_START:
             self.on_key(B.KSCAN_ESCAPE)
-        elif self.match.winner:
+        elif self.snap["winner"]:
             # пауза после победы, чтобы случайное нажатие ✕ не перезапустило игру
             if btn == B.CONTROLLER_BUTTON_A and pygame.time.get_ticks() - self.win_time > 1000:
                 self.on_key(B.KSCAN_R)

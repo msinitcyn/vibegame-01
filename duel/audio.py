@@ -7,12 +7,13 @@ import pygame
 from .config import (
     MUSIC,
     MUSIC_DIR,
-    MUSIC_END,
     MUSIC_FADE_MS,
     MUSIC_VOLUME,
     SHOOT_VOLUME,
     SOUNDS_DIR,
 )
+
+MUSIC_END = pygame.USEREVENT + 1     # событие «трек закончился»
 
 
 class Audio:
