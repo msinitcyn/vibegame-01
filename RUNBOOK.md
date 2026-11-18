@@ -207,6 +207,7 @@ openspec/            спецификации и изменения (OpenSpec)
 - CLI: `openspec` (стоит в `~/.local/bin`, версия 2.1). Обновить: `npm install -g --prefix ~/.local @fission-ai/openspec@latest`, потом `openspec update` в проекте.
 - Папки: `openspec/specs/` — текущие спецификации игры, `openspec/changes/` — предлагаемые изменения, `openspec/changes/archive/` — завершённые. `openspec/config.yaml` — контекст проекта и правила (язык артефактов — русский).
 - Скиллы для Claude Code лежат в `.agents/skills/` (ссылки — в `.claude/skills/`).
+- Текущая игра описана в `openspec/specs/` (12 разделов): `battlefield` (поле и движение), `shooting` (стрельба, жизни, победа), `ammo`, `artifacts` (выпадение, инвентарь, очередь, стаки), `artifact-effects` (что делает каждый артефакт), `mobs`, `computer-opponent`, `controls`, `menus`, `settings` (языки), `hud` (статус), `audio-graphics`. Проверка формата: `openspec validate --specs --strict`.
 
 Порядок работы в Claude Code:
 
