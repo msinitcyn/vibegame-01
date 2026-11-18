@@ -194,9 +194,30 @@ duel/                игра
   settings.py        сохранение настроек между запусками
   game.py            цикл игры, ввод, правила, применение артефактов
 tests/               автотесты
+openspec/            спецификации и изменения (OpenSpec)
+.agents/skills/      скиллы OpenSpec для Claude Code
 ```
 
 Новый артефакт: строка в `ITEMS` и `HELP_SECTIONS` и описание в `item_help` (`duel/items.py`), значок в `duel/icons.py`, действие в `Game.apply_item` (`duel/game.py`).
+
+## Разработка по спецификациям (OpenSpec)
+
+В проекте подключён [OpenSpec](https://github.com/Fission-AI/OpenSpec) — spec-driven development: сначала спецификация изменения, потом код.
+
+- CLI: `openspec` (стоит в `~/.local/bin`, версия 2.1). Обновить: `npm install -g --prefix ~/.local @fission-ai/openspec@latest`, потом `openspec update` в проекте.
+- Папки: `openspec/specs/` — текущие спецификации игры, `openspec/changes/` — предлагаемые изменения, `openspec/changes/archive/` — завершённые. `openspec/config.yaml` — контекст проекта и правила (язык артефактов — русский).
+- Скиллы для Claude Code лежат в `.agents/skills/` (ссылки — в `.claude/skills/`).
+
+Порядок работы в Claude Code:
+
+1. `/openspec-propose <что хотим>` — создаёт `openspec/changes/<имя>/`: `proposal.md` (что и зачем), `specs/…` (что должна делать игра — дельта к спецификации), `design.md` (как), `tasks.md` (шаги). Код при этом не трогается.
+2. Прочитать, поправить, обсудить.
+3. `/openspec-apply-change` — реализация по `tasks.md`.
+4. `/openspec-archive-change` — изменение вливается в `openspec/specs/`, папка уходит в архив.
+
+Ещё: `/openspec-explore` — обдумать идею без изменений в файлах. Полезные команды: `openspec list` (изменения), `openspec list --specs`, `openspec view` (дашборд).
+
+Телеметрия OpenSpec отключена: `openspec config set telemetry.enabled false`.
 
 ## Проверки
 
