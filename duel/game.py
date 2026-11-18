@@ -59,14 +59,16 @@ PLAYER_IDS = ("blue", "red")      # первый геймпад — синий, 
 class Game(ScreensMixin):
     """Приложение поверх матча: хотсит — оба игрока за одним компьютером."""
 
-    def __init__(self):
+    def __init__(self, windowed=False, net=None, pad=0):
+        """net — (соединение, приветствие сервера) для сетевого клиента; pad — номер своего геймпада."""
         pygame.init()
         self.settings = settings.load()
         set_lang(self.settings["lang"])
         self.audio = Audio()
         pygame.display.set_caption(t("title"))
         # SCALED: поле остаётся WIDTH×HEIGHT, а на экран растягивается с сохранением пропорций
-        self.screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.SCALED | pygame.FULLSCREEN)
+        flags = pygame.SCALED if windowed else pygame.SCALED | pygame.FULLSCREEN
+        self.screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont("dejavusans", 18, bold=True)
         self.small = pygame.font.SysFont("dejavusans", 14)
@@ -86,7 +88,13 @@ class Game(ScreensMixin):
         self.settings_index = 0
         self.state = "menu"
         self.start_hp = MAX_HP
+        self.net, self.me, self.pad_index = None, None, pad
         self.restart()
+        if net:
+            self.net, hello = net
+            self.me = hello["you"]
+            self.state = "play"
+            pygame.display.set_caption(f"{t('title')} — {t('name.' + self.me)} (сеть)")
 
     # ------------------------------------------------------------------ партия
 
@@ -140,7 +148,7 @@ class Game(ScreensMixin):
                     self.held.discard(e.scancode)
                 if e.type == pygame.KEYDOWN:
                     self.held.add(e.scancode)
-                    if e.scancode == pygame.KSCAN_ESCAPE and self.state == "menu":
+                    if e.scancode == pygame.KSCAN_ESCAPE and (self.state == "menu" or self.net):
                         return
                     self.on_key(e.scancode)
                 if e.type == MUSIC_END:
@@ -167,7 +175,11 @@ class Game(ScreensMixin):
             if self.state == "settings":
                 self.draw_settings()
                 continue
-            if not self.snap["winner"]:
+            if self.net:
+                if not self.net_frame(dt):
+                    print("связь с сервером потеряна")
+                    return
+            elif not self.snap["winner"]:
                 # фиксированный такт: копим время кадров, делаем целое число шагов
                 self.time_acc += dt
                 steps = 0
@@ -178,6 +190,36 @@ class Game(ScreensMixin):
                 if steps == MAX_STEPS_PER_FRAME:
                     self.time_acc = 0.0
             self.draw()
+
+    def net_frame(self, dt):
+        """Сетевой клиент: команды своего мага на сервер (60 раз в секунду), снимки и события
+        с сервера. Обе раскладки клавиатуры управляют своим магом. False — связь потеряна."""
+        self.time_acc += dt
+        steps = 0
+        while self.time_acc >= STEP and steps < MAX_STEPS_PER_FRAME:
+            self.time_acc -= STEP
+            steps += 1
+            held = self.held | self.pad_held()
+            dx = dy = 0
+            fire = melee = False
+            slot = None
+            for pid in PLAYER_IDS:
+                c, p = self.controls[pid], self.pending[pid]
+                dx += (c.right in held) - (c.left in held)
+                dy += (c.down in held) - (c.up in held)
+                fire, melee = fire or p.fire, melee or p.melee
+                slot = p.use_slot if p.use_slot is not None else slot
+            self.pending = {pid: Command() for pid in PLAYER_IDS}
+            self.net.send({"type": "cmd", "move": [max(-1, min(1, dx)), max(-1, min(1, dy))],
+                           "fire": fire, "melee": melee, "slot": slot})
+        if steps == MAX_STEPS_PER_FRAME:
+            self.time_acc = 0.0
+        for msg in self.net.recv():
+            if msg.get("type") == "state":
+                self.snap = msg["snap"]
+                self.handle_events([tuple(e) for e in msg["events"]])
+        self.tick_popups(dt)
+        return not self.net.closed
 
     # ------------------------------------------------------------------ события матча
 
@@ -243,7 +285,10 @@ class Game(ScreensMixin):
             self.state = "menu"
             return
         if self.snap["winner"] and sc == pygame.KSCAN_R:
-            self.restart()
+            if self.net:
+                self.net.send({"type": "restart"})
+            else:
+                self.restart()
         if not self.snap["winner"]:
             # нажатия копятся в команду и применяются в ближайшем такте матча
             for pid, c in self.controls.items():
@@ -258,6 +303,10 @@ class Game(ScreensMixin):
     def on_pad(self, iid, btn):
         """Кнопка геймпада -> соответствующая клавиша его игрока."""
         i = self.pads.index(iid)
+        if self.net:                  # клиент: только свой геймпад, управляет своим магом
+            if i != self.pad_index:
+                return
+            i = 0
         if i is None or i >= len(PLAYER_IDS):
             return
         c = self.controls[PLAYER_IDS[i]]
@@ -303,6 +352,10 @@ class Game(ScreensMixin):
         out = set()
         for i, pid in enumerate(PLAYER_IDS):
             c = self.controls[pid]
+            if self.net:
+                if i:
+                    break
+                i = self.pad_index
             dx, dy = self.pads.direction(i)
             if dy < 0:
                 out.add(c.up)
