@@ -53,7 +53,7 @@ def test_all_screens_draw_in_every_language(game, lang, lang_restore):
 
 def test_settings_menu_changes_and_saves_language(game, lang_restore):
     game.state = "menu"
-    game.on_key(pygame.KSCAN_7)                 # «Настройки»
+    game.on_key(pygame.KSCAN_4)                 # «Настройки»
     assert game.state == "settings"
     game.on_key(pygame.KSCAN_D)                 # язык → следующий
     assert i18n.get_lang() == "en"

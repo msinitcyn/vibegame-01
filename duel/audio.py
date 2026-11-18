@@ -35,8 +35,8 @@ class Audio:
                 print(f"Нет музыки «{k}» ({MUSIC[k]})")
         pygame.mixer.music.set_volume(MUSIC_VOLUME)
         pygame.mixer.music.set_endevent(MUSIC_END)
-        # у каждого игрока свой звук выстрела; shoot03.mp3 пока не используется
-        for who, fname in (("blue", "shoot01.mp3"), ("red", "shoot02.mp3")):
+        # у каждого игрока свой звук выстрела; shoot03.mp3 — звук ближнего удара
+        for who, fname in (("blue", "shoot01.mp3"), ("red", "shoot02.mp3"), ("melee", "shoot03.mp3")):
             try:
                 snd = pygame.mixer.Sound(SOUNDS_DIR / fname)
                 snd.set_volume(SHOOT_VOLUME)
@@ -71,6 +71,9 @@ class Audio:
         # событие приходит и когда мы сами меняем трек — тогда музыка уже снова играет
         if self.enabled and self.kind == "game" and not pygame.mixer.music.get_busy():
             self.play_next()
+
+    def melee(self):
+        self.shoot("melee")
 
     def shoot(self, who):
         snd = self.shots.get(who)

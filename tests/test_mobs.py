@@ -153,19 +153,6 @@ def test_mob_dies_after_three_hits(game):
     assert m not in game.mobs and len(game.mobs) == MOB_COUNT - 1
 
 
-def test_computer_shoots_mob_that_chases_it(game):
-    game.start("hard")
-    m = spawn(game)[0]
-    game.mobs = [m]
-    m.target = game.red
-    game.red.ammo = 100
-    for _ in range(int(8 / DT)):
-        game.update(DT)
-        if not game.mobs:
-            break
-    assert game.mobs == [], f"моб жив, hp={m.hp}, расстояние {math.hypot(m.x - game.red.x, m.y - game.red.y):.0f}"
-
-
 # --- артефакты только из мобов
 
 def test_no_artifacts_without_mob_kills(game):

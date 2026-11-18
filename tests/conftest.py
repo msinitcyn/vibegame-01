@@ -26,7 +26,7 @@ def game(_game):
     """Игра в режиме «два игрока», без геймпадов, с фиксированным random."""
     random.seed(0)
     _game.pads.pads = []
-    _game.start(None)
+    _game.start()
     _game.held = set()
     # пачки патронов и мобы сами не появляются — тесты создают их явно
     _game.ammo_timer = {p: 1e9 for p in _game.players}

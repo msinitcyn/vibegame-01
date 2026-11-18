@@ -1,4 +1,6 @@
 """Артефакты: применение, складывание эффектов, щит, двойники, стены, очищение."""
+import math
+
 import pytest
 
 from duel.config import (
@@ -12,7 +14,7 @@ from duel.config import (
 )
 from duel.entities import AmmoPack, Artifact, Bullet
 from duel.items import BAD_EFFECTS, HELP_SECTIONS, ITEMS, item_help, ring_color
-from tests.conftest import step
+from tests.conftest import DT, step
 
 
 def bullet_at(target, shooter, dx=200):
@@ -116,7 +118,7 @@ def test_heal_capped_by_max_hp(game):
 
 
 def test_heal_in_test_mode_not_capped_to_10(game):
-    game.start(None, TEST_HP)
+    game.start(TEST_HP)
     b = game.blue
     b.hp = 500
     game.apply_item(b, "heal")
@@ -244,16 +246,60 @@ def test_walls_do_not_replace_each_other(game):
     assert len(game.walls) == 2
 
 
-def test_wall_reflects_foe_bullet_and_absorbs_own(game):
+def test_wall_reflects_foe_bullet(game):
     from duel.config import BULLET_SPEED
     b, r = game.blue, game.red
     game.apply_item(b, "wall")
     w = game.walls[0]
-    game.bullets = [Bullet(400, b.y, -BULLET_SPEED, 0, r), Bullet(b.x + 30, b.y, BULLET_SPEED, 0, b)]
+    game.bullets = [Bullet(400, b.y, -BULLET_SPEED, 0, r)]
     step(game, 0.5)
     assert len(game.bullets) == 1
     reflected = game.bullets[0]
     assert reflected.owner is b and reflected.vx > 0 and reflected.x > w.x
+
+
+def test_own_bullet_passes_own_wall(game):
+    from duel.config import BULLET_SPEED
+    b = game.blue
+    game.apply_item(b, "wall")
+    w = game.walls[0]
+    shot = Bullet(b.x + 30, b.y, BULLET_SPEED, 0, b)
+    game.bullets = [shot]
+    step(game, 0.3)
+    assert game.bullets == [shot] and shot.x > w.x and shot.owner is b
+
+
+def mob_vs_wall(game, wall_y, mob_y, seconds):
+    """Синий за своей стеной (стена на высоте wall_y), моб идёт на синего с высоты mob_y."""
+    from duel.entities import Mob
+    b = game.blue
+    b.x, b.y = 80, wall_y
+    game.apply_item(b, "wall")
+    w = game.walls[0]
+    m = Mob(w.x + 120, mob_y, 50)
+    m.target = b
+    game.mobs = [m]
+    xs = []
+    for _ in range(int(seconds / DT)):
+        game.update(DT)
+        b.hp = 10
+        xs.append((m.x, m.y))
+    return w, m, xs
+
+
+def test_mob_cannot_pass_through_wall(game):
+    from duel.config import MOB_RADIUS, WALL_W
+    w, m, path = mob_vs_wall(game, 360, 360, 1.0)
+    for x, y in path:                           # ни в один момент моб не внутри стены
+        assert not (abs(x - w.x) < WALL_W / 2 + MOB_RADIUS and w.y1 - MOB_RADIUS < y < w.y2 + MOB_RADIUS)
+
+
+def test_mob_goes_around_wall(game):
+    """Моб упирается в стену, обходит её с торца и доходит до мага, пока стена ещё стоит."""
+    w, m, path = mob_vs_wall(game, 360, 360, 6.0)
+    b = game.blue
+    assert game.walls, "стена ещё должна стоять"
+    assert math.hypot(m.x - b.x, m.y - b.y) < b.radius + m.radius + 10   # дошёл до мага
 
 
 # --- двойники
@@ -370,3 +416,11 @@ def test_fastshots_also_for_clone_bullets(game):
     b = game.blue
     game.apply_item(b, "fastshots")
     assert game.bullet_speed(b) == pytest.approx(FAST_BULLET_FACTOR)  # пули двойников — тоже пули синего
+
+
+def test_mob_goes_around_wall_at_field_edge(game):
+    """Стена у верхнего края поля — моб обходит её снизу, а не упирается в край."""
+    from duel.config import TOP, WALL_H
+    w, m, path = mob_vs_wall(game, TOP + WALL_H / 2, TOP + 30, 6.0)
+    b = game.blue
+    assert math.hypot(m.x - b.x, m.y - b.y) < b.radius + m.radius + 10

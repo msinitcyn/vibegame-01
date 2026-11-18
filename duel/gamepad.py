@@ -15,6 +15,7 @@ PAD_ITEM_COLORS = ((255, 130, 200), (80, 220, 170), (255, 95, 95), (120, 165, 25
 # ромб, как кнопки на геймпаде: □ слева, △ сверху, ○ справа, ✕ снизу (смещения в ячейках)
 PAD_ITEM_LAYOUT = ((-1, 0), (0, -1), (1, 0), (0, 1))
 PAD_FIRE = "fire"                # условная кнопка: R1 или нажатый R2
+PAD_MELEE = "melee"              # условная кнопка: L1 или нажатый L2
 PAD_UP, PAD_DOWN = "up", "down"  # условные кнопки: стик вверх/вниз (для меню)
 
 
@@ -64,12 +65,15 @@ class Gamepads:
                 axis(B.CONTROLLER_BUTTON_DPAD_UP, B.CONTROLLER_BUTTON_DPAD_DOWN, B.CONTROLLER_AXIS_LEFTY))
 
     def axis_event(self, e):
-        """Превращает R2 и стик в «нажатия». Возвращает условную кнопку или None."""
-        if e.axis == pygame.CONTROLLER_AXIS_TRIGGERRIGHT:
+        """Превращает R2, L2 и стик в «нажатия». Возвращает условную кнопку или None."""
+        triggers = {pygame.CONTROLLER_AXIS_TRIGGERRIGHT: PAD_FIRE,
+                    pygame.CONTROLLER_AXIS_TRIGGERLEFT: PAD_MELEE}
+        if e.axis in triggers:
             on = e.value > 32767 * 0.5
-            was = self.trigger.get(e.instance_id, False)
-            self.trigger[e.instance_id] = on
-            return PAD_FIRE if on and not was else None
+            key = (e.instance_id, e.axis)
+            was = self.trigger.get(key, False)
+            self.trigger[key] = on
+            return triggers[e.axis] if on and not was else None
         if e.axis == pygame.CONTROLLER_AXIS_LEFTY:
             v = e.value / 32767
             pos = -1 if v < -PAD_DEAD else (1 if v > PAD_DEAD else 0)

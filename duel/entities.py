@@ -6,6 +6,8 @@ import random
 import pygame
 
 from .config import (
+    MELEE_FLASH,
+    MELEE_RANGE,
     MOB_KEEP_DISTANCE,
     MOB_RANGE,
     MOB_SHOT_COLOR,
@@ -171,7 +173,7 @@ class Unit:
 
 
 class Player(Unit):
-    def __init__(self, x, color, keys, shoot_keys, item_keys, direction, name, land):
+    def __init__(self, x, color, keys, shoot_keys, item_keys, direction, name, land, melee_keys=()):
         self.start_x = x
         self.color = color
         # клавиши движения: вверх, вниз, влево, вправо
@@ -179,6 +181,7 @@ class Player(Unit):
         self.land = land              # (x_min, x_max) своей земли — дальше маг не заходит
         self.shoot_keys = shoot_keys
         self.item_keys = item_keys    # клавиши ячеек инвентаря
+        self.melee_keys = melee_keys  # клавиши ближнего удара
         self.dir = direction          # +1 стреляет вправо, -1 влево
         self.name = name
         self.sprite = "mage_blue" if direction > 0 else "mage_red"
@@ -190,6 +193,8 @@ class Player(Unit):
         self.hp = self.max_hp = hp
         self.ammo = START_AMMO
         self.cooldown = 0.0
+        self.melee_cd = 0.0           # перезарядка ближнего удара
+        self.melee_flash = 0.0        # сколько ещё виден взмах
         self.reset_effects()
         self.items = [None] * INVENTORY_SIZE
         self.queue = []               # собранные артефакты, ждущие свободной ячейки
@@ -218,6 +223,8 @@ class Player(Unit):
         self.tick_effects(dt)
         self.cooldown = max(0.0, self.cooldown - dt)
         self.hit_flash = max(0.0, self.hit_flash - dt)
+        self.melee_cd = max(0.0, self.melee_cd - dt)
+        self.melee_flash = max(0.0, self.melee_flash - dt)
 
         self.moving = self.moving_x = 0
         if not self.frozen:
@@ -251,6 +258,14 @@ class Player(Unit):
     def draw(self, surf):
         pos = (int(self.x), int(self.y))
         draw_unit(surf, self.sprite, pos, self.radius, self.dir, white=self.hit_flash > 0)
+        if self.melee_flash > 0:
+            # взмах: светлое кольцо на дальности удара, тает
+            k = self.melee_flash / MELEE_FLASH
+            ring = pygame.Surface((2 * (int(self.radius) + MELEE_RANGE) + 4,) * 2, pygame.SRCALPHA)
+            c = ring.get_width() // 2
+            pygame.draw.circle(ring, (*self.color, int(220 * k)), (c, c), int(self.radius) + MELEE_RANGE, 4)
+            pygame.draw.circle(ring, (255, 255, 255, int(160 * k)), (c, c), int(self.radius) + MELEE_RANGE - 6, 2)
+            surf.blit(ring, ring.get_rect(center=pos))
         self.draw_effects(surf)
 
 
@@ -396,6 +411,7 @@ class Mob:
         self.hp = self.max_hp = hp
         self.ranged = ranged
         self.shot_cd = MOB_SHOT_COOLDOWN
+        self.detour = None            # обход стены: (стена, высота торца, куда проходить)
         self.radius = MOB_RADIUS
         self.target = None            # игрок, на которого злится
         self.hit_cd = 0.0
@@ -403,14 +419,14 @@ class Mob:
         self.facing = 1
         self.alive = True
 
-    def hurt(self, attacker):
-        self.hp -= 1
+    def hurt(self, attacker, damage=1):
+        self.hp -= damage
         self.flash = 0.12
         self.target = attacker
         if self.hp <= 0:
             self.alive = False
 
-    def update(self, dt, speed=1.0):
+    def update(self, dt, speed=1.0, walls=()):
         """Двигается к цели (speed — множитель скорости от «быстрых пуль»/«замедления»).
         Возвращает игрока, которого ударил в этом кадре, иначе None."""
         self.flash = max(0.0, self.flash - dt)
@@ -430,16 +446,49 @@ class Mob:
             dx, dy = spot_x - self.x, p.y - self.y
             dist = math.hypot(dx, dy)
         if dist > 0:
-            norm = math.hypot(dx, dy)
             step = min(MOB_SPEED * speed * dt, dist)
-            dx, dy = dx / norm * dist, dy / norm * dist
-            self.x += dx / dist * step
-            self.y += dy / dist * step
+            norm = math.hypot(dx, dy)
+            self.move_around(dx / norm * step, dy / norm * step, walls)
         self.facing = -p.dir                  # лицом к игроку
         if math.hypot(p.x - self.x, p.y - self.y) <= reach + 1 and self.hit_cd == 0:
             self.hit_cd = MOB_HIT_COOLDOWN
             return p
         return None
+
+    def move_around(self, dx, dy, walls):
+        """Шаг (dx, dy), но сквозь стены нельзя. Упёрся под углом — скользит вдоль стены;
+        упёрся лбом — обходит: вдоль стены до ближнего торца, потом мимо неё, и снова к цели."""
+        r = self.radius
+        step = math.hypot(dx, dy)
+        if self.detour:
+            w, end, side = self.detour
+            if w not in walls:
+                self.detour = None            # стена исчезла — обход больше не нужен
+            elif abs(self.y - end) > 0.5:
+                self.y += max(-step, min(step, end - self.y))      # к торцу
+                return
+            else:
+                self.x += side * step         # мимо торца
+                if (self.x - w.x) * side > WALL_W / 2 + r:
+                    self.detour = None
+                return
+        nx, ny = self.x + dx, self.y + dy
+        blocking = [w for w in walls if w.blocks(nx, ny, r) and not w.blocks(self.x, self.y, r)]
+        if not blocking:
+            self.x, self.y = nx, ny           # свободно (или стену поставили прямо на моба — выходит)
+            return
+        if dx and not any(w.blocks(nx, self.y, r) for w in walls):
+            self.x = nx                       # скольжение по горизонтали
+            return
+        if abs(dy) > 0.3 * step and not any(w.blocks(self.x, ny, r) for w in walls):
+            self.y = ny                       # скольжение по вертикали (если движется вдоль стены)
+            return
+        w = blocking[0]                       # упёрся лбом — обход через ближний торец
+        ends = [e for e in (w.y1 - r - 1, w.y2 + r + 1) if TOP + r <= e <= BOTTOM - r]
+        if not ends:                          # стена во всю высоту — обойти нельзя, стоим
+            return
+        end = min(ends, key=lambda e: abs(self.y - e))   # ближний торец, до которого можно дойти
+        self.detour = (w, end, 1 if w.x > self.x else -1)
 
     def shoot(self, dt):
         """Дальнобойный злой моб: снаряд в цель, если она не дальше MOB_RANGE и прошла
@@ -506,7 +555,7 @@ class Wall:
     """Стена перед игроком.
 
     Сторона к сопернику — зеркало: пули соперника отражаются и становятся пулями владельца.
-    Сторона к владельцу — чёрная дыра: пули владельца поглощаются.
+    Свои выстрелы владельца пролетают насквозь. Мобы сквозь стену не проходят (см. Mob).
     """
 
     def __init__(self, owner):
@@ -523,13 +572,15 @@ class Wall:
             return
         back = -self.owner.dir                    # знак стороны владельца
         mirror_face = self.x - back * WALL_W / 2  # поверхность зеркала
-        black_face = self.x + back * WALL_W / 2   # поверхность чёрной дыры
-        if (prev_x - black_face) * back >= 0 > (b.x - black_face) * back:
-            b.alive = False                       # своя пуля — поглощена
-        elif (prev_x - mirror_face) * back <= 0 < (b.x - mirror_face) * back:
+        # отражаются только пули, пришедшие со стороны соперника; свои пролетают насквозь
+        if (prev_x - mirror_face) * back <= 0 < (b.x - mirror_face) * back:
             b.x = 2 * mirror_face - b.x           # отражаем назад
             b.vx = -b.vx
             b.owner = self.owner                  # теперь это наша пуля
+
+    def blocks(self, x, y, r):
+        """Пересекает ли круг (x, y, r) стену — для мобов, которым сквозь неё нельзя."""
+        return abs(x - self.x) < WALL_W / 2 + r and self.y1 - r < y < self.y2 + r
 
     def draw(self, surf):
         if self.life < 1.5 and int(self.life * 8) % 2 == 0:
@@ -537,11 +588,10 @@ class Wall:
         h = self.y2 - self.y1
         half = WALL_W // 2
         back = -self.owner.dir
-        black_x = self.x if back > 0 else self.x - half
+        back_x = self.x if back > 0 else self.x - half
         mirror_x = self.x - half if back > 0 else self.x
-        # чёрная сторона с фиолетовым ореолом
-        pygame.draw.rect(surf, (60, 0, 90), (black_x + back * 2 - 1, self.y1 - 2, half + 2, h + 4))
-        pygame.draw.rect(surf, (0, 0, 0), (black_x, self.y1, half, h))
+        # тыльная сторона — тёмная сталь (свои выстрелы через неё проходят)
+        pygame.draw.rect(surf, (54, 58, 74), (back_x, self.y1, half, h))
         # зеркальная сторона
         pygame.draw.rect(surf, (225, 235, 255), (mirror_x, self.y1, half, h))
         pygame.draw.rect(surf, self.owner.color, (mirror_x, self.y1, half, h), 1)

@@ -1,45 +1,49 @@
-"""Партии целиком: компьютер, музыка, отрисовка всех экранов."""
+"""Партии целиком: случайные игроки, музыка, отрисовка всех экранов."""
 import random
 
 import pytest
 
-from duel.ai import AI, AI_LEVELS
 from duel.items import ITEMS
 from tests.conftest import DT
 
 
-@pytest.mark.parametrize("level", list(AI_LEVELS))
-def test_computer_plays_without_errors(game, level):
-    """Компьютер против компьютера, с артефактами и патронами, ~1 минута игры."""
-    game.start(level)
-    bot = AI(game, game.blue, level)
-    for i in range(3600):
-        bot.update(DT)
-        game.held = bot.keys()
-        if i % 120 == 0:
-            game.apply_item(game.blue, random.choice(list(ITEMS)))
+class RandomBot:
+    """Случайный ввод для одного мага: ходит, стреляет, бьёт, тратит артефакты."""
+
+    def __init__(self, game, player):
+        self.game, self.p = game, player
+        self.keys = set()
+        self.turn = 0.0
+
+    def step(self):
+        p = self.p
+        self.turn -= DT
+        if self.turn <= 0:
+            self.turn = random.uniform(0.2, 0.8)
+            self.keys = {k for k in (p.up_key, p.down_key, p.left_key, p.right_key) if random.random() < 0.35}
+        if random.random() < 0.12:
+            self.game.fire(p)
+        if random.random() < 0.05:
+            self.game.melee(p)
+        if random.random() < 0.02:
+            self.game.use_item(p, random.randrange(4))
+        return self.keys
+
+
+def test_random_players_play_without_errors(game):
+    """Два случайных игрока, с мобами, артефактами и патронами, ~3 минуты игры."""
+    random.seed(7)
+    game.start()
+    bots = [RandomBot(game, p) for p in game.players]
+    for i in range(60 * 180):
+        game.held = set().union(*(b.step() for b in bots))
+        if i % 300 == 0:
+            game.apply_item(random.choice(game.players), random.choice(list(ITEMS)))
         game.update(DT)
+        if i % 100 == 0:
+            game.draw()
         if game.winner:
             game.restart()
-            bot = AI(game, game.blue, level)
-
-
-def test_hard_beats_easy(game):
-    """8 отдельных партий: сложный компьютер (справа) должен выиграть у лёгкого хотя бы 6."""
-    wins = 0
-    for seed in range(8):
-        random.seed(seed)
-        game.start("hard")
-        bot = AI(game, game.blue, "easy")
-        for _ in range(60 * 60 * 5):            # до 5 минут игрового времени
-            bot.update(DT)
-            game.held = bot.keys()
-            game.update(DT)
-            if game.winner:
-                break
-        assert game.winner, f"партия {seed} не закончилась за 5 минут"
-        wins += game.winner is game.red
-    assert wins >= 6, f"сложный выиграл только {wins} из 8"
 
 
 def test_all_screens_draw(game):
@@ -61,24 +65,9 @@ def test_music_follows_screen(game):
     game.state = "menu"
     game.update_music()
     assert a.kind == "menu" and a.track.name.startswith("menu-")
-    game.start(None)
+    game.start()
     game.update_music()
     assert a.kind == "game" and a.track.name.startswith("background-")
-
-
-def test_computer_walks_to_artifact_anywhere_on_its_land(game):
-    from duel.entities import Artifact
-    game.start("hard")
-    game.next_wave = 1e9
-    game.ammo_timer = {p: 1e9 for p in game.players}
-    r = game.red
-    art = Artifact(r.land[0] + 40, "speed", 150)
-    game.artifacts = [art]
-    for _ in range(int(5 / DT)):
-        game.update(DT)
-        if not game.artifacts:
-            break
-    assert game.artifacts == [] and "speed" in r.items
 
 
 def test_ammo_packs_spawn_on_own_land(game):
@@ -88,22 +77,3 @@ def test_ammo_packs_spawn_on_own_land(game):
     for p in game.players:
         mine = [a for a in game.ammo_packs if p.land[0] <= a.x <= p.land[1]]
         assert len(mine) == 1
-
-
-def test_computer_dodges_mob_shot(game):
-    """Снаряд моба летит в красного (сложный компьютер) — тот уходит с линии."""
-    from duel.entities import MobShot
-    game.start("hard")
-    game.next_wave = 1e9
-    game.ammo_timer = {p: 1e9 for p in game.players}
-    r = game.red
-    r.x, r.y = 900, 400
-    game.blue.y = 100                            # соперник далеко по высоте — не мешает
-    hits = 0
-    for _ in range(5):
-        r.hp = 10
-        game.mob_shots = [MobShot(r.x - 250, r.y, r)]
-        for _ in range(int(1.5 / DT)):
-            game.update(DT)
-        hits += r.hp < 10
-    assert hits <= 1, f"компьютер не увернулся {hits} раз из 5"

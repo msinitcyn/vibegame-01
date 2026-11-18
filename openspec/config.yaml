@@ -6,13 +6,13 @@ context: |
   Keep OpenSpec structural headings and SHALL/MUST keywords in English.
 
   Project: «Дуэль шариков» — 2D-дуэль двух магов (синий/ледяной слева, красный/огненный
-  справа) на Python 3.12 + pygame 2.6. Два игрока на одном компьютере (клавиатура и
-  геймпады PlayStation) или против компьютера (3 уровня). Артефакты, инвентарь с очередью,
+  справа) на Python 3.12 + pygame 2.6. Только два живых игрока на одном компьютере
+  (клавиатура и геймпады PlayStation), без компьютерного соперника. Артефакты, инвентарь с очередью,
   волны мобов в центральной полосе, патроны, пиксельная графика, музыка.
 
   Code layout: main.py — запуск; пакет duel/: config.py (все числа и цвета баланса),
   items.py (артефакты), icons.py, entities.py (игрок, двойник, пуля, стена, моб…),
-  ai.py, gamepad.py, audio.py, screens.py (отрисовка), game.py (цикл и правила),
+  gamepad.py, audio.py, screens.py (отрисовка), game.py (цикл и правила),
   i18n.py (все тексты на ru/en/fi), settings.py, sprites.py; assets/ — музыка, звуки,
   спрайты (PNG редактируемые); tools/make_sprites.py; tests/ — pytest.
 

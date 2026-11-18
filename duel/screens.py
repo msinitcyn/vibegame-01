@@ -3,6 +3,8 @@
 import pygame
 
 from .config import (
+    MELEE_COOLDOWN,
+    MELEE_DAMAGE,
     AMMO_COLOR,
     HUD_CENTER,
     MOB_IDLE_COLOR,
@@ -54,7 +56,7 @@ class ScreensMixin:
             pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
             txt = self.font.render(f"{i + 1}.  {self.menu_label(i)}", True, WHITE if sel else GREY)
             s.blit(txt, txt.get_rect(center=rect.center))
-        hints = [(tr("menu.hint", n=len(self.menu)), GREY), (tr("menu.hint_vs"), GREY)]
+        hints = [(tr("menu.hint", n=len(self.menu)), GREY)]
         n = len(self.pads.pads)
         if n:
             roles = [tr("pads.blue"), tr("pads.red")]
@@ -129,9 +131,10 @@ class ScreensMixin:
         s = self.screen
         numbers = dict(queue=QUEUE_SHOWN, weapon=f"{WEAPON_TIME:.0f}", wmax=WEAPON_MAX,
                        ammo=START_AMMO, pack=AMMO_PACK, every=f"{MOB_EVERY:.0f}",
-                       mmax=MOB_MAX, mhp=MOB_MAX_HP, ranged=MOB_RANGED_EVERY, range=MOB_RANGE)
+                       mmax=MOB_MAX, mhp=MOB_MAX_HP, ranged=MOB_RANGED_EVERY, range=MOB_RANGE,
+                       melee=MELEE_DAMAGE, melee_cd=f"{MELEE_COOLDOWN:g}".replace(".", tr("decimal")))
         x0, y, width = 80, 70, WIDTH - 160
-        for i in range(1, 9):
+        for i in range(1, 10):
             lines = self.wrap(tr(f"note.{i}", **numbers), width, self.small)
             for j, line in enumerate(lines):
                 prefix = "•  " if j == 0 else "    "
@@ -233,8 +236,7 @@ class ScreensMixin:
         self.draw_wave_timer()
         for p in self.players:
             left = p is self.blue
-            is_ai = bool(self.ai and p is self.ai.me)
-            has_pad = not is_ai and self.players.index(p) < len(self.pads.pads)
+            has_pad = self.players.index(p) < len(self.pads.pads)
             rects, x0, inv_w = self.inventory_rects(left, has_pad)
             for i, (kind, rect) in enumerate(zip(p.items, rects)):
                 pygame.draw.rect(s, (22, 24, 34), rect, border_radius=6)
@@ -243,8 +245,6 @@ class ScreensMixin:
                     draw_icon(s, kind, rect.center, rect.w // 2 - 4)
                     if "noitems" in p.effects and kind != "cleanse":
                         pygame.draw.line(s, ITEMS["foe_noitems"][1], rect.bottomleft, rect.topright, 2)
-                if is_ai:
-                    continue              # у компьютера клавиш нет
                 if has_pad:
                     color = PAD_ITEM_COLORS[i]
                     if kind:              # значок кнопки в углу

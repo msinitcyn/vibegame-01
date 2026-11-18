@@ -23,6 +23,10 @@ from .config import (
     HEIGHT,
     MAX_CLONES,
     MAX_HP,
+    MELEE_COOLDOWN,
+    MELEE_DAMAGE,
+    MELEE_FLASH,
+    MELEE_RANGE,
     MOB_COUNT,
     MOB_DAMAGE,
     MOB_DELAY,
@@ -52,8 +56,7 @@ from .items import BAD_EFFECTS, INSTANT_ITEMS, ITEMS, item_name, ring_color
 from .i18n import LANGS, get_lang, set_lang, t
 from . import settings
 from .entities import AmmoPack, Artifact, Clone, Mob, Player, Wall
-from .ai import AI, AI_LEVELS
-from .gamepad import Gamepads, PAD_DOWN, PAD_FIRE, PAD_ITEM_BUTTONS, PAD_UP
+from .gamepad import Gamepads, PAD_DOWN, PAD_FIRE, PAD_ITEM_BUTTONS, PAD_MELEE, PAD_UP
 from .audio import Audio
 from .screens import ScreensMixin
 from .sprites import reload_all
@@ -82,33 +85,29 @@ class Game(ScreensMixin):
         self.blue = Player(60, BLUE, (pygame.KSCAN_W, pygame.KSCAN_S, pygame.KSCAN_A, pygame.KSCAN_D),
                            (pygame.KSCAN_SPACE,),
                            (pygame.KSCAN_1, pygame.KSCAN_2, pygame.KSCAN_3, pygame.KSCAN_4),
-                           1, t("name.blue"), BLUE_LAND)
+                           1, t("name.blue"), BLUE_LAND, (pygame.KSCAN_E,))
         self.red = Player(WIDTH - 60, RED,
                           (pygame.KSCAN_UP, pygame.KSCAN_DOWN, pygame.KSCAN_LEFT, pygame.KSCAN_RIGHT),
                           (pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER),
                           (pygame.KSCAN_9, pygame.KSCAN_0, pygame.KSCAN_MINUS, pygame.KSCAN_EQUALS),
-                          -1, t("name.red"), RED_LAND)
+                          -1, t("name.red"), RED_LAND, (pygame.KSCAN_RSHIFT,))
         self.key_names = {self.blue: "1234", self.red: "90-="}
         self.held = set()             # зажатые физические клавиши
         self.pads = Gamepads()
         self.players = (self.blue, self.red)
-        # пункты меню: (действие, уровень компьютера); подписи — menu_label()
-        self.menu = [("play", None)] + [("play", lvl) for lvl in AI_LEVELS] + \
-            [("test", None), ("help", None), ("settings", None)]
+        # пункты меню; подписи — menu_label()
+        self.menu = ["play", "test", "help", "settings"]
         self.menu_index = 0
         self.settings_rows = ["lang", "back"]
         self.help_page = 0
         self.settings_index = 0
         self.state = "menu"
-        self.ai_level = None          # None — два игрока
         self.start_hp = MAX_HP
         self.restart()
 
-    def start(self, level, hp=MAX_HP):
-        """level=None — два игрока, иначе уровень компьютера за правого."""
-        self.ai_level = level
+    def start(self, hp=MAX_HP):
+        """Новая партия двух игроков (в тестовом режиме — с другим числом жизней)."""
         self.start_hp = hp
-        self.red.name = t("name.cpu") if level else t("name.red")
         self.state = "play"
         self.held.clear()
         self.restart()
@@ -135,7 +134,6 @@ class Game(ScreensMixin):
         self.wave_interval = MOB_EVERY
         self.winner = None
         self.win_time = 0
-        self.ai = AI(self, self.red, self.ai_level) if self.ai_level else None
 
     def run(self):
         while True:
@@ -208,9 +206,11 @@ class Game(ScreensMixin):
         if self.winner and sc == pygame.KSCAN_R:
             self.restart()
         if not self.winner:
-            for p in self.humans():
+            for p in self.players:
                 if sc in p.shoot_keys:
                     self.fire(p)
+                if sc in p.melee_keys:
+                    self.melee(p)
                 if sc in p.item_keys:
                     self.use_item(p, p.item_keys.index(sc))
 
@@ -252,6 +252,8 @@ class Game(ScreensMixin):
                 self.on_key(B.KSCAN_R)
         elif btn in (B.CONTROLLER_BUTTON_RIGHTSHOULDER, PAD_FIRE):
             self.on_key(p.shoot_keys[0])
+        elif btn in (B.CONTROLLER_BUTTON_LEFTSHOULDER, PAD_MELEE):
+            self.on_key(p.melee_keys[0])
         elif btn in PAD_ITEM_BUTTONS:
             self.on_key(p.item_keys[PAD_ITEM_BUTTONS.index(btn)])
 
@@ -281,7 +283,7 @@ class Game(ScreensMixin):
         settings.save(self.settings)
         pygame.display.set_caption(t("title"))
         self.blue.name = t("name.blue")
-        self.red.name = t("name.cpu") if self.ai_level else t("name.red")
+        self.red.name = t("name.red")
 
     def pad_held(self):
         """Направления с геймпадов в виде «зажатых» клавиш игроков."""
@@ -302,15 +304,11 @@ class Game(ScreensMixin):
         in_menu = self.state in ("menu", "help", "settings")
         self.audio.music("menu" if in_menu else "game")
 
-    def humans(self):
-        return (self.blue,) if self.ai else self.players
-
     def menu_key(self, sc):
         up = (pygame.KSCAN_W, pygame.KSCAN_UP)
         down = (pygame.KSCAN_S, pygame.KSCAN_DOWN)
         ok = (pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER, pygame.KSCAN_SPACE)
-        digits = (pygame.KSCAN_1, pygame.KSCAN_2, pygame.KSCAN_3, pygame.KSCAN_4, pygame.KSCAN_5,
-                  pygame.KSCAN_6, pygame.KSCAN_7)
+        digits = (pygame.KSCAN_1, pygame.KSCAN_2, pygame.KSCAN_3, pygame.KSCAN_4)
         if sc in up:
             self.menu_index = (self.menu_index - 1) % len(self.menu)
         elif sc in down:
@@ -322,14 +320,11 @@ class Game(ScreensMixin):
             self.menu_select()
 
     def menu_label(self, i):
-        action, level = self.menu[i]
-        if action == "play":
-            return t("menu.vs", level=t(f"level.{level}")) if level else t("menu.two")
-        return {"test": t("menu.test", hp=TEST_HP), "help": t("menu.help"),
-                "settings": t("menu.settings")}[action]
+        return {"play": t("menu.two"), "test": t("menu.test", hp=TEST_HP), "help": t("menu.help"),
+                "settings": t("menu.settings")}[self.menu[i]]
 
     def menu_select(self):
-        action, level = self.menu[self.menu_index]
+        action = self.menu[self.menu_index]
         if action == "help":
             self.state = "help"
             self.help_page = 0
@@ -337,9 +332,9 @@ class Game(ScreensMixin):
             self.state = "settings"
             self.settings_index = 0
         elif action == "test":
-            self.start(None, TEST_HP)
+            self.start(TEST_HP)
         else:
-            self.start(level)
+            self.start()
 
     def fire(self, p):
         if p.ammo <= 0 and p.can_fire:
@@ -352,6 +347,18 @@ class Game(ScreensMixin):
         if shots:
             self.audio.shoot("blue" if p is self.blue else "red")
             self.bullets.extend(shots)
+
+    def melee(self, p):
+        """Ближний удар: MELEE_DAMAGE всем мобам рядом. Магов, двойников и пули не задевает;
+        патроны не тратит, работает и под заморозкой, «не стреляет», запретом артефактов."""
+        if p.melee_cd > 0:
+            return
+        p.melee_cd = MELEE_COOLDOWN
+        p.melee_flash = MELEE_FLASH
+        self.audio.melee()
+        for m in self.mobs:
+            if m.alive and math.hypot(m.x - p.x, m.y - p.y) <= p.radius + m.radius + MELEE_RANGE:
+                m.hurt(p, MELEE_DAMAGE)       # злится на ударившего; смерть — общим порядком
 
     def popup(self, text, p, color):
         self.popups.append([text, p.x + p.dir * 90, p.y, POPUP_TIME, color])
@@ -405,12 +412,9 @@ class Game(ScreensMixin):
         self.popup(item_name(kind) + "!", target, ITEMS[kind][1])
 
     def update(self, dt):
-        if self.ai:
-            self.ai.update(dt)
         held = self.held | self.pad_held()
         for p in self.players:
-            keys = self.ai.keys() if self.ai and p is self.ai.me else held
-            p.update(dt, keys)
+            p.update(dt, held)
         self.update_mobs(dt)
 
         # артефакты сами не появляются — только выпадают из убитых мобов (drop_artifact)
@@ -532,7 +536,9 @@ class Game(ScreensMixin):
                 self.wave_interval = max(MOB_EVERY_MIN, self.wave_interval - MOB_SPEEDUP)
             self.next_wave += self.wave_interval
         for m in self.mobs:
-            p = m.update(dt, self.chaser_speed(m.target) if m.target else 1.0)
+            if not m.alive:
+                continue                      # добит ударом между кадрами — уберётся ниже
+            p = m.update(dt, self.chaser_speed(m.target) if m.target else 1.0, self.walls)
             if p and not p.shield_absorb():   # щит гасит и удар моба
                 p.hp -= MOB_DAMAGE
                 p.hit_flash = 0.12

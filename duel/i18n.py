@@ -29,25 +29,19 @@ TEXTS = {
         "title": "Дуэль шариков",
         "name.blue": "Синий",
         "name.red": "Красный",
-        "name.cpu": "Компьютер",
 
         "menu.two": "Два игрока",
-        "menu.vs": "Против компьютера: {level}",
-        "level.easy": "легко",
-        "level.medium": "средне",
-        "level.hard": "сложно",
         "menu.test": "Тестовый режим: по {hp} жизней",
         "menu.help": "Артефакты: что делает каждый",
         "menu.settings": "Настройки",
         "menu.hint": "W/S или ↑/↓ — выбор,  Enter/Пробел или 1-{n} — выбрать,  Esc — выход",
-        "menu.hint_vs": "Против компьютера: вы играете синим слева (W/A/S/D, Пробел, 1-4)",
         "pads.none": "Геймпады не подключены",
         "pads.list": "Геймпады: {list}",
         "pads.blue": "синий",
         "pads.red": "красный",
         "pads.spare": "запасной",
-        "pads.hint": "Геймпад: стик/крестовина — движение, R1/R2 — огонь, □ △ ○ ✕ — артефакты, "
-                     "Options — меню",
+        "pads.hint": "Геймпад: стик/крестовина — движение, R1/R2 — огонь, L1/L2 — удар, "
+                     "□ △ ○ ✕ — артефакты, Options — меню",
 
         "settings.title": "Настройки",
         "settings.lang": "Язык: {lang}",
@@ -76,6 +70,8 @@ TEXTS = {
                   "дальнобойный (зелёный, с кристаллом): держится на расстоянии и стреляет "
                   "не дальше {range} px.",
         "note.8": "Дебаффы снимает только время или очищение.",
+        "note.9": "Ближний удар (E / правый Shift / L1, L2) — только по мобам рядом: {melee} урона, "
+                  "без патронов, раз в {melee_cd} с.",
 
         "wave.title": "волна {n}",
         "wave.in": "через {s} с",
@@ -134,7 +130,7 @@ TEXTS = {
                        "живут до {clone_time} с.",
         "help.breaker": "{breaker} с твои пули сбивают встречные пули соперника.",
         "help.wall": "Стена перед тобой на {wall_time} с: пули соперника отражаются и становятся "
-                     "твоими, свои — поглощаются.",
+                     "твоими, свои пролетают насквозь. Мобы сквозь неё не проходят.",
     },
 
     # ------------------------------------------------------------------ English
@@ -142,24 +138,19 @@ TEXTS = {
         "title": "Ball Duel",
         "name.blue": "Blue",
         "name.red": "Red",
-        "name.cpu": "Computer",
 
         "menu.two": "Two players",
-        "menu.vs": "Vs computer: {level}",
-        "level.easy": "easy",
-        "level.medium": "medium",
-        "level.hard": "hard",
         "menu.test": "Test mode: {hp} lives each",
         "menu.help": "Artifacts: what each one does",
         "menu.settings": "Settings",
         "menu.hint": "W/S or ↑/↓ — move,  Enter/Space or 1-{n} — select,  Esc — quit",
-        "menu.hint_vs": "Vs computer: you play blue on the left (W/A/S/D, Space, 1-4)",
         "pads.none": "No gamepads connected",
         "pads.list": "Gamepads: {list}",
         "pads.blue": "blue",
         "pads.red": "red",
         "pads.spare": "spare",
-        "pads.hint": "Gamepad: stick/D-pad — move, R1/R2 — fire, □ △ ○ ✕ — artifacts, Options — menu",
+        "pads.hint": "Gamepad: stick/D-pad — move, R1/R2 — fire, L1/L2 — melee, □ △ ○ ✕ — artifacts, "
+                     "Options — menu",
 
         "settings.title": "Settings",
         "settings.lang": "Language: {lang}",
@@ -187,6 +178,8 @@ TEXTS = {
                   "at most {mmax} mobs with {mhp} lives, then waves come faster. One mob in {ranged} "
                   "is ranged (green, with a crystal): it keeps its distance and shoots up to {range} px.",
         "note.8": "Debuffs are removed only by time or cleanse.",
+        "note.9": "Melee (E / right Shift / L1, L2) hits only nearby mobs: {melee} damage, "
+                  "no ammo, once every {melee_cd} s.",
 
         "wave.title": "wave {n}",
         "wave.in": "in {s} s",
@@ -244,7 +237,7 @@ TEXTS = {
                        "and live up to {clone_time} s.",
         "help.breaker": "For {breaker} s your bullets knock down incoming opponent bullets.",
         "help.wall": "A wall in front of you for {wall_time} s: opponent bullets bounce back "
-                     "and become yours, your own are absorbed.",
+                     "and become yours, your own fly through. Mobs can't pass it.",
     },
 
     # ------------------------------------------------------------------ suomi
@@ -252,25 +245,19 @@ TEXTS = {
         "title": "Pallojen kaksintaistelu",
         "name.blue": "Sininen",
         "name.red": "Punainen",
-        "name.cpu": "Tietokone",
 
         "menu.two": "Kaksi pelaajaa",
-        "menu.vs": "Tietokonetta vastaan: {level}",
-        "level.easy": "helppo",
-        "level.medium": "keskitaso",
-        "level.hard": "vaikea",
         "menu.test": "Testitila: {hp} elämää kummallekin",
         "menu.help": "Artefaktit: mitä kukin tekee",
         "menu.settings": "Asetukset",
         "menu.hint": "W/S tai ↑/↓ — liiku,  Enter/välilyönti tai 1-{n} — valitse,  Esc — lopeta",
-        "menu.hint_vs": "Tietokonetta vastaan: pelaat sinisellä vasemmalla (W/A/S/D, välilyönti, 1-4)",
         "pads.none": "Peliohjaimia ei ole kytketty",
         "pads.list": "Peliohjaimet: {list}",
         "pads.blue": "sininen",
         "pads.red": "punainen",
         "pads.spare": "vara",
-        "pads.hint": "Peliohjain: tikku/ristiohjain — liiku, R1/R2 — ammu, □ △ ○ ✕ — artefaktit, "
-                     "Options — valikko",
+        "pads.hint": "Peliohjain: tikku/ristiohjain — liiku, R1/R2 — ammu, L1/L2 — lyönti, "
+                     "□ △ ○ ✕ — artefaktit, Options — valikko",
 
         "settings.title": "Asetukset",
         "settings.lang": "Kieli: {lang}",
@@ -299,6 +286,8 @@ TEXTS = {
                   "hirviö ampuu kaukaa (vihreä, kristallipäinen): pysyy etäällä ja ampuu enintään "
                   "{range} px päähän.",
         "note.8": "Heikennykset poistuvat vain ajan kanssa tai puhdistuksella.",
+        "note.9": "Lähilyönti (E / oikea Shift / L1, L2) osuu vain lähellä oleviin hirviöihin: "
+                  "{melee} vahinkoa, ilman ammuksia, kerran {melee_cd} s välein.",
 
         "wave.title": "aalto {n}",
         "wave.in": "{s} s päästä",
@@ -357,6 +346,6 @@ TEXTS = {
                        "ja elävät enintään {clone_time} s.",
         "help.breaker": "{breaker} s luotisi torjuvat vastaan tulevat vastustajan luodit.",
         "help.wall": "Muuri edessäsi {wall_time} s: vastustajan luodit kimpoavat takaisin "
-                     "ja muuttuvat sinun luodeiksesi, omasi imeytyvät.",
+                     "ja muuttuvat sinun luodeiksesi, omasi lentävät läpi. Hirviöt eivät pääse läpi.",
     },
 }

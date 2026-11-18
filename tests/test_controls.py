@@ -69,16 +69,16 @@ def test_keyboard_fire_and_items(game):
 def test_menu_keys(game):
     game.state = "menu"
     game.menu_index = 0
-    game.on_key(pygame.KSCAN_S)
+    assert game.menu == ["play", "test", "help", "settings"]   # режимов против компьютера нет
     game.on_key(pygame.KSCAN_RETURN)
-    assert game.state == "play" and game.ai_level == "easy"
+    assert game.state == "play" and game.blue.hp == 10
     game.on_key(pygame.KSCAN_ESCAPE)
     assert game.state == "menu"
-    game.on_key(pygame.KSCAN_6)
+    game.on_key(pygame.KSCAN_3)
     assert game.state == "help"
     game.on_key(pygame.KSCAN_ESCAPE)
     assert game.state == "menu"
-    game.on_key(pygame.KSCAN_5)
+    game.on_key(pygame.KSCAN_2)
     assert game.state == "play" and game.blue.hp == 1000
 
 
@@ -129,20 +129,14 @@ def test_pad_menu_navigation(game):
     game.menu_index = 0
     game.on_pad(101, pygame.CONTROLLER_BUTTON_DPAD_DOWN)
     game.on_pad(101, pygame.CONTROLLER_BUTTON_A)
-    assert game.state == "play" and game.ai_level == "easy"
+    assert game.state == "play" and game.blue.hp == 1000      # второй пункт — тестовый режим
     game.on_pad(100, pygame.CONTROLLER_BUTTON_START)
     assert game.state == "menu"
 
 
-def test_vs_computer_ignores_right_player_keys(game):
-    game.start("easy")
-    game.on_key(pygame.KSCAN_RETURN)
-    assert game.bullets == []
-
-
 def test_help_pages(game):
     game.state = "menu"
-    game.on_key(pygame.KSCAN_6)
+    game.on_key(pygame.KSCAN_3)
     assert game.state == "help" and game.help_page == 0
     game.on_key(pygame.KSCAN_D)
     assert game.help_page == 1
