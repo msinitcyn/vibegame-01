@@ -26,8 +26,8 @@
 
 ## 5. Документация и итог
 
-- [ ] 5.1 `RUNBOOK.md` (структура: матч, команды, приложение; как добавлять новую механику — правила в матче, вид в приложении), `docs/network-roadmap.md` (этап 0 выполнен), код в `openspec/config.yaml`; проверка: описанная структура совпадает с файлами
-- [ ] 5.2 `pyflakes main.py duel tests tools` и `pytest -q` без ошибок; игра запускается и проходит партию случайных ботов; `openspec validate separate-match-from-app --strict` проходит
+- [x] 5.1 `RUNBOOK.md` (структура: матч, команды, приложение; как добавлять новую механику — правила в матче, вид в приложении), `docs/network-roadmap.md` (этап 0 выполнен), код в `openspec/config.yaml`; проверка: описанная структура совпадает с файлами
+- [x] 5.2 `pyflakes main.py duel tests tools` и `pytest -q` без ошибок; игра запускается и проходит партию случайных ботов; `openspec validate separate-match-from-app --strict` проходит
 
 ## Workflow follow-up
 

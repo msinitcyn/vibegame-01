@@ -12,11 +12,17 @@ context: |
 
   Code layout: main.py — запуск; пакет duel/: config.py (все числа и цвета баланса),
   items.py (артефакты), icons.py, entities.py (игрок, двойник, пуля, стена, моб…),
-  gamepad.py, audio.py, screens.py (отрисовка), game.py (цикл и правила),
+  commands.py (команда игрока), match.py (Match — все правила и состояние партии,
+  step(dt, команды) -> события, свой генератор match.rng, номера объектов),
+  gamepad.py, audio.py, screens.py (отрисовка), game.py (приложение: окно, меню,
+  ввод -> команды, события -> звук и надписи, фиксированный такт 60 Гц),
   i18n.py (все тексты на ru/en/fi), settings.py, sprites.py; assets/ — музыка, звуки,
   спрайты (PNG редактируемые); tools/make_sprites.py; tests/ — pytest.
 
   Conventions:
+  - Правила — только в match.py/entities.py (без pygame-ввода, звука, текста); вид и звук —
+    в game.py/screens.py через события матча. Случайность — только match.rng.
+  - Намеренное изменение правил — перезаписать эталон tools/fingerprint.py --save tests/data/fingerprint.json.
   - Числа баланса — константы в duel/config.py, не «магические числа» в коде.
   - Любой текст на экране — через i18n.t() с ключом во всех трёх языках (ru, en, fi).
   - Управление — по физическим клавишам (scancode), работает в любой раскладке;
