@@ -36,7 +36,7 @@ from .match import STEP, Match
 from .discovery import DISCOVERY_PORT, Finder
 from .net import PORT, connect, error_key
 from .snapshot import player as snap_player, snapshot
-from .gamepad import Gamepads, PAD_DOWN, PAD_FIRE, PAD_ITEM_BUTTONS, PAD_MELEE, PAD_UP
+from .gamepad import Gamepads, PAD_DOWN, PAD_FIRE, PAD_ITEM_BUTTONS, PAD_LEFT, PAD_MELEE, PAD_RIGHT, PAD_UP
 from .audio import MUSIC_END, Audio
 from .render import DIR
 from .screens import ScreensMixin
@@ -629,15 +629,15 @@ class Game(ScreensMixin):
         if self.state == "help":
             if btn in (B.CONTROLLER_BUTTON_A, B.CONTROLLER_BUTTON_B, B.CONTROLLER_BUTTON_START):
                 self.state = "menu"
-            elif btn in (B.CONTROLLER_BUTTON_DPAD_LEFT, B.CONTROLLER_BUTTON_DPAD_RIGHT):
+            elif btn in (B.CONTROLLER_BUTTON_DPAD_LEFT, B.CONTROLLER_BUTTON_DPAD_RIGHT, PAD_LEFT, PAD_RIGHT):
                 self.on_key(B.KSCAN_RIGHT)
             return
         if self.state == "pick":          # геймпад игрока — его строка выбора
             if pid is None:
                 return
-            if btn == B.CONTROLLER_BUTTON_DPAD_LEFT:
+            if btn in (B.CONTROLLER_BUTTON_DPAD_LEFT, PAD_LEFT):        # крестовина или левый стик
                 self.pick_move(pid, -1)
-            elif btn == B.CONTROLLER_BUTTON_DPAD_RIGHT:
+            elif btn in (B.CONTROLLER_BUTTON_DPAD_RIGHT, PAD_RIGHT):
                 self.pick_move(pid, 1)
             elif btn == B.CONTROLLER_BUTTON_A:
                 self.pick_confirm(pid, True)
@@ -650,6 +650,7 @@ class Game(ScreensMixin):
             keys = {B.CONTROLLER_BUTTON_DPAD_UP: B.KSCAN_UP, PAD_UP: B.KSCAN_UP,
                     B.CONTROLLER_BUTTON_DPAD_DOWN: B.KSCAN_DOWN, PAD_DOWN: B.KSCAN_DOWN,
                     B.CONTROLLER_BUTTON_DPAD_LEFT: B.KSCAN_LEFT, B.CONTROLLER_BUTTON_DPAD_RIGHT: B.KSCAN_RIGHT,
+                    PAD_LEFT: B.KSCAN_LEFT, PAD_RIGHT: B.KSCAN_RIGHT,
                     B.CONTROLLER_BUTTON_A: B.KSCAN_RETURN, B.CONTROLLER_BUTTON_B: B.KSCAN_ESCAPE,
                     B.CONTROLLER_BUTTON_START: B.KSCAN_ESCAPE}
             if btn in keys:
@@ -670,8 +671,8 @@ class Game(ScreensMixin):
                 self.take_bot()
             elif btn == B.CONTROLLER_BUTTON_A:
                 self.on_key(B.KSCAN_RETURN)
-            elif btn in (B.CONTROLLER_BUTTON_DPAD_LEFT, B.CONTROLLER_BUTTON_DPAD_RIGHT):
-                self.next_hero(-1 if btn == B.CONTROLLER_BUTTON_DPAD_LEFT else 1)
+            elif btn in (B.CONTROLLER_BUTTON_DPAD_LEFT, B.CONTROLLER_BUTTON_DPAD_RIGHT, PAD_LEFT, PAD_RIGHT):
+                self.next_hero(-1 if btn in (B.CONTROLLER_BUTTON_DPAD_LEFT, PAD_LEFT) else 1)
             elif btn in (B.CONTROLLER_BUTTON_B, B.CONTROLLER_BUTTON_START):
                 self.on_key(B.KSCAN_ESCAPE)
             return

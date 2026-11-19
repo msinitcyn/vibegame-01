@@ -104,3 +104,33 @@ def test_heroes_do_not_change_rules():
         a.step(1 / 60)
         b.step(1 / 60)
     assert digest(a) == digest(b)
+
+
+def stick(game, iid, value):
+    """Событие левого стика по горизонтали -> условная кнопка, как в цикле игры."""
+    from types import SimpleNamespace
+    e = SimpleNamespace(instance_id=iid, axis=pygame.CONTROLLER_AXIS_LEFTX, value=value)
+    btn = game.pads.axis_event(e)
+    if btn:
+        game.on_pad(iid, btn)
+
+
+def test_pick_with_left_stick(game):
+    game.pads.pads = [(100, FakePad()), (101, FakePad())]
+    open_pick(game)
+    stick(game, 100, 32000)                     # левый: Холод -> Природа
+    stick(game, 100, 32000)                     # держит — второго шага нет
+    assert game.pick["blue"]["hero"] == "nature"
+    stick(game, 100, 0)                         # отпустил
+    stick(game, 100, 32000)                     # ещё раз -> Зло
+    assert game.pick["blue"]["hero"] == "evil"
+    stick(game, 101, -32000)                    # правый: Огонь -> Зло (занят? нет, только курсор)
+    assert game.pick["red"]["hero"] == "evil"
+    game.draw_pick()
+
+
+def test_one_pad_moves_right_row(game):
+    game.pads.pads = [(100, FakePad())]
+    open_pick(game)
+    stick(game, 100, 32000)
+    assert game.pick["red"]["hero"] == "frost" and game.pick["blue"]["hero"] == "frost"

@@ -221,7 +221,12 @@ class ScreensMixin:
         for row, pid in enumerate(("blue", "red")):
             me, other = self.pick[pid], self.pick["red" if pid == "blue" else "blue"]
             top = 120 + row * 260
-            img = self.small.render(tr("pick.left" if pid == "blue" else "pick.right"), True, GREY)
+            label = tr("pick.left" if pid == "blue" else "pick.right")
+            pad = self.pad_of(pid)
+            pad_name = self.pads.pads[pad][1].name[:24] if pad is not None else ""
+            label += "   " + (tr("pick.pad", n=pad + 1, name=pad_name) if pad is not None else
+                              tr("pick.mouse") if pid == "blue" else tr("pick.no_pad"))
+            img = self.small.render(label, True, GREY)
             s.blit(img, (x0, top))
             for i, hero in enumerate(HEROES):
                 card = pygame.Rect(x0 + i * (w + gap), top + 26, w, 190)

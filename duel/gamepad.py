@@ -20,6 +20,7 @@ PAD_ITEM_LAYOUT = ((-1, 0), (0, -1), (1, 0), (0, 1))
 PAD_FIRE = "fire"                # условная кнопка: R1 или нажатый R2
 PAD_MELEE = "melee"              # условная кнопка: L1 или нажатый L2
 PAD_UP, PAD_DOWN = "up", "down"  # условные кнопки: стик вверх/вниз (для меню)
+PAD_LEFT, PAD_RIGHT = "left", "right"    # стик влево/вправо (выбор героя, листание)
 
 
 class Gamepads:
@@ -88,11 +89,14 @@ class Gamepads:
             was = self.trigger.get(key, False)
             self.trigger[key] = on
             return triggers[e.axis] if on and not was else None
-        if e.axis == pygame.CONTROLLER_AXIS_LEFTY:
+        if e.axis in (pygame.CONTROLLER_AXIS_LEFTY, pygame.CONTROLLER_AXIS_LEFTX):
             v = e.value / 32767
             pos = -1 if v < -PAD_DEAD else (1 if v > PAD_DEAD else 0)
-            was = self.stick.get(e.instance_id, 0)
-            self.stick[e.instance_id] = pos
-            if pos != was and pos:
-                return PAD_UP if pos < 0 else PAD_DOWN
+            key = (e.instance_id, e.axis)
+            was = self.stick.get(key, 0)
+            self.stick[key] = pos
+            if pos != was and pos:            # одно «нажатие» на каждый наклон стика
+                if e.axis == pygame.CONTROLLER_AXIS_LEFTY:
+                    return PAD_UP if pos < 0 else PAD_DOWN
+                return PAD_LEFT if pos < 0 else PAD_RIGHT
         return None
