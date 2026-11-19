@@ -56,6 +56,7 @@ from .config import (
     MOB_RANGED_EVERY,
     MOB_SHOT_R,
     MOB_SPEEDUP,
+    MOB_SWING_TIME,
     MOB_ZONE,
     RED,
     RED_LAND,
@@ -363,6 +364,8 @@ class Match:
             if not m.alive:
                 continue                      # добит ударом между тактами — уберётся ниже
             p = m.update(dt, self.chaser_speed(m.target) if m.target else 1.0, self.walls)
+            if m.swing == MOB_SWING_TIME:     # удар только что случился (попал или мимо) — звук
+                self.emit("mob_swing", m.x, m.y, m.swing_hit)
             if p and not p.shield_absorb():   # щит гасит и удар моба
                 p.hp -= MOB_DAMAGE
                 p.hit_flash = 0.12
@@ -374,7 +377,12 @@ class Match:
     def update_mob_shots(self, dt):
         """Снаряды мобов: скорость — как у движения мобов на эту цель; попадают в любого мага."""
         for s in self.mob_shots:
+            prev_x = s.x
             s.update(dt, self.chaser_speed(s.target))
+            for w in self.walls:              # зеркало отражает снаряд — он становится пулей хозяина
+                b = w.reflect_shot(s, prev_x) if s.alive else None
+                if b:
+                    self.bullets.append(b)
             if not s.alive:
                 continue
             for p in self.players:

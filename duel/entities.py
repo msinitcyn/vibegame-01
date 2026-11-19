@@ -8,9 +8,13 @@ from .config import (
     MOB_KEEP_DISTANCE,
     MOB_RANGE,
     MOB_SHOT_COOLDOWN,
+    MOB_SHOT_R,
     MOB_SHOT_SPEED,
     WEAPON_MAX,
     MOB_HIT_COOLDOWN,
+    MOB_REACH_EXTRA,
+    MOB_SWING_TIME,
+    MOB_WINDUP,
     MOB_HP,
     MOB_RADIUS,
     MOB_SPEED,
@@ -346,6 +350,10 @@ class Mob:
         self.radius = MOB_RADIUS
         self.target = None            # игрок, на которого злится
         self.hit_cd = 0.0
+        self.windup = 0.0             # замах: сколько секунд до удара (0 — не замахивается)
+        self.swing = 0.0              # сколько ещё видна дуга удара
+        self.swing_dir = 0.0          # куда бил (радианы)
+        self.swing_hit = False        # удар попал (иначе — промах)
         self.flash = 0.0
         self.facing = 1
         self.alive = True
@@ -363,13 +371,25 @@ class Mob:
 
     def update(self, dt, speed=1.0, walls=()):
         """Двигается к цели (speed — множитель скорости от «быстрых пуль»/«замедления»).
-        Возвращает игрока, которого ударил в этом кадре, иначе None."""
+        Ближний моб, дойдя до мага, замахивается и бьёт. Возвращает игрока, которого ударил
+        в этом кадре, иначе None (промах виден по swing и swing_hit)."""
         self.flash = max(0.0, self.flash - dt)
         self.hit_cd = max(0.0, self.hit_cd - dt)
+        self.swing = max(0.0, self.swing - dt)
         p = self.target
         if p is None:
+            self.windup = 0.0
             return None
         reach = p.radius + self.radius
+        if self.windup > 0:                   # замах: стоит, а потом бьёт — попал или нет
+            self.windup = max(0.0, self.windup - dt)
+            if self.windup > 0:
+                return None
+            self.hit_cd = MOB_HIT_COOLDOWN
+            self.swing = MOB_SWING_TIME
+            self.swing_dir = math.atan2(p.y - self.y, p.x - self.x)
+            self.swing_hit = math.hypot(p.x - self.x, p.y - self.y) <= reach + MOB_REACH_EXTRA
+            return p if self.swing_hit else None
         if self.ranged:
             # дальнобойный: идёт прямо к цели, пока она дальше части дальности, потом стоит
             dx, dy = p.x - self.x, p.y - self.y
@@ -385,9 +405,9 @@ class Mob:
             norm = math.hypot(dx, dy)
             self.move_around(dx / norm * step, dy / norm * step, walls)
         self.facing = -p.dir                  # лицом к игроку
-        if math.hypot(p.x - self.x, p.y - self.y) <= reach + 1 and self.hit_cd == 0:
-            self.hit_cd = MOB_HIT_COOLDOWN
-            return p
+        # дальнобойный вблизи не бьёт; ближний, дойдя до мага, начинает замах
+        if not self.ranged and math.hypot(p.x - self.x, p.y - self.y) <= reach + 1 and self.hit_cd == 0:
+            self.windup = MOB_WINDUP
         return None
 
     def move_around(self, dx, dy, walls):
@@ -476,17 +496,33 @@ class Wall:
         self.y1, self.y2 = cy - half, cy + half
         self.life = WALL_TIME
 
+    @property
+    def mirror_face(self):
+        """x лицевой (зеркальной) стороны — к сопернику."""
+        return self.x + self.owner.dir * WALL_W / 2
+
+    def crossed(self, prev_x, x, y, r):
+        """Пересёк ли за кадр зеркало со стороны соперника (свои выстрелы пролетают насквозь)."""
+        if not (self.y1 - r <= y <= self.y2 + r):
+            return False
+        back = -self.owner.dir                    # знак стороны владельца
+        face = self.mirror_face
+        return (prev_x - face) * back <= 0 < (x - face) * back
+
     def hit(self, b, prev_x):
         """Обрабатывает пулю, если она пересекла стену за этот кадр."""
-        if not (self.y1 - BULLET_R <= b.y <= self.y2 + BULLET_R):
-            return
-        back = -self.owner.dir                    # знак стороны владельца
-        mirror_face = self.x - back * WALL_W / 2  # поверхность зеркала
-        # отражаются только пули, пришедшие со стороны соперника; свои пролетают насквозь
-        if (prev_x - mirror_face) * back <= 0 < (b.x - mirror_face) * back:
-            b.x = 2 * mirror_face - b.x           # отражаем назад
+        if self.crossed(prev_x, b.x, b.y, BULLET_R):
+            b.x = 2 * self.mirror_face - b.x      # отражаем назад
             b.vx = -b.vx
             b.owner = self.owner                  # теперь это наша пуля
+
+    def reflect_shot(self, s, prev_x):
+        """Снаряд моба попал в зеркало — вместо него пуля хозяина стены, летящая обратно.
+        Возвращает Bullet или None."""
+        if not self.crossed(prev_x, s.x, s.y, MOB_SHOT_R):
+            return None
+        s.alive = False
+        return Bullet(2 * self.mirror_face - s.x, s.y, -s.dx * BULLET_SPEED, s.dy * BULLET_SPEED, self.owner)
 
     def blocks(self, x, y, r):
         """Пересекает ли круг (x, y, r) стену — для мобов, которым сквозь неё нельзя."""

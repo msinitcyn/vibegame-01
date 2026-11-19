@@ -20,6 +20,7 @@ from .config import (
     MOB_IDLE_COLOR,
     MOB_SHOT_COLOR,
     MOB_SHOT_R,
+    MOB_WINDUP,
     SHIELD_GAP,
     WALL_W,
 )
@@ -136,6 +137,32 @@ def draw_ammo_pack(surf, a, font):
     surf.blit(txt, txt.get_rect(midbottom=(box.centerx, box.bottom + 1)))
 
 
+def draw_mob_attack(surf, m, font):
+    """Замах (красный «!» и красный ореол, тем сильнее, чем ближе удар) и дуга удара."""
+    pos = _pos(m)
+    r = m["r"]
+    windup = m.get("windup", 0)
+    if windup > 0:
+        k = 1 - windup / MOB_WINDUP
+        glow = pygame.Surface((int(r * 4),) * 2, pygame.SRCALPHA)
+        c = glow.get_width() // 2
+        pygame.draw.circle(glow, (255, 50, 40, int(60 + 150 * k)), (c, c), int(r + 4 + 6 * k), 4)
+        surf.blit(glow, glow.get_rect(center=pos))
+        if font:
+            mark = font.render("!", True, (255, 70, 60))
+            surf.blit(mark, mark.get_rect(midbottom=(pos[0] + int(r) + 6, pos[1] - int(r))))
+    if m.get("swing", 0) > 0:
+        d = m.get("swing_dir", 0)
+        rad = r + 22
+        rect = pygame.Rect(0, 0, 2 * rad, 2 * rad)
+        rect.center = pos
+        start, stop = -d - 0.9, -d + 0.9          # pygame считает углы с осью Y вверх
+        color = (255, 80, 50) if m.get("swing_hit") else (150, 150, 160)   # попал — красная, мимо — серая
+        pygame.draw.arc(surf, (16, 12, 20), rect.inflate(6, 6), start, stop, 9)
+        pygame.draw.arc(surf, color, rect, start, stop, 6)
+        pygame.draw.arc(surf, (255, 255, 255), rect.inflate(-4, -4), start + 0.25, stop - 0.25, 2)
+
+
 def draw_mob(surf, m, font=None, heroes=DEFAULT_HERO):
     pos = _pos(m)
     draw_unit(surf, "mob_ranged" if m["ranged"] else "mob", pos, m["r"], m["facing"],
@@ -192,3 +219,5 @@ def draw_field(surf, snap, font):
         draw_bullet(surf, b, heroes)
     for p in snap["players"]:
         draw_player(surf, p, heroes)
+    for m in snap["mobs"]:                # замахи и удары мобов — поверх магов, чтобы были видны
+        draw_mob_attack(surf, m, font)

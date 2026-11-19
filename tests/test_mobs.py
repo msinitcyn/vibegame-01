@@ -153,7 +153,7 @@ def test_shield_absorbs_mob_hit(match):
     m = spawn(match)[0]
     m.target = b
     m.x, m.y = b.x + 30, b.y
-    step(match, 0.1)
+    step(match, 0.6)                              # замах, потом удар
     assert b.hp == MAX_HP and b.shield_hits == SHIELD_HITS - 1
 
 
@@ -400,14 +400,85 @@ def test_mob_shot_speed_follows_slow_and_fast(match):
     assert flown() == pytest.approx(normal * FAST_BULLET_FACTOR, rel=0.05)
 
 
-def test_mob_shots_ignore_walls_and_breaker(match):
+def test_mob_shots_ignore_breaker(match):
     from duel.entities import Bullet, MobShot
     from duel.config import BULLET_SPEED
     b = match.blue
     b.x, b.y = 100, 300
-    match.apply_item(b, "wall")                   # стена между магом и снарядом
     match.give(b, "breaker")
     match.mob_shots = [MobShot(400, 300, b)]
     match.bullets = [Bullet(150, 300, BULLET_SPEED, 0, b)]   # пуля синего навстречу
     step(match, 1.5)
-    assert b.hp == MAX_HP - 1                    # снаряд прошёл и стену, и пулю
+    assert b.hp == MAX_HP - 1                    # снаряд прошёл сквозь встречную пулю
+
+
+def test_wall_reflects_mob_shot_into_owner_bullet(match):
+    from duel.entities import Mob, MobShot
+    b = match.blue
+    b.x, b.y = 100, 300
+    match.apply_item(b, "wall")                   # стена между магом и снарядом
+    shooter = Mob(450, 300, 5, ranged=True)
+    shooter.shot_cd = 99                          # сам больше не стреляет
+    match.mobs = [shooter]
+    match.mob_shots = [MobShot(400, 300, b)]
+    step(match, 0.9)                              # снаряд долетел до стены (~0,73 с) и отразился
+    assert not match.mob_shots and b.hp == MAX_HP
+    assert [x.owner for x in match.bullets] == [b] and match.bullets[0].vx > 0   # летит обратно
+    step(match, 1.0)
+    shooter.shot_cd = 99
+    assert shooter.hp == 4 and shooter.target is b                               # и попала в моба
+
+
+# --- удар ближнего моба: замах, удар, промах; дальнобойный вблизи не бьёт
+
+def mob_at(match, target, dx=30, ranged=False):
+    from duel.entities import Mob
+    m = Mob(target.x + dx, target.y, 5, ranged=ranged)
+    m.target = target
+    match.mobs = [m]
+    return m
+
+
+def test_mob_winds_up_then_hits(match):
+    from duel.config import MOB_WINDUP
+    b = match.blue
+    m = mob_at(match, b)
+    step(match, MOB_WINDUP / 2)
+    assert m.windup > 0 and b.hp == MAX_HP          # замахнулся, ещё не ударил
+    events = []
+    for _ in range(int(MOB_WINDUP * 60) + 2):
+        events += match.step(DT)
+    assert b.hp == MAX_HP - 1 and m.swing > 0 and m.swing_hit
+    assert any(e[0] == "mob_swing" and e[3] for e in events)
+
+
+def test_dodge_during_windup_misses(match):
+    from duel.config import MOB_WINDUP
+    b = match.blue
+    b.x, b.y = 200, 300
+    m = mob_at(match, b)
+    step(match, MOB_WINDUP / 2)
+    assert m.windup > 0
+    b.y += 120                                      # отбежал
+    step(match, MOB_WINDUP)
+    assert b.hp == MAX_HP and m.swing > 0 and not m.swing_hit
+
+
+def test_ranged_mob_does_not_melee(match):
+    b = match.blue
+    m = mob_at(match, b, dx=20, ranged=True)
+    m.shot_cd = 99                                  # и не стреляет — проверяем только касание
+    step(match, 3.0)
+    assert b.hp == MAX_HP and m.windup == 0
+
+
+def test_mob_attack_draws(game):
+    from duel.config import MOB_WINDUP
+    mob_at(game.match, game.match.blue)
+    step(game.match, MOB_WINDUP / 2)
+    game.refresh_snap()
+    game.draw()
+    step(game.match, MOB_WINDUP)
+    game.refresh_snap()
+    assert game.snap["mobs"][0]["swing"] > 0
+    game.draw()

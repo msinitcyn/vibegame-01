@@ -537,6 +537,8 @@ class Game(ScreensMixin):
                 self.audio.shoot(ev[1])
             elif kind == "melee":
                 self.audio.melee()
+            elif kind == "mob_swing":             # удар моба (попал или мимо) — слышно
+                self.audio.melee()
             elif kind == "no_ammo":
                 self.popup(t("popup.noammo"), ev[1], BAD_TEXT)
             elif kind == "pickup":
