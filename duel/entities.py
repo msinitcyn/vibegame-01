@@ -173,6 +173,7 @@ class Player(Unit):
         self.start_x = x
         self.color = color
         self.hero = None              # герой (только вид): fire / frost / nature / dark / light
+        self.foe_land_t = 0.0         # сколько стоит на чужой земле с последнего урона
         self.land = land              # (x_min, x_max) своей земли — дальше маг не заходит
         self.dir = direction          # +1 стреляет вправо, -1 влево
         self.reset()
@@ -228,7 +229,7 @@ class Player(Unit):
             self.x += dx * k
             self.y += dy * k
         r = self.radius
-        self.x = max(self.land[0] + r, min(self.land[1] - r, self.x))
+        self.x = max(r, min(WIDTH - r, self.x))         # можно и на чужую землю (там отнимаются жизни)
         self.y = max(TOP + r, min(BOTTOM - r, self.y))
         self.x, self.y = push_out_of_arena(self.x, self.y, r, self.dir)      # в арену мобов не заходит
 
@@ -246,6 +247,10 @@ class Player(Unit):
         near = ARENA[0] - self.dir * (ARENA_R + margin)          # ближний к центру край столбцов
         lo, hi = sorted((self.land[0] + margin if self.dir > 0 else self.land[1] - margin, near))
         return self.rng.uniform(lo, hi)
+
+    def on_foe_land(self):
+        """Центр мага на половине соперника."""
+        return (self.x - ARENA[0]) * self.dir > 0
 
     def in_land(self, x, y):
         """Точка на своей земле: в своей половине и не в арене."""

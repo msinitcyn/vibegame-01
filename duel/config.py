@@ -17,6 +17,7 @@ BLUE_LAND = (0, WIDTH / 2)
 RED_LAND = (WIDTH / 2, WIDTH)
 ARENA = (WIDTH / 2, (TOP + BOTTOM) / 2)      # центр арены мобов
 ARENA_R = 150                    # радиус арены, пикс
+FOE_LAND_DPS = 2                 # на чужой земле маг теряет столько жизней в секунду
 
 
 

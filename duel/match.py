@@ -39,6 +39,7 @@ from .config import (
     CLONE_EFFECTS,
     CLONE_TIME,
     FAST_BULLET_FACTOR,
+    FOE_LAND_DPS,
     HEAL_AMOUNT,
     MAX_CLONES,
     MAX_HP,
@@ -169,8 +170,9 @@ class Match:
             self.bullets.extend(shots)
 
     def melee(self, p):
-        """Ближний удар: MELEE_DAMAGE всем мобам рядом. Магов, двойников и пули не задевает;
-        патроны не тратит, работает и под заморозкой, «не стреляет», запретом артефактов."""
+        """Ближний удар: MELEE_DAMAGE всем мобам и магу-сопернику рядом (щит гасит), двойники
+        соперника рядом погибают. Пули не сбивает; патроны не тратит, работает и под заморозкой,
+        «не стреляет», запретом артефактов."""
         if p.melee_cd > 0:
             return
         p.melee_cd = MELEE_COOLDOWN
@@ -179,6 +181,14 @@ class Match:
         for m in self.mobs:
             if m.alive and math.hypot(m.x - p.x, m.y - p.y) <= p.radius + m.radius + MELEE_RANGE:
                 m.hurt(p, MELEE_DAMAGE)       # злится на ударившего; смерть — общим порядком
+        foe = self.other(p)
+        if math.hypot(foe.x - p.x, foe.y - p.y) <= p.radius + foe.radius + MELEE_RANGE:
+            if not foe.shield_absorb():      # щит гасит удар целиком
+                foe.hp -= MELEE_DAMAGE
+                foe.hit_flash = 0.12
+        for c in self.clones_of(foe):
+            if math.hypot(c.x - p.x, c.y - p.y) <= p.radius + c.radius + MELEE_RANGE:
+                c.alive = False
 
     def use_item(self, p, slot):
         kind = p.items[slot]
@@ -244,6 +254,15 @@ class Match:
     def update(self, dt, moves):
         for p in self.players:
             p.update(dt, moves.get(p.id, (0, 0)))
+            # на чужой земле отнимаются жизни: FOE_LAND_DPS в секунду (щит не помогает)
+            if p.on_foe_land():
+                p.foe_land_t += dt
+                while p.foe_land_t >= 1 / FOE_LAND_DPS:
+                    p.foe_land_t -= 1 / FOE_LAND_DPS
+                    p.hp -= 1
+                    p.hit_flash = 0.12
+            else:
+                p.foe_land_t = 0.0
         self.update_mobs(dt)
 
         # артефакты сами не появляются — только выпадают из убитых мобов (drop_artifact)

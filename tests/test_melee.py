@@ -2,7 +2,7 @@
 import pygame
 import pytest
 
-from duel.config import MAX_HP, MELEE_COOLDOWN, MELEE_DAMAGE, MELEE_RANGE
+from duel.config import SHIELD_HITS, MAX_HP, MELEE_COOLDOWN, MELEE_DAMAGE, MELEE_RANGE
 from duel.entities import Mob
 from tests.conftest import DT, FakePad, step
 
@@ -59,20 +59,34 @@ def test_melee_without_ammo_and_under_debuffs(match, debuff):
     assert m.hp == 3 - MELEE_DAMAGE and b.ammo == 0
 
 
-def test_melee_only_against_mobs(match):
-    """Соперник, его двойники и пули ударом не задеваются."""
+def test_melee_hits_foe_and_clones_not_bullets(match):
+    """Соперник рядом теряет MELEE_DAMAGE, двойники рядом гибнут, пули ударом не сбиваются."""
     from duel.config import BULLET_SPEED
     from duel.entities import Bullet
     b, r = match.blue, match.red
-    b.x, b.y = 380, 300
-    r.x, r.y = 620, 300
+    b.x, b.y = 480, 120
+    r.x, r.y = 520, 120                      # сошлись над ареной
     match.apply_item(r, "clones")
     for c in match.clones:
-        c.x, c.y = b.x + 30, b.y
-    bullet = Bullet(b.x + 25, b.y, -BULLET_SPEED, 0, r)
+        c.x, c.y = b.x - 30, b.y
+    bullet = Bullet(b.x + 25, b.y + 40, -BULLET_SPEED, 0, r)
     match.bullets = [bullet]
     match.melee(b)
-    assert r.hp == MAX_HP and all(c.alive for c in match.clones) and bullet.alive
+    assert r.hp == MAX_HP - MELEE_DAMAGE and not any(c.alive for c in match.clones) and bullet.alive
+
+
+def test_melee_on_foe_with_shield(match):
+    b, r = match.blue, match.red
+    b.x, b.y, r.x, r.y = 480, 120, 520, 120
+    match.give(r, "shield")
+    match.melee(b)
+    assert r.hp == MAX_HP and r.shield_hits == SHIELD_HITS - 1
+
+
+def test_melee_misses_far_foe(match):
+    b, r = match.blue, match.red
+    match.melee(b)                            # маги на старте — далеко
+    assert r.hp == MAX_HP
 
 
 def test_melee_kill_drops_artifact_on_own_land(match):

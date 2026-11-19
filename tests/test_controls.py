@@ -34,20 +34,22 @@ def test_diagonal_not_faster(game):
     assert dist == pytest.approx(b.speed * 0.1, rel=0.05)
 
 
-def test_mages_stay_on_own_land(game):
+def test_mages_cross_only_around_arena(game):
+    """На высоте арены маги упираются в её край; над и под ней проходят на чужую землю до края поля."""
     import math
     from duel.config import ARENA, ARENA_R, TOP, WIDTH
     b, r = game.match.blue, game.match.red
+    b.hp = r.hp = 1000                          # чужая земля отнимает жизни — не важно для теста
     game.held = {pygame.KSCAN_D, pygame.KSCAN_LEFT}
     step(game, 5)
-    for p in (b, r):                            # на высоте арены упираются в её край
+    for p in (b, r):
         assert math.hypot(p.x - ARENA[0], p.y - ARENA[1]) >= ARENA_R + p.radius - 0.01
     assert b.x < ARENA[0] < r.x
-    b.y = r.y = TOP + 40                        # над ареной — сходятся у центральной линии
+    b.y = r.y = TOP + 40
     step(game, 5)
-    assert b.x + b.radius == pytest.approx(WIDTH / 2) and r.x - r.radius == pytest.approx(WIDTH / 2)
+    assert b.x + b.radius == pytest.approx(WIDTH) and r.x - r.radius == pytest.approx(0)
     game.held = {pygame.KSCAN_A, pygame.KSCAN_RIGHT}
-    step(game, 5)
+    step(game, 8)
     assert b.x - b.radius >= -0.01 and r.x + r.radius <= WIDTH + 0.01
 
 

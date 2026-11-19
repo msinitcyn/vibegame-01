@@ -111,3 +111,26 @@ def test_object_ids_unique_and_permanent():
             break
     assert len(seen) > 50                       # пули, мобы, снаряды, пачки…
     assert {p.id for p in m.players} == {"blue", "red"}
+
+
+def test_foe_land_burns_two_per_second(match):
+    from duel.config import FOE_LAND_DPS, MAX_HP, TOP
+    from tests.conftest import step
+    b = match.blue
+    b.x, b.y = 700, TOP + 40                    # на земле красного
+    step(match, 2.1)                            # 2 с (+ запас на округление тактов)
+    assert b.hp == MAX_HP - 2 * FOE_LAND_DPS
+    b.x = 300                                   # вернулся к себе — урон прекратился
+    step(match, 2.0)
+    assert b.hp == MAX_HP - 2 * FOE_LAND_DPS
+
+
+def test_pick_up_on_foe_land(match):
+    from duel.config import AMMO_PACK, START_AMMO, TOP
+    from duel.entities import AmmoPack, Artifact
+    b = match.blue
+    match.artifacts = [Artifact(700, "speed", TOP + 40)]
+    match.ammo_packs = [AmmoPack(700, TOP + 40)]
+    b.x, b.y = 700, TOP + 40
+    match.step(DT)
+    assert "speed" in b.items and b.ammo == START_AMMO + AMMO_PACK

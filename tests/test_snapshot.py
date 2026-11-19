@@ -70,7 +70,7 @@ def test_snapshot_json_roundtrip_during_game():
             assert json.loads(json.dumps(snap)) == snap
             checked += 1
         if m.winner:
-            break
+            m = Match(seed=12 + tick)          # партия кончилась — следующая
     assert checked > 10
     full_scene(m)
     snap = snapshot(m)
