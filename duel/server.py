@@ -13,6 +13,7 @@
 Снимки — раз в SEND_EVERY тактов (30 в секунду) со всеми событиями с прошлого снимка.
 """
 import argparse
+import math
 import secrets
 import select
 import socket
@@ -74,7 +75,7 @@ class Server:
         self.newcomers = []           # [(Conn, когда подключился)] — ещё не прислали join
         self.bot = bot
         self.proto = proto            # версия протокола в приветствии (тесты проверяют несовпадение)
-        self.bots = {pid: Bot(i + 1) for i, pid in enumerate(PIDS)}
+        self.bots = {pid: Bot(i + 1, forward=0.0 if pid == "blue" else math.pi) for i, pid in enumerate(PIDS)}
         self.tick_no = 0              # номер такта сервера (для плавной анимации у клиентов)
         self.phase = "lobby"
         self.events = []              # события с прошлого снимка
@@ -228,6 +229,9 @@ class Server:
                     slot = msg.get("slot")
                     if slot in (0, 1, 2, 3):
                         c.use_slot = slot
+                    aim = msg.get("aim")
+                    if isinstance(aim, (int, float)) and not isinstance(aim, bool) and math.isfinite(aim):
+                        c.aim = float(aim)
                 elif kind == "name":
                     s.name = clean_name(msg.get("name"))
                 elif kind == "ready":
@@ -328,7 +332,7 @@ class Server:
                 commands[pid] = self.pending[pid]
             elif pid in bots:
                 commands[pid] = Command(*self.bots[pid].act())
-        # нажатия — один раз; направление держится до следующей команды клиента
+        # нажатия — один раз; направление и прицел держатся до следующей команды клиента
         self.pending = {pid: Command(move=self.pending[pid].move) for pid in PIDS}
         self.events += [list(e) for e in self.match.step(STEP, commands)]
 

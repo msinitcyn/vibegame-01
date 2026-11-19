@@ -33,7 +33,7 @@ def snapshot(match):
         "next_wave": _t(m.next_wave),
         "winner": _pid(m.winner),
         "players": [{
-            "id": p.id, "hero": p.hero, "x": _xy(p.x), "y": _xy(p.y), "r": _xy(p.radius),
+            "id": p.id, "hero": p.hero, "x": _xy(p.x), "y": _xy(p.y), "r": _xy(p.radius), "aim": _t(p.aim),
             "hp": p.hp, "ammo": p.ammo, "effects": _effects(p), "shield_hits": p.shield_hits,
             "items": list(p.items), "queue": list(p.queue),
             "hit_flash": _t(p.hit_flash), "melee_flash": _t(p.melee_flash),

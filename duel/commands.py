@@ -12,3 +12,4 @@ class Command:
     fire: bool = False            # нажат выстрел (с прошлого такта)
     melee: bool = False           # нажат ближний удар
     use_slot: int = None          # нажата ячейка инвентаря 0–3 (или None)
+    aim: float = None             # прицел, радианы (0 — вправо, π — влево, ось Y вниз); None — не менять

@@ -39,6 +39,7 @@ TEXTS = {
         "pick.taken": "занят",
         "pick.chosen": "✓ выбран",
         "pick.hint": "Одного героя вдвоём выбрать нельзя.   Ещё раз Пробел/Enter или ○ — передумать,   Esc — в меню",
+        "pick.need_pad": "Нужен хотя бы один геймпад: левый — клавиатура и мышь, правый — геймпад",
 
         "menu.two": "Два игрока",
         "menu.test": "Тестовый режим: по {hp} жизней",
@@ -203,6 +204,7 @@ TEXTS = {
         "pick.taken": "taken",
         "pick.chosen": "✓ chosen",
         "pick.hint": "Both players can't take the same hero.   Space/Enter again or ○ — change,   Esc — menu",
+        "pick.need_pad": "At least one gamepad needed: left — keyboard and mouse, right — gamepad",
 
         "menu.two": "Two players",
         "menu.test": "Test mode: {hp} lives each",
@@ -365,6 +367,7 @@ TEXTS = {
         "pick.taken": "varattu",
         "pick.chosen": "✓ valittu",
         "pick.hint": "Samaa sankaria ei voi valita kahdesti.   Uudelleen välilyönti/Enter tai ○ — vaihda,   Esc — valikko",
+        "pick.need_pad": "Tarvitaan vähintään yksi peliohjain: vasen — näppäimistö ja hiiri, oikea — ohjain",
 
         "menu.two": "Kaksi pelaajaa",
         "menu.test": "Testitila: {hp} elämää kummallekin",

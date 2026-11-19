@@ -4,6 +4,7 @@
 делает шаги матча с фиксированным тактом и превращает события матча в звук и
 всплывающие надписи на языке игрока. Отрисовка — в ScreensMixin (duel/screens.py).
 """
+import math
 import time
 
 import pygame
@@ -112,6 +113,10 @@ class Game(ScreensMixin):
         # SCALED: поле остаётся WIDTH×HEIGHT, а на экран растягивается с сохранением пропорций
         flags = pygame.SCALED if windowed else pygame.SCALED | pygame.FULLSCREEN
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
+        try:
+            pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_CROSSHAIR)     # курсор-перекрестие для прицела
+        except pygame.error:
+            pass
         self.clock = pygame.time.Clock()
         self.font = load_font(18, bold=True)
         self.small = load_font(14)
@@ -148,6 +153,8 @@ class Game(ScreensMixin):
         self.net_addr = self.net_token = None    # куда и с каким ключом возвращаться после обрыва
         self.reconnect_until = None   # пока не None — связь потеряна, пытаемся вернуться
         self.net_end = "net.lost"     # почему закончилась сетевая игра (текст для меню)
+        self.mouse_pos = None         # где курсор (логические координаты окна)
+        self.aim_source = {}          # чем игрок целился последним: "mouse" или "pad"
         self.restart()
         if net:
             self.enter_net(*net)
@@ -187,6 +194,7 @@ class Game(ScreensMixin):
             c = self.controls[pid]
             cmd = self.pending[pid]
             cmd.move = ((c.right in held) - (c.left in held), (c.down in held) - (c.up in held))
+            cmd.aim = self.aim_for(pid)
             commands[pid] = cmd
         self.pending = {pid: Command() for pid in PLAYER_IDS}
         events = self.match.step(dt, commands)
@@ -210,6 +218,11 @@ class Game(ScreensMixin):
                         self.leave_net()
                         return
                     self.on_key(e.scancode)
+                if e.type == pygame.MOUSEMOTION:
+                    self.on_mouse_move(e.pos)
+                if e.type == pygame.MOUSEBUTTONDOWN:
+                    self.on_mouse_move(e.pos)
+                    self.on_mouse_button(e.button)
                 if e.type == pygame.TEXTINPUT:
                     self.on_text(e.text)
                 if e.type == MUSIC_END:
@@ -288,7 +301,7 @@ class Game(ScreensMixin):
                 slot = p.use_slot if p.use_slot is not None else slot
             self.pending = {pid: Command() for pid in PLAYER_IDS}
             self.net.send({"type": "cmd", "move": [max(-1, min(1, dx)), max(-1, min(1, dy))],
-                           "fire": fire, "melee": melee, "slot": slot})
+                           "fire": fire, "melee": melee, "slot": slot, "aim": self.aim_for(self.me)})
         if steps == MAX_STEPS_PER_FRAME:
             self.time_acc = 0.0
         for msg in self.net.recv():
@@ -601,13 +614,9 @@ class Game(ScreensMixin):
     def on_pad(self, iid, btn):
         """Кнопка геймпада -> соответствующая клавиша его игрока."""
         i = self.pads.index(iid)
-        if self.net:                  # клиент: только свой геймпад, управляет своим магом
-            if i != self.pad_index:
-                return
-            i = 0
-        if i is None or i >= len(PLAYER_IDS):
+        if i is None:
             return
-        c = self.controls[PLAYER_IDS[i]]
+        pid = self.pad_side(i)        # чей это геймпад (в меню — неважно)
         B = pygame
         if self.state == "menu":
             if btn in (B.CONTROLLER_BUTTON_DPAD_UP, PAD_UP):
@@ -624,7 +633,8 @@ class Game(ScreensMixin):
                 self.on_key(B.KSCAN_RIGHT)
             return
         if self.state == "pick":          # геймпад игрока — его строка выбора
-            pid = PLAYER_IDS[i]
+            if pid is None:
+                return
             if btn == B.CONTROLLER_BUTTON_DPAD_LEFT:
                 self.pick_move(pid, -1)
             elif btn == B.CONTROLLER_BUTTON_DPAD_RIGHT:
@@ -665,6 +675,9 @@ class Game(ScreensMixin):
             elif btn in (B.CONTROLLER_BUTTON_B, B.CONTROLLER_BUTTON_START):
                 self.on_key(B.KSCAN_ESCAPE)
             return
+        if pid is None:                   # лишний геймпад — в партии не участвует
+            return
+        c = self.controls[pid]
         if btn == B.CONTROLLER_BUTTON_START:
             self.on_key(B.KSCAN_ESCAPE)
         elif self.snap["winner"]:
@@ -678,15 +691,70 @@ class Game(ScreensMixin):
         elif btn in PAD_ITEM_BUTTONS:
             self.on_key(c.items[PAD_ITEM_BUTTONS.index(btn)])
 
+    def pad_side(self, i):
+        """Чей геймпад номер i: по сети — только свой; за одним компьютером при одном геймпаде
+        он у правого игрока (левый — клавиатура и мышь), при двух — первый у левого, второй у правого."""
+        if self.net:
+            return self.me if i == self.pad_index else None
+        n = len(self.pads.pads)
+        if n >= 2:
+            return PLAYER_IDS[i] if i < len(PLAYER_IDS) else None
+        return "red" if i == 0 else None
+
+    def pad_of(self, pid):
+        """Номер геймпада игрока pid или None."""
+        for i in range(len(self.pads.pads)):
+            if self.pad_side(i) == pid:
+                return i
+        return None
+
+    def mouse_side(self):
+        """Кто целится мышью: по сети — свой маг; за одним компьютером — левый, если геймпадов меньше двух."""
+        if self.net:
+            return self.me
+        return "blue" if len(self.pads.pads) < 2 else None
+
+    def on_mouse_move(self, pos):
+        self.mouse_pos = pos
+        side = self.mouse_side()
+        if side:
+            self.aim_source[side] = "mouse"
+
+    def on_mouse_button(self, button):
+        """Левая кнопка — выстрел, правая — ближний удар (у того, кто целится мышью)."""
+        side = self.mouse_side()
+        if self.state != "play" or side is None or (self.net and self.net_waiting):
+            return
+        c = self.controls[side]
+        if button == 1:
+            self.on_key(c.fire[0])
+        elif button == 3:
+            self.on_key(c.melee[0])
+
+    def aim_for(self, pid):
+        """Прицел игрока на этот такт: правый стик, если наклонён; иначе — к курсору мыши,
+        если игрок целится мышью; иначе None (прицел не меняется)."""
+        a = self.pads.aim(self.pad_of(pid))
+        if a is not None:
+            self.aim_source[pid] = "pad"
+            return a
+        if (self.mouse_side() == pid and self.mouse_pos is not None
+                and self.aim_source.get(pid) == "mouse"):
+            p = next((p for p in self.snap.get("players", []) if p["id"] == pid), None)
+            if p:
+                mx, my = self.mouse_pos
+                if (mx, my) != (round(p["x"]), round(p["y"])):
+                    return math.atan2(my - p["y"], mx - p["x"])
+        return None
+
     def pad_held(self):
         """Направления с геймпадов в виде «зажатых» клавиш игроков."""
         out = set()
-        for i, pid in enumerate(PLAYER_IDS):
+        for i in range(len(self.pads.pads)):
+            pid = self.pad_side(i)
+            if pid is None:
+                continue
             c = self.controls[pid]
-            if self.net:
-                if i:
-                    break
-                i = self.pad_index
             dx, dy = self.pads.direction(i)
             if dy < 0:
                 out.add(c.up)
@@ -833,7 +901,10 @@ class Game(ScreensMixin):
             p["hero"] = HEROES[(HEROES.index(p["hero"]) + step) % len(HEROES)]
 
     def pick_confirm(self, pid, ok):
-        """Подтвердить (или снять) выбор; героя, подтверждённого соперником, взять нельзя."""
+        """Подтвердить (или снять) выбор; героя, подтверждённого соперником, взять нельзя.
+        Без геймпада играть нельзя: одному из двоих нужен правый стик для прицела."""
+        if ok and not self.pads.pads:
+            return
         other = self.pick["red" if pid == "blue" else "blue"]
         if ok and other["ok"] and other["hero"] == self.pick[pid]["hero"]:
             return

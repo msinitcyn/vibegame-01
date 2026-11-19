@@ -46,15 +46,16 @@ from .config import (
 from .items import WEAPON_ITEMS
 
 
-def make_bullets(owner, x, y, direction, radius, angles, wavy=False):
-    """Пули из точки (x, y): угол -1 — 45° вверх, 0 — прямо, 1 — 45° вниз."""
+def make_bullets(owner, x, y, angle, radius, offsets, wavy=False):
+    """Пули из края мага в точке (x, y) по направлению angle (радианы: 0 — вправо, π — влево,
+    ось Y — вниз) со смещениями offsets (веер — ±45°). Волна — поперёк направления полёта."""
     bullets = []
-    for a in angles:
-        ang = a * math.pi / 4
-        vx = direction * BULLET_SPEED * math.cos(ang)
-        vy = BULLET_SPEED * math.sin(ang)
-        bx = x + direction * (radius + BULLET_R + 2)
-        b = Bullet(bx, y, vx, vy, owner)
+    for off in offsets:
+        ang = angle + off
+        cos, sin = math.cos(ang), math.sin(ang)
+        edge = radius + BULLET_R + 2
+        b = Bullet(x + cos * edge, y + sin * edge, BULLET_SPEED * cos, BULLET_SPEED * sin, owner)
+        b.wave_nx, b.wave_ny = -sin, cos
         if wavy:
             rng = owner.rng
             b.wave_amp = rng.uniform(*WAVE_AMP)
@@ -117,10 +118,11 @@ class Unit:
         if "shield" not in self.effects:
             self.shield_hits = 0
 
-    def shot_angles(self, moving):
+    def shot_offsets(self):
+        """Смещения пуль от прицела: веер — три пули через 45°."""
         if "triple" in self.effects:
-            return (-1, 0, 1)
-        return (moving,)
+            return (-math.pi / 4, 0.0, math.pi / 4)
+        return (0.0,)
 
     def shield_blocks(self, b):
         """Щит гасит пулю, если она в него попала. Возвращает True, если погасил."""
@@ -163,7 +165,8 @@ class Player(Unit):
         self.reset_effects()
         self.items = [None] * INVENTORY_SIZE
         self.queue = []               # собранные артефакты, ждущие свободной ячейки
-        self.moving = 0               # -1 вверх, +1 вниз, 0 — по вертикали стоит (от этого наклон выстрела)
+        self.moving = 0               # -1 вверх, +1 вниз, 0 — по вертикали стоит
+        self.aim = 0.0 if self.dir > 0 else math.pi    # прицел (радианы): сначала — на соперника
         self.moving_x = 0             # -1 влево, +1 вправо
         self.hit_flash = 0.0
 
@@ -216,9 +219,9 @@ class Player(Unit):
             return []
         self.ammo -= 1                # веер тоже тратит один патрон
         self.cooldown = SHOT_COOLDOWN * (RAPID_FACTOR if "rapid" in self.effects else 1)
-        # угол наклона: вверх/вниз — 45°, стоя — прямо
-        return make_bullets(self, self.x, self.y, self.dir, self.radius,
-                            self.shot_angles(self.moving), "wavy" in self.effects)
+        # пуля летит по прицелу; движение на направление не влияет
+        return make_bullets(self, self.x, self.y, self.aim, self.radius,
+                            self.shot_offsets(), "wavy" in self.effects)
 
 
 class Bullet:
@@ -230,6 +233,7 @@ class Bullet:
         self.px, self.py = x, y
         self.t = 0.0
         self.wave_amp = 0.0           # 0 — летит прямо, иначе извивается
+        self.wave_nx, self.wave_ny = 0.0, 1.0      # куда смещает волна (поперёк полёта)
         self.wave_w = 0.0
         self.wave_phase = 0.0
 
@@ -238,11 +242,12 @@ class Bullet:
         self.x += self.vx * dt
         self.y += self.vy * dt
         if self.wave_amp:
-            # вертикальная добавка: смещение A·sin(ωt + φ), берём его приращение
+            # добавка поперёк полёта: смещение A·sin(ωt + φ), берём его приращение
             old = math.sin(self.wave_w * self.t + self.wave_phase)
             self.t += dt
             new = math.sin(self.wave_w * self.t + self.wave_phase)
-            self.y += self.wave_amp * (new - old)
+            self.x += self.wave_amp * (new - old) * self.wave_nx
+            self.y += self.wave_amp * (new - old) * self.wave_ny
         # отскок от верхней и нижней стенок
         if self.y - BULLET_R < TOP:
             self.y = TOP + BULLET_R
@@ -302,8 +307,9 @@ class Clone(Unit):
             pause = self.owner.rng.uniform(*CLONE_SHOT_EVERY)
             self.shot_timer = pause * (RAPID_FACTOR if "rapid" in self.effects else 1)
             if self.can_fire:
-                return make_bullets(self.owner, self.x, self.y, self.owner.dir, r,
-                                    self.shot_angles(self.moving), "wavy" in self.effects)
+                forward = 0.0 if self.owner.dir > 0 else math.pi      # двойник стреляет прямо вперёд
+                return make_bullets(self.owner, self.x, self.y, forward, r,
+                                    self.shot_offsets(), "wavy" in self.effects)
         return []
 
 

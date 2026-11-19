@@ -3,6 +3,8 @@
 Правила (match.py, entities.py) ничего не рисуют: экран знает только снимок.
 Новый вид объекта: поле в снимке + функция здесь + строка в draw_field.
 """
+import math
+
 import pygame
 
 from .config import (
@@ -67,10 +69,28 @@ def draw_effects(surf, u):
         pygame.draw.line(surf, (30, 30, 30), (cx - d, cy + d), (cx + d, cy - d), 4)
 
 
+def draw_aim(surf, p, color):
+    """Метка прицела: треугольник цвета героя рядом с магом, остриём по направлению прицела."""
+    a = p["aim"]
+    cos, sin = math.cos(a), math.sin(a)
+    cx, cy = p["x"], p["y"]
+    near, far, half = p["r"] + 8, p["r"] + 30, 5     # узкий и длинный — читается как стрелка
+    tip = (cx + cos * far, cy + sin * far)
+    base = (cx + cos * near, cy + sin * near)
+    left = (base[0] - sin * half, base[1] + cos * half)
+    right = (base[0] + sin * half, base[1] - cos * half)
+    pygame.draw.polygon(surf, (16, 12, 20), [tip, left, right], 3)
+    pygame.draw.polygon(surf, color, [tip, left, right])
+
+
 def draw_player(surf, p, heroes):
     pos = _pos(p)
     pid = p["id"]
-    draw_unit(surf, HERO_SPRITE[heroes[pid]], pos, p["r"], DIR[pid], white=p["hit_flash"] > 0)
+    aim = p.get("aim")
+    facing = DIR[pid] if aim is None else (1 if math.cos(aim) >= 0 else -1)   # лицом к прицелу
+    draw_unit(surf, HERO_SPRITE[heroes[pid]], pos, p["r"], facing, white=p["hit_flash"] > 0)
+    if aim is not None:
+        draw_aim(surf, p, side_color(heroes, pid))
     if p["melee_flash"] > 0:
         k = min(1.0, p["melee_flash"] / MELEE_FLASH)
         radius = int(p["r"])

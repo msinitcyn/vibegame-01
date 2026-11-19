@@ -69,6 +69,7 @@ def test_keyboard_fire_and_items(game):
 
 
 def test_menu_keys(game):
+    game.pads.pads = [(100, FakePad())]         # без геймпада партия за одним компьютером не начнётся
     game.state = "menu"
     game.menu_index = 0
     # режимов против компьютера в хотсите нет; сетевая игра — пункты 2 и 3

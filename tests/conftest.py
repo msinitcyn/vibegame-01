@@ -81,6 +81,8 @@ class FakePad:
         self.buttons = set()
         self.stick_x = 0
         self.stick_y = 0
+        self.right_x = 0              # правый стик — прицел
+        self.right_y = 0
 
     def get_button(self, b):
         return b in self.buttons
@@ -88,4 +90,6 @@ class FakePad:
     def get_axis(self, axis):
         import pygame
         return {pygame.CONTROLLER_AXIS_LEFTY: self.stick_y,
-                pygame.CONTROLLER_AXIS_LEFTX: self.stick_x}.get(axis, 0)
+                pygame.CONTROLLER_AXIS_LEFTX: self.stick_x,
+                pygame.CONTROLLER_AXIS_RIGHTX: self.right_x,
+                pygame.CONTROLLER_AXIS_RIGHTY: self.right_y}.get(axis, 0)

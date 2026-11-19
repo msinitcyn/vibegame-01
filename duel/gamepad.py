@@ -1,10 +1,13 @@
 """Геймпады: подключение, кнопки, стик."""
 
+import math
+
 import pygame
 from pygame._sdl2 import controller
 
 
 PAD_DEAD = 0.45                  # мёртвая зона стика (доля от максимума)
+AIM_DEAD = 0.5                   # правый стик: ближе к центру — прицел не меняется
 PAD_ITEM_BUTTONS = (pygame.CONTROLLER_BUTTON_X,   # □
                     pygame.CONTROLLER_BUTTON_Y,   # △
                     pygame.CONTROLLER_BUTTON_B,   # ○
@@ -63,6 +66,17 @@ class Gamepads:
 
         return (axis(B.CONTROLLER_BUTTON_DPAD_LEFT, B.CONTROLLER_BUTTON_DPAD_RIGHT, B.CONTROLLER_AXIS_LEFTX),
                 axis(B.CONTROLLER_BUTTON_DPAD_UP, B.CONTROLLER_BUTTON_DPAD_DOWN, B.CONTROLLER_AXIS_LEFTY))
+
+    def aim(self, i):
+        """Прицел правым стиком геймпада номер i: угол (радианы) или None — стик в мёртвой зоне."""
+        if i is None or i >= len(self.pads):
+            return None
+        c = self.pads[i][1]
+        x = c.get_axis(pygame.CONTROLLER_AXIS_RIGHTX) / 32767
+        y = c.get_axis(pygame.CONTROLLER_AXIS_RIGHTY) / 32767
+        if math.hypot(x, y) < AIM_DEAD:
+            return None
+        return math.atan2(y, x)
 
     def axis_event(self, e):
         """Превращает R2, L2 и стик в «нажатия». Возвращает условную кнопку или None."""

@@ -140,6 +140,8 @@ class Match:
                 c = commands.get(p.id)
                 if c is None:
                     continue
+                if c.aim is not None:     # прицел — до выстрела этого такта
+                    p.aim = float(c.aim)
                 if c.fire:
                     self.fire(p)
                 if c.melee:

@@ -9,6 +9,7 @@
     .venv/bin/python tools/fingerprint.py --check FILE # сравнить с сохранённым
 """
 import hashlib
+import math
 import json
 import sys
 from pathlib import Path
@@ -60,7 +61,7 @@ def run(seed):
     from duel.match import Match
     games = 0
     m = Match(seed=seed * 1000)
-    bots = [Bot(seed * 100 + i) for i in range(2)]
+    bots = [Bot(seed * 100 + i, forward=0.0 if i == 0 else math.pi) for i in range(2)]
     out = []
     for tick in range(TICKS):
         cmds = {p.id: Command(*b.act()) for p, b in zip(m.players, bots)}

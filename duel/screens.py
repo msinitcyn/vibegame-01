@@ -238,6 +238,9 @@ class ScreensMixin:
                 if note:
                     img = self.small.render(note, True, AMMO_COLOR if cur else GREY)
                     s.blit(img, img.get_rect(center=(card.centerx, card.top + 170)))
+        if not self.pads.pads:            # прицел нужен правым стиком хотя бы одному игроку
+            img = self.font.render(tr("pick.need_pad"), True, BAD_TEXT)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 72)))
         img = self.small.render(tr("pick.hint"), True, GREY)
         s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 40)))
         pygame.display.flip()

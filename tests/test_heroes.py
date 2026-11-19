@@ -9,6 +9,8 @@ from tests.conftest import FakePad
 
 
 def open_pick(game, hp=MAX_HP):
+    if not game.pads.pads:
+        game.pads.pads = [(100, FakePad())]     # за одним компьютером нужен хотя бы один геймпад
     game.heroes = None
     game.open_pick(hp)
     assert game.state == "pick"
