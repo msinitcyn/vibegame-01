@@ -23,10 +23,11 @@ jobs:
       DUEL_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
       SDL_VIDEODRIVER: dummy
       SDL_AUDIODRIVER: dummy
+      PYTHONUTF8: "1"               # русские сообщения в журнале и на Windows
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 

@@ -14,6 +14,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+# на Windows вывод в журнал по умолчанию в cp1252 — русские сообщения уронили бы сборку
+for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+        stream.reconfigure(encoding="utf-8", errors="replace")
+
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
 WORK = ROOT / "build"
