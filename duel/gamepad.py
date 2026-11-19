@@ -18,7 +18,8 @@ PAD_ITEM_LABELS = "□△○✕"
 PAD_ITEM_COLORS = ((255, 130, 200), (80, 220, 170), (255, 95, 95), (120, 165, 255))
 # ромб, как кнопки на геймпаде: □ слева, △ сверху, ○ справа, ✕ снизу (смещения в ячейках)
 PAD_ITEM_LAYOUT = ((-1, 0), (0, -1), (1, 0), (0, 1))
-PAD_FIRE = "fire"                # условная кнопка: R1 или нажатый R2
+PAD_FIRE = "fire"                # условная кнопка: выстрел (R1)
+PAD_AIM_RESET = "aim_reset"      # условная кнопка: нажатый R2 — прицел прямо на соперника
 PAD_MELEE = "melee"              # условная кнопка: L1 или нажатый L2
 PAD_UP, PAD_DOWN = "up", "down"  # условные кнопки: стик вверх/вниз (для меню)
 PAD_LEFT, PAD_RIGHT = "left", "right"    # стик влево/вправо (выбор героя, листание)
@@ -82,7 +83,7 @@ class Gamepads:
 
     def axis_event(self, e):
         """Превращает R2, L2 и стик в «нажатия». Возвращает условную кнопку или None."""
-        triggers = {pygame.CONTROLLER_AXIS_TRIGGERRIGHT: PAD_FIRE,
+        triggers = {pygame.CONTROLLER_AXIS_TRIGGERRIGHT: PAD_AIM_RESET,
                     pygame.CONTROLLER_AXIS_TRIGGERLEFT: PAD_MELEE}
         if e.axis in triggers:
             on = e.value > 32767 * 0.5

@@ -240,3 +240,26 @@ def test_settings_rows_change_and_save(sens):
     game.on_key(pygame.KSCAN_A)
     assert game.settings["aim_mouse"] == 4
     game.draw_settings()
+
+
+def test_r2_and_middle_click_reset_aim(sens):
+    from types import SimpleNamespace
+    game = sens
+    pad = FakePad()
+    game.pads.pads = [(100, pad)]                        # геймпад у правого, мышь у левого
+    game.settings["aim_stick"] = 10
+    pad.right_x, pad.right_y = 0, 32000
+    game.update(DT)
+    pad.right_x, pad.right_y = 0, 0
+    btn = game.pads.axis_event(SimpleNamespace(instance_id=100, axis=pygame.CONTROLLER_AXIS_TRIGGERRIGHT,
+                                               value=32000))
+    game.on_pad(100, btn)                                # R2
+    game.update(DT)
+    assert game.match.red.aim == pytest.approx(math.pi)  # прямо на соперника
+    blue = game.match.blue
+    game.on_mouse_move((round(blue.x), round(blue.y) + 200))
+    game.update(DT)
+    assert blue.aim == pytest.approx(math.pi / 2, abs=0.01)
+    game.on_mouse_button(2)                              # средняя кнопка
+    game.update(DT)
+    assert blue.aim == pytest.approx(0.0, abs=0.01)

@@ -134,8 +134,9 @@ def test_pads_fire_and_items(game):
 def test_r2_trigger_fires_once_per_press(game):
     from types import SimpleNamespace
     with_pads(game)
+    from duel.gamepad import PAD_AIM_RESET
     press = SimpleNamespace(instance_id=101, axis=pygame.CONTROLLER_AXIS_TRIGGERRIGHT, value=32000)
-    assert game.pads.axis_event(press) == PAD_FIRE
+    assert game.pads.axis_event(press) == PAD_AIM_RESET     # R2 — прицел прямо (стрельба — R1)
     assert game.pads.axis_event(press) is None
 
 

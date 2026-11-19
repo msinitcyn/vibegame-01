@@ -140,11 +140,15 @@ def test_mob_hits_on_contact_once_per_cooldown(match):
     m = spawn(match)[0]
     m.target = b
     m.x, m.y = b.x + 60, b.y
-    step(match, 1.5)
-    assert b.hp in (MAX_HP - 1, MAX_HP - 2)       # пришёл и ударил, но не каждый кадр
-    hp = b.hp
-    step(match, 2.0)
-    assert b.hp == hp - 2
+    hits, hp = [], b.hp
+    for i in range(int(4.5 / DT)):
+        match.step(DT)
+        if b.hp < hp:
+            hits.append(i * DT)
+            hp = b.hp
+    gaps = [b2 - a for a, b2 in zip(hits, hits[1:])]
+    from duel.config import MOB_HIT_COOLDOWN, MOB_WINDUP
+    assert len(hits) >= 3 and all(g == pytest.approx(MOB_HIT_COOLDOWN + MOB_WINDUP, abs=0.05) for g in gaps)
 
 
 def test_shield_absorbs_mob_hit(match):

@@ -62,7 +62,9 @@ def test_pick_with_gamepads(game):
     open_pick(game, TEST_HP)
     game.on_pad(101, pygame.CONTROLLER_BUTTON_DPAD_LEFT)     # правый: Огонь -> Зло
     game.on_pad(100, pygame.CONTROLLER_BUTTON_A)
-    game.on_pad(101, pygame.CONTROLLER_BUTTON_B)             # снять (ещё не выбран — ничего)
+    game.on_pad(100, pygame.CONTROLLER_BUTTON_X)             # □ — снять выбор
+    assert not game.pick["blue"]["ok"] and game.state == "pick"
+    game.on_pad(100, pygame.CONTROLLER_BUTTON_A)
     game.on_pad(101, pygame.CONTROLLER_BUTTON_A)
     assert game.state == "play" and game.match.blue.hp == TEST_HP
     assert {p.id: p.hero for p in game.match.players} == {"blue": "frost", "red": "evil"}

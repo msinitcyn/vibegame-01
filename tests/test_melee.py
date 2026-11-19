@@ -120,11 +120,11 @@ def test_melee_gamepad_l1_and_l2(game):
 def test_l2_and_r2_independent(game):
     """L2 и R2 одного геймпада не мешают друг другу."""
     from types import SimpleNamespace
-    from duel.gamepad import PAD_FIRE, PAD_MELEE
+    from duel.gamepad import PAD_AIM_RESET, PAD_MELEE
     game.pads.pads = [(100, FakePad())]
     r2 = SimpleNamespace(instance_id=100, axis=pygame.CONTROLLER_AXIS_TRIGGERRIGHT, value=32000)
     l2 = SimpleNamespace(instance_id=100, axis=pygame.CONTROLLER_AXIS_TRIGGERLEFT, value=32000)
-    assert game.pads.axis_event(r2) == PAD_FIRE
+    assert game.pads.axis_event(r2) == PAD_AIM_RESET
     assert game.pads.axis_event(l2) == PAD_MELEE
 
 

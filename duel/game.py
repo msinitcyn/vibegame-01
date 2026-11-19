@@ -36,7 +36,8 @@ from .match import STEP, Match
 from .discovery import DISCOVERY_PORT, Finder
 from .net import PORT, connect, error_key
 from .snapshot import player as snap_player, snapshot
-from .gamepad import Gamepads, PAD_DOWN, PAD_FIRE, PAD_ITEM_BUTTONS, PAD_LEFT, PAD_MELEE, PAD_RIGHT, PAD_UP
+from .gamepad import (Gamepads, PAD_AIM_RESET, PAD_DOWN, PAD_FIRE, PAD_ITEM_BUTTONS, PAD_LEFT, PAD_MELEE,
+                      PAD_RIGHT, PAD_UP)
 from .audio import MUSIC_END, Audio
 from .render import DIR
 from .screens import ScreensMixin
@@ -158,6 +159,7 @@ class Game(ScreensMixin):
         self.focused = True
         self.aim_source = {}          # чем игрок целился последним: "mouse" или "pad"
         self.stick_aim = {}           # плавный прицел стиком: текущий угол игрока
+        self.aim_reset = {}           # сброс прицела прямо: игрок -> угол на ближайший такт
         self.restart()
         if net:
             self.enter_net(*net)
@@ -637,8 +639,9 @@ class Game(ScreensMixin):
             elif btn in (B.CONTROLLER_BUTTON_A, B.CONTROLLER_BUTTON_START):
                 self.on_key(B.KSCAN_RETURN)
             return
+        back = (B.CONTROLLER_BUTTON_X, B.CONTROLLER_BUTTON_B)   # □ (и ○) — назад во всех меню
         if self.state == "help":
-            if btn in (B.CONTROLLER_BUTTON_A, B.CONTROLLER_BUTTON_B, B.CONTROLLER_BUTTON_START):
+            if btn in (B.CONTROLLER_BUTTON_A, *back, B.CONTROLLER_BUTTON_START):
                 self.state = "menu"
             elif btn in (B.CONTROLLER_BUTTON_DPAD_LEFT, B.CONTROLLER_BUTTON_DPAD_RIGHT, PAD_LEFT, PAD_RIGHT):
                 self.on_key(B.KSCAN_RIGHT)
@@ -652,8 +655,11 @@ class Game(ScreensMixin):
                 self.pick_move(pid, 1)
             elif btn == B.CONTROLLER_BUTTON_A:
                 self.pick_confirm(pid, True)
-            elif btn == B.CONTROLLER_BUTTON_B:
-                self.pick_confirm(pid, False)
+            elif btn in back:             # снять выбор; если ничего не выбрано — назад в меню
+                if self.pick[pid]["ok"]:
+                    self.pick_confirm(pid, False)
+                else:
+                    self.state = "menu"
             elif btn == B.CONTROLLER_BUTTON_START:
                 self.state = "menu"
             return
@@ -663,7 +669,7 @@ class Game(ScreensMixin):
                     B.CONTROLLER_BUTTON_DPAD_LEFT: B.KSCAN_LEFT, B.CONTROLLER_BUTTON_DPAD_RIGHT: B.KSCAN_RIGHT,
                     PAD_LEFT: B.KSCAN_LEFT, PAD_RIGHT: B.KSCAN_RIGHT,
                     B.CONTROLLER_BUTTON_A: B.KSCAN_RETURN, B.CONTROLLER_BUTTON_B: B.KSCAN_ESCAPE,
-                    B.CONTROLLER_BUTTON_START: B.KSCAN_ESCAPE}
+                    B.CONTROLLER_BUTTON_X: B.KSCAN_ESCAPE, B.CONTROLLER_BUTTON_START: B.KSCAN_ESCAPE}
             if btn in keys:
                 self.on_key(keys[btn])
             return
@@ -674,7 +680,7 @@ class Game(ScreensMixin):
                 self.on_key(B.KSCAN_DOWN)
             elif btn == B.CONTROLLER_BUTTON_A:
                 self.on_key(B.KSCAN_RETURN)
-            elif btn in (B.CONTROLLER_BUTTON_B, B.CONTROLLER_BUTTON_START):
+            elif btn in (*back, B.CONTROLLER_BUTTON_START):
                 self.on_key(B.KSCAN_ESCAPE)
             return
         if self.net and self.net_waiting:
@@ -684,7 +690,7 @@ class Game(ScreensMixin):
                 self.on_key(B.KSCAN_RETURN)
             elif btn in (B.CONTROLLER_BUTTON_DPAD_LEFT, B.CONTROLLER_BUTTON_DPAD_RIGHT, PAD_LEFT, PAD_RIGHT):
                 self.next_hero(-1 if btn in (B.CONTROLLER_BUTTON_DPAD_LEFT, PAD_LEFT) else 1)
-            elif btn in (B.CONTROLLER_BUTTON_B, B.CONTROLLER_BUTTON_START):
+            elif btn in (*back, B.CONTROLLER_BUTTON_START):
                 self.on_key(B.KSCAN_ESCAPE)
             return
         if pid is None:                   # лишний геймпад — в партии не участвует
@@ -698,6 +704,8 @@ class Game(ScreensMixin):
                 self.on_key(B.KSCAN_R)
         elif btn in (B.CONTROLLER_BUTTON_RIGHTSHOULDER, PAD_FIRE):
             self.on_key(c.fire[0])
+        elif btn == PAD_AIM_RESET:            # R2 — прицел прямо на соперника
+            self.reset_aim(pid)
         elif btn in (B.CONTROLLER_BUTTON_LEFTSHOULDER, PAD_MELEE):
             self.on_key(c.melee[0])
         elif btn in PAD_ITEM_BUTTONS:
@@ -782,12 +790,26 @@ class Game(ScreensMixin):
         c = self.controls[side]
         if button == 1:
             self.on_key(c.fire[0])
+        elif button == 2:                     # средняя кнопка — прицел прямо
+            self.reset_aim(side)
         elif button == 3:
             self.on_key(c.melee[0])
+
+    def reset_aim(self, pid):
+        """Прицел прямо на соперника (R2 / средняя кнопка мыши); перекрестие мыши — перед магом."""
+        forward = 0.0 if DIR[pid] > 0 else math.pi
+        self.aim_reset[pid] = forward
+        self.stick_aim[pid] = forward
+        if self.mouse_side() == pid:
+            p = next((p for p in self.snap.get("players", []) if p["id"] == pid), None)
+            if p:
+                self.mouse_pos = (p["x"] + DIR[pid] * 150, p["y"])
 
     def aim_for(self, pid):
         """Прицел игрока на этот такт: правый стик, если наклонён; иначе — к курсору мыши,
         если игрок целится мышью; иначе None (прицел не меняется)."""
+        if pid in self.aim_reset:         # сброс прицела — на этот такт, потом как обычно
+            return self.aim_reset.pop(pid)
         target = self.pads.aim(self.pad_of(pid))
         if target is not None:
             self.aim_source[pid] = "pad"
