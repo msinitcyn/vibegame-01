@@ -13,7 +13,7 @@ import socket
 
 PROTO = 1
 PORT = 5555
-MAX_OUT = 4 * 1024 * 1024          # клиент не читает — отключаем, а не копим без конца
+MAX_OUT = 1024 * 1024              # клиент не читает (~7 с снимков) — отключаем, а не копим
 
 
 class Conn:
@@ -22,9 +22,12 @@ class Conn:
     def __init__(self, sock):
         self.sock = sock
         sock.setblocking(False)
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        try:
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)   # без задержки мелких пакетов
+        except OSError:
+            pass                      # не TCP (например, пара сокетов в тестах)
         self.inbuf = b""
-        self.outbuf = b""
+        self.outbuf = bytearray()      # дописывается без копирования всего буфера
         self.closed = False
 
     def fileno(self):
@@ -48,7 +51,7 @@ class Conn:
             except OSError:
                 self.close()
                 return
-            self.outbuf = self.outbuf[n:]
+            del self.outbuf[:n]
 
     def recv(self):
         out = []

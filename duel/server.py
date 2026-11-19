@@ -21,12 +21,13 @@ PIDS = ("blue", "red")
 
 
 class Server:
-    def __init__(self, port=PORT, bot=False, host="0.0.0.0"):
+    def __init__(self, port=PORT, bot=False, host="0.0.0.0", proto=PROTO):
         self.listener = socket.create_server((host, port))
         self.listener.setblocking(False)
         self.port = self.listener.getsockname()[1]
         self.conns = {}               # pid -> Conn
         self.bot = bot
+        self.proto = proto            # версия протокола в приветствии (тесты проверяют несовпадение)
         self.bots = {pid: Bot(i + 1) for i, pid in enumerate(PIDS)}
         self.new_match()
 
@@ -49,7 +50,7 @@ class Server:
                 continue
             pid = free[0]
             self.conns[pid] = conn
-            conn.send({"type": "hello", "proto": PROTO, "role": "player", "you": pid})
+            conn.send({"type": "hello", "proto": self.proto, "role": "player", "you": pid})
             print(f"{addr[0]}:{addr[1]} подключился — {pid}", flush=True)
 
     def read(self):
@@ -71,6 +72,13 @@ class Server:
                 del self.conns[pid]
                 self.pending[pid] = Command()
                 print(f"{pid} отключился", flush=True)
+
+    def step(self):
+        """Один такт сервера: подключения, команды, шаг матча (если есть игроки)."""
+        self.accept()
+        self.read()
+        if self.conns:                # без игроков матч стоит
+            self.tick()
 
     def tick(self):
         commands = {}

@@ -19,7 +19,10 @@ if __name__ == "__main__":
         # кнопки геймпада доходят и до окна без фокуса — два клиента на одном компьютере
         os.environ["SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS"] = "1"
         from duel.net import connect
-        net = connect(args.connect)
+        try:
+            net = connect(args.connect)
+        except (ConnectionError, OSError) as e:
+            raise SystemExit(f"не удалось подключиться к {args.connect}: {e}")
     import pygame
     from duel.game import Game
     Game(windowed=args.windowed, net=net, pad=args.pad).run()
