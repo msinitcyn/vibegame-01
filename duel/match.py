@@ -28,6 +28,8 @@ from .config import (
     AMMO_PACK,
     AMMO_SPAWN,
     HERO_ONLY_ITEMS,
+    LEVEL_MIN_MOB_HP,
+    LEVEL_WEIGHT,
     ICE_STEP,
     LASSO_SPEED,
     BEAR_HP,
@@ -87,7 +89,7 @@ from .config import (
 )
 from .entities import (AmmoPack, Artifact, Beam, Clone, FireRing, IceTrail, Mob, Player, Sentry,
                        TreeWall, Wall, push_out_of_arena)
-from .items import BAD_EFFECTS, INSTANT_ITEMS, ITEMS
+from .items import BAD_EFFECTS, INSTANT_ITEMS, ITEMS, item_level
 
 NO_AMMO_EVERY = 1.0               # «нет патронов» — не чаще раза в столько секунд партии
 STEP = 1 / 60                     # фиксированный такт матча
@@ -535,9 +537,11 @@ class Match:
         x = max(killer.land[0] + m, min(killer.land[1] - m, mob.x))
         y = max(TOP + m, min(BOTTOM - m, mob.y))
         x, y = push_out_of_arena(x, y, m, killer.dir)             # целиком на земле, не в арене
-        # артефакты героя (луч Света) выпадают только ему
-        kinds = [k for k in ITEMS if HERO_ONLY_ITEMS.get(k, killer.hero) == killer.hero]
-        self.artifacts.append(Artifact(x, self.rng.choice(kinds), y))
+        # артефакты героя выпадают только ему; уровень — по запасу жизней моба, высокие — реже
+        kinds = [k for k in ITEMS if HERO_ONLY_ITEMS.get(k, killer.hero) == killer.hero
+                 and mob.max_hp >= LEVEL_MIN_MOB_HP[item_level(k)]]
+        weights = [LEVEL_WEIGHT[item_level(k)] for k in kinds]
+        self.artifacts.append(Artifact(x, self.rng.choices(kinds, weights)[0], y))
 
     def bullet_speed(self, owner):
         """Множитель скорости пуль owner: «быстрые пули» у него; «пули соперника замирают» у цели — стоят."""

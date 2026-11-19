@@ -5,6 +5,7 @@ from .config import (
     BEAM_LENGTH,
     ICE_LIFE,
     BEAR_HP,
+    ITEM_LEVEL,
     SENTRY_COUNT,
     SENTRY_HP,
     SENTRY_RANGE,
@@ -79,6 +80,11 @@ HELP_SECTIONS = [
               "trees", "bear", "immune", "sentries", "lasso", "firering", "fastshots", "rapid",
               "zombies", "mobswap", "clones", "wall"]),
 ]
+
+
+def item_level(kind):
+    """Уровень артефакта 1..4 (по умолчанию 1)."""
+    return ITEM_LEVEL.get(kind, 1)
 
 
 def item_name(kind):

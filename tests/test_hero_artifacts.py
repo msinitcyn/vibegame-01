@@ -213,9 +213,10 @@ def test_bear_is_big_fast_melee_and_returns_old_hp():
     speed0 = b.speed
     m.apply_item(b, "bear")
     assert b.hp == BEAR_HP and b.radius == BASE_RADIUS * BEAR_SIZE
-    assert b.speed == speed0 * BEAR_SPEED and not b.can_fire
-    m.hurt_player(b, 15)
-    assert b.hp == BEAR_HP - 15
+    assert b.speed == speed0 * BEAR_SPEED == speed0 and not b.can_fire     # скорость как у мага
+    assert BEAR_HP == 15
+    m.hurt_player(b, 10)
+    assert b.hp == BEAR_HP - 10
     step(m, DURATION["bear"] + 0.1)
     assert b.hp == 6 and "bear" not in b.effects and b.bear_saved is None
 
@@ -300,7 +301,7 @@ def test_former_common_items_belong_to_heroes():
         for seed in range(500):
             m = Match(seed=seed)
             m.set_heroes({"blue": hero, "red": "fire" if hero != "fire" else "light"})
-            mob = Mob(200, TOP + 60, 1)
+            mob = Mob(200, TOP + 60, 6)                  # толстый — может уронить любой уровень
             mob.target = m.blue
             m.drop_artifact(mob)
             seen.add(m.artifacts[0].kind)
@@ -433,3 +434,42 @@ def test_sentries_wither():
     r.x, r.y = 50, TOP + 40
     step(m, SENTRY_TIME + 0.1)
     assert m.sentries == []
+
+
+
+# ------------------------------------------------------------------ уровни
+
+def drops(hero, mob_hp, n=1500):
+    from collections import Counter
+    from duel.match import Match
+    seen = Counter()
+    for seed in range(n):
+        m = Match(seed=seed)
+        m.set_heroes({"blue": hero, "red": "light" if hero != "light" else "fire"})
+        mob = Mob(200, TOP + 60, mob_hp)
+        mob.target = m.blue
+        m.drop_artifact(mob)
+        seen[m.artifacts[0].kind] += 1
+    return seen
+
+
+def test_levels_cover_all_items():
+    from duel.items import ITEMS, item_level
+    assert {item_level(k) for k in ITEMS} == {1, 2, 3, 4}
+    assert item_level("bear") == item_level("firering") == 4
+    assert {item_level(k) for k in ("lasso", "zombies", "icewalk", "sentries")} == {3}
+
+
+def test_level_by_mob_hp():
+    from duel.items import item_level
+    thin = drops("fire", 3, 600)
+    assert max(item_level(k) for k in thin) == 2                  # худой моб: только 1–2
+    mid = drops("fire", 5, 600)
+    assert max(item_level(k) for k in mid) == 3 and "firering" not in mid
+    fat = drops("fire", 6)
+    assert "firering" in fat and "lasso" in fat
+
+
+def test_heavy_items_are_rarer():
+    fat = drops("fire", 6, 3000)
+    assert fat["firering"] < fat["lasso"] < fat["heal"]

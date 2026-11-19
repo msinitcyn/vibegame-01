@@ -196,6 +196,7 @@ TEXTS = {
         "popup.immune": "иммунитет",
         "sec.hero": "Артефакты героев",
         "help.hero_note": "Выпадают только из мобов, добитых своим героем, — но подобрать и применить может любой.",
+        "help.levels": "Точки под значком — уровень артефакта (1–4). Чем выше, тем реже: 3-й — из мобов с 5+ жизнями, 4-й — только из самых толстых (6).",
         "hero.owner": "выпадает только: {hero}",
         "help.clearfoe": "Все пули соперника, что сейчас на экране, исчезают.",
         "help.slowfoe": "{slowfoe} с пули соперника висят в воздухе (не касайся!), потом летят дальше. "
@@ -391,6 +392,7 @@ TEXTS = {
         "popup.immune": "immune",
         "sec.hero": "Hero artifacts",
         "help.hero_note": "They drop only from mobs finished off by their hero — but anyone can pick them up and use them.",
+        "help.levels": "Dots under an icon show the artifact level (1–4). Higher is rarer: level 3 drops from mobs with 5+ lives, level 4 only from the fattest (6).",
         "hero.owner": "drops only for: {hero}",
         "help.clearfoe": "All opponent bullets currently on screen disappear.",
         "help.slowfoe": "For {slowfoe} s the opponent's bullets hang in the air (don't touch!), then fly on. "
@@ -587,6 +589,7 @@ TEXTS = {
         "popup.immune": "immuuni",
         "sec.hero": "Sankarien artefaktit",
         "help.hero_note": "Putoavat vain oman sankarin kaatamista hirviöistä — mutta kuka tahansa voi poimia ja käyttää.",
+        "help.levels": "Pisteet kuvakkeen alla ovat artefaktin taso (1–4). Mitä korkeampi, sitä harvinaisempi: taso 3 putoaa hirviöistä, joilla on 5+ elämää, taso 4 vain lihavimmista (6).",
         "hero.owner": "putoaa vain: {hero}",
         "help.clearfoe": "Kaikki ruudulla olevat vastustajan luodit katoavat.",
         "help.slowfoe": "{slowfoe} s vastustajan luodit leijuvat ilmassa (älä koske!), sitten lentävät "

@@ -325,6 +325,9 @@ class ScreensMixin:
                         s.blit(self.tiny_text.render(line, True, WHITE), (x0 + 48, y + 21 + j * 14))
                     y += row_h
                 y += 6
+        for j, line in enumerate(self.wrap(tr("help.levels"), WIDTH - 80, self.small)):
+            img = self.small.render(line, True, GREY)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 70 + j * 19)))
 
     def draw_help_heroes(self, heroes):
         """Артефакты героев: слева маг героя, справа его артефакты (значок, название, описание)."""
@@ -562,7 +565,7 @@ class ScreensMixin:
             if kind == "ammo":
                 draw_ammo_icon(surf, (x + r, r + 1), r)
             else:
-                draw_icon(surf, kind, (x + r, r + 1), r)
+                draw_icon(surf, kind, (x + r, r + 1), r, level=False)   # статус эффектов — без уровня
             surf.blit(txt, (x + 2 * r + 3, r + 1 - txt.get_height() // 2))
             x += 2 * r + 3 + txt.get_width() + gap
         return surf

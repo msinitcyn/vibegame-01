@@ -5,7 +5,7 @@ import math
 import pygame
 
 from .config import AMMO_COLOR, ICON_BG, MOB_IDLE_COLOR, RED, WHITE
-from .items import ITEMS, ring_color
+from .items import ITEMS, item_level, ring_color
 
 
 def draw_ammo_icon(surf, center, r):
@@ -20,8 +20,24 @@ def draw_ammo_icon(surf, center, r):
         pygame.draw.line(surf, AMMO_COLOR, (x, box.top + 3), (x, box.bottom - 3), 2)
 
 
-def draw_icon(surf, kind, center, r):
-    """Значок артефакта — одинаковый на поле и в инвентаре."""
+LEVEL_DOT = (255, 215, 80)
+
+
+def draw_icon(surf, kind, center, r, level=True):
+    """Значок артефакта — одинаковый на поле, в инвентаре и в справке; снизу — точки уровня."""
+    _draw_icon(surf, kind, center, r)
+    if level and r >= 10:
+        n = item_level(kind)
+        dot = max(2, round(r * 0.13))
+        step = dot * 2.6 / r                     # угол между точками
+        for i in range(n):
+            a = math.pi / 2 + (i - (n - 1) / 2) * step
+            p = (round(center[0] + math.cos(a) * r), round(center[1] + math.sin(a) * r))
+            pygame.draw.circle(surf, (16, 12, 20), p, dot + 1)
+            pygame.draw.circle(surf, LEVEL_DOT, p, dot)
+
+
+def _draw_icon(surf, kind, center, r):
     cx, cy = center
     color = ITEMS[kind][1]
     ring = ring_color(kind)
