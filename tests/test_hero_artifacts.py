@@ -201,3 +201,105 @@ def test_zombie_goes_for_foe_and_expires_without_drop():
     assert r.hp < 1000                                   # дошёл и бьёт
     step(m, ZOMBIE_TIME)
     assert z not in m.mobs and m.artifacts == []
+
+
+# ------------------------------------------------------------------ медведь
+
+def test_bear_is_big_fast_melee_and_returns_old_hp():
+    from duel.config import BASE_RADIUS, BEAR_HP, BEAR_SIZE, BEAR_SPEED, DURATION
+    m = new_match()
+    b = m.blue
+    b.hp = 6
+    speed0 = b.speed
+    m.apply_item(b, "bear")
+    assert b.hp == BEAR_HP and b.radius == BASE_RADIUS * BEAR_SIZE
+    assert b.speed == speed0 * BEAR_SPEED and not b.can_fire
+    m.hurt_player(b, 15)
+    assert b.hp == BEAR_HP - 15
+    step(m, DURATION["bear"] + 0.1)
+    assert b.hp == 6 and "bear" not in b.effects and b.bear_saved is None
+
+
+def test_bear_defeated_turns_back_without_losing():
+    from duel.config import BEAR_HP
+    m = new_match()
+    b = m.blue
+    b.hp = 3
+    m.apply_item(b, "bear")
+    m.hurt_player(b, BEAR_HP)
+    step(m)
+    assert b.hp == 3 and "bear" not in b.effects and m.winner is None
+
+
+def test_bear_melee_reaches_further_and_hits_harder():
+    from duel.config import BEAR_MELEE_DAMAGE, MELEE_RANGE
+    m = new_match()
+    b = m.blue
+    m.apply_item(b, "bear")
+    mob = Mob(b.x + b.radius + MELEE_RANGE + 30 + 18, b.y, 10)
+    m.mobs = [mob]
+    m.melee(b)
+    assert mob.hp == 10 - BEAR_MELEE_DAMAGE
+
+
+# ------------------------------------------------------------------ огненный круг
+
+def ring_match():
+    from duel.config import FIRE_RING_R
+    m = new_match()
+    b, r = m.blue, m.red
+    b.x, b.y, r.x, r.y = 150, TOP + 200, 800, TOP + 300
+    r.hp = 1000
+    m.apply_item(b, "firering")
+    ring = m.rings[0]
+    assert (ring.x, ring.y) == (r.x, r.y) and r in ring.inside and b not in ring.inside
+    return m, ring, FIRE_RING_R
+
+
+def test_ring_traps_and_burns_at_wall():
+    m, ring, R = ring_match()
+    r = m.red
+    step(m, 0.5)
+    assert r.hp == 1000                                  # в середине не жжёт
+    walk(m, "red", (0, 1), 1.5)                          # бежит к стене
+    assert math.hypot(r.x - ring.x, r.y - ring.y) <= R - r.radius + 0.01
+    assert r.hp <= 1000 - 4                              # ~1 с у стены — 4 жизни
+
+
+def test_ring_bullets_out_die_in_pass():
+    m, ring, R = ring_match()
+    r, b = m.red, m.blue
+    m.bullets = [Bullet(ring.x, ring.y - R + 20, 0, -520, r),        # изнутри наружу
+                 Bullet(ring.x - R - 30, ring.y + 60, 520, 0, b)]    # снаружи внутрь
+    step(m, 0.2)
+    owners = [x.owner for x in m.bullets]
+    assert r not in owners and b in owners
+
+
+def test_ring_keeps_outsiders_out():
+    m, ring, R = ring_match()
+    b = m.blue
+    b.hp = 1000
+    b.effects["icewalk"] = 99                            # чужая земля не жжёт — проверяем только огонь
+    b.x, b.y = ring.x - R - 60, ring.y
+    walk(m, "blue", (1, 0), 1.0)
+    assert math.hypot(b.x - ring.x, b.y - ring.y) >= R + b.radius - 0.01
+    assert b.hp == 1000                                  # свой огонь не жжёт
+
+
+# ------------------------------------------------------------------ чьи артефакты
+
+def test_former_common_items_belong_to_heroes():
+    from duel.match import Match
+    owners = {"shield": "frost", "foe_freeze": "frost", "clearfoe": "light", "mobswap": "dark"}
+    for hero in ("fire", "frost", "nature", "dark", "light"):
+        seen = set()
+        for seed in range(500):
+            m = Match(seed=seed)
+            m.set_heroes({"blue": hero, "red": "fire" if hero != "fire" else "light"})
+            mob = Mob(200, TOP + 60, 1)
+            mob.target = m.blue
+            m.drop_artifact(mob)
+            seen.add(m.artifacts[0].kind)
+        for kind, owner in owners.items():
+            assert (kind in seen) == (hero == owner), (hero, kind)

@@ -31,6 +31,8 @@ from .config import (
     HERO_COLOR,
     HERO_EDGE,
     HERO_ONLY_ITEMS,
+    HELP_HERO_PAGES,
+    HELP_PAGES,
     HERO_LAND,
     HERO_SPRITE,
     HEROES,
@@ -283,19 +285,21 @@ class ScreensMixin:
         pygame.display.flip()
 
     def draw_help(self):
-        """Справка в три страницы: общие артефакты, артефакты героев, правила."""
+        """Справка: общие артефакты, артефакты героев (две страницы), правила."""
         s = self.screen
         s.fill(BG)
-        title = (tr("help.title"), tr("sec.hero"), tr("help.rules"))[self.help_page]
+        page = self.help_page
+        heroes = page - 1 if 1 <= page <= len(HELP_HERO_PAGES) else None
+        title = (tr("help.title") if page == 0 else tr("sec.hero") if heroes is not None else tr("help.rules"))
         img = self.font.render(title, True, WHITE)
         s.blit(img, img.get_rect(center=(WIDTH // 2, 24)))
-        if self.help_page == 0:
+        if page == 0:
             self.draw_help_items()
-        elif self.help_page == 1:
-            self.draw_help_heroes()
+        elif heroes is not None:
+            self.draw_help_heroes(HELP_HERO_PAGES[heroes])
         else:
             self.draw_help_rules()
-        hint = self.small.render(f"{tr('help.pages', page=self.help_page + 1, pages=3)}    "
+        hint = self.small.render(f"{tr('help.pages', page=page + 1, pages=HELP_PAGES)}    "
                                  f"{tr('help.back')}", True, GREY)
         s.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 16)))
         pygame.display.flip()
@@ -322,23 +326,29 @@ class ScreensMixin:
                     y += row_h
                 y += 6
 
-    def draw_help_heroes(self):
-        """Артефакты героев: маг героя, значок, название, описание."""
+    def draw_help_heroes(self, heroes):
+        """Артефакты героев: слева маг героя, справа его артефакты (значок, название, описание)."""
         s = self.screen
-        y = 70
-        for kind in dict(HELP_SECTIONS)["hero"]:
-            hero = HERO_ONLY_ITEMS[kind]
-            draw_unit(s, HERO_SPRITE[hero], (70, y + 40), 30, 1)
-            draw_icon(s, kind, (140, y + 40), 24)
-            name = self.font.render(item_name(kind), True, ITEMS[kind][1])
-            s.blit(name, (180, y + 6))
-            owner = self.small.render(tr("hero.owner", hero=tr("hero." + hero)), True, HERO_COLOR[hero])
-            s.blit(owner, (180 + name.get_width() + 16, y + 9))
-            for j, line in enumerate(self.wrap(item_help(kind), WIDTH - 240, self.small)):
-                s.blit(self.small.render(line, True, WHITE), (180, y + 36 + j * 20))
-            y += 116
+        y = 56
+        kinds = dict(HELP_SECTIONS)["hero"]
+        for hero in heroes:
+            mine = [k for k in kinds if HERO_ONLY_ITEMS[k] == hero]
+            top = y
+            for kind in mine:
+                draw_icon(s, kind, (150, y + 26), 22)
+                name = self.font.render(item_name(kind), True, ITEMS[kind][1])
+                s.blit(name, (186, y))
+                lines = self.wrap(item_help(kind), WIDTH - 220, self.small)
+                for j, line in enumerate(lines):
+                    s.blit(self.small.render(line, True, WHITE), (186, y + 28 + j * 19))
+                y += 34 + 19 * len(lines) + 8
+            pygame.draw.line(s, HERO_COLOR[hero], (24, top), (24, y - 10), 3)
+            draw_unit(s, HERO_SPRITE[hero], (70, (top + y) // 2 - 10), 28, 1)
+            label = self.small.render(tr("hero." + hero), True, HERO_COLOR[hero])
+            s.blit(label, label.get_rect(center=(70, (top + y) // 2 + 30)))
+            y += 6
         note = self.small.render(tr("help.hero_note"), True, GREY)
-        s.blit(note, note.get_rect(center=(WIDTH // 2, y + 10)))
+        s.blit(note, note.get_rect(center=(WIDTH // 2, HEIGHT - 44)))
 
     def draw_help_rules(self):
         s = self.screen

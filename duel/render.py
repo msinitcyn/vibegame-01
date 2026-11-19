@@ -11,6 +11,9 @@ from .config import (
     AMMO_COLOR,
     BEAM_WIDTH,
     ICE_R,
+    BEAR_REACH,
+    FIRE_RING_HEAT,
+    FIRE_RING_R,
     ZOMBIE_RADIUS,
     TREE_W,
     AMMO_PACK,
@@ -88,21 +91,47 @@ def draw_aim(surf, p, color):
     pygame.draw.polygon(surf, color, [tip, left, right])
 
 
+def draw_bear(surf, pos, r, facing, white, color):
+    """Медведь: бурое тело, уши, светлая морда в сторону взгляда, ошейник цвета героя."""
+    x, y = pos
+    fur = (255, 255, 255) if white else (120, 78, 44)
+    light = (255, 255, 255) if white else (190, 140, 90)
+    ink = (16, 12, 20)
+    for ex in (-0.6, 0.6):                                  # уши
+        c = (int(x + ex * r), int(y - 0.75 * r))
+        pygame.draw.circle(surf, ink, c, int(r * 0.32) + 2)
+        pygame.draw.circle(surf, fur, c, int(r * 0.32))
+        pygame.draw.circle(surf, light, c, int(r * 0.15))
+    pygame.draw.circle(surf, ink, (int(x), int(y)), int(r) + 2)
+    pygame.draw.circle(surf, fur, (int(x), int(y)), int(r))
+    pygame.draw.arc(surf, color, (x - r * 0.8, y - r * 0.2, r * 1.6, r * 1.1), math.pi * 1.15, math.pi * 1.85, 4)
+    sx = x + facing * r * 0.38                              # морда
+    pygame.draw.ellipse(surf, light, (sx - r * 0.34, y - r * 0.05, r * 0.68, r * 0.5))
+    pygame.draw.circle(surf, ink, (int(sx + facing * r * 0.12), int(y + r * 0.08)), max(3, int(r * 0.1)))
+    for ex in (-0.2, 0.25):                                 # глаза
+        pygame.draw.circle(surf, ink, (int(x + facing * (ex + 0.2) * r), int(y - r * 0.28)), max(2, int(r * 0.08)))
+
+
 def draw_player(surf, p, heroes):
     pos = _pos(p)
     pid = p["id"]
     aim = p.get("aim")
     facing = DIR[pid] if aim is None else (1 if math.cos(aim) >= 0 else -1)   # лицом к прицелу
-    draw_unit(surf, HERO_SPRITE[heroes[pid]], pos, p["r"], facing, white=p["hit_flash"] > 0)
+    bear = "bear" in p.get("effects", {})
+    if bear:
+        draw_bear(surf, pos, p["r"], facing, p["hit_flash"] > 0, side_color(heroes, pid))
+    else:
+        draw_unit(surf, HERO_SPRITE[heroes[pid]], pos, p["r"], facing, white=p["hit_flash"] > 0)
     if aim is not None:
         draw_aim(surf, p, side_color(heroes, pid))
     if p["melee_flash"] > 0:
         k = min(1.0, p["melee_flash"] / MELEE_FLASH)
         radius = int(p["r"])
-        ring = pygame.Surface((2 * (radius + MELEE_RANGE) + 4,) * 2, pygame.SRCALPHA)
+        reach = MELEE_RANGE + (BEAR_REACH if bear else 0)
+        ring = pygame.Surface((2 * (radius + reach) + 4,) * 2, pygame.SRCALPHA)
         c = ring.get_width() // 2
-        pygame.draw.circle(ring, (*side_color(heroes, pid), int(220 * k)), (c, c), radius + MELEE_RANGE, 4)
-        pygame.draw.circle(ring, (255, 255, 255, int(160 * k)), (c, c), radius + MELEE_RANGE - 6, 2)
+        pygame.draw.circle(ring, (*side_color(heroes, pid), int(220 * k)), (c, c), radius + reach, 4)
+        pygame.draw.circle(ring, (255, 255, 255, int(160 * k)), (c, c), radius + reach - 6, 2)
         surf.blit(ring, ring.get_rect(center=pos))
     draw_effects(surf, p)
 
@@ -258,6 +287,29 @@ def draw_trees(surf, t):
         d += TREE_W * 0.85
 
 
+def draw_fire_ring(surf, ring, t):
+    """Огненный круг: тёплое свечение у стены и пляшущие языки пламени по окружности."""
+    R = FIRE_RING_R
+    x, y = ring["x"], ring["y"]
+    k = 1.0 if ring["life"] > 1 else (0.4 + 0.6 * (int(ring["life"] * 8) % 2))   # мигает перед концом
+    glow = pygame.Surface((2 * R + 2 * FIRE_RING_HEAT + 8,) * 2, pygame.SRCALPHA)
+    c = R + FIRE_RING_HEAT + 4
+    pygame.draw.circle(glow, (255, 90, 30, int(45 * k)), (c, c), R + FIRE_RING_HEAT)
+    pygame.draw.circle(glow, (0, 0, 0, 0), (c, c), R - FIRE_RING_HEAT)
+    pygame.draw.circle(glow, (255, 120, 40, int(90 * k)), (c, c), R + FIRE_RING_HEAT, 3)
+    pygame.draw.circle(glow, (255, 120, 40, int(90 * k)), (c, c), R - FIRE_RING_HEAT, 3)
+    surf.blit(glow, (int(x) - c, int(y) - c))
+    pygame.draw.circle(surf, (16, 12, 20), (int(x), int(y)), R, 10)
+    pygame.draw.circle(surf, (230, 70, 20), (int(x), int(y)), R, 6)
+    n = 36
+    for i in range(n):
+        a = i * 2 * math.pi / n
+        h = 9 + 6 * math.sin(t * 9 + i * 1.7)
+        fx, fy = x + math.cos(a) * R, y + math.sin(a) * R
+        pygame.draw.polygon(surf, (255, 150, 40), [(fx - 5, fy + 3), (fx + 5, fy + 3), (fx, fy - h)])
+        pygame.draw.polygon(surf, (255, 235, 130), [(fx - 2, fy + 2), (fx + 2, fy + 2), (fx, fy - h * 0.55)])
+
+
 def draw_pull(surf, victim, puller, color):
     """Нить притяжения: волнистая линия от того, кто тянет, к тому, кого тянут."""
     x0, y0, x1, y1 = puller["x"], puller["y"], victim["x"], victim["y"]
@@ -296,6 +348,8 @@ def draw_field(surf, snap, font):
         draw_bullet(surf, b, heroes)
     for t in snap.get("trees", []):
         draw_trees(surf, t)
+    for ring in snap.get("rings", []):
+        draw_fire_ring(surf, ring, snap.get("time", 0))
     by_id = {p["id"]: p for p in snap["players"]}
     for p in snap["players"]:
         raising = p.get("effects", {}).get("raising")

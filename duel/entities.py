@@ -5,6 +5,11 @@
 import math
 
 from .config import (
+    BEAR_SIZE,
+    BEAR_SPEED,
+    FIRE_RING_HEAT,
+    FIRE_RING_R,
+    FIRE_RING_TIME,
     HERO_FADE,
     ICE_LIFE,
     ICE_R,
@@ -116,11 +121,13 @@ class Unit:
             r *= 2
         if "shrink" in self.effects:
             r *= 0.5
+        if "bear" in self.effects:
+            r *= BEAR_SIZE
         return r
 
     @property
     def speed_mult(self):
-        return 1.8 if "speed" in self.effects else 1.0
+        return (1.8 if "speed" in self.effects else 1.0) * (BEAR_SPEED if "bear" in self.effects else 1.0)
 
     @property
     def frozen(self):
@@ -128,7 +135,7 @@ class Unit:
 
     @property
     def can_fire(self):
-        return "nofire" not in self.effects
+        return "nofire" not in self.effects and "bear" not in self.effects      # медведь не стреляет
 
     def apply(self, effect):
         """Эффекты складываются: разные действуют одновременно, повтор того же добавляет время.
@@ -197,6 +204,8 @@ class Player(Unit):
         self.cooldown = 0.0
         self.melee_cd = 0.0           # перезарядка ближнего удара
         self.melee_flash = 0.0        # сколько ещё виден взмах
+        self.bear_saved = None        # «Медведь»: жизни мага до превращения
+        self.ring_t = 0.0             # сколько стоит у огненной стены с последнего урона
         self.reset_effects()
         self.items = [None] * INVENTORY_SIZE
         self.queue = []               # собранные артефакты, ждущие свободной ячейки
@@ -276,6 +285,39 @@ class Player(Unit):
         # пуля летит по прицелу; движение на направление не влияет
         return make_bullets(self, self.x, self.y, self.aim, self.radius,
                             self.shot_offsets(), "wavy" in self.effects)
+
+
+class FireRing:
+    """«Огненный круг»: кольцо радиусом FIRE_RING_R вокруг соперника. Стену не пересекает ни
+    один маг; сопернику хозяина у стены больно; пули изнутри наружу гаснут."""
+
+    def __init__(self, owner, foe, players):
+        self.id = None
+        self.owner = owner
+        self.x, self.y = foe.x, foe.y
+        self.life = FIRE_RING_TIME
+        self.inside = {p for p in players if math.hypot(p.x - self.x, p.y - self.y) < FIRE_RING_R}
+
+    def keep(self, p):
+        """Удержать мага по свою сторону стены."""
+        dx, dy = p.x - self.x, p.y - self.y
+        d = math.hypot(dx, dy)
+        if d == 0:
+            return
+        r = p.radius
+        lim = FIRE_RING_R - r if p in self.inside else FIRE_RING_R + r
+        if (p in self.inside and d > lim) or (p not in self.inside and d < lim):
+            lim = max(0.0, lim)
+            p.x, p.y = self.x + dx / d * lim, self.y + dy / d * lim
+
+    def near_wall(self, p):
+        d = math.hypot(p.x - self.x, p.y - self.y)
+        return abs(d - FIRE_RING_R) - p.radius < FIRE_RING_HEAT
+
+    def stops(self, x0, y0, x1, y1):
+        """Снаряд перелетел изнутри наружу."""
+        return (math.hypot(x0 - self.x, y0 - self.y) < FIRE_RING_R
+                <= math.hypot(x1 - self.x, y1 - self.y))
 
 
 class Bullet:

@@ -40,8 +40,26 @@ LASSO_SPEED = 450                # тянет к Огню быстрее, чем
 ZOMBIE_RADIUS = 140              # радиус оживления (ближний удар достаёт ~64)
 ZOMBIE_MAX = 2                   # сколько мобов за раз становятся зомби
 ZOMBIE_TIME = 20.0               # сколько живёт зомби
-HERO_ONLY_ITEMS = {"beam": "light", "icewalk": "frost", "trees": "nature", "lasso": "fire",
-                   "zombies": "dark"}
+# «Медведь» (Природа)
+BEAR_HP = 20                     # жизни медведя (после — прежние жизни мага)
+BEAR_SIZE = 1.6                  # во сколько раз больше мага
+BEAR_SPEED = 1.35                # во сколько раз быстрее
+BEAR_REACH = 45                  # на сколько дальше ближний удар, пикс
+BEAR_MELEE_DAMAGE = 3            # сила ближнего удара медведя
+# «Огненный круг» (Огонь)
+FIRE_RING_R = 170                # радиус кольца вокруг соперника, пикс
+FIRE_RING_TIME = 6.0             # сколько горит
+FIRE_RING_HEAT = 35              # ближе этого к стене — жжёт, пикс
+FIRE_RING_DPS = 4                # жизней в секунду у стены
+# справка: страницы артефактов героев (герои по порядку) и всего страниц
+HELP_HERO_PAGES = (("light", "frost"), ("nature", "fire", "dark"))
+HELP_PAGES = 2 + len(HELP_HERO_PAGES)
+# артефакт -> герой: выпадает только ему (подобрать может любой)
+HERO_ONLY_ITEMS = {"beam": "light", "clearfoe": "light",
+                   "icewalk": "frost", "foe_freeze": "frost", "shield": "frost",
+                   "trees": "nature", "bear": "nature",
+                   "lasso": "fire", "firering": "fire",
+                   "zombies": "dark", "mobswap": "dark"}
 
 
 
@@ -198,6 +216,7 @@ DURATION = {"grow2": 7, "shrink": 7, "freeze": 2.5, "speed": 7, "nofire": 4, "sl
             "icewalk": 8,                 # «Ледяная тропа»: чужая земля не жжёт, за магом — лёд
             "lassoed": 3,                 # «Огненное лассо»: соперника тянет к Огню
             "raising": 0.6,               # «Восставшие мертвецы»: сколько видно кольцо оживления
+            "bear": 10,                   # «Медведь»: сколько маг — медведь
             # улучшения оружия
             "triple": WEAPON_TIME, "wavy": WEAPON_TIME, "rapid": WEAPON_TIME, "breaker": WEAPON_TIME}
 RAPID_FACTOR = 0.4               # пауза между выстрелами x0.4

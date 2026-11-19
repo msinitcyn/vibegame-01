@@ -170,5 +170,10 @@ def test_help_pages(game):
     assert game.help_page == 1
     game.on_key(pygame.KSCAN_LEFT)
     assert game.help_page == 0
+    game.on_key(pygame.KSCAN_LEFT)
+    assert game.help_page == 3                  # по кругу: 4 страницы
+    for page in range(4):
+        game.help_page = page
+        game.draw_help()
     game.on_key(pygame.KSCAN_ESCAPE)
     assert game.state == "menu"

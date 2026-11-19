@@ -30,6 +30,10 @@ from .config import (
     HERO_ONLY_ITEMS,
     ICE_STEP,
     LASSO_SPEED,
+    BEAR_HP,
+    BEAR_MELEE_DAMAGE,
+    BEAR_REACH,
+    FIRE_RING_DPS,
     MOB_HIT_COOLDOWN,
     MOB_REACH_EXTRA,
     MOB_SPEED,
@@ -77,7 +81,8 @@ from .config import (
     TOP,
     WIDTH,
 )
-from .entities import (AmmoPack, Artifact, Beam, Clone, IceTrail, Mob, Player, TreeWall, Wall,
+from .entities import (
+    FireRing,AmmoPack, Artifact, Beam, Clone, IceTrail, Mob, Player, TreeWall, Wall,
                        push_out_of_arena)
 from .items import BAD_EFFECTS, INSTANT_ITEMS, ITEMS
 
@@ -109,6 +114,7 @@ class Match:
         self.beams = []               # «Луч света»
         self.ice = []                 # «Ледяная тропа»: куски следа
         self.trees = []               # «Стена деревьев»
+        self.rings = []               # «Огненный круг»
         self.trail_last = {}          # маг под «Ледяной тропой» -> где положен последний кусок следа
         self.match_time = 0.0         # секунд с начала партии
         self.mob_wave = 0             # сколько волн мобов уже пришло
@@ -141,7 +147,7 @@ class Match:
     def objects(self):
         """Все объекты поля, кроме магов."""
         return (self.bullets + self.mobs + self.mob_shots + self.artifacts + self.ammo_packs
-                + self.walls + self.clones + self.beams + self.ice + self.trees)
+                + self.walls + self.clones + self.beams + self.ice + self.trees + self.rings)
 
     def number_new(self):
         """Выдать номера объектам, появившимся за шаг (в порядке появления в списках)."""
@@ -193,17 +199,20 @@ class Match:
         p.melee_cd = MELEE_COOLDOWN
         p.melee_flash = MELEE_FLASH
         self.emit("melee", p.id)
+        bear = "bear" in p.effects            # медведь бьёт дальше и сильнее
+        reach = MELEE_RANGE + (BEAR_REACH if bear else 0)
+        damage = BEAR_MELEE_DAMAGE if bear else MELEE_DAMAGE
         for m in self.mobs:
             if m.zombie_of is p:
                 continue                      # своих зомби не бьём
-            if m.alive and math.hypot(m.x - p.x, m.y - p.y) <= p.radius + m.radius + MELEE_RANGE:
-                m.hurt(p, MELEE_DAMAGE)       # злится на ударившего; смерть — общим порядком
+            if m.alive and math.hypot(m.x - p.x, m.y - p.y) <= p.radius + m.radius + reach:
+                m.hurt(p, damage)             # злится на ударившего; смерть — общим порядком
         foe = self.other(p)
-        if math.hypot(foe.x - p.x, foe.y - p.y) <= p.radius + foe.radius + MELEE_RANGE:
+        if math.hypot(foe.x - p.x, foe.y - p.y) <= p.radius + foe.radius + reach:
             if not foe.shield_absorb():      # щит гасит удар целиком
-                self.hurt_player(foe, MELEE_DAMAGE)
+                self.hurt_player(foe, damage)
         for c in self.clones_of(foe):
-            if math.hypot(c.x - p.x, c.y - p.y) <= p.radius + c.radius + MELEE_RANGE:
+            if math.hypot(c.x - p.x, c.y - p.y) <= p.radius + c.radius + reach:
                 c.alive = False
 
     def use_item(self, p, slot):
@@ -252,6 +261,13 @@ class Match:
             for m in self.mobs:
                 if m.target is p:
                     m.target = None if "mobpeace" in foe.effects else foe
+        elif kind == "bear":                  # маг — медведь; жизни мага сохраняются
+            if p.bear_saved is None:
+                p.bear_saved = p.hp
+            p.hp = BEAR_HP
+            self.give(p, "bear")
+        elif kind == "firering":              # огненное кольцо вокруг соперника
+            self.rings.append(FireRing(p, foe, self.players))
         elif kind == "zombies":               # мобы рядом — зомби мага
             self.raise_zombies(p)
         elif kind == "icewalk":               # чужая земля не жжёт, за магом — ледяной след
@@ -293,6 +309,14 @@ class Match:
             return
         p.hp -= n
         p.hit_flash = 0.12
+        if p.bear_saved is not None and p.hp <= 0:
+            self.end_bear(p)                  # медведя победили — снова маг, партия идёт
+
+    def end_bear(self, p):
+        """Конец превращения: у мага — жизни, что были до него."""
+        p.hp, p.bear_saved = p.bear_saved, None
+        p.effects.pop("bear", None)
+        self.emit("bear_end", p.id)
 
     def on_trail(self, p, owner):
         """Маг p стоит на ледяном следе хозяина owner."""
@@ -304,6 +328,9 @@ class Match:
         if self.on_trail(p, foe):
             return True
         return p.on_foe_land() and "icewalk" not in p.effects and not self.on_trail(p, p)
+
+    def ring_stops(self, x0, y0, x1, y1):
+        return any(r.stops(x0, y0, x1, y1) for r in self.rings)
 
     def blocked(self, x, y, r):
         return any(t.hits(x, y, r) for t in self.trees)
@@ -317,6 +344,8 @@ class Match:
             if t.hits(p.x, p.y, r):
                 p.x, p.y = t.push_out(p.x, p.y, r)
         p.x, p.y = push_out_of_arena(p.x, p.y, r, p.dir)
+        for ring in self.rings:               # огненную стену не пересечь
+            ring.keep(p)
 
     def update_ice(self, p):
         """Под «Ледяной тропой» за магом остаётся след — кусок каждые ICE_STEP пикселей."""
@@ -335,8 +364,13 @@ class Match:
         for t in self.ice:
             t.life -= dt
         self.ice = [t for t in self.ice if t.life > 0]
+        for ring in self.rings:
+            ring.life -= dt
+        self.rings = [r for r in self.rings if r.life > 0]
         for p in self.players:
             p.update(dt, moves.get(p.id, (0, 0)))
+            if p.bear_saved is not None and "bear" not in p.effects:
+                self.end_bear(p)              # время медведя вышло
             if "lassoed" in p.effects:        # «Огненное лассо»: тянет к сопернику быстрее бега
                 foe = self.other(p)
                 dx, dy = foe.x - p.x, foe.y - p.y
@@ -356,6 +390,14 @@ class Match:
                     self.hurt_player(p, 1)
             else:
                 p.foe_land_t = 0.0
+            # у огненной стены соперника хозяина — FIRE_RING_DPS в секунду
+            if any(r.owner is not p and r.near_wall(p) for r in self.rings):
+                p.ring_t += dt
+                while p.ring_t >= 1 / FIRE_RING_DPS:
+                    p.ring_t -= 1 / FIRE_RING_DPS
+                    self.hurt_player(p, 1)
+            else:
+                p.ring_t = 0.0
         self.update_mobs(dt)
 
         # артефакты сами не появляются — только выпадают из убитых мобов (drop_artifact)
@@ -401,8 +443,8 @@ class Match:
             prev_x = b.x
             # если у цели «пули соперника медленнее» — эта пуля тормозит
             b.update(dt * self.bullet_speed(b.owner))
-            if self.blocked(b.x, b.y, BULLET_R):      # деревья гасят пулю
-                b.alive = False
+            if self.blocked(b.x, b.y, BULLET_R) or self.ring_stops(b.px, b.py, b.x, b.y):
+                b.alive = False                   # деревья и огненная стена (изнутри) гасят пулю
                 continue
             for w in self.walls:
                 if b.alive:
@@ -579,10 +621,10 @@ class Match:
     def update_mob_shots(self, dt):
         """Снаряды мобов: скорость — как у движения мобов на эту цель; попадают в любого мага."""
         for s in self.mob_shots:
-            prev_x = s.x
+            prev_x, prev_y = s.x, s.y
             s.update(dt, self.chaser_speed(s.target))
-            if s.alive and self.blocked(s.x, s.y, MOB_SHOT_R):     # деревья гасят снаряд
-                s.alive = False
+            if s.alive and (self.blocked(s.x, s.y, MOB_SHOT_R) or self.ring_stops(prev_x, prev_y, s.x, s.y)):
+                s.alive = False                   # деревья и огненная стена (изнутри) гасят снаряд
             for w in self.walls:              # зеркало отражает снаряд — он становится пулей хозяина
                 b = w.reflect_shot(s, prev_x) if s.alive else None
                 if b:

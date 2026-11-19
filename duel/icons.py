@@ -117,6 +117,19 @@ def draw_icon(surf, kind, center, r):
             a = i * math.pi / 4
             pygame.draw.line(surf, color, P(-0.42 - 0.22 * math.cos(a), 0.22 - 0.22 * math.sin(a)),
                              P(-0.42 + 0.22 * math.cos(a), 0.22 + 0.22 * math.sin(a)), max(1, w // 2))
+    elif kind == "bear":                          # морда медведя
+        pygame.draw.circle(surf, color, P(-0.36, -0.36), r * 0.18)
+        pygame.draw.circle(surf, color, P(0.36, -0.36), r * 0.18)
+        pygame.draw.circle(surf, color, P(0, 0.02), r * 0.45)
+        pygame.draw.circle(surf, (235, 210, 170), P(0, 0.18), r * 0.18)
+        pygame.draw.circle(surf, (20, 16, 26), P(0, 0.12), max(2, r * 0.07))
+        for u in (-0.17, 0.17):
+            pygame.draw.circle(surf, (20, 16, 26), P(u, -0.08), max(2, r * 0.06))
+    elif kind == "firering":                      # кольцо огня
+        pygame.draw.circle(surf, color, P(0, 0), r * 0.42, max(2, w))
+        for k in range(8):
+            a = k * math.pi / 4
+            pygame.draw.circle(surf, (255, 220, 110), P(0.42 * math.cos(a), 0.42 * math.sin(a)), max(2, r * 0.07))
     elif kind == "zombies":                       # череп
         pygame.draw.circle(surf, color, P(0, -0.1), r * 0.42)
         pygame.draw.rect(surf, color, (*P(-0.22, 0.15), r * 0.44, r * 0.3))

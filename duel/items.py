@@ -4,6 +4,10 @@ from .config import (
     BEAM_DPS,
     BEAM_LENGTH,
     ICE_LIFE,
+    BEAR_HP,
+    FIRE_RING_DPS,
+    FIRE_RING_R,
+    FIRE_RING_TIME,
     ZOMBIE_MAX,
     ZOMBIE_RADIUS,
     ZOMBIE_TIME,
@@ -49,6 +53,8 @@ ITEMS = {
     "trees": ("self", (100, 210, 90)),
     "lasso": ("foe", (255, 130, 50)),
     "zombies": ("self", (175, 230, 140)),
+    "bear": ("self", (200, 140, 80)),
+    "firering": ("foe", (255, 110, 40)),
     "foe_grow": ("foe", (190, 120, 255)),
     "foe_freeze": ("foe", (170, 220, 255)),
     "foe_nofire": ("foe", (255, 110, 90)),
@@ -58,11 +64,13 @@ ITEMS = {
 
 # Справка: группы артефактов (экран «Артефакты» в меню). Заголовок — section_title(id).
 HELP_SECTIONS = [
-    ("defense", ["shield", "heal", "cleanse", "shrink", "speed", "clearfoe", "slowfoe", "mobpeace"]),
+    ("defense", ["heal", "cleanse", "shrink", "speed", "slowfoe", "mobpeace"]),
     ("weapon", ["triple", "wavy", "rapid", "breaker"]),
-    ("attack", ["clones", "wall", "fastshots", "mobswap"]),
-    ("debuff", ["foe_grow", "foe_freeze", "foe_nofire", "foe_invert", "foe_noitems"]),
-    ("hero", ["beam", "icewalk", "trees", "lasso", "zombies"]),   # своя страница справки
+    ("attack", ["clones", "wall", "fastshots"]),
+    ("debuff", ["foe_grow", "foe_nofire", "foe_invert", "foe_noitems"]),
+    # артефакты героев — свои страницы справки, по героям
+    ("hero", ["beam", "clearfoe", "icewalk", "foe_freeze", "shield", "trees", "bear",
+              "lasso", "firering", "zombies", "mobswap"]),
 ]
 
 
@@ -87,13 +95,15 @@ def item_help(kind):
         fastshots=f"{d['fastshots']:g}", mobpeace=f"{d['mobpeace']:g}",
         beam_len=BEAM_LENGTH, beam_dps=BEAM_DPS,
         icewalk=f"{d['icewalk']:g}", ice_life=f"{ICE_LIFE:g}", trees=f"{TREE_TIME:g}", tree_len=TREE_LENGTH,
-        lasso=f"{d['lassoed']:g}", zmax=ZOMBIE_MAX, zr=ZOMBIE_RADIUS, ztime=f"{ZOMBIE_TIME:g}", fast=f"{FAST_BULLET_FACTOR:g}".replace(".", t("decimal")),
+        lasso=f"{d['lassoed']:g}", bear=f"{d['bear']:g}", bear_hp=BEAR_HP,
+        ring_r=FIRE_RING_R, ring_time=f"{FIRE_RING_TIME:g}", ring_dps=FIRE_RING_DPS, zmax=ZOMBIE_MAX, zr=ZOMBIE_RADIUS, ztime=f"{ZOMBIE_TIME:g}", fast=f"{FAST_BULLET_FACTOR:g}".replace(".", t("decimal")),
     )
     return t(f"help.{kind}", **numbers)
 
 
 WEAPON_ITEMS = ("triple", "wavy", "rapid", "breaker")      # улучшения оружия: на WEAPON_TIME
-ATTACK_ITEMS = WEAPON_ITEMS + tuple(dict(HELP_SECTIONS)["attack"]) + ("beam", "trees", "zombies")
+ATTACK_ITEMS = WEAPON_ITEMS + tuple(dict(HELP_SECTIONS)["attack"]) + ("beam", "trees", "zombies", "bear",
+                                                                       "mobswap")
 # эффект на игроке -> артефакт, чей значок показывать в статусе (если имена различаются)
 EFFECT_ICON = {"lassoed": "lasso", "raising": "zombies", "grow2": "foe_grow", "freeze": "foe_freeze", "nofire": "foe_nofire",
                "invert": "foe_invert", "noitems": "foe_noitems"}

@@ -11,6 +11,7 @@ import pygame
 
 from .commands import Command
 from .config import (
+    HELP_PAGES,
     AMMO_COLOR,
     BAD_TEXT,
     DEFAULT_HERO,
@@ -44,7 +45,6 @@ from .screens import ScreensMixin
 from .sprites import reload_all
 
 MAX_STEPS_PER_FRAME = 5           # после долгого кадра не «догоняем» больше этого
-HELP_PAGES = 3                    # справка: общие артефакты, артефакты героев, правила
 ADDRESS_MAX = 64                  # длина адреса на экране «Подключиться»
 CONNECT_TIMEOUT = 3.0
 SILENCE = 3.0                     # столько секунд без сообщений сервера — связь потеряна
