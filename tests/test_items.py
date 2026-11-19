@@ -48,8 +48,8 @@ def test_ring_colors_follow_groups():
     for section, kinds in HELP_SECTIONS:
         if section in expected:
             assert {ring_color(k) for k in kinds} == {expected[section]}, section
-    # артефакты героев — по смыслу: луч и деревья — атака, тропа — защита, притяжение — по сопернику
-    assert [ring_color(k) for k in ("beam", "trees", "icewalk", "pull")] == [ATTACK_RING, ATTACK_RING,
+    # артефакты героев — по смыслу: луч и деревья — атака, тропа — защита, лассо — по сопернику
+    assert [ring_color(k) for k in ("beam", "trees", "icewalk", "lasso")] == [ATTACK_RING, ATTACK_RING,
                                                                            SELF_RING, FOE_RING]
 
 

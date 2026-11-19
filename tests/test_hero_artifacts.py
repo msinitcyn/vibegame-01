@@ -2,7 +2,7 @@
 import math
 
 from duel.commands import Command
-from duel.config import (BEAM_LENGTH, DURATION, FOE_LAND_DPS, HERO_FADE, MAX_HP, TOP, TREE_LENGTH,
+from duel.config import (FOE_LAND_DPS, HERO_FADE, MAX_HP, TOP, TREE_LENGTH,
                          TREE_TIME, TREE_W)
 from duel.entities import Bullet, Mob
 from tests.conftest import DT, new_match, step
@@ -96,34 +96,108 @@ def test_trees_fade_from_the_mage():
     assert m.trees == []
 
 
-def test_beam_fades_from_the_mage():
-    m = new_match()
-    b = m.blue
-    b.aim = 0.0
-    m.apply_item(b, "beam")
-    step(m, DURATION["beaming"] - HERO_FADE / 2)
-    beam = m.beams[0]
-    assert beam.length == BEAM_LENGTH and 0 < beam.start < beam.length
+# ------------------------------------------------------------------ огненное лассо
 
-
-# ------------------------------------------------------------------ притяжение тьмы
-
-def test_pull_drags_foe_to_darkness():
+def test_lasso_drags_foe_to_fire():
     m = new_match()
     b, r = m.blue, m.red
     b.x, b.y, r.x, r.y = 200, TOP + 40, 560, TOP + 40    # красный у центральной линии на своей земле
     r.hp = 1000
-    m.apply_item(b, "pull")
-    assert "pulled" in r.effects
+    m.apply_item(b, "lasso")
+    assert "lassoed" in r.effects
     step(m, 2.0)
     assert r.x < 500                                     # затянут на землю синего
 
 
-def test_pull_can_be_resisted_slowly():
+def test_lasso_cannot_be_escaped():
     m = new_match()
     b, r = m.blue, m.red
     b.x, b.y, r.x, r.y = 200, TOP + 40, 700, TOP + 40
-    m.apply_item(b, "pull")
+    r.hp = 1000
+    m.apply_item(b, "lasso")
     x0 = r.x
     walk(m, "red", (1, 0), 1.0)                          # бежит прочь
-    assert r.x > x0 and r.x - x0 < 300 * 0.5            # уходит, но медленно
+    assert r.x < x0                                      # всё равно тянет к Огню, только медленнее
+    still = r.x
+    m2 = new_match()
+    m2.blue.x, m2.blue.y, m2.red.x, m2.red.y = 200, TOP + 40, 700, TOP + 40
+    m2.red.hp = 1000
+    m2.apply_item(m2.blue, "lasso")
+    step(m2, 1.0)                                        # стоит — тянет быстрее
+    assert m2.red.x < still
+
+
+# ------------------------------------------------------------------ восставшие мертвецы
+
+def dark_with_mobs(n=3, dist=60):
+    m = new_match()
+    m.set_heroes({"blue": "dark", "red": "fire"})
+    b = m.blue
+    b.x, b.y = 300, TOP + 200
+    m.mobs = [Mob(b.x + dist + 30 * i, b.y, 5) for i in range(n)]
+    m.next_wave = 1e9
+    return m
+
+
+def test_raise_up_to_max_nearest():
+    from duel.config import ZOMBIE_MAX
+    m = dark_with_mobs(n=4)
+    m.apply_item(m.blue, "zombies")
+    z = [x for x in m.mobs if x.zombie_of is m.blue]
+    assert len(z) == ZOMBIE_MAX and z == m.mobs[:ZOMBIE_MAX]          # ближайшие
+    far = dark_with_mobs(n=1, dist=400)
+    far.apply_item(far.blue, "zombies")
+    assert far.mobs[0].zombie_of is None                                # далеко — не оживает
+
+
+def test_zombie_absorbs_damage_for_owner():
+    m = dark_with_mobs(n=2)
+    b = m.blue
+    m.apply_item(b, "zombies")
+    m.bullets = [Bullet(b.x - 40, b.y, 520, 0, m.red)]
+    step(m, 0.2)
+    assert b.hp == MAX_HP
+    assert sorted(x.hp for x in m.zombies_of(b)) == [4, 5]
+
+
+def test_own_bullets_pass_zombies_foe_bullets_hit():
+    m = dark_with_mobs(n=1)
+    b = m.blue
+    m.apply_item(b, "zombies")
+    z = m.mobs[0]
+    z.x, z.y = 600, TOP + 40
+    m.bullets = [Bullet(z.x - 60, z.y, 520, 0, b)]
+    step(m, 0.2)
+    assert z.hp == 5
+    m.bullets = [Bullet(z.x + 60, z.y, -520, 0, m.red)]
+    step(m, 0.2)
+    assert z.hp < 5 and z.zombie_of is b
+
+
+def test_zombie_attacks_mob_going_for_owner():
+    m = dark_with_mobs(n=1)
+    b = m.blue
+    m.apply_item(b, "zombies")
+    z = m.mobs[0]
+    enemy = Mob(z.x + 120, z.y, 5)
+    enemy.target = b
+    m.mobs.append(enemy)
+    step(m, 2.0)
+    assert enemy.hp < 5 and enemy.target is b
+
+
+def test_zombie_goes_for_foe_and_expires_without_drop():
+    from duel.config import ZOMBIE_TIME
+    m = dark_with_mobs(n=1)
+    b, r = m.blue, m.red
+    r.x, r.y = 700, TOP + 200
+    r.hp = 1000                                          # зомби бьёт красного — не дать партии кончиться
+    m.apply_item(b, "zombies")
+    z = m.mobs[0]
+    d0 = math.hypot(r.x - z.x, r.y - z.y)
+    step(m, 1.0)
+    assert math.hypot(r.x - z.x, r.y - z.y) < d0
+    step(m, 4.0)
+    assert r.hp < 1000                                   # дошёл и бьёт
+    step(m, ZOMBIE_TIME)
+    assert z not in m.mobs and m.artifacts == []

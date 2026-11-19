@@ -44,6 +44,7 @@ def snapshot(match):
             "id": x.id, "x": _xy(x.x), "y": _xy(x.y), "r": _xy(x.radius), "hp": x.hp,
             "max_hp": x.max_hp, "ranged": x.ranged, "facing": x.facing, "flash": _t(x.flash),
             "windup": _t(x.windup), "swing": _t(x.swing), "swing_dir": _t(x.swing_dir), "swing_hit": x.swing_hit,
+            "zombie": _pid(x.zombie_of),
             "target": _pid(x.target),
         } for x in m.mobs],
         "mob_shots": [{"id": s.id, "x": _xy(s.x), "y": _xy(s.y)} for s in m.mob_shots],
@@ -53,8 +54,8 @@ def snapshot(match):
                        for a in m.ammo_packs],
         "walls": [{"id": w.id, "owner": w.owner.id, "x": _xy(w.x), "y1": _xy(w.y1),
                    "y2": _xy(w.y2), "life": _t(w.life)} for w in m.walls],
-        "beams": [{"id": b.id, "owner": b.owner.id, "x": _xy(b.x), "y": _xy(b.y), "angle": _t(b.angle),
-                   "start": _xy(b.start), "len": _xy(b.length), "life": _t(b.life)} for b in m.beams],
+        "beams": [{"id": b.id, "owner": b.owner.id, "pts": [[_xy(x), _xy(y)] for x, y in b.path]}
+                  for b in m.beams],
         "ice": [{"id": t.id, "owner": t.owner.id, "x": _xy(t.x), "y": _xy(t.y), "life": _t(t.life)}
                 for t in m.ice],
         "trees": [{"id": t.id, "owner": t.owner.id, "x": _xy(t.x), "y": _xy(t.y), "angle": _t(t.angle),

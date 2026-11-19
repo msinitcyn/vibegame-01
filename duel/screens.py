@@ -336,7 +336,7 @@ class ScreensMixin:
             s.blit(owner, (180 + name.get_width() + 16, y + 9))
             for j, line in enumerate(self.wrap(item_help(kind), WIDTH - 240, self.small)):
                 s.blit(self.small.render(line, True, WHITE), (180, y + 36 + j * 20))
-            y += 140
+            y += 116
         note = self.small.render(tr("help.hero_note"), True, GREY)
         s.blit(note, note.get_rect(center=(WIDTH // 2, y + 10)))
 

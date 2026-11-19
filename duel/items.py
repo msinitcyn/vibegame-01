@@ -4,6 +4,9 @@ from .config import (
     BEAM_DPS,
     BEAM_LENGTH,
     ICE_LIFE,
+    ZOMBIE_MAX,
+    ZOMBIE_RADIUS,
+    ZOMBIE_TIME,
     TREE_LENGTH,
     TREE_TIME,
     ATTACK_RING,
@@ -44,7 +47,8 @@ ITEMS = {
     "beam": ("self", (255, 236, 140)),        # артефакты героев (выпадают только «своему»)
     "icewalk": ("self", (190, 235, 255)),
     "trees": ("self", (100, 210, 90)),
-    "pull": ("foe", (185, 120, 245)),
+    "lasso": ("foe", (255, 130, 50)),
+    "zombies": ("self", (175, 230, 140)),
     "foe_grow": ("foe", (190, 120, 255)),
     "foe_freeze": ("foe", (170, 220, 255)),
     "foe_nofire": ("foe", (255, 110, 90)),
@@ -58,7 +62,7 @@ HELP_SECTIONS = [
     ("weapon", ["triple", "wavy", "rapid", "breaker"]),
     ("attack", ["clones", "wall", "fastshots", "mobswap"]),
     ("debuff", ["foe_grow", "foe_freeze", "foe_nofire", "foe_invert", "foe_noitems"]),
-    ("hero", ["beam", "icewalk", "trees", "pull"]),       # своя страница справки
+    ("hero", ["beam", "icewalk", "trees", "lasso", "zombies"]),   # своя страница справки
 ]
 
 
@@ -81,17 +85,17 @@ def item_help(kind):
         rapid=f"{d['rapid']:.0f}", wavy=f"{d['wavy']:.0f}", clones=CLONE_COUNT,
         clone_time=f"{CLONE_TIME:.0f}", breaker=f"{d['breaker']:.0f}", wall_time=f"{WALL_TIME:.0f}",
         fastshots=f"{d['fastshots']:g}", mobpeace=f"{d['mobpeace']:g}",
-        beam=f"{d['beaming']:g}".replace(".", t("decimal")), beam_len=BEAM_LENGTH, beam_dps=BEAM_DPS,
+        beam_len=BEAM_LENGTH, beam_dps=BEAM_DPS,
         icewalk=f"{d['icewalk']:g}", ice_life=f"{ICE_LIFE:g}", trees=f"{TREE_TIME:g}", tree_len=TREE_LENGTH,
-        pull=f"{d['pulled']:g}", fast=f"{FAST_BULLET_FACTOR:g}".replace(".", t("decimal")),
+        lasso=f"{d['lassoed']:g}", zmax=ZOMBIE_MAX, zr=ZOMBIE_RADIUS, ztime=f"{ZOMBIE_TIME:g}", fast=f"{FAST_BULLET_FACTOR:g}".replace(".", t("decimal")),
     )
     return t(f"help.{kind}", **numbers)
 
 
 WEAPON_ITEMS = ("triple", "wavy", "rapid", "breaker")      # улучшения оружия: на WEAPON_TIME
-ATTACK_ITEMS = WEAPON_ITEMS + tuple(dict(HELP_SECTIONS)["attack"]) + ("beam", "trees")
+ATTACK_ITEMS = WEAPON_ITEMS + tuple(dict(HELP_SECTIONS)["attack"]) + ("beam", "trees", "zombies")
 # эффект на игроке -> артефакт, чей значок показывать в статусе (если имена различаются)
-EFFECT_ICON = {"beaming": "beam", "pulled": "pull", "grow2": "foe_grow", "freeze": "foe_freeze", "nofire": "foe_nofire",
+EFFECT_ICON = {"lassoed": "lasso", "raising": "zombies", "grow2": "foe_grow", "freeze": "foe_freeze", "nofire": "foe_nofire",
                "invert": "foe_invert", "noitems": "foe_noitems"}
 INSTANT_ITEMS = ("heal",)                                  # срабатывают при подборе, минуя инвентарь
 # дебаффы: снимаются только временем или очищением, ничем другим

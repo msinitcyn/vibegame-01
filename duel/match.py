@@ -27,12 +27,16 @@ from .commands import Command
 from .config import (
     AMMO_PACK,
     AMMO_SPAWN,
-    BEAM_LENGTH,
-    BEAM_SPEED,
-    DURATION,
     HERO_ONLY_ITEMS,
     ICE_STEP,
-    PULL_SPEED,
+    LASSO_SPEED,
+    MOB_HIT_COOLDOWN,
+    MOB_REACH_EXTRA,
+    MOB_SPEED,
+    MOB_WINDUP,
+    ZOMBIE_MAX,
+    ZOMBIE_RADIUS,
+    ZOMBIE_TIME,
     ARENA,
     ARENA_R,
     ARTIFACT_R,
@@ -190,13 +194,14 @@ class Match:
         p.melee_flash = MELEE_FLASH
         self.emit("melee", p.id)
         for m in self.mobs:
+            if m.zombie_of is p:
+                continue                      # своих зомби не бьём
             if m.alive and math.hypot(m.x - p.x, m.y - p.y) <= p.radius + m.radius + MELEE_RANGE:
                 m.hurt(p, MELEE_DAMAGE)       # злится на ударившего; смерть — общим порядком
         foe = self.other(p)
         if math.hypot(foe.x - p.x, foe.y - p.y) <= p.radius + foe.radius + MELEE_RANGE:
             if not foe.shield_absorb():      # щит гасит удар целиком
-                foe.hp -= MELEE_DAMAGE
-                foe.hit_flash = 0.12
+                self.hurt_player(foe, MELEE_DAMAGE)
         for c in self.clones_of(foe):
             if math.hypot(c.x - p.x, c.y - p.y) <= p.radius + c.radius + MELEE_RANGE:
                 c.alive = False
@@ -247,15 +252,16 @@ class Match:
             for m in self.mobs:
                 if m.target is p:
                     m.target = None if "mobpeace" in foe.effects else foe
+        elif kind == "zombies":               # мобы рядом — зомби мага
+            self.raise_zombies(p)
         elif kind == "icewalk":               # чужая земля не жжёт, за магом — ледяной след
             self.give(p, "icewalk")
         elif kind == "trees":                 # стена деревьев по прицелу
             self.trees.append(TreeWall(p))
-        elif kind == "pull":                  # соперника тянет к магу
-            self.give(foe, "pulled")
-        elif kind == "beam":                  # луч из мага по прицелу; маг на это время стоит
-            self.give(p, "beaming")
-            self.beams.append(Beam(p, DURATION["beaming"]))
+        elif kind == "lasso":                 # огненное лассо: соперника тянет к магу
+            self.give(foe, "lassoed")
+        elif kind == "beam":                  # летящий луч по прицелу
+            self.beams.append(Beam(p))
         elif kind == "cleanse":
             for u in [p] + self.clones_of(p):
                 for e in BAD_EFFECTS:
@@ -270,6 +276,23 @@ class Match:
         self.emit("used", target.id, kind)
 
     # ------------------------------------------------------------------ такт
+
+    def zombies_of(self, p):
+        return [m for m in self.mobs if m.alive and m.zombie_of is p]
+
+    def hurt_player(self, p, n):
+        """Маг теряет n жизней (щит проверяется до этого). Пока у него есть зомби — урон
+        получает зомби («Восставшие мертвецы»)."""
+        zombies = self.zombies_of(p)
+        if zombies:
+            z = zombies[0]
+            z.hp -= n
+            z.flash = 0.12
+            if z.hp <= 0:
+                z.alive = False
+            return
+        p.hp -= n
+        p.hit_flash = 0.12
 
     def on_trail(self, p, owner):
         """Маг p стоит на ледяном следе хозяина owner."""
@@ -314,13 +337,13 @@ class Match:
         self.ice = [t for t in self.ice if t.life > 0]
         for p in self.players:
             p.update(dt, moves.get(p.id, (0, 0)))
-            if "pulled" in p.effects:         # «Притяжение тьмы»: тянет к сопернику
+            if "lassoed" in p.effects:        # «Огненное лассо»: тянет к сопернику быстрее бега
                 foe = self.other(p)
                 dx, dy = foe.x - p.x, foe.y - p.y
                 d = math.hypot(dx, dy)
                 room = d - p.radius - foe.radius
                 if room > 0:
-                    step = min(PULL_SPEED * dt, room)
+                    step = min(LASSO_SPEED * dt, room)
                     p.x += dx / d * step
                     p.y += dy / d * step
             self.constrain(p)
@@ -330,8 +353,7 @@ class Match:
                 p.foe_land_t += dt
                 while p.foe_land_t >= 1 / FOE_LAND_DPS:
                     p.foe_land_t -= 1 / FOE_LAND_DPS
-                    p.hp -= 1
-                    p.hit_flash = 0.12
+                    self.hurt_player(p, 1)
             else:
                 p.foe_land_t = 0.0
         self.update_mobs(dt)
@@ -386,6 +408,8 @@ class Match:
                 if b.alive:
                     w.hit(b, prev_x)
             for m in self.mobs:
+                if m.zombie_of is b.owner:
+                    continue                  # свои пули сквозь своих зомби
                 if b.alive and m.alive and math.hypot(b.x - m.x, b.y - m.y) < m.radius + BULLET_R:
                     b.alive = False
                     m.hurt(b.owner)           # моб злится на того, чья пуля
@@ -397,8 +421,7 @@ class Match:
                 continue
             if math.hypot(b.x - target.x, b.y - target.y) < target.radius + BULLET_R:
                 b.alive = False
-                target.hp -= 1
-                target.hit_flash = 0.12
+                self.hurt_player(target, 1)
                 continue
             for c in self.clones:
                 if not c.alive or c.owner is not target:
@@ -413,7 +436,10 @@ class Match:
         self.clones = [c for c in self.clones if c.alive]
         for m in self.mobs:
             if not m.alive:
-                self.drop_artifact(m)
+                if m.zombie_of is None:
+                    self.drop_artifact(m)
+                else:
+                    self.emit("mob_dead", m.x, m.y)   # зомби артефакт не роняет
         self.mobs = [m for m in self.mobs if m.alive]
         self.collide_bullets()
         self.bullets = [b for b in self.bullets if b.alive]
@@ -464,7 +490,11 @@ class Match:
             if not m.alive:
                 continue                      # добит ударом между тактами — уберётся ниже
             x0, y0 = m.x, m.y
-            p = m.update(dt, self.chaser_speed(m.target) if m.target else 1.0, self.walls)
+            if m.zombie_of is not None:       # зомби Тьмы — своя логика
+                self.update_zombie(m, dt)
+                p = None
+            else:
+                p = m.update(dt, self.chaser_speed(m.target) if m.target else 1.0, self.walls)
             if self.blocked(m.x, m.y, m.radius):      # сквозь деревья не пройти: шаг по одной оси или стоять
                 nx, ny = m.x, m.y
                 if not self.blocked(nx, y0, m.radius):
@@ -476,31 +506,75 @@ class Match:
             if m.swing == MOB_SWING_TIME:     # удар только что случился (попал или мимо) — звук
                 self.emit("mob_swing", m.x, m.y, m.swing_hit)
             if p and not p.shield_absorb():   # щит гасит и удар моба
-                p.hp -= MOB_DAMAGE
-                p.hit_flash = 0.12
-            shot = m.shoot(dt)
+                self.hurt_player(p, MOB_DAMAGE)
+            shot = m.shoot(dt) if m.zombie_of is None else None
             if shot:
                 self.mob_shots.append(shot)
         self.update_mob_shots(dt)
         self.update_beams(dt)
 
+    def raise_zombies(self, p):
+        """«Восставшие мертвецы»: до ZOMBIE_MAX ближайших мобов в радиусе — зомби мага p."""
+        self.give(p, "raising")
+        near = [m for m in self.mobs if m.alive and m.zombie_of is None
+                and math.hypot(m.x - p.x, m.y - p.y) <= ZOMBIE_RADIUS + m.radius]
+        near.sort(key=lambda m: math.hypot(m.x - p.x, m.y - p.y))
+        for m in near[:ZOMBIE_MAX]:
+            m.zombie_of, m.zombie_life = p, ZOMBIE_TIME
+            m.target, m.windup, m.detour = None, 0.0, None
+
+    def update_zombie(self, m, dt):
+        """Зомби: бьёт мобов, нападающих на хозяина, а если их нет — соперника хозяина."""
+        m.zombie_life -= dt
+        m.flash = max(0.0, m.flash - dt)
+        m.hit_cd = max(0.0, m.hit_cd - dt)
+        m.swing = max(0.0, m.swing - dt)
+        if m.zombie_life <= 0:
+            m.alive = False
+            return
+        owner = m.zombie_of
+        attackers = [x for x in self.mobs if x.alive and x.zombie_of is None and x.target is owner]
+        target = (min(attackers, key=lambda x: math.hypot(x.x - m.x, x.y - m.y)) if attackers
+                  else self.other(owner))
+        reach = m.radius + target.radius
+        dist = math.hypot(target.x - m.x, target.y - m.y)
+        m.facing = 1 if target.x >= m.x else -1
+        if m.windup > 0:                      # замах — потом удар, если цель ещё рядом
+            m.windup = max(0.0, m.windup - dt)
+            if m.windup > 0:
+                return
+            m.hit_cd, m.swing = MOB_HIT_COOLDOWN, MOB_SWING_TIME
+            m.swing_dir = math.atan2(target.y - m.y, target.x - m.x)
+            m.swing_hit = dist <= reach + MOB_REACH_EXTRA
+            if m.swing_hit:
+                if isinstance(target, Mob):
+                    target.hurt(owner)
+                elif not target.shield_absorb():
+                    self.hurt_player(target, MOB_DAMAGE)
+            return
+        if dist > reach:
+            step = min(MOB_SPEED * dt, dist - reach)
+            m.move_around((target.x - m.x) / dist * step, (target.y - m.y) / dist * step, self.walls)
+        elif m.hit_cd == 0:
+            m.windup = MOB_WINDUP
+
     def update_beams(self, dt):
-        """Лучи: растут, бьют насквозь соперника, его двойников и мобов, пока касаются."""
+        """Лучи: летят, бьют насквозь соперника, его двойников и мобов, пока касаются."""
         for beam in self.beams:
-            beam.life -= dt
-            beam.length = min(BEAM_LENGTH, beam.length + BEAM_SPEED * dt)
+            beam.update(dt)
             owner = beam.owner
             foe = self.other(owner)
             if beam.tick(foe, beam.touches(foe.x, foe.y, foe.radius), dt) and not foe.shield_absorb():
-                foe.hp -= 1
-                foe.hit_flash = 0.12
+                self.hurt_player(foe, 1)
             for c in self.clones_of(foe):
                 if beam.tick(c, beam.touches(c.x, c.y, c.radius), dt):
                     c.alive = False
             for m in self.mobs:
+                if m.zombie_of is owner:
+                    continue                  # свои зомби
                 if m.alive and beam.tick(m, beam.touches(m.x, m.y, m.radius), dt):
                     m.hurt(owner)         # злится на Свет (если нет «Мира с мобами»)
-        self.beams = [b for b in self.beams if b.life > 0]
+        self.beams = [b for b in self.beams if b.alive]
 
     def update_mob_shots(self, dt):
         """Снаряды мобов: скорость — как у движения мобов на эту цель; попадают в любого мага."""
@@ -520,8 +594,7 @@ class Match:
                 if math.hypot(s.x - p.x, s.y - p.y) < p.radius + guard + MOB_SHOT_R:
                     s.alive = False
                     if not p.shield_absorb():
-                        p.hp -= MOB_DAMAGE
-                        p.hit_flash = 0.12
+                        self.hurt_player(p, MOB_DAMAGE)
                     break
         self.mob_shots = [s for s in self.mob_shots if s.alive]
 

@@ -1,8 +1,10 @@
-"""«Луч света» — артефакт только героя Свет."""
+"""«Луч света» — летящий длинный луч героя Свет: насквозь, отскакивает, улетает."""
+import math
 
 import pytest
 
-from duel.config import BEAM_LENGTH, DURATION, MAX_HP, SHIELD_HITS, TOP
+from duel.commands import Command
+from duel.config import BEAM_LENGTH, BEAM_SPEED, BOTTOM, MAX_HP, SHIELD_HITS, TOP, WIDTH
 from duel.entities import Artifact, Mob
 from duel.match import Match
 from tests.conftest import DT, new_match, step
@@ -18,48 +20,56 @@ def light():
     return m
 
 
-def test_beam_hits_through_mob_and_foe_once_per_second(light):
+def path_len(beam):
+    return sum(math.hypot(x1 - x0, y1 - y0) for (x0, y0), (x1, y1) in zip(beam.path, beam.path[1:]))
+
+
+def test_beam_flies_through_mob_and_foe(light):
     m = light
     b, r = m.blue, m.red
     mob = Mob(350, b.y, 10)
     m.mobs = [mob]
     r.hp = 50
     m.apply_item(b, "beam")
-    x0, y0 = b.x, b.y
-    step(m, 0.25)                                              # луч дорос (3000 px/с) до соперника
-    assert r.hp == 49 and mob.hp == 9 and mob.target is b      # насквозь: и моб, и соперник — сразу
-    step(m, 1.0)
-    assert r.hp == 48 and mob.hp == 8                          # и ещё раз через секунду
-    assert (b.x, b.y) == (x0, y0)                              # маг стоит
-    step(m, DURATION["beaming"])
-    assert m.beams == [] and "beaming" not in b.effects
-    hp = r.hp
-    step(m, 1.0)
-    assert r.hp == hp                                          # луч погас — урона нет
+    step(m, 1.0)                                        # пролетел обоих (касание короче секунды)
+    assert mob.hp == 9 and mob.target is b and r.hp == 49
 
 
-def test_beam_grows_and_has_length(light):
+def test_beam_keeps_length_and_flies(light):
     m = light
     m.apply_item(m.blue, "beam")
-    step(m, DT)
-    assert 0 < m.beams[0].length < BEAM_LENGTH
     step(m, 0.5)
-    assert m.beams[0].length == BEAM_LENGTH
+    beam = m.beams[0]
+    assert path_len(beam) == pytest.approx(BEAM_LENGTH, rel=0.02)
+    assert beam.hx == pytest.approx(m.blue.x + m.blue.radius + 4 + BEAM_SPEED * 0.5, abs=20)
 
 
-def test_beam_misses_foe_out_of_line_or_too_far(light):
+def test_beam_bounces_and_leaves(light):
     m = light
-    m.red.y = TOP + 300                                        # не на линии луча
-    m.apply_item(m.blue, "beam")
-    step(m, 1.5)
-    assert m.red.hp == MAX_HP
-    m2 = new_match()
-    m2.blue.x, m2.blue.y, m2.red.x, m2.red.y = 50, TOP + 60, 50 + BEAM_LENGTH + 60, TOP + 60
-    m2.blue.aim = 0.0
-    m2.red.hp = 50
-    m2.apply_item(m2.blue, "beam")
-    step(m2, 1.5)
-    assert m2.red.hp == 50                                     # дальше длины луча
+    b = m.blue
+    b.aim = math.radians(60)                            # круто вниз — отскочит от нижнего края
+    m.apply_item(b, "beam")
+    beam = m.beams[0]
+    bounced = False
+    for _ in range(int(4 / DT)):
+        m.step(DT)
+        if beam.vy < 0:
+            bounced = True
+        if not m.beams:
+            break
+        assert all(TOP - 1 <= y <= BOTTOM + 1 for _, y in beam.path)
+    assert bounced and m.beams == []                    # отскочил и целиком улетел за край
+    assert beam.hx > WIDTH
+
+
+def test_mage_moves_while_beam_flies(light):
+    m = light
+    b = m.blue
+    m.apply_item(b, "beam")
+    y0 = b.y
+    for _ in range(20):
+        m.step(DT, {"blue": Command(move=(0, 1))})
+    assert b.y > y0 and m.beams
 
 
 def test_shield_and_clones(light):
@@ -69,8 +79,9 @@ def test_shield_and_clones(light):
     m.apply_item(r, "clones")
     for c in m.clones:
         c.x, c.y = 400, m.blue.y
+        c.moving, c.turn_timer = 0, 99                   # стоят на линии луча
     m.apply_item(m.blue, "beam")
-    step(m, 0.3)
+    step(m, 0.8)
     assert r.hp == MAX_HP and r.shield_hits == SHIELD_HITS - 1 and not any(c.alive for c in m.clones)
 
 
@@ -95,7 +106,7 @@ def test_anyone_picks_up_and_uses_beam():
     step(m)
     assert not m.artifacts and "beam" in b.items             # Холод забрал чужой уникальный артефакт
     m.use_item(b, b.items.index("beam"))
-    assert m.beams and "beaming" in b.effects
+    assert m.beams
 
 
 def test_beam_draws(game):
@@ -105,6 +116,5 @@ def test_beam_draws(game):
     mm.apply_item(mm.blue, "beam")
     step(mm, 0.2)
     game.refresh_snap()
-    assert game.snap["beams"] and game.snap["beams"][0]["len"] > 0
+    assert len(game.snap["beams"][0]["pts"]) > 2
     game.draw()
-    assert game.status_chips(game.snap["players"][0], game.snap).get_width() > 0

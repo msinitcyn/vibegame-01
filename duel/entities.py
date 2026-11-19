@@ -13,6 +13,8 @@ from .config import (
     TREE_TIME,
     TREE_W,
     BEAM_DPS,
+    BEAM_LENGTH,
+    BEAM_SPEED,
     BEAM_WIDTH,
     ARENA,
     ARENA_R,
@@ -122,7 +124,7 @@ class Unit:
 
     @property
     def frozen(self):
-        return "freeze" in self.effects or "beaming" in self.effects     # луч света тоже держит на месте
+        return "freeze" in self.effects
 
     @property
     def can_fire(self):
@@ -405,6 +407,8 @@ class Mob:
         self.flash = 0.0
         self.facing = 1
         self.alive = True
+        self.zombie_of = None         # «Восставшие мертвецы»: маг-хозяин зомби
+        self.zombie_life = 0.0
 
     def hurt(self, attacker, damage=1):
         self.hp -= damage
@@ -592,29 +596,54 @@ class TreeWall:
 
 
 class Beam:
-    """«Луч света»: прямой луч из мага по прицелу, быстро вырастает до BEAM_LENGTH, бьёт насквозь.
-    Пока касается цели, снимает BEAM_DPS жизней в секунду (первый удар — сразу)."""
+    """«Луч света»: длинный снаряд по прицелу. Голова летит как пуля и отражается от верхнего
+    и нижнего края; за ней — хвост длиной BEAM_LENGTH (ломаная на отскоках). Бьёт насквозь:
+    пока касается цели, BEAM_DPS жизней в секунду (первый удар — сразу). Исчезает, целиком
+    вылетев за левый или правый край."""
 
-    def __init__(self, owner, life):
+    def __init__(self, owner):
         self.id = None
         self.owner = owner
-        self.x, self.y, self.angle = owner.x, owner.y, owner.aim
-        self.length = 0.0
-        self.life = life
+        cos, sin = math.cos(owner.aim), math.sin(owner.aim)
+        edge = owner.radius + 4
+        self.hx, self.hy = owner.x + cos * edge, owner.y + sin * edge
+        self.vx, self.vy = cos * BEAM_SPEED, sin * BEAM_SPEED
+        self.path = [(self.hx, self.hy)]      # от хвоста к голове
         self.touching = {}            # цель -> сколько секунд касается с последнего удара
+        self.alive = True
 
-    @property
-    def start(self):
-        """Откуда луч сейчас начинается: под конец гаснет от мага к концу."""
-        return self.length * max(0.0, 1 - self.life / HERO_FADE)
-
-    @property
-    def end(self):
-        return (self.x + math.cos(self.angle) * self.length, self.y + math.sin(self.angle) * self.length)
+    def update(self, dt):
+        self.hx += self.vx * dt
+        self.hy += self.vy * dt
+        if self.hy < TOP:                     # отскок, как у пули
+            self.hy, self.vy = 2 * TOP - self.hy, abs(self.vy)
+        elif self.hy > BOTTOM:
+            self.hy, self.vy = 2 * BOTTOM - self.hy, -abs(self.vy)
+        self.path.append((self.hx, self.hy))
+        # хвост — не длиннее BEAM_LENGTH: старые точки отрезаем, последний отрезок укорачиваем
+        total, keep = 0.0, [self.path[-1]]
+        for (x0, y0), (x1, y1) in zip(reversed(self.path[:-1]), reversed(self.path[1:])):
+            seg = math.hypot(x1 - x0, y1 - y0)
+            if total + seg >= BEAM_LENGTH:
+                k = (BEAM_LENGTH - total) / seg if seg else 0.0
+                keep.append((x1 + (x0 - x1) * k, y1 + (y0 - y1) * k))
+                break
+            total += seg
+            keep.append((x0, y0))
+        self.path = keep[::-1]
+        if all(x < -BEAM_WIDTH for x, _ in self.path) or all(x > WIDTH + BEAM_WIDTH for x, _ in self.path):
+            self.alive = False
 
     def touches(self, x, y, r):
-        """Касается ли круга (x, y, r): расстояние до видимого отрезка не больше r + половины толщины."""
-        return dist_to_segment(x, y, self.x, self.y, self.angle, self.start, self.length) <= r + BEAM_WIDTH / 2
+        """Касается ли круга (x, y, r) какой-нибудь отрезок луча."""
+        reach = r + BEAM_WIDTH / 2
+        for (x0, y0), (x1, y1) in zip(self.path, self.path[1:]):
+            vx, vy = x1 - x0, y1 - y0
+            ll = vx * vx + vy * vy
+            k = 0.0 if ll == 0 else max(0.0, min(1.0, ((x - x0) * vx + (y - y0) * vy) / ll))
+            if math.hypot(x - (x0 + vx * k), y - (y0 + vy * k)) <= reach:
+                return True
+        return len(self.path) == 1 and math.hypot(x - self.hx, y - self.hy) <= reach
 
     def tick(self, target, touching, dt):
         """Сколько ударов нанести цели в этот такт (0 или 1)."""

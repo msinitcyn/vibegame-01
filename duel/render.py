@@ -11,6 +11,7 @@ from .config import (
     AMMO_COLOR,
     BEAM_WIDTH,
     ICE_R,
+    ZOMBIE_RADIUS,
     TREE_W,
     AMMO_PACK,
     ARTIFACT_R,
@@ -168,9 +169,22 @@ def draw_mob_attack(surf, m, font):
 
 def draw_mob(surf, m, font=None, heroes=DEFAULT_HERO):
     pos = _pos(m)
+    zombie = m.get("zombie")
+    if zombie:                                    # зомби Тьмы: трупно-зелёное облако и кольцо хозяина
+        r = int(m["r"])
+        aura = pygame.Surface((4 * r,) * 2, pygame.SRCALPHA)
+        c = 2 * r
+        pygame.draw.circle(aura, (120, 220, 90, 70), (c, c), r + 8)
+        pygame.draw.circle(aura, (*side_color(heroes, zombie), 220), (c, c), r + 8, 3)
+        surf.blit(aura, aura.get_rect(center=pos))
     draw_unit(surf, "mob_ranged" if m["ranged"] else "mob", pos, m["r"], m["facing"],
               white=m["flash"] > 0)
-    color = side_color(heroes, m["target"]) if m["target"] else MOB_IDLE_COLOR
+    if zombie:                                    # зелёный оттенок поверх спрайта
+        tint = pygame.Surface((int(2 * m["r"]),) * 2, pygame.SRCALPHA)
+        pygame.draw.circle(tint, (110, 230, 80, 90), (int(m["r"]),) * 2, int(m["r"]))
+        surf.blit(tint, tint.get_rect(center=pos))
+    color = (side_color(heroes, zombie) if zombie else
+             side_color(heroes, m["target"]) if m["target"] else MOB_IDLE_COLOR)
     bar = pygame.Rect(0, 0, 28, 5)
     bar.midbottom = (pos[0], pos[1] - m["r"] - 2)
     pygame.draw.rect(surf, (16, 12, 20), bar.inflate(2, 2))
@@ -203,17 +217,15 @@ def draw_wall(surf, w, heroes):
 
 
 def draw_beam(surf, b, heroes):
-    """Луч света: широкое свечение цвета героя и белая сердцевина; к концу жизни — тоньше."""
-    ox, oy, a = b["x"], b["y"], b["angle"]
-    x, y = ox + math.cos(a) * b.get("start", 0), oy + math.sin(a) * b.get("start", 0)    # гаснет от мага
-    ex, ey = ox + math.cos(a) * b["len"], oy + math.sin(a) * b["len"]
-    k = max(0.3, min(1.0, b["life"] / 0.5))         # затухание в последние полсекунды
-    w = max(2, int(BEAM_WIDTH * k))
+    """Летящий луч: ломаная (на отскоках) — свечение цвета героя и белая сердцевина."""
+    pts = [tuple(p) for p in b["pts"]]
+    if len(pts) < 2:
+        return
     glow = side_color(heroes, b["owner"])
-    pygame.draw.line(surf, (16, 12, 20), (x, y), (ex, ey), w + 6)
-    pygame.draw.line(surf, glow, (x, y), (ex, ey), w + 2)
-    pygame.draw.line(surf, (255, 255, 235), (x, y), (ex, ey), max(1, w // 3))
-    pygame.draw.circle(surf, (255, 255, 235), (int(ex), int(ey)), max(2, w // 2))
+    pygame.draw.lines(surf, (16, 12, 20), False, pts, BEAM_WIDTH + 6)
+    pygame.draw.lines(surf, glow, False, pts, BEAM_WIDTH + 2)
+    pygame.draw.lines(surf, (255, 255, 235), False, pts, max(1, BEAM_WIDTH // 3))
+    pygame.draw.circle(surf, (255, 255, 235), (int(pts[-1][0]), int(pts[-1][1])), BEAM_WIDTH // 2 + 1)
 
 
 def draw_ice(surf, t, heroes):
@@ -257,8 +269,9 @@ def draw_pull(surf, victim, puller, color):
         k = i / n
         w = math.sin(k * math.pi * 4) * 7 * math.sin(k * math.pi)
         pts.append((x0 + (x1 - x0) * k + nx / nl * w, y0 + (y1 - y0) * k + ny / nl * w))
-    pygame.draw.lines(surf, (16, 12, 20), False, pts, 6)
-    pygame.draw.lines(surf, color, False, pts, 3)
+    pygame.draw.lines(surf, (16, 12, 20), False, pts, 7)
+    pygame.draw.lines(surf, color, False, pts, 4)
+    pygame.draw.lines(surf, (255, 230, 120), False, pts, 1)          # огненная сердцевина
 
 
 def draw_field(surf, snap, font):
@@ -285,7 +298,15 @@ def draw_field(surf, snap, font):
         draw_trees(surf, t)
     by_id = {p["id"]: p for p in snap["players"]}
     for p in snap["players"]:
-        if "pulled" in p.get("effects", {}):
+        raising = p.get("effects", {}).get("raising")
+        if raising:                               # кольцо оживления — гаснет
+            k = max(0.0, min(1.0, raising / 0.6))
+            ring = pygame.Surface((2 * ZOMBIE_RADIUS + 8,) * 2, pygame.SRCALPHA)
+            c = ZOMBIE_RADIUS + 4
+            pygame.draw.circle(ring, (120, 220, 90, int(50 * k)), (c, c), ZOMBIE_RADIUS)
+            pygame.draw.circle(ring, (150, 240, 110, int(230 * k)), (c, c), ZOMBIE_RADIUS, 3)
+            surf.blit(ring, (int(p["x"]) - c, int(p["y"]) - c))
+        if "lassoed" in p.get("effects", {}):
             puller = by_id["red" if p["id"] == "blue" else "blue"]
             draw_pull(surf, p, puller, side_color(heroes, puller["id"]))
     for b in snap.get("beams", []):
