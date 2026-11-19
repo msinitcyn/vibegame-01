@@ -49,10 +49,10 @@ sh spellgunners/install.sh --uninstall  # удалить (настройки в 
 
 ## Выпуск версии (GitHub)
 
-Один раз — создать на GitHub пустой репозиторий `spellgunners` (без README, без .gitignore) и отправить туда код:
+Один раз — создать на GitHub пустой репозиторий с любым именем (например, `vibegame`; без README и .gitignore) и отправить туда код:
 
 ```bash
-git remote add origin git@github.com:ИМЯ/spellgunners.git
+git remote add origin git@github.com:ИМЯ/РЕПОЗИТОРИЙ.git
 git push -u origin master
 ```
 
