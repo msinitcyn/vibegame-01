@@ -10,7 +10,10 @@ from .commands import Command
 from .config import (
     AMMO_COLOR,
     BAD_TEXT,
+    FONT_FILES,
+    FONTS_DIR,
     FPS,
+    ICON_FILE,
     HEIGHT,
     MAX_HP,
     MOB_IDLE_COLOR,
@@ -36,6 +39,18 @@ from .sprites import reload_all
 MAX_STEPS_PER_FRAME = 5           # после долгого кадра не «догоняем» больше этого
 ADDRESS_MAX = 64                  # длина адреса на экране «Подключиться»
 CONNECT_TIMEOUT = 3.0
+
+
+def load_font(size, bold=False):
+    """Шрифт из файлов игры (assets/fonts) — не зависит от того, что установлено в системе."""
+    return pygame.font.Font(str(FONTS_DIR / FONT_FILES[bold]), size)
+
+
+def set_window_icon():
+    try:
+        pygame.display.set_icon(pygame.image.load(str(ICON_FILE)))
+    except (pygame.error, FileNotFoundError):
+        pass                          # без значка игра всё равно работает
 
 
 class Controls:
@@ -85,15 +100,16 @@ class Game(ScreensMixin):
         set_lang(self.settings["lang"])
         self.audio = Audio()
         pygame.display.set_caption(t("title"))
+        set_window_icon()             # до создания окна — так значок подхватывают все системы
         # SCALED: поле остаётся WIDTH×HEIGHT, а на экран растягивается с сохранением пропорций
         flags = pygame.SCALED if windowed else pygame.SCALED | pygame.FULLSCREEN
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
         self.clock = pygame.time.Clock()
-        self.font = pygame.font.SysFont("dejavusans", 18, bold=True)
-        self.small = pygame.font.SysFont("dejavusans", 14)
-        self.tiny = pygame.font.SysFont("dejavusans", 11, bold=True)
-        self.tiny_text = pygame.font.SysFont("dejavusans", 12)
-        self.big = pygame.font.SysFont("dejavusans", 56, bold=True)
+        self.font = load_font(18, bold=True)
+        self.small = load_font(14)
+        self.tiny = load_font(11, bold=True)
+        self.tiny_text = load_font(12)
+        self.big = load_font(56, bold=True)
 
         self.controls = CONTROLS
         self.key_names = {"blue": "1234", "red": "90-="}

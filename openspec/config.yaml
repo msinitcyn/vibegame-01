@@ -18,7 +18,8 @@ context: |
   ввод -> команды, события -> звук и надписи, фиксированный такт 60 Гц),
   snapshot.py (снимок матча простыми данными, JSON-совместимый), render.py (отрисовка
   объектов поля по снимку; экран читает только game.snap), server.py (сервер без окна),
-  net.py (TCP, JSON по строкам), bot.py (случайный бот), interp.py (плавная анимация клиента), discovery.py (поиск игр в сети, UDP 5556),
+  net.py (TCP, JSON по строкам), bot.py (случайный бот), interp.py (плавная анимация клиента), discovery.py (поиск игр в сети, UDP 5556), selftest.py (main.py --selftest);
+  сборка: tools/build.py (PyInstaller), packaging/ (install.sh, Inno Setup), .github/workflows/release.yml;
   i18n.py (все тексты на ru/en/fi), settings.py, sprites.py; assets/ — музыка, звуки,
   спрайты (PNG редактируемые); tools/make_sprites.py; tests/ — pytest.
 

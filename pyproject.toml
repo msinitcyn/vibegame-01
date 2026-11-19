@@ -1,12 +1,13 @@
 [project]
 name = "fast-game"
-version = "0.1.0"
+version = "0.2.0"
 description = "Дуэль двух шариков с артефактами"
 requires-python = ">=3.10"
 dependencies = ["pygame>=2.5"]
 
 [dependency-groups]
 dev = ["pytest>=8", "pyflakes>=3"]
+build = ["pyinstaller>=6", "pillow>=10"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

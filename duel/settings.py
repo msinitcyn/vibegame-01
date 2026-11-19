@@ -1,20 +1,24 @@
-"""Настройки игрока между запусками: язык (и всё, что добавим потом).
+r"""Настройки игрока между запусками: язык, последний адрес сервера.
 
-Хранятся в ~/.config/duel/settings.json (или в файле из переменной окружения DUEL_SETTINGS).
+Хранятся в папке настроек пользователя: на Linux — ~/.config/duel/settings.json,
+на Windows — %APPDATA%\duel\settings.json (или в файле из переменной DUEL_SETTINGS).
 Битый или отсутствующий файл — просто настройки по умолчанию.
 """
 import json
 import os
 from pathlib import Path
 
-DEFAULTS = {"lang": "ru"}
+DEFAULTS = {"lang": "ru", "last_address": "localhost"}
 
 
-def path():
+def path(system=None):
     custom = os.environ.get("DUEL_SETTINGS")
     if custom:
         return Path(custom)
-    base = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+    if (system or os.name) == "nt":
+        base = Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming")
+    else:
+        base = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
     return base / "duel" / "settings.json"
 
 

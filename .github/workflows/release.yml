@@ -1,0 +1,87 @@
+# Сборка игры для Linux и Windows и выпуск версии.
+#   git tag v0.2.0 && git push origin v0.2.0   — собрать и выложить на страницу выпуска
+#   Actions → «Сборка и выпуск» → Run workflow  — просто собрать (файлы — в результатах запуска)
+name: Сборка и выпуск
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        # Ubuntu 22.04 — чтобы сборка запускалась и на системах постарше
+        os: [ubuntu-22.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      DUEL_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+      SDL_VIDEODRIVER: dummy
+      SDL_AUDIODRIVER: dummy
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Зависимости
+        run: python -m pip install pygame==2.6.1 pyinstaller pillow pytest pyflakes
+
+      - name: Тесты
+        if: runner.os == 'Linux'
+        run: |
+          python -m pyflakes main.py duel tests tools
+          python -m pytest -q
+
+      - name: Inno Setup (установщик Windows)
+        if: runner.os == 'Windows'
+        run: choco install innosetup -y --no-progress
+
+      - name: Сборка
+        run: python tools/build.py
+
+      - name: Самопроверка сборки (Linux)
+        if: runner.os == 'Linux'
+        run: ./dist/duel-linux --selftest
+
+      - name: Самопроверка сборки (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dist\duel-windows.exe -ArgumentList '--selftest' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "самопроверка не прошла: код $($p.ExitCode)" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: duel-${{ runner.os }}
+          if-no-files-found: ignore
+          path: |
+            dist/duel-linux.tar.gz
+            dist/duel-linux
+            dist/install.sh
+            dist/duel-windows.exe
+            dist/duel-setup.exe
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: files
+          merge-multiple: true
+
+      - name: Страница выпуска
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -l files
+          gh release create "${{ github.ref_name }}" files/* \
+            --repo "${{ github.repository }}" --title "${{ github.ref_name }}" --generate-notes

@@ -1,5 +1,6 @@
 """Все настройки игры: размеры, скорости, длительности, патроны, цвета, звук."""
 
+import sys
 from pathlib import Path
 
 
@@ -15,7 +16,18 @@ MOB_ZONE = (0.4, 0.6)            # полоса мобов: доли ширин�
 BLUE_LAND = (0, WIDTH * MOB_ZONE[0])
 RED_LAND = (WIDTH * MOB_ZONE[1], WIDTH)
 
-ASSETS = Path(__file__).resolve().parent.parent / "assets"
+
+
+def resource_root():
+    """Где лежат файлы игры: папка проекта или, внутри готовой сборки, папка распаковки."""
+    unpacked = getattr(sys, "_MEIPASS", None)
+    return Path(unpacked) if unpacked else Path(__file__).resolve().parent.parent
+
+
+ASSETS = resource_root() / "assets"
+FONTS_DIR = ASSETS / "fonts"          # шрифт внутри игры: одинаковые буквы и значки на Linux и Windows
+FONT_FILES = {False: "DejaVuSansCondensed.ttf", True: "DejaVuSansCondensed-Bold.ttf"}
+ICON_FILE = ASSETS / "icon.png"
 MUSIC_DIR = ASSETS / "music"
 SOUNDS_DIR = ASSETS / "sounds"
 SPRITES_DIR = ASSETS / "sprites"

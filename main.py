@@ -3,6 +3,7 @@
     python main.py                                   # хотсит, полный экран
     python main.py --connect localhost --windowed    # сетевой клиент (сервер: python -m duel.server)
     python main.py --connect 192.168.1.5 --pad 1     # свой геймпад — второй по счёту
+    python main.py --selftest                        # самопроверка без окна (код выхода 0 — всё работает)
 """
 import argparse
 import os
@@ -13,7 +14,11 @@ if __name__ == "__main__":
     ap.add_argument("--connect", metavar="АДРЕС", help="подключиться к серверу (host или host:port)")
     ap.add_argument("--windowed", action="store_true", help="в окне, а не на весь экран")
     ap.add_argument("--pad", type=int, default=0, help="номер своего геймпада (с 0) в сетевой игре")
+    ap.add_argument("--selftest", action="store_true", help="самопроверка без окна и звука")
     args = ap.parse_args()
+    if args.selftest:
+        from duel.selftest import run
+        raise SystemExit(run())
     net = None
     if args.connect:
         # кнопки геймпада доходят и до окна без фокуса — два клиента на одном компьютере
