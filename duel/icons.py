@@ -110,6 +110,13 @@ def draw_icon(surf, kind, center, r):
         pygame.draw.circle(surf, (20, 20, 30), P(-0.22, -0.02), max(1, r * 0.06))
         pygame.draw.line(surf, color, P(0.05, 0.05), P(0.5, 0.05), w)
         pygame.draw.polygon(surf, color, [P(0.62, 0.05), P(0.38, -0.18), P(0.38, 0.28)])
+    elif kind == "beam":                          # звезда и длинный луч
+        pygame.draw.line(surf, color, P(-0.35, 0.2), P(0.65, -0.25), w + 2)
+        pygame.draw.line(surf, WHITE, P(-0.35, 0.2), P(0.65, -0.25), max(1, w // 2))
+        for i in range(4):
+            a = i * math.pi / 4
+            pygame.draw.line(surf, color, P(-0.42 - 0.22 * math.cos(a), 0.22 - 0.22 * math.sin(a)),
+                             P(-0.42 + 0.22 * math.cos(a), 0.22 + 0.22 * math.sin(a)), max(1, w // 2))
     elif kind == "foe_invert":                    # стрелки вверх и вниз
         pygame.draw.line(surf, color, P(-0.22, 0.55), P(-0.22, -0.45), w)
         pygame.draw.polygon(surf, color, [P(-0.22, -0.6), P(-0.42, -0.3), P(-0.02, -0.3)])

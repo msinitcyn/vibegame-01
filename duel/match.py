@@ -27,6 +27,10 @@ from .commands import Command
 from .config import (
     AMMO_PACK,
     AMMO_SPAWN,
+    BEAM_LENGTH,
+    BEAM_SPEED,
+    DURATION,
+    HERO_ONLY_ITEMS,
     ARENA,
     ARENA_R,
     ARTIFACT_R,
@@ -67,7 +71,7 @@ from .config import (
     TOP,
     WIDTH,
 )
-from .entities import AmmoPack, Artifact, Clone, Mob, Player, Wall, push_out_of_arena
+from .entities import AmmoPack, Artifact, Beam, Clone, Mob, Player, Wall, push_out_of_arena
 from .items import BAD_EFFECTS, INSTANT_ITEMS, ITEMS
 
 NO_AMMO_EVERY = 1.0               # «нет патронов» — не чаще раза в столько секунд партии
@@ -95,6 +99,7 @@ class Match:
         self.no_ammo_at = {p: -10.0 for p in self.players}
         self.mobs = []
         self.mob_shots = []           # снаряды дальнобойных мобов
+        self.beams = []               # «Луч света»
         self.match_time = 0.0         # секунд с начала партии
         self.mob_wave = 0             # сколько волн мобов уже пришло
         self.next_wave = MOB_DELAY    # когда придёт следующая (секунды партии)
@@ -126,7 +131,7 @@ class Match:
     def objects(self):
         """Все объекты поля, кроме магов."""
         return (self.bullets + self.mobs + self.mob_shots + self.artifacts + self.ammo_packs
-                + self.walls + self.clones)
+                + self.walls + self.clones + self.beams)
 
     def number_new(self):
         """Выдать номера объектам, появившимся за шаг (в порядке появления в списках)."""
@@ -236,6 +241,9 @@ class Match:
             for m in self.mobs:
                 if m.target is p:
                     m.target = None if "mobpeace" in foe.effects else foe
+        elif kind == "beam":                  # луч из мага по прицелу; маг на это время стоит
+            self.give(p, "beaming")
+            self.beams.append(Beam(p, DURATION["beaming"]))
         elif kind == "cleanse":
             for u in [p] + self.clones_of(p):
                 for e in BAD_EFFECTS:
@@ -269,6 +277,8 @@ class Match:
         for p in self.players:
             for a in self.artifacts:
                 instant = a.kind in INSTANT_ITEMS
+                if HERO_ONLY_ITEMS.get(a.kind, p.hero) != p.hero:
+                    continue                      # артефакт другого героя — не подбирается
                 if not a.taken and math.hypot(a.x - p.x, a.y - p.y) < p.radius + ARTIFACT_R:
                     if instant:
                         self.apply_item(p, a.kind)    # сразу, в инвентарь не кладём
@@ -357,7 +367,9 @@ class Match:
         x = max(killer.land[0] + m, min(killer.land[1] - m, mob.x))
         y = max(TOP + m, min(BOTTOM - m, mob.y))
         x, y = push_out_of_arena(x, y, m, killer.dir)             # целиком на земле, не в арене
-        self.artifacts.append(Artifact(x, self.rng.choice(list(ITEMS)), y))
+        # артефакты героя (луч Света) выпадают только ему
+        kinds = [k for k in ITEMS if HERO_ONLY_ITEMS.get(k, killer.hero) == killer.hero]
+        self.artifacts.append(Artifact(x, self.rng.choice(kinds), y))
 
     def bullet_speed(self, owner):
         """Множитель скорости пуль owner: «быстрые пули» у него, «пули соперника медленнее» у цели."""
@@ -394,6 +406,25 @@ class Match:
             if shot:
                 self.mob_shots.append(shot)
         self.update_mob_shots(dt)
+        self.update_beams(dt)
+
+    def update_beams(self, dt):
+        """Лучи: растут, бьют насквозь соперника, его двойников и мобов, пока касаются."""
+        for beam in self.beams:
+            beam.life -= dt
+            beam.length = min(BEAM_LENGTH, beam.length + BEAM_SPEED * dt)
+            owner = beam.owner
+            foe = self.other(owner)
+            if beam.tick(foe, beam.touches(foe.x, foe.y, foe.radius), dt) and not foe.shield_absorb():
+                foe.hp -= 1
+                foe.hit_flash = 0.12
+            for c in self.clones_of(foe):
+                if beam.tick(c, beam.touches(c.x, c.y, c.radius), dt):
+                    c.alive = False
+            for m in self.mobs:
+                if m.alive and beam.tick(m, beam.touches(m.x, m.y, m.radius), dt):
+                    m.hurt(owner)         # злится на Свет (если нет «Мира с мобами»)
+        self.beams = [b for b in self.beams if b.life > 0]
 
     def update_mob_shots(self, dt):
         """Снаряды мобов: скорость — как у движения мобов на эту цель; попадают в любого мага."""

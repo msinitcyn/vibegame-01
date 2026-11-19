@@ -299,9 +299,9 @@ class ScreensMixin:
 
     def draw_help_items(self):
         s = self.screen
-        row_h, col_w = 48, 470
+        row_h, col_w = 46, 470
         sections = dict(HELP_SECTIONS)
-        cols = {0: ["defense", "attack"], 1: ["weapon", "debuff"]}
+        cols = {0: ["defense", "weapon"], 1: ["attack", "debuff"]}     # колонки примерно поровну
         for col, ids in cols.items():
             x0 = 20 + col * (col_w + 20)
             y = 50

@@ -9,6 +9,7 @@ import pygame
 
 from .config import (
     AMMO_COLOR,
+    BEAM_WIDTH,
     AMMO_PACK,
     ARTIFACT_R,
     BULLET_R,
@@ -199,6 +200,19 @@ def draw_wall(surf, w, heroes):
     pygame.draw.rect(surf, side_color(heroes, w["owner"]), (mirror_x, y1, half, h), 1)
 
 
+def draw_beam(surf, b, heroes):
+    """Луч света: широкое свечение цвета героя и белая сердцевина; к концу жизни — тоньше."""
+    x, y, a = b["x"], b["y"], b["angle"]
+    ex, ey = x + math.cos(a) * b["len"], y + math.sin(a) * b["len"]
+    k = max(0.3, min(1.0, b["life"] / 0.5))         # затухание в последние полсекунды
+    w = max(2, int(BEAM_WIDTH * k))
+    glow = side_color(heroes, b["owner"])
+    pygame.draw.line(surf, (16, 12, 20), (x, y), (ex, ey), w + 6)
+    pygame.draw.line(surf, glow, (x, y), (ex, ey), w + 2)
+    pygame.draw.line(surf, (255, 255, 235), (x, y), (ex, ey), max(1, w // 3))
+    pygame.draw.circle(surf, (255, 255, 235), (int(ex), int(ey)), max(2, w // 2))
+
+
 def draw_field(surf, snap, font):
     """Все объекты поля в порядке слоёв: стены, артефакты, пачки, двойники, мобы,
     снаряды, пули, маги. Цвета и маги — по героям сторон."""
@@ -217,6 +231,8 @@ def draw_field(surf, snap, font):
         draw_mob_shot(surf, s)
     for b in snap["bullets"]:
         draw_bullet(surf, b, heroes)
+    for b in snap.get("beams", []):
+        draw_beam(surf, b, heroes)
     for p in snap["players"]:
         draw_player(surf, p, heroes)
     for m in snap["mobs"]:                # замахи и удары мобов — поверх магов, чтобы были видны

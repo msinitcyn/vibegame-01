@@ -175,6 +175,8 @@ TEXTS = {
         "item.mobswap": "перевод стрелок",
         "help.mobpeace": "Мобы, которые идут на тебя, успокаиваются, а {mobpeace} с твои попадания и удары их не злят.",
         "help.mobswap": "Все мобы, которые идут на тебя, разворачиваются и идут на соперника.",
+        "item.beam": "луч света",
+        "help.beam": "Только для Света: из мага по прицелу бьёт луч {beam_len} px насквозь — {beam_dps} жизнь в секунду всем, кого касается. {beam} с маг стоит на месте.",
         "help.clearfoe": "Все пули соперника, что сейчас на экране, исчезают.",
         "help.slowfoe": "Пули соперника и мобы, которые идут на тебя, примерно вдвое медленнее, "
                         "{slowfoe} с.",
@@ -348,6 +350,8 @@ TEXTS = {
         "item.mobswap": "pass the mobs",
         "help.mobpeace": "Mobs coming at you calm down, and for {mobpeace} s your hits don't make them angry.",
         "help.mobswap": "All mobs coming at you turn around and go for the opponent.",
+        "item.beam": "beam of light",
+        "help.beam": "Light only: a {beam_len} px beam shoots along your aim and pierces — {beam_dps} life per second to everyone it touches. You stand still for {beam} s.",
         "help.clearfoe": "All opponent bullets currently on screen disappear.",
         "help.slowfoe": "Opponent bullets and mobs coming at you are about twice as slow, {slowfoe} s.",
         "help.fastshots": "Your bullets fly {fast}× faster for {fastshots} s, and so do mobs "
@@ -521,6 +525,8 @@ TEXTS = {
         "item.mobswap": "hirviöt vastustajalle",
         "help.mobpeace": "Sinua kohti tulevat hirviöt rauhoittuvat, ja {mobpeace} s osumasi eivät suututa niitä.",
         "help.mobswap": "Kaikki sinua kohti tulevat hirviöt kääntyvät ja menevät vastustajan kimppuun.",
+        "item.beam": "valonsäde",
+        "help.beam": "Vain Valolle: {beam_len} px säde lähtee tähtäyksen suuntaan läpi kaiken — {beam_dps} elämä sekunnissa kaikille, joihin se osuu. Seisot paikallasi {beam} s.",
         "help.clearfoe": "Kaikki ruudulla olevat vastustajan luodit katoavat.",
         "help.slowfoe": "Vastustajan luodit ja sinua kohti tulevat hirviöt ovat noin puolet "
                         "hitaampia, {slowfoe} s.",

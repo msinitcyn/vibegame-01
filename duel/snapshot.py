@@ -53,6 +53,8 @@ def snapshot(match):
                        for a in m.ammo_packs],
         "walls": [{"id": w.id, "owner": w.owner.id, "x": _xy(w.x), "y1": _xy(w.y1),
                    "y2": _xy(w.y2), "life": _t(w.life)} for w in m.walls],
+        "beams": [{"id": b.id, "owner": b.owner.id, "x": _xy(b.x), "y": _xy(b.y), "angle": _t(b.angle),
+                   "len": _xy(b.length), "life": _t(b.life)} for b in m.beams],
         "clones": [{"id": c.id, "owner": c.owner.id, "x": _xy(c.x), "y": _xy(c.y),
                     "r": _xy(c.radius), "life": _t(c.life), "effects": _effects(c)}
                    for c in m.clones],

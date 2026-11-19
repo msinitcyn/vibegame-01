@@ -18,6 +18,12 @@ RED_LAND = (WIDTH / 2, WIDTH)
 ARENA = (WIDTH / 2, (TOP + BOTTOM) / 2)      # центр арены мобов
 ARENA_R = 150                    # радиус арены, пикс
 FOE_LAND_DPS = 2                 # на чужой земле маг теряет столько жизней в секунду
+# «Луч света» — артефакт только героя Свет
+BEAM_LENGTH = 650                # длина луча, пикс
+BEAM_WIDTH = 12                  # толщина (попадание — по ней)
+BEAM_SPEED = 3000                # как быстро вырастает, пикс/сек
+BEAM_DPS = 1                     # урон в секунду, пока касается (первый — сразу)
+HERO_ONLY_ITEMS = {"beam": "light"}   # артефакт -> единственный герой, кто его получает и подбирает
 
 
 
@@ -171,6 +177,7 @@ ICON_BG = (35, 38, 52)
 DURATION = {"grow2": 7, "shrink": 7, "freeze": 2.5, "speed": 7, "nofire": 4, "slowfoe": 7,
             "shield": 7, "invert": 5, "noitems": 5, "fastshots": 7,
             "mobpeace": 8,                # «Мир с мобами»: попадания не злят мобов
+            "beaming": 2.5,               # «Луч света»: пока горит луч, маг стоит на месте
             # улучшения оружия
             "triple": WEAPON_TIME, "wavy": WEAPON_TIME, "rapid": WEAPON_TIME, "breaker": WEAPON_TIME}
 RAPID_FACTOR = 0.4               # пауза между выстрелами x0.4

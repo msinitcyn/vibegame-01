@@ -5,6 +5,8 @@
 import math
 
 from .config import (
+    BEAM_DPS,
+    BEAM_WIDTH,
     ARENA,
     ARENA_R,
     MOB_KEEP_DISTANCE,
@@ -113,7 +115,7 @@ class Unit:
 
     @property
     def frozen(self):
-        return "freeze" in self.effects
+        return "freeze" in self.effects or "beaming" in self.effects     # луч света тоже держит на месте
 
     @property
     def can_fire(self):
@@ -517,6 +519,44 @@ class MobShot:
         self.travelled += step
         if self.travelled >= MOB_RANGE or not (0 <= self.x <= WIDTH and TOP <= self.y <= BOTTOM):
             self.alive = False
+
+
+class Beam:
+    """«Луч света»: прямой луч из мага по прицелу, быстро вырастает до BEAM_LENGTH, бьёт насквозь.
+    Пока касается цели, снимает BEAM_DPS жизней в секунду (первый удар — сразу)."""
+
+    def __init__(self, owner, life):
+        self.id = None
+        self.owner = owner
+        self.x, self.y, self.angle = owner.x, owner.y, owner.aim
+        self.length = 0.0
+        self.life = life
+        self.touching = {}            # цель -> сколько секунд касается с последнего удара
+
+    @property
+    def end(self):
+        return (self.x + math.cos(self.angle) * self.length, self.y + math.sin(self.angle) * self.length)
+
+    def touches(self, x, y, r):
+        """Касается ли круга (x, y, r): расстояние до отрезка луча не больше r + половины толщины."""
+        ex, ey = self.end
+        vx, vy = ex - self.x, ey - self.y
+        ll = vx * vx + vy * vy
+        k = 0.0 if ll == 0 else max(0.0, min(1.0, ((x - self.x) * vx + (y - self.y) * vy) / ll))
+        return math.hypot(x - (self.x + vx * k), y - (self.y + vy * k)) <= r + BEAM_WIDTH / 2
+
+    def tick(self, target, touching, dt):
+        """Сколько ударов нанести цели в этот такт (0 или 1)."""
+        if not touching:
+            self.touching.pop(target, None)
+            return 0
+        t = self.touching.get(target, 1 / BEAM_DPS) + dt       # новая цель — удар сразу
+        hits = 0
+        if t >= 1 / BEAM_DPS:
+            t -= 1 / BEAM_DPS
+            hits = 1
+        self.touching[target] = t
+        return hits
 
 
 class Wall:
