@@ -3,7 +3,9 @@
 Сервер -> клиент:
     {"type": "hello", "proto": 1, "role": "player", "you": "blue"}   после подключения
     {"type": "full"}                                                  мест нет
-    {"type": "state", "snap": {...}, "events": [[...], ...]}          каждый такт
+    {"type": "state", "tick": N, "waiting": bool, "snap": {...}, "events": [[...], ...]}
+                                       раз в 2 такта (30/с); события — все с прошлого снимка;
+                                       waiting — партия ещё не началась (ждём второго игрока)
 Клиент -> сервер:
     {"type": "cmd", "move": [dx, dy], "fire": bool, "melee": bool, "slot": int|null}
     {"type": "restart"}                                               новая партия после победы
@@ -11,7 +13,7 @@
 import json
 import socket
 
-PROTO = 1
+PROTO = 2                          # 2: снимки раз в 2 такта, с номером такта и ожиданием
 PORT = 5555
 MAX_OUT = 1024 * 1024              # клиент не читает (~7 с снимков) — отключаем, а не копим
 
@@ -105,3 +107,27 @@ def connect(address, timeout=5.0):
             break
         time.sleep(0.01)
     raise ConnectionError("сервер не ответил")
+
+
+def local_addresses():
+    """Адреса этого компьютера в локальной сети (без 127.*) — их вводит второй игрок."""
+    found = []
+    try:
+        # «подключение» UDP-сокета ничего не отправляет, но выбирает исходящий интерфейс
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("10.255.255.255", 1))
+            found.append(s.getsockname()[0])
+        finally:
+            s.close()
+    except OSError:
+        pass
+    try:
+        found += socket.gethostbyname_ex(socket.gethostname())[2]
+    except OSError:
+        pass
+    out = []
+    for a in found:
+        if not a.startswith("127.") and a != "0.0.0.0" and a not in out:
+            out.append(a)
+    return out

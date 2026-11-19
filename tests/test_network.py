@@ -9,7 +9,7 @@ import pygame
 import pytest
 
 from duel.net import PROTO, Conn, connect, parse_address
-from duel.server import Server
+from duel.server import SEND_EVERY, Server, start_in_thread
 
 
 def wait(srv, cond, timeout=3.0):
@@ -46,7 +46,7 @@ class Client:
 
 @pytest.fixture
 def server():
-    srv = Server(port=0, host="127.0.0.1")
+    srv = Server(port=0, host="127.0.0.1", log=lambda text: None)
     yield srv
     for c in list(srv.conns.values()):
         c.close()
@@ -92,7 +92,8 @@ def test_roles_and_full_server(server):
 
 
 def test_command_moves_and_fires(server):
-    a = Client(server)
+    a, b = Client(server), Client(server)
+    assert b.hello["you"] == "red"
     blue = server.match.blue
     y0 = blue.y
     a.cmd(move=(0, 1), fire=True)
@@ -111,7 +112,7 @@ def test_bad_command_values_are_clamped(server):
 
 
 def test_bot_takes_empty_place_and_yields():
-    srv = Server(port=0, host="127.0.0.1", bot=True)
+    srv = Server(port=0, host="127.0.0.1", bot=True, log=lambda text: None)
     try:
         human = Client(srv)                                 # ссылка держит соединение открытым
         red = srv.match.red
@@ -131,10 +132,14 @@ def test_bot_takes_empty_place_and_yields():
 
 
 def test_disconnect_frees_place_and_match_stands(server):
-    a = Client(server)
+    a, b = Client(server), Client(server)
     wait(server, lambda: server.match.match_time > 0.1)
     a.conn.close()
     wait(server, lambda: "blue" not in server.conns)
+    t = server.match.match_time
+    wait(server, lambda: server.match.match_time > t)      # с одним игроком партия идёт дальше
+    b.conn.close()
+    wait(server, lambda: not server.conns)
     t = server.match.match_time
     for _ in range(30):
         server.step()
@@ -143,7 +148,8 @@ def test_disconnect_frees_place_and_match_stands(server):
 
 
 def test_restart_after_win(server):
-    a = Client(server)
+    a, b = Client(server), Client(server)
+    assert b.hello["you"] == "red"
     old = server.match
     old.red.hp = 0
     wait(server, lambda: any(s["snap"]["winner"] == "blue" for s in a.states()))
@@ -153,7 +159,7 @@ def test_restart_after_win(server):
 
 
 def test_other_protocol_version_refused():
-    srv = Server(port=0, host="127.0.0.1", proto=PROTO + 1)
+    srv = Server(port=0, host="127.0.0.1", proto=PROTO + 1, log=lambda text: None)
     import threading
     stop = threading.Event()
 
@@ -176,6 +182,7 @@ def test_other_protocol_version_refused():
 
 def test_client_game_plays_over_network(game, server):
     """Приложение в режиме клиента: выстрел с клавиатуры доходит до сервера, снимок рисуется."""
+    server.bot = True                           # соперник — бот, партия начинается сразу
     sock = socket.create_connection(("127.0.0.1", server.port))
     conn = Conn(sock)
     wait(server, lambda: "blue" in server.conns)
@@ -191,3 +198,68 @@ def test_client_game_plays_over_network(game, server):
     finally:
         game.net, game.me = None, None
         conn.close()
+
+
+# ------------------------------------------------------------------ ожидание и частота снимков
+
+def test_waits_for_second_player(server):
+    a = Client(server)
+    for _ in range(60):
+        server.step()
+    assert server.match.match_time == 0 and not server.started
+    assert a.states() and all(s["waiting"] for s in a.states())
+    b = Client(server)
+    wait(server, lambda: server.match.match_time > 0)
+    assert not a.states()[-1]["waiting"] and b.hello["you"] == "red"
+
+
+def test_bot_starts_at_once():
+    srv = Server(port=0, host="127.0.0.1", bot=True, log=lambda text: None)
+    try:
+        a = Client(srv)
+        wait(srv, lambda: srv.match.match_time > 0)
+        assert a.hello["you"] == "blue"
+    finally:
+        srv.close()
+
+
+def test_snapshots_30_per_second_and_no_lost_events(server):
+    a, b = Client(server), Client(server)
+    assert b.hello["you"] == "red"
+    wait(server, lambda: server.started)
+    t0 = server.tick_no
+    a.msgs.clear()
+    fired = 0
+    for i in range(120):                         # 2 секунды игрового времени
+        if i % 3 == 0:
+            a.cmd(fire=True)                     # выстрел на нечётных и чётных тактах
+            fired += 1
+        server.match.blue.cooldown = 0
+        server.match.blue.ammo = 100
+        server.step()
+        time.sleep(0.001)
+    for _ in range(10):
+        server.step()
+    states = a.states()
+    ticks = [s["tick"] for s in states]
+    assert all(t % SEND_EVERY == 0 for t in ticks) and ticks == sorted(ticks)
+    assert 55 <= len([t for t in ticks if t <= t0 + 120]) <= 61
+    shots = sum(e == ["shot", "blue"] for s in states for e in s["events"])
+    assert shots == fired
+
+
+def test_server_in_thread_starts_and_stops():
+    srv = start_in_thread(port=0, log=lambda text: None)
+    conn, hello = connect(f"127.0.0.1:{srv.port}", timeout=3)
+    assert hello["you"] == "blue"
+    port = srv.port
+    srv.stop()
+    srv.thread.join(timeout=2)
+    assert not srv.thread.is_alive()
+    deadline = time.monotonic() + 2
+    while not conn.closed and time.monotonic() < deadline:
+        conn.recv()
+        time.sleep(0.01)
+    assert conn.closed                           # клиент узнал, что сервера нет
+    s = socket.create_server(("0.0.0.0", port))  # порт свободен
+    s.close()
