@@ -8,7 +8,9 @@ import json
 import os
 from pathlib import Path
 
-DEFAULTS = {"lang": "ru", "name": "", "last_address": "localhost"}
+DEFAULTS = {"lang": "ru", "name": "", "last_address": "localhost",
+            "aim_stick": 6, "aim_mouse": 5}       # чувствительность прицела, 1–10
+AIM_LEVELS = (1, 10)
 NAME_MAX = 16                     # длина имени игрока
 
 

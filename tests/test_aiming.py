@@ -93,6 +93,7 @@ def test_mouse_right_button_melee(game):
 def test_one_pad_is_right_players_with_stick_aim(game):
     pad = FakePad()
     game.pads.pads = [(100, pad)]
+    game.settings["aim_stick"] = 10                     # мгновенный прицел (плавный — ниже)
     assert game.pad_side(0) == "red" and game.mouse_side() == "blue"
     pad.right_x, pad.right_y = 0, 32000                # правый стик вниз
     game.on_pad(100, pygame.CONTROLLER_BUTTON_RIGHTSHOULDER)
@@ -140,3 +141,102 @@ def test_aim_goes_over_network():
         assert srv.match.blue.aim == 2.0
     finally:
         srv.close()
+
+
+# ------------------------------------------------------------------ чувствительность
+
+@pytest.fixture
+def sens(game):
+    saved = dict(game.settings)
+    yield game
+    game.settings.update(saved)
+    game.mouse_captured = False
+
+
+def test_stick_turns_smoothly_by_level(sens):
+    game = sens
+    pad = FakePad()
+    game.pads.pads = [(100, pad)]
+    red = game.match.red                                 # смотрит влево (π)
+    pad.right_x, pad.right_y = 0, -32000                 # стик вверх: цель −π/2, поворот на 90°
+    game.settings["aim_stick"] = 1                       # 120°/с — за такт 2°
+    game.update(DT)
+    # за такт — на 2° (старт — угол из снимка, он округлён до 0,01 рад)
+    assert abs(math.remainder(red.aim - math.pi, 2 * math.pi)) == pytest.approx(math.radians(2), abs=0.005)
+    for _ in range(60):                                  # за секунду точно довернулся
+        game.update(DT)
+    assert math.cos(red.aim + math.pi / 2) == pytest.approx(1, abs=1e-6)
+
+
+def test_faster_level_turns_faster(sens):
+    game = sens
+    pad = FakePad()
+    game.pads.pads = [(100, pad)]
+    pad.right_x, pad.right_y = 0, -32000
+    turned = {}
+    for level in (2, 8):
+        game.start()
+        game.stick_aim.clear()
+        game.settings["aim_stick"] = level
+        for _ in range(5):
+            game.update(DT)
+        turned[level] = abs(math.remainder(game.match.red.aim - math.pi, 2 * math.pi))
+    assert turned[8] > turned[2] > 0
+
+
+def test_releasing_stick_keeps_aim(sens):
+    game = sens
+    pad = FakePad()
+    game.pads.pads = [(100, pad)]
+    game.settings["aim_stick"] = 10
+    pad.right_x, pad.right_y = 0, 32000                  # вниз
+    game.update(DT)
+    pad.right_x, pad.right_y = -15000, 5000              # отпускает: стик проскакивает середину
+    game.update(DT)
+    pad.right_x, pad.right_y = 0, 0
+    game.update(DT)
+    assert game.match.red.aim == pytest.approx(math.pi / 2, abs=0.01)
+
+
+def test_mouse_crosshair_speed_and_bounds(sens):
+    game = sens
+    game.pads.pads = []
+    game.settings["aim_mouse"] = 1                       # 0,2 от движения мыши
+    game.mouse_captured = True
+    game.mouse_pos = (300.0, 300.0)
+    game.on_mouse_move((0, 0), (100, 0))
+    assert game.mouse_pos == pytest.approx((320.0, 300.0))
+    game.settings["aim_mouse"] = 10                      # ×2
+    game.on_mouse_move((0, 0), (5000, -5000))            # дальше края не уходит
+    x, y = game.mouse_pos
+    assert x == pytest.approx(999.0) and y >= 84
+
+
+def test_capture_only_in_play(sens):
+    game = sens
+    game.pads.pads = []
+    game.state = "play"
+    game.sync_mouse_capture()
+    assert game.mouse_captured and game.mouse_pos is not None   # перекрестие перед магом
+    game.draw()
+    game.state = "menu"
+    game.sync_mouse_capture()
+    assert not game.mouse_captured
+    game.pads.pads = [(100, FakePad()), (101, FakePad())]       # оба на геймпадах — мышь не нужна
+    game.state = "play"
+    game.sync_mouse_capture()
+    assert not game.mouse_captured
+
+
+def test_settings_rows_change_and_save(sens):
+    from duel import settings
+    game = sens
+    game.state = "settings"
+    game.settings_index = game.settings_rows.index("aim_stick")
+    for _ in range(12):
+        game.on_key(pygame.KSCAN_RIGHT)
+    assert game.settings["aim_stick"] == 10 and settings.load()["aim_stick"] == 10
+    game.on_key(pygame.KSCAN_DOWN)                        # «Прицел мышью»
+    game.on_key(pygame.KSCAN_A)
+    assert game.settings["aim_mouse"] == 4
+    game.draw_settings()

@@ -7,7 +7,8 @@ from pygame._sdl2 import controller
 
 
 PAD_DEAD = 0.45                  # мёртвая зона стика (доля от максимума)
-AIM_DEAD = 0.5                   # правый стик: ближе к центру — прицел не меняется
+AIM_DEAD = 0.6                   # правый стик: только уверенное отклонение меняет прицел
+                                 # (при отпускании стик проскакивает середину — прицел не дёргается)
 PAD_ITEM_BUTTONS = (pygame.CONTROLLER_BUTTON_X,   # □
                     pygame.CONTROLLER_BUTTON_Y,   # △
                     pygame.CONTROLLER_BUTTON_B,   # ○

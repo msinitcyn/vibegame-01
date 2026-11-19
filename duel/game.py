@@ -137,7 +137,7 @@ class Game(ScreensMixin):
         self.join_touched = False     # игрок листал или набирал — тогда игру сами не выбираем
         self.finder = None            # поиск игр в сети, пока открыт экран «Подключиться»
         self.menu_index = 0
-        self.settings_rows = ["lang", "name", "back"]
+        self.settings_rows = ["lang", "name", "aim_stick", "aim_mouse", "back"]
         self.help_page = 0
         self.settings_index = 0
         self.state = "menu"
@@ -153,8 +153,11 @@ class Game(ScreensMixin):
         self.net_addr = self.net_token = None    # куда и с каким ключом возвращаться после обрыва
         self.reconnect_until = None   # пока не None — связь потеряна, пытаемся вернуться
         self.net_end = "net.lost"     # почему закончилась сетевая игра (текст для меню)
-        self.mouse_pos = None         # где курсор (логические координаты окна)
+        self.mouse_pos = None         # перекрестие мыши на поле (логические координаты окна)
+        self.mouse_captured = False   # в партии курсор спрятан, мышь двигает перекрестие
+        self.focused = True
         self.aim_source = {}          # чем игрок целился последним: "mouse" или "pad"
+        self.stick_aim = {}           # плавный прицел стиком: текущий угол игрока
         self.restart()
         if net:
             self.enter_net(*net)
@@ -180,6 +183,7 @@ class Game(ScreensMixin):
         self.pending = {pid: Command() for pid in PLAYER_IDS}   # нажатия до следующего такта
         self.time_acc = 0.0           # накопленное время кадров для фиксированного такта
         self.win_time = 0
+        self.stick_aim = {}           # плавный прицел стиком начинается заново с новой партией
         self.refresh_snap()
 
     def refresh_snap(self):
@@ -210,6 +214,9 @@ class Game(ScreensMixin):
                     return
                 if e.type == pygame.WINDOWFOCUSLOST:
                     self.held.clear()
+                    self.focused = False
+                if e.type == pygame.WINDOWFOCUSGAINED:
+                    self.focused = True
                 if e.type == pygame.KEYUP:
                     self.held.discard(e.scancode)
                 if e.type == pygame.KEYDOWN:
@@ -219,9 +226,10 @@ class Game(ScreensMixin):
                         return
                     self.on_key(e.scancode)
                 if e.type == pygame.MOUSEMOTION:
-                    self.on_mouse_move(e.pos)
+                    self.on_mouse_move(e.pos, e.rel)
                 if e.type == pygame.MOUSEBUTTONDOWN:
-                    self.on_mouse_move(e.pos)
+                    if not self.mouse_captured:
+                        self.on_mouse_move(e.pos)
                     self.on_mouse_button(e.button)
                 if e.type == pygame.TEXTINPUT:
                     self.on_text(e.text)
@@ -240,6 +248,7 @@ class Game(ScreensMixin):
             if self.snap["winner"] and not self.win_time:
                 self.win_time = pygame.time.get_ticks()
             self.update_music()
+            self.sync_mouse_capture()
             if self.state == "menu":
                 self.draw_menu()
                 continue
@@ -717,11 +726,53 @@ class Game(ScreensMixin):
             return self.me
         return "blue" if len(self.pads.pads) < 2 else None
 
-    def on_mouse_move(self, pos):
-        self.mouse_pos = pos
+    def mouse_factor(self):
+        """Скорость перекрестия: уровень 1 → 0,2, 5 → 1, 10 → 2."""
+        return self.settings.get("aim_mouse", 5) / 5
+
+    def on_mouse_move(self, pos, rel=None):
+        """Курсор захвачен (партия) — перекрестие сдвигается на rel·скорость в пределах поля;
+        иначе — стоит там, где курсор."""
+        if self.mouse_captured and rel is not None and self.mouse_pos is not None:
+            k = self.mouse_factor()
+            x = max(0.0, min(WIDTH - 1.0, self.mouse_pos[0] + rel[0] * k))
+            y = max(float(TOP), min(HEIGHT - 1.0, self.mouse_pos[1] + rel[1] * k))
+            self.mouse_pos = (x, y)
+        else:
+            self.mouse_pos = pos
         side = self.mouse_side()
         if side:
             self.aim_source[side] = "mouse"
+            self.stick_aim.pop(side, None)
+
+    def want_mouse_capture(self):
+        return (self.state == "play" and self.focused and self.mouse_side() is not None
+                and not self.snap.get("winner") and not (self.net and self.net_waiting))
+
+    def sync_mouse_capture(self):
+        """В партии курсор прячется и не уходит из окна (мышь двигает своё перекрестие),
+        вне партии — обычный курсор."""
+        want = self.want_mouse_capture()
+        if want == self.mouse_captured:
+            return
+        self.mouse_captured = want
+        try:
+            pygame.mouse.set_visible(not want)
+            pygame.event.set_grab(want)
+        except pygame.error:
+            pass
+        side = self.mouse_side()
+        if want and side:                 # перекрестие — перед своим магом
+            p = next((p for p in self.snap.get("players", []) if p["id"] == side), None)
+            if p:
+                self.mouse_pos = (p["x"] + DIR[side] * 150, p["y"])
+
+    def stick_turn_rate(self):
+        """Скорость поворота прицела к стику, рад/с; None — сразу (уровень 10)."""
+        level = self.settings.get("aim_stick", 6)
+        if level >= settings.AIM_LEVELS[1]:
+            return None
+        return math.radians(120 * 1.35 ** (level - 1))
 
     def on_mouse_button(self, button):
         """Левая кнопка — выстрел, правая — ближний удар (у того, кто целится мышью)."""
@@ -737,10 +788,19 @@ class Game(ScreensMixin):
     def aim_for(self, pid):
         """Прицел игрока на этот такт: правый стик, если наклонён; иначе — к курсору мыши,
         если игрок целится мышью; иначе None (прицел не меняется)."""
-        a = self.pads.aim(self.pad_of(pid))
-        if a is not None:
+        target = self.pads.aim(self.pad_of(pid))
+        if target is not None:
             self.aim_source[pid] = "pad"
-            return a
+            rate = self.stick_turn_rate()
+            cur = self.stick_aim.get(pid)
+            if rate is None or cur is None:
+                p = next((p for p in self.snap.get("players", []) if p["id"] == pid), None)
+                cur = target if rate is None or p is None else p.get("aim", target)
+            diff = (target - cur + math.pi) % (2 * math.pi) - math.pi      # кратчайший поворот
+            step = abs(diff) if rate is None else rate * STEP
+            cur += max(-step, min(step, diff))
+            self.stick_aim[pid] = cur
+            return cur
         if (self.mouse_side() == pid and self.mouse_pos is not None
                 and self.aim_source.get(pid) == "mouse"):
             p = next((p for p in self.snap.get("players", []) if p["id"] == pid), None)
@@ -794,6 +854,12 @@ class Game(ScreensMixin):
             self.settings_index = (self.settings_index + 1) % len(self.settings_rows)
         elif row == "back" and sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
             self.state = "menu"
+        elif row in ("aim_stick", "aim_mouse"):
+            step = {K.KSCAN_A: -1, K.KSCAN_LEFT: -1, K.KSCAN_D: 1, K.KSCAN_RIGHT: 1}.get(sc)
+            if step:
+                lo, hi = settings.AIM_LEVELS
+                self.settings[row] = max(lo, min(hi, self.settings.get(row, settings.DEFAULTS[row]) + step))
+                settings.save(self.settings)
         elif row == "lang":
             step = {K.KSCAN_A: -1, K.KSCAN_LEFT: -1, K.KSCAN_D: 1, K.KSCAN_RIGHT: 1,
                     K.KSCAN_RETURN: 1, K.KSCAN_KP_ENTER: 1, K.KSCAN_SPACE: 1}.get(sc)

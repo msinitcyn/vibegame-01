@@ -262,11 +262,13 @@ class ScreensMixin:
         labels = {"lang": f"◀  {tr('settings.lang', lang=LANGS[get_lang()])}  ▶",
                   "name": tr("settings.name", name=name) if name.strip() or row == "name"
                   else tr("settings.name", name=tr("settings.name_empty")),
+                  "aim_stick": f"◀  {tr('settings.aim_stick', n=self.settings.get('aim_stick', 6))}  ▶",
+                  "aim_mouse": f"◀  {tr('settings.aim_mouse', n=self.settings.get('aim_mouse', 5))}  ▶",
                   "back": tr("settings.back")}
         for i, line in enumerate(self.settings_rows):
             sel = i == self.settings_index
             rect = pygame.Rect(0, 0, 460, 48)
-            rect.center = (WIDTH // 2, 260 + i * 64)
+            rect.center = (WIDTH // 2, 220 + i * 60)
             pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=10)
             pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
             txt = self.font.render(labels[line], True, WHITE if sel else GREY)
@@ -524,6 +526,14 @@ class ScreensMixin:
         s = self.screen
         s.blit(self.field_background(), (0, TOP))
         draw_field(s, self.snap, self.tiny)
+        if self.mouse_captured and self.mouse_pos:     # перекрестие мыши
+            x, y = int(self.mouse_pos[0]), int(self.mouse_pos[1])
+            for color, w in (((16, 12, 20), 4), ((255, 255, 255), 2)):
+                pygame.draw.circle(s, color, (x, y), 9, w)
+                pygame.draw.line(s, color, (x - 14, y), (x - 5, y), w)
+                pygame.draw.line(s, color, (x + 5, y), (x + 14, y), w)
+                pygame.draw.line(s, color, (x, y - 14), (x, y - 5), w)
+                pygame.draw.line(s, color, (x, y + 5), (x, y + 14), w)
         for text, x, y, t, color in self.popups:
             img = self.font.render(text, True, color)
             img.set_alpha(int(255 * min(1, t / 0.5)))
