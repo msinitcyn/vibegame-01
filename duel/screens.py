@@ -12,6 +12,7 @@ from .config import (
     HUD_CENTER,
     MOB_IDLE_COLOR,
     MOB_ZONE,
+    MOB_ZONE_EDGE,
     MOB_EVERY,
     MOB_MAX,
     MOB_MAX_HP,
@@ -25,6 +26,11 @@ from .config import (
     GREY,
     HEARTS_SHOWN,
     HEIGHT,
+    HERO_COLOR,
+    HERO_EDGE,
+    HERO_LAND,
+    HERO_SPRITE,
+    HEROES,
     HUD_H,
     INVENTORY_SIZE,
     QUEUE_SHOWN,
@@ -40,8 +46,8 @@ from .i18n import LANGS, get_lang
 from .i18n import t as tr
 from .icons import draw_ammo_icon, draw_icon
 from .gamepad import PAD_ITEM_COLORS, PAD_ITEM_LABELS, PAD_ITEM_LAYOUT
-from .render import COLOR, draw_field
-from .sprites import draw_unit, sprite_image
+from .render import draw_field
+from .sprites import draw_unit, recolored_image, sprite_image
 
 
 class ScreensMixin:
@@ -144,7 +150,7 @@ class ScreensMixin:
             card = pygame.Rect(0, 0, 380, 150)
             card.center = (WIDTH // 2 + (-210 if i == 0 else 210), 260)
             pygame.draw.rect(s, (26, 29, 40), card, border_radius=14)
-            pygame.draw.rect(s, COLOR[pid], card, 3 if pid == self.me else 1, border_radius=14)
+            pygame.draw.rect(s, self.side_color(pid), card, 3 if pid == self.me else 1, border_radius=14)
             if who is None:
                 name, status, color = tr("net.free_seat"), "", GREY
             elif who == "away":
@@ -153,14 +159,21 @@ class ScreensMixin:
                 ready = seat.get("ready")
                 name = self.player_label(pid)
                 status, color = (tr("net.ready"), AMMO_COLOR) if ready else (tr("net.not_ready"), GREY)
-            img = self.font.render(name, True, COLOR[pid] if who else GREY)
-            s.blit(img, img.get_rect(center=(card.centerx, card.top + 40)))
+            hero = seat.get("hero")
+            if hero:                          # маг героя слева в карточке
+                draw_unit(s, HERO_SPRITE[hero], (card.left + 62, card.centery), 34, 1 if pid == "blue" else -1)
+            img = self.font.render(name, True, self.side_color(pid) if who else GREY)
+            s.blit(img, img.get_rect(center=(card.centerx + 40, card.top + 32)))
+            if hero:
+                arrows = "◀  {}  ▶" if pid == self.me and who == "human" else "{}"
+                img = self.small.render(arrows.format(tr("hero." + hero)), True, HERO_COLOR[hero])
+                s.blit(img, img.get_rect(center=(card.centerx + 40, card.top + 60)))
             if status:
                 img = self.font.render(status, True, color)
-                s.blit(img, img.get_rect(center=(card.centerx, card.top + 82)))
+                s.blit(img, img.get_rect(center=(card.centerx + 40, card.top + 92)))
             if pid == self.me:
                 img = self.small.render(tr("net.you"), True, WHITE)
-                s.blit(img, img.get_rect(center=(card.centerx, card.bottom - 22)))
+                s.blit(img, img.get_rect(center=(card.centerx + 40, card.bottom - 22)))
         y = 380
         if self.host_server:
             if not hasattr(self, "_addresses"):
@@ -196,6 +209,38 @@ class ScreensMixin:
         for i, text in enumerate(lines[:2]):
             img = self.font.render(text, True, WHITE)
             s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 12 * (len(lines) - 1) + i * 28)))
+
+    def draw_pick(self):
+        """Выбор героев за одним компьютером: строка левого игрока сверху, правого — снизу."""
+        s = self.screen
+        s.fill(BG)
+        img = self.big.render(tr("pick.title"), True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 60)))
+        w, gap = 210, 20
+        x0 = (WIDTH - 4 * w - 3 * gap) // 2
+        for row, pid in enumerate(("blue", "red")):
+            me, other = self.pick[pid], self.pick["red" if pid == "blue" else "blue"]
+            top = 120 + row * 260
+            img = self.small.render(tr("pick.left" if pid == "blue" else "pick.right"), True, GREY)
+            s.blit(img, (x0, top))
+            for i, hero in enumerate(HEROES):
+                card = pygame.Rect(x0 + i * (w + gap), top + 26, w, 190)
+                cur = me["hero"] == hero
+                taken = other["ok"] and other["hero"] == hero
+                pygame.draw.rect(s, (40, 46, 66) if cur else (26, 29, 40), card, border_radius=12)
+                pygame.draw.rect(s, HERO_COLOR[hero] if cur else (60, 64, 80), card,
+                                 4 if cur and me["ok"] else (2 if cur else 1), border_radius=12)
+                draw_unit(s, HERO_SPRITE[hero], (card.centerx, card.top + 72), 40, 1 if pid == "blue" else -1,
+                          alpha=90 if taken else 255)
+                img = self.font.render(tr("hero." + hero), True, HERO_COLOR[hero] if not taken else GREY)
+                s.blit(img, img.get_rect(center=(card.centerx, card.top + 140)))
+                note = tr("pick.chosen") if cur and me["ok"] else (tr("pick.taken") if taken else "")
+                if note:
+                    img = self.small.render(note, True, AMMO_COLOR if cur else GREY)
+                    s.blit(img, img.get_rect(center=(card.centerx, card.top + 170)))
+        img = self.small.render(tr("pick.hint"), True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 40)))
+        pygame.display.flip()
 
     def draw_settings(self):
         s = self.screen
@@ -370,7 +415,7 @@ class ScreensMixin:
         self.draw_wave_timer()
         for i_player, p in enumerate(self.snap["players"]):
             pid = p["id"]
-            color = COLOR[pid]
+            color = self.side_color(pid)
             left = pid == "blue"
             has_pad = i_player < len(self.pads.pads)
             rects, x0, inv_w = self.inventory_rects(left, has_pad)
@@ -412,18 +457,27 @@ class ScreensMixin:
                 s.blit(img, rect)
 
     def field_background(self):
-        """Поле: земля синего (лёд), полоса мобов (обсидиан), земля красного (лава). Рисуется один раз."""
-        bg = getattr(self, "_field_bg", None)
-        if bg is None:
+        """Поле: земли игроков — фонами их героев (кромкой к середине), посередине — полоса мобов.
+        Рисуется заново, только когда сменились герои."""
+        heroes = (self.side_hero("blue"), self.side_hero("red"))
+        cached = getattr(self, "_field_bg", None)
+        if cached is None or cached[0] != heroes:
             h = BOTTOM - TOP
             bg = pygame.Surface((WIDTH, h))
             half = WIDTH // 2
-            bg.blit(sprite_image("bg_ice", (half, h)), (0, 0))
-            bg.blit(sprite_image("bg_lava", (WIDTH - half, h)), (half, 0))
+            for (x, w, side), hero in zip(((0, half, "left"), (half, WIDTH - half, "right")), heroes):
+                name, drawn_for = HERO_LAND[hero]
+                img = sprite_image(name, (w, h))
+                if drawn_for != side:
+                    img = pygame.transform.flip(img, True, False)
+                bg.blit(img, (x, 0))
             x0, x1 = round(WIDTH * MOB_ZONE[0]), round(WIDTH * MOB_ZONE[1])
-            bg.blit(sprite_image("bg_mob", (x1 - x0, h)), (x0, 0))
-            self._field_bg = bg
-        return bg
+            # края полосы мобов — цветом кромки земли соседнего героя
+            palette = tuple((was, now) for side, hero in zip(("left", "right"), heroes)
+                            for was, now in zip(MOB_ZONE_EDGE[side], HERO_EDGE[hero]) if was != now)
+            bg.blit(recolored_image("bg_mob", palette, (x1 - x0, h)), (x0, 0))
+            self._field_bg = cached = (heroes, bg)
+        return cached[1]
 
     def status_chips(self, p, snap):
         """Вторая строка статуса: патроны и значки всех действующих на игрока артефактов
@@ -475,7 +529,7 @@ class ScreensMixin:
             shade.fill((0, 0, 0, 150))
             s.blit(shade, (0, 0))
             w = self.snap["winner"]
-            t = self.big.render(tr("win", name=self.player_label(w)), True, COLOR[w])
+            t = self.big.render(tr("win", name=self.player_label(w)), True, self.side_color(w))
             s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 20)))
             hint = tr("win.hint")
             if self.net:

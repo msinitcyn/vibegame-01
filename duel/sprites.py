@@ -1,14 +1,14 @@
 """Пиксельные спрайты из assets/sprites/: загрузка, перекраска команды, масштаб без размытия.
 
 Источник — PNG-файлы, их можно править в любом пиксель-редакторе.
-Маг нарисован один раз (mage.png, ледяные цвета); красный получается заменой
-цветов команды из MAGE_RED_PALETTE. В игре F5 перечитывает картинки с диска.
+Маг нарисован один раз (mage.png, ледяные цвета — герой Холод); остальные герои
+получаются заменой цветов (MAGE_RED/GREEN/BLACK_PALETTE в config.py). В игре F5 перечитывает картинки с диска.
 """
 from functools import lru_cache
 
 import pygame
 
-from .config import MAGE_RED_PALETTE, SPRITES_DIR
+from .config import MAGE_BLACK_PALETTE, MAGE_GREEN_PALETTE, MAGE_RED_PALETTE, SPRITES_DIR
 
 # во сколько раз спрайт больше диаметра круга попадания (у спрайта есть прозрачные поля)
 SPRITE_TO_HITBOX = 1.15
@@ -17,6 +17,8 @@ SPRITE_TO_HITBOX = 1.15
 VARIANTS = {
     "mage_blue": ("mage", {}),
     "mage_red": ("mage", MAGE_RED_PALETTE),
+    "mage_green": ("mage", MAGE_GREEN_PALETTE),
+    "mage_black": ("mage", MAGE_BLACK_PALETTE),
 }
 
 
@@ -67,9 +69,15 @@ def sprite_image(name, size):
     return pygame.transform.scale(_base(name), size)
 
 
+@lru_cache(maxsize=32)
+def recolored_image(name, palette, size):
+    """Картинка с заменой цветов (palette — кортеж пар «#было», «#стало»), растянутая до size."""
+    return pygame.transform.scale(recolor(_base(name), dict(palette)), size)
+
+
 def reload_all():
     """Сбросить кэш — следующая отрисовка перечитает PNG с диска."""
-    for f in (_base, sprite, sprite_image):
+    for f in (_base, sprite, sprite_image, recolored_image):
         f.cache_clear()
 
 

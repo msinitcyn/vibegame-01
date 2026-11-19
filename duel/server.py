@@ -22,6 +22,7 @@ import time
 from . import discovery
 from .bot import Bot
 from .commands import Command
+from .config import DEFAULT_HERO, HEROES
 from .match import STEP, Match
 from .net import PORT, PROTO, Conn
 from .snapshot import snapshot
@@ -48,6 +49,7 @@ class Seat:
         self.ready = False
         self.away_until = None        # момент (monotonic), до которого место держится за отошедшим
         self.last_seen = 0.0
+        self.hero = None              # герой игрока на этом месте (только вид)
 
     @property
     def free(self):
@@ -108,6 +110,22 @@ class Server:
     def all_ready(self):
         humans = [s for s in self.seats.values() if not s.free]
         return self.full() and all(s.ready for s in humans)
+
+    def taken_heroes(self, pid):
+        """Герои, занятые другими местами (люди, отошедшие и бот)."""
+        heroes = self.seat_heroes()
+        return {h for p, h in heroes.items() if p != pid and h}
+
+    def seat_heroes(self):
+        """Герой каждого места: у людей — свой, у бота — первый свободный, у пустого — None."""
+        out = {pid: s.hero for pid, s in self.seats.items() if not s.free}
+        for pid in self.bot_seats():
+            out[pid] = next(h for h in [DEFAULT_HERO[pid], *HEROES] if h not in out.values())
+        return out
+
+    def free_hero(self, pid):
+        taken = self.taken_heroes(pid)
+        return next(h for h in [DEFAULT_HERO[pid], *HEROES] if h not in taken)
 
     def new_match(self):
         self.games += 1
@@ -183,6 +201,7 @@ class Server:
             if not back:
                 s.token = secrets.token_hex(8)
                 s.ready = False
+                s.hero = self.free_hero(pid)
                 self.pending[pid] = Command()
             s.name = clean_name(join.get("name")) or s.name
             conn.send({"type": "seat", "you": pid, "token": s.token})
@@ -213,6 +232,11 @@ class Server:
                     s.name = clean_name(msg.get("name"))
                 elif kind == "ready":
                     s.ready = bool(msg.get("ready", True))
+                elif kind == "hero":
+                    hero = msg.get("hero")
+                    if self.phase == "lobby" and hero in HEROES and hero not in self.taken_heroes(pid):
+                        if hero != s.hero:
+                            s.hero, s.ready = hero, False
                 elif kind == "leave":
                     self.free_seat(pid, "вышел")
                     break
@@ -254,6 +278,7 @@ class Server:
         now = self.clock()
         out = {}
         bots = self.bot_seats()
+        heroes = self.seat_heroes()
         for pid, s in self.seats.items():
             if s.conn:
                 who = "human"
@@ -264,7 +289,7 @@ class Server:
             else:
                 who = None
             out[pid] = {"who": who, "name": s.name if who in ("human", "away") else "",
-                        "ready": s.ready or who == "bot",
+                        "ready": s.ready or who == "bot", "hero": heroes.get(pid),
                         "away_left": max(0, round(s.away_until - now)) if who == "away" else 0}
         return out
 
@@ -272,12 +297,14 @@ class Server:
         self.tick_no += 1
         if self.phase == "lobby" and self.all_ready():
             self.phase = "play"
+            self.match.set_heroes(self.seat_heroes())
             for s in self.seats.values():
                 s.ready = False
             self.log("все готовы — партия началась")
         elif self.phase == "over" and self.all_ready():
             self.phase = "play"
             self.new_match()
+            self.match.set_heroes(self.seat_heroes())
             self.log("реванш")
         paused = any(s.away_until is not None for s in self.seats.values())
         if self.phase == "play" and not paused:

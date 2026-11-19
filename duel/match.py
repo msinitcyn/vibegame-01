@@ -32,6 +32,7 @@ from .config import (
     BLUE_LAND,
     BOTTOM,
     BULLET_R,
+    DEFAULT_HERO,
     CLONE_COUNT,
     CLONE_EFFECTS,
     CLONE_TIME,
@@ -71,13 +72,14 @@ STEP = 1 / 60                     # фиксированный такт матч
 
 
 class Match:
-    def __init__(self, hp=MAX_HP, seed=None):
+    def __init__(self, hp=MAX_HP, seed=None, heroes=None):
         self.seed = random.randrange(2 ** 32) if seed is None else seed
         self.rng = random.Random(self.seed)
         self.last_id = 0
         self.blue = Player("blue", 60, BLUE, 1, BLUE_LAND)
         self.red = Player("red", WIDTH - 60, RED, -1, RED_LAND)
         self.players = (self.blue, self.red)
+        self.set_heroes(heroes)
         for p in self.players:
             p.rng = self.rng
             p.reset(hp)
@@ -98,6 +100,12 @@ class Match:
         self.events = []              # копятся до конца шага, step() их отдаёт
 
     # ------------------------------------------------------------------ общее
+
+    def set_heroes(self, heroes=None):
+        """Герои сторон (только вид); по умолчанию — Холод слева, Огонь справа."""
+        heroes = heroes or {}
+        for p in self.players:
+            p.hero = heroes.get(p.id) or DEFAULT_HERO[p.id]
 
     def player(self, pid):
         return self.blue if pid == "blue" else self.red

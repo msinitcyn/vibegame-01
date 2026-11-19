@@ -147,6 +147,7 @@ class Player(Unit):
         self.rng = None               # генератор случайных чисел матча (ставит Match)
         self.start_x = x
         self.color = color
+        self.hero = None              # герой (только вид): fire / frost / nature / evil
         self.land = land              # (x_min, x_max) своей земли — дальше маг не заходит
         self.dir = direction          # +1 стреляет вправо, -1 влево
         self.reset()

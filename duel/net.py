@@ -13,6 +13,7 @@
     {"type": "cmd", "move": [dx, dy], "fire": bool, "melee": bool, "slot": int|null}   каждый такт
     {"type": "ready", "ready": bool}                 готов к партии (в лобби) или к реваншу (после победы)
     {"type": "name", "name": "Маша"}                 сменить имя
+    {"type": "hero", "hero": "nature"}               сменить героя (в лобби; занятого соперником — нельзя)
     {"type": "leave"}                                ушёл сам (Esc) — место свободно сразу
 """
 import json

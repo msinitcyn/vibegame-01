@@ -220,14 +220,23 @@ def draw_mob(ranged=False):
 def draw_background(kind):
     """Тёмный фон половины поля: пули на нём должны хорошо читаться."""
     import random
-    rng = random.Random(7 if kind == "ice" else 11)
+    rng = random.Random({"ice": 7, "lava": 11, "grass": 13, "ash": 17}[kind])
     w, h = BG_W, BG_H
+    core = None                    # светящееся ядро трещин (лава, пепел)
     if kind == "ice":
         base, patches, crack, sparkle, edge = ((24, 40, 66), [(30, 50, 82), (20, 34, 58), (34, 58, 92)],
                                                (52, 84, 124), (70, 108, 150), (110, 160, 215))
+    elif kind == "grass":          # тёмная трава: корни и мелкие цветы
+        base, patches, crack, sparkle, edge = ((20, 38, 22), [(26, 50, 28), (16, 30, 18), (32, 58, 30)],
+                                               (40, 74, 34), (92, 110, 60), (90, 160, 70))
+    elif kind == "ash":            # выжженная земля зла: пепел и фиолетовые трещины
+        base, patches, crack, sparkle, edge = ((22, 18, 26), [(30, 24, 36), (15, 12, 18), (36, 28, 42)],
+                                               (78, 34, 104), (60, 46, 70), (120, 60, 160))
+        core = (140, 70, 190)
     else:
         base, patches, crack, sparkle, edge = ((30, 18, 18), [(44, 26, 24), (22, 13, 14), (52, 30, 26)],
                                                (120, 40, 14), (96, 36, 16), (150, 50, 15))
+        core = (175, 70, 22)
     surf = pygame.Surface((w, h))
     surf.fill(base)
 
@@ -245,15 +254,14 @@ def draw_background(kind):
             x += rng.choice((-1, 0, 1))
             y += rng.choice((-1, 0, 1))
     # трещины: во льду — светлые, в лаве — светящиеся с ярким ядром
-    for _ in range(22 if kind == "ice" else 16):
-        walk(rng, w, h, put, rng.randint(8, 26), crack,
-             core=None if kind == "ice" else (175, 70, 22), core_every=4)
-    # блёстки инея / искры — тусклые, чтобы не путались с пулями
-    for _ in range(40 if kind == "ice" else 30):
+    for _ in range(16 if core else 22):
+        walk(rng, w, h, put, rng.randint(8, 26), crack, core=core, core_every=4)
+    # блёстки инея / искры / цветы — тусклые, чтобы не путались с пулями
+    for _ in range(30 if core else 40):
         put(rng.randrange(w), rng.randrange(h), sparkle)
-    # кромка у середины поля: изломанная полоса
-    x_edge = w - 1 if kind == "ice" else 0
-    step = -1 if kind == "ice" else 1
+    # кромка у середины поля: изломанная полоса (лава нарисована для правой стороны, остальные — для левой)
+    x_edge = 0 if kind == "lava" else w - 1
+    step = 1 if kind == "lava" else -1
     for y in range(h):
         depth = 1 + (y * 7 + (y // 3) * 5) % 3
         for i in range(depth):
@@ -304,6 +312,8 @@ def main(argv):
         "mage.png": lambda: draw_mage("blue"),
         "bg_ice.png": lambda: draw_background("ice"),
         "bg_lava.png": lambda: draw_background("lava"),
+        "bg_grass.png": lambda: draw_background("grass"),
+        "bg_ash.png": lambda: draw_background("ash"),
         "mob.png": draw_mob,
         "mob_ranged.png": lambda: draw_mob(ranged=True),
         "bg_mob.png": draw_mob_zone,

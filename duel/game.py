@@ -12,9 +12,12 @@ from .commands import Command
 from .config import (
     AMMO_COLOR,
     BAD_TEXT,
+    DEFAULT_HERO,
     FONT_FILES,
     FONTS_DIR,
     FPS,
+    HERO_COLOR,
+    HEROES,
     ICON_FILE,
     HEIGHT,
     MAX_HP,
@@ -155,15 +158,17 @@ class Game(ScreensMixin):
     def players(self):
         return self.match.players
 
-    def start(self, hp=MAX_HP):
+    def start(self, hp=MAX_HP, heroes=None):
         """Новая партия двух игроков (в тестовом режиме — с другим числом жизней)."""
         self.start_hp = hp
+        self.heroes = dict(heroes or DEFAULT_HERO)
         self.state = "play"
         self.held.clear()
         self.restart()
 
     def restart(self, seed=None):
-        self.match = Match(self.start_hp, seed)       # без зерна — каждый раз новая партия
+        # без зерна — каждый раз новая партия; герои — выбранные перед партией
+        self.match = Match(self.start_hp, seed, getattr(self, "heroes", None))
         self.popups = []              # [текст, x, y, время, цвет]
         self.pending = {pid: Command() for pid in PLAYER_IDS}   # нажатия до следующего такта
         self.time_acc = 0.0           # накопленное время кадров для фиксированного такта
@@ -230,6 +235,9 @@ class Game(ScreensMixin):
                 continue
             if self.state == "settings":
                 self.draw_settings()
+                continue
+            if self.state == "pick":
+                self.draw_pick()
                 continue
             if self.state == "join":
                 if self.finder:
@@ -333,6 +341,19 @@ class Game(ScreensMixin):
             self.net_heard = time.monotonic()
             self.reconnect_until = None
         return True
+
+    def next_hero(self, step):
+        """Лобби: следующий свободный герой (занятых соперником пропускаем)."""
+        mine = self.side_hero(self.me)
+        taken = {s.get("hero") for pid, s in self.net_seats.items() if pid != self.me and s.get("who")}
+        i = HEROES.index(mine)
+        for k in range(1, len(HEROES)):
+            hero = HEROES[(i + step * k) % len(HEROES)]
+            if hero not in taken:
+                if self.net and self.reconnect_until is None:
+                    self.net.send({"type": "hero", "hero": hero})
+                    self.net_seats.setdefault(self.me, {})["hero"] = hero    # сразу видно у себя
+                return
 
     def my_ready(self):
         return bool(self.net_seats.get(self.me, {}).get("ready"))
@@ -525,7 +546,7 @@ class Game(ScreensMixin):
         if sc == pygame.KSCAN_F5:
             # перечитать картинки с диска — удобно, пока рисуешь в редакторе
             reload_all()
-            self._field_bg = None
+            self._field_bg = None         # фон поля перерисуется из новых картинок
         if sc == pygame.KSCAN_F11:
             pygame.display.toggle_fullscreen()
             self.held.clear()
@@ -542,6 +563,9 @@ class Game(ScreensMixin):
         if self.state == "settings":
             self.settings_key(sc)
             return
+        if self.state == "pick":
+            self.pick_key(sc)
+            return
         if self.state == "join":
             self.join_key(sc)
             return
@@ -555,6 +579,8 @@ class Game(ScreensMixin):
                 self.take_bot()
             elif sc in (pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER, pygame.KSCAN_SPACE):
                 self.send_ready(not self.my_ready())
+            elif sc in (pygame.KSCAN_LEFT, pygame.KSCAN_A, pygame.KSCAN_RIGHT, pygame.KSCAN_D):
+                self.next_hero(-1 if sc in (pygame.KSCAN_LEFT, pygame.KSCAN_A) else 1)
             return
         if self.snap["winner"] and sc == pygame.KSCAN_R:
             if self.net:
@@ -597,6 +623,19 @@ class Game(ScreensMixin):
             elif btn in (B.CONTROLLER_BUTTON_DPAD_LEFT, B.CONTROLLER_BUTTON_DPAD_RIGHT):
                 self.on_key(B.KSCAN_RIGHT)
             return
+        if self.state == "pick":          # геймпад игрока — его строка выбора
+            pid = PLAYER_IDS[i]
+            if btn == B.CONTROLLER_BUTTON_DPAD_LEFT:
+                self.pick_move(pid, -1)
+            elif btn == B.CONTROLLER_BUTTON_DPAD_RIGHT:
+                self.pick_move(pid, 1)
+            elif btn == B.CONTROLLER_BUTTON_A:
+                self.pick_confirm(pid, True)
+            elif btn == B.CONTROLLER_BUTTON_B:
+                self.pick_confirm(pid, False)
+            elif btn == B.CONTROLLER_BUTTON_START:
+                self.state = "menu"
+            return
         if self.state == "settings":
             keys = {B.CONTROLLER_BUTTON_DPAD_UP: B.KSCAN_UP, PAD_UP: B.KSCAN_UP,
                     B.CONTROLLER_BUTTON_DPAD_DOWN: B.KSCAN_DOWN, PAD_DOWN: B.KSCAN_DOWN,
@@ -621,6 +660,8 @@ class Game(ScreensMixin):
                 self.take_bot()
             elif btn == B.CONTROLLER_BUTTON_A:
                 self.on_key(B.KSCAN_RETURN)
+            elif btn in (B.CONTROLLER_BUTTON_DPAD_LEFT, B.CONTROLLER_BUTTON_DPAD_RIGHT):
+                self.next_hero(-1 if btn == B.CONTROLLER_BUTTON_DPAD_LEFT else 1)
             elif btn in (B.CONTROLLER_BUTTON_B, B.CONTROLLER_BUTTON_START):
                 self.on_key(B.KSCAN_ESCAPE)
             return
@@ -699,15 +740,29 @@ class Game(ScreensMixin):
         self.settings["name"] = name
         settings.save(self.settings)
 
+    def side_hero(self, pid):
+        """Герой стороны: в лобби — с места на сервере, в партии — из снимка."""
+        if self.net and self.net_waiting:
+            hero = (self.net_seats.get(pid) or {}).get("hero")
+            if hero:
+                return hero
+        for p in self.snap.get("players", []):
+            if p["id"] == pid and p.get("hero"):
+                return p["hero"]
+        return DEFAULT_HERO[pid]
+
+    def side_color(self, pid):
+        return HERO_COLOR[self.side_hero(pid)]
+
     def player_label(self, pid):
-        """Подпись игрока: в сетевой игре — имя или «Бот», иначе (и без имени) — цвет."""
+        """Подпись игрока: в сетевой игре — имя или «Бот», иначе (и без имени) — имя героя."""
         if self.net:
             seat = self.net_seats.get(pid) or {}
             if seat.get("who") == "bot":
                 return t("name.bot")
             if seat.get("name"):
                 return seat["name"]
-        return t("name." + pid)
+        return t("hero." + self.side_hero(pid))
 
     def player_name(self):
         """Своё имя для сетевой игры ('' — называть по цвету)."""
@@ -721,7 +776,7 @@ class Game(ScreensMixin):
         pygame.display.set_caption(t("title"))
 
     def update_music(self):
-        in_menu = self.state in ("menu", "help", "settings", "join") or self.net_waiting
+        in_menu = self.state in ("menu", "help", "settings", "join", "pick") or self.net_waiting
         self.audio.music("menu" if in_menu else "game")
 
     def menu_key(self, sc):
@@ -755,10 +810,47 @@ class Game(ScreensMixin):
             self.state = "settings"
             self.settings_index = 0
         elif action == "test":
-            self.start(TEST_HP)
+            self.open_pick(TEST_HP)
         elif action == "host":
             self.host_game()
         elif action == "join":
             self.open_join()
         else:
-            self.start()
+            self.open_pick(MAX_HP)
+
+    # ------------------------------------------------------------------ выбор героев
+
+    def open_pick(self, hp):
+        """Экран выбора героев перед партией за одним компьютером; последний выбор запоминается."""
+        last = getattr(self, "heroes", None) or DEFAULT_HERO
+        self.pick_hp = hp
+        self.pick = {pid: {"hero": last[pid], "ok": False} for pid in PLAYER_IDS}
+        self.state = "pick"
+
+    def pick_move(self, pid, step):
+        p = self.pick[pid]
+        if not p["ok"]:
+            p["hero"] = HEROES[(HEROES.index(p["hero"]) + step) % len(HEROES)]
+
+    def pick_confirm(self, pid, ok):
+        """Подтвердить (или снять) выбор; героя, подтверждённого соперником, взять нельзя."""
+        other = self.pick["red" if pid == "blue" else "blue"]
+        if ok and other["ok"] and other["hero"] == self.pick[pid]["hero"]:
+            return
+        self.pick[pid]["ok"] = ok
+        if all(p["ok"] for p in self.pick.values()):
+            self.start(self.pick_hp, {pid: p["hero"] for pid, p in self.pick.items()})
+
+    def pick_key(self, sc):
+        """Левый: A/D и Пробел, правый: ←/→ и Enter (повтор — снять выбор); Esc — меню."""
+        K = pygame
+        if sc == K.KSCAN_ESCAPE:
+            self.state = "menu"
+        elif sc in (K.KSCAN_A, K.KSCAN_D):
+            self.pick_move("blue", -1 if sc == K.KSCAN_A else 1)
+        elif sc in (K.KSCAN_LEFT, K.KSCAN_RIGHT):
+            self.pick_move("red", -1 if sc == K.KSCAN_LEFT else 1)
+        elif sc == K.KSCAN_SPACE:
+            self.pick_confirm("blue", not self.pick["blue"]["ok"])
+        elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER):
+            self.pick_confirm("red", not self.pick["red"]["ok"])

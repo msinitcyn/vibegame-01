@@ -74,6 +74,9 @@ def test_menu_keys(game):
     # режимов против компьютера в хотсите нет; сетевая игра — пункты 2 и 3
     assert game.menu == ["play", "host", "join", "test", "help", "settings"]
     game.on_key(pygame.KSCAN_RETURN)
+    assert game.state == "pick"                 # сначала выбор героев
+    game.on_key(pygame.KSCAN_SPACE)
+    game.on_key(pygame.KSCAN_RETURN)
     assert game.state == "play" and game.match.blue.hp == 10
     game.on_key(pygame.KSCAN_ESCAPE)
     assert game.state == "menu"
@@ -86,6 +89,9 @@ def test_menu_keys(game):
     game.on_key(pygame.KSCAN_ESCAPE)
     assert game.state == "menu"
     game.on_key(pygame.KSCAN_4)
+    assert game.state == "pick"
+    game.on_key(pygame.KSCAN_SPACE)
+    game.on_key(pygame.KSCAN_RETURN)
     assert game.state == "play" and game.match.blue.hp == 1000
 
 
@@ -139,7 +145,10 @@ def test_pad_menu_navigation(game):
     for _ in range(3):
         game.on_pad(101, pygame.CONTROLLER_BUTTON_DPAD_DOWN)
     game.on_pad(101, pygame.CONTROLLER_BUTTON_A)
-    assert game.state == "play" and game.match.blue.hp == 1000      # четвёртый пункт — тестовый режим
+    assert game.state == "pick"                                     # четвёртый пункт — тестовый режим
+    game.on_pad(100, pygame.CONTROLLER_BUTTON_A)
+    game.on_pad(101, pygame.CONTROLLER_BUTTON_A)
+    assert game.state == "play" and game.match.blue.hp == 1000
     game.on_pad(100, pygame.CONTROLLER_BUTTON_START)
     assert game.state == "menu"
 

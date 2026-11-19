@@ -174,7 +174,7 @@ def test_lobby_waits_for_both_ready(server):
         server.step()
     assert server.phase == "lobby" and server.match.match_time == 0
     seats = a.last()["seats"]
-    assert seats["blue"] == {"who": "human", "name": "Папа", "ready": False, "away_left": 0}
+    assert seats["blue"] == {"who": "human", "name": "Папа", "ready": False, "away_left": 0, "hero": "frost"}
     assert a.last()["waiting"] is True
     a.ready()
     wait(server, lambda: a.last()["seats"]["blue"]["ready"], clients=(a, b))
@@ -464,7 +464,7 @@ def test_client_game_plays_over_network(game):
         game.leave_net()
         game.set_name("")
         srv.stop()
-    assert game.player_label("blue") == i18n.t("name.blue")       # хотсит — по цвету
+    assert game.player_label("blue") == i18n.t("hero.frost")      # хотсит — имя героя
 
 
 def test_client_reconnects_to_own_seat(game):
@@ -504,6 +504,62 @@ def test_client_pause_notice(game):
         other.sock.close()
         frames(game, lambda: game.net_paused and game.net_seats["red"]["who"] == "away")
         assert i18n.t("net.paused", name="Маша", s=game.net_seats["red"]["away_left"])
+        game.draw()
+    finally:
+        game.leave_net()
+        srv.stop()
+
+
+# ------------------------------------------------------------------ герои
+
+def test_heroes_in_lobby(server):
+    a, b = Client(server), Client(server)
+    wait(server, lambda: a.states() and a.last()["seats"]["red"]["hero"], clients=(a, b))
+    assert a.last()["seats"]["blue"]["hero"] == "frost" and a.last()["seats"]["red"]["hero"] == "fire"
+    a.conn.send({"type": "hero", "hero": "fire"})          # занят соперником — отказ
+    a.conn.send({"type": "hero", "hero": "dragon"})        # нет такого — отказ
+    b.ready()
+    b.conn.send({"type": "hero", "hero": "evil"})          # смена снимает «готов»
+    wait(server, lambda: a.last()["seats"]["red"]["hero"] == "evil", clients=(a, b))
+    assert a.last()["seats"]["blue"]["hero"] == "frost" and not a.last()["seats"]["red"]["ready"]
+    a.conn.send({"type": "hero", "hero": "nature"})
+    playing(server, a, b)
+    assert {p.id: p.hero for p in server.match.players} == {"blue": "nature", "red": "evil"}
+    wait(server, lambda: a.last()["phase"] == "play", clients=(a, b))
+    assert next(p for p in a.last()["snap"]["players"] if p["id"] == "red")["hero"] == "evil"
+
+
+def test_bot_gets_free_hero():
+    srv = make_server(bot=True)
+    try:
+        a = Client(srv)
+        wait(srv, lambda: a.states() and a.last()["seats"]["red"]["who"] == "bot", clients=(a,))
+        bot = a.last()["seats"]["red"]["hero"]
+        assert bot and bot != a.last()["seats"]["blue"]["hero"]
+        a.conn.send({"type": "hero", "hero": bot})          # героя бота взять нельзя
+        a.conn.send({"type": "hero", "hero": "nature"})
+        wait(srv, lambda: a.last()["seats"]["blue"]["hero"] == "nature", clients=(a,))
+        assert a.last()["seats"]["red"]["hero"] == bot
+    finally:
+        srv.close()
+
+
+def test_client_changes_hero_in_lobby(game):
+    srv = start_in_thread(port=0, bot=True, log=lambda text: None, discovery_port=None)
+    try:
+        address = f"127.0.0.1:{srv.port}"
+        game.enter_net(*connect(address, timeout=3), address)
+        frames(game, lambda: game.net_seats.get("red", {}).get("hero"))
+        bot_hero = game.net_seats["red"]["hero"]
+        for _ in range(3):
+            game.on_key(pygame.KSCAN_RIGHT)
+            frames(game, lambda: True)
+            assert game.side_hero("blue") != bot_hero         # занятого бота пропускаем
+        game.draw_lobby()
+        game.on_key(pygame.KSCAN_RETURN)
+        mine = game.side_hero("blue")
+        frames(game, lambda: not game.net_waiting)
+        assert game.side_hero("blue") == mine and game.side_hero("red") == bot_hero
         game.draw()
     finally:
         game.leave_net()
