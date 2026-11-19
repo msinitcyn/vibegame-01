@@ -2,13 +2,13 @@
 
 Источник — PNG-файлы, их можно править в любом пиксель-редакторе.
 Маг нарисован один раз (mage.png, ледяные цвета — герой Холод); остальные герои
-получаются заменой цветов (MAGE_RED/GREEN/BLACK_PALETTE в config.py). В игре F5 перечитывает картинки с диска.
+получаются заменой цветов (MAGE_RED/GREEN/BLACK/YELLOW_PALETTE в config.py). В игре F5 перечитывает картинки с диска.
 """
 from functools import lru_cache
 
 import pygame
 
-from .config import MAGE_BLACK_PALETTE, MAGE_GREEN_PALETTE, MAGE_RED_PALETTE, SPRITES_DIR
+from .config import MAGE_BLACK_PALETTE, MAGE_GREEN_PALETTE, MAGE_RED_PALETTE, MAGE_YELLOW_PALETTE, SPRITES_DIR
 
 # во сколько раз спрайт больше диаметра круга попадания (у спрайта есть прозрачные поля)
 SPRITE_TO_HITBOX = 1.15
@@ -19,6 +19,7 @@ VARIANTS = {
     "mage_red": ("mage", MAGE_RED_PALETTE),
     "mage_green": ("mage", MAGE_GREEN_PALETTE),
     "mage_black": ("mage", MAGE_BLACK_PALETTE),
+    "mage_yellow": ("mage", MAGE_YELLOW_PALETTE),
 }
 
 

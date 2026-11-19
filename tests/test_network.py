@@ -519,14 +519,14 @@ def test_heroes_in_lobby(server):
     a.conn.send({"type": "hero", "hero": "fire"})          # занят соперником — отказ
     a.conn.send({"type": "hero", "hero": "dragon"})        # нет такого — отказ
     b.ready()
-    b.conn.send({"type": "hero", "hero": "evil"})          # смена снимает «готов»
-    wait(server, lambda: a.last()["seats"]["red"]["hero"] == "evil", clients=(a, b))
+    b.conn.send({"type": "hero", "hero": "dark"})          # смена снимает «готов»
+    wait(server, lambda: a.last()["seats"]["red"]["hero"] == "dark", clients=(a, b))
     assert a.last()["seats"]["blue"]["hero"] == "frost" and not a.last()["seats"]["red"]["ready"]
     a.conn.send({"type": "hero", "hero": "nature"})
     playing(server, a, b)
-    assert {p.id: p.hero for p in server.match.players} == {"blue": "nature", "red": "evil"}
+    assert {p.id: p.hero for p in server.match.players} == {"blue": "nature", "red": "dark"}
     wait(server, lambda: a.last()["phase"] == "play", clients=(a, b))
-    assert next(p for p in a.last()["snap"]["players"] if p["id"] == "red")["hero"] == "evil"
+    assert next(p for p in a.last()["snap"]["players"] if p["id"] == "red")["hero"] == "dark"
 
 
 def test_bot_gets_free_hero():

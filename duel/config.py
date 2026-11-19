@@ -46,6 +46,12 @@ MAGE_GREEN_PALETTE = {
     "#f0f8ff": "#b6f0a0",        # блик
     "#78e1ff": "#ffe14a",        # кристалл -> жёлтый цветок
 }
+MAGE_YELLOW_PALETTE = {
+    "#b9d4f0": "#e8c440",        # мантия и шляпа — золотые
+    "#6e96cd": "#a07c1c",        # тень
+    "#f0f8ff": "#fff4b0",        # блик
+    "#78e1ff": "#ffffff",        # кристалл -> белая звезда
+}
 MAGE_BLACK_PALETTE = {
     "#b9d4f0": "#3a3046",        # мантия и шляпа — почти чёрные
     "#6e96cd": "#1e1726",        # тень
@@ -55,16 +61,18 @@ MAGE_BLACK_PALETTE = {
 
 # Герои: только вид (правила у всех одинаковые). Сторона поля — blue (слева) / red (справа).
 #   цвет интерфейса и пуль, спрайт мага, фон земли, у какой стороны картинки фона кромка к середине
-HEROES = ("fire", "frost", "nature", "evil")
+HEROES = ("fire", "frost", "nature", "dark", "light")
 HERO_COLOR = {"fire": (255, 90, 80), "frost": (215, 238, 255), "nature": (110, 225, 100),
-              "evil": (185, 120, 245)}
-HERO_SPRITE = {"fire": "mage_red", "frost": "mage_blue", "nature": "mage_green", "evil": "mage_black"}
+              "dark": (185, 120, 245), "light": (255, 214, 80)}
+HERO_SPRITE = {"fire": "mage_red", "frost": "mage_blue", "nature": "mage_green", "dark": "mage_black",
+               "light": "mage_yellow"}
 HERO_LAND = {"fire": ("bg_lava", "right"), "frost": ("bg_ice", "left"), "nature": ("bg_grass", "left"),
-             "evil": ("bg_ash", "left")}
+             "dark": ("bg_ash", "left"), "light": ("bg_light", "left")}
 DEFAULT_HERO = {"blue": "frost", "red": "fire"}      # с кого начинается выбор у каждой стороны
 # кромка земли героя (светлая линия, тёмная полоса) — ею же красятся края полосы мобов
 HERO_EDGE = {"frost": ("#6ea0d7", "#34547c"), "fire": ("#96320f", "#78280e"),
-             "nature": ("#5aa046", "#284a22"), "evil": ("#783ca0", "#4e2268")}
+             "nature": ("#5aa046", "#284a22"), "dark": ("#783ca0", "#4e2268"),
+             "light": ("#d2a02a", "#7a5a14")}
 MOB_ZONE_EDGE = {"left": ("#6ea0d7", "#34547c"), "right": ("#96320f", "#78280e")}   # как нарисовано в bg_mob
 MUSIC_VOLUME = 0.4
 # музыка подбирается по маске имени файла — новые треки подхватываются сами

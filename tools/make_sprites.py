@@ -220,7 +220,7 @@ def draw_mob(ranged=False):
 def draw_background(kind):
     """Тёмный фон половины поля: пули на нём должны хорошо читаться."""
     import random
-    rng = random.Random({"ice": 7, "lava": 11, "grass": 13, "ash": 17}[kind])
+    rng = random.Random({"ice": 7, "lava": 11, "grass": 13, "ash": 17, "light": 19}[kind])
     w, h = BG_W, BG_H
     core = None                    # светящееся ядро трещин (лава, пепел)
     if kind == "ice":
@@ -229,7 +229,11 @@ def draw_background(kind):
     elif kind == "grass":          # тёмная трава: корни и мелкие цветы
         base, patches, crack, sparkle, edge = ((20, 38, 22), [(26, 50, 28), (16, 30, 18), (32, 58, 30)],
                                                (40, 74, 34), (92, 110, 60), (90, 160, 70))
-    elif kind == "ash":            # выжженная земля зла: пепел и фиолетовые трещины
+    elif kind == "light":          # земля света: тёплый тёмный камень с золотыми прожилками
+        base, patches, crack, sparkle, edge = ((38, 32, 20), [(48, 40, 24), (30, 25, 15), (56, 46, 27)],
+                                               (112, 88, 36), (120, 104, 60), (210, 160, 42))
+        core = (190, 150, 56)
+    elif kind == "ash":            # выжженная земля тьмы: пепел и фиолетовые трещины
         base, patches, crack, sparkle, edge = ((22, 18, 26), [(30, 24, 36), (15, 12, 18), (36, 28, 42)],
                                                (78, 34, 104), (60, 46, 70), (120, 60, 160))
         core = (140, 70, 190)
@@ -314,6 +318,7 @@ def main(argv):
         "bg_lava.png": lambda: draw_background("lava"),
         "bg_grass.png": lambda: draw_background("grass"),
         "bg_ash.png": lambda: draw_background("ash"),
+        "bg_light.png": lambda: draw_background("light"),
         "mob.png": draw_mob,
         "mob_ranged.png": lambda: draw_mob(ranged=True),
         "bg_mob.png": draw_mob_zone,

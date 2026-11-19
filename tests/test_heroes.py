@@ -20,13 +20,13 @@ def test_pick_and_start(game):
     open_pick(game)
     game.on_key(pygame.KSCAN_D)                 # левый: Холод -> Природа
     game.on_key(pygame.KSCAN_SPACE)
-    game.on_key(pygame.KSCAN_RIGHT)             # правый: Огонь -> Холод -> Природа -> Зло
+    game.on_key(pygame.KSCAN_RIGHT)             # правый: Огонь -> Холод -> Природа -> Тьма
     game.on_key(pygame.KSCAN_RIGHT)
     game.on_key(pygame.KSCAN_RIGHT)
     game.draw_pick()
     game.on_key(pygame.KSCAN_RETURN)
     assert game.state == "play"
-    assert {p.id: p.hero for p in game.match.players} == {"blue": "nature", "red": "evil"}
+    assert {p.id: p.hero for p in game.match.players} == {"blue": "nature", "red": "dark"}
     assert game.player_label("blue") == i18n.t("hero.nature")
     game.draw()
 
@@ -60,30 +60,30 @@ def test_confirmed_cursor_does_not_move_and_esc(game):
 def test_pick_with_gamepads(game):
     game.pads.pads = [(100, FakePad()), (101, FakePad())]
     open_pick(game, TEST_HP)
-    game.on_pad(101, pygame.CONTROLLER_BUTTON_DPAD_LEFT)     # правый: Огонь -> Зло
+    game.on_pad(101, pygame.CONTROLLER_BUTTON_DPAD_LEFT)     # правый: Огонь -> Свет
     game.on_pad(100, pygame.CONTROLLER_BUTTON_A)
     game.on_pad(100, pygame.CONTROLLER_BUTTON_X)             # □ — снять выбор
     assert not game.pick["blue"]["ok"] and game.state == "pick"
     game.on_pad(100, pygame.CONTROLLER_BUTTON_A)
     game.on_pad(101, pygame.CONTROLLER_BUTTON_A)
     assert game.state == "play" and game.match.blue.hp == TEST_HP
-    assert {p.id: p.hero for p in game.match.players} == {"blue": "frost", "red": "evil"}
+    assert {p.id: p.hero for p in game.match.players} == {"blue": "frost", "red": "light"}
 
 
 def test_last_choice_remembered_and_restart_keeps_heroes(game):
-    game.start(heroes={"blue": "evil", "red": "nature"})
+    game.start(heroes={"blue": "dark", "red": "nature"})
     game.restart()
-    assert game.match.blue.hero == "evil"
+    assert game.match.blue.hero == "dark"
     game.open_pick(MAX_HP)
-    assert game.pick["blue"]["hero"] == "evil" and game.pick["red"]["hero"] == "nature"
+    assert game.pick["blue"]["hero"] == "dark" and game.pick["red"]["hero"] == "nature"
 
 
 def test_hero_in_snapshot_and_colors(game):
-    m = Match(seed=1, heroes={"blue": "nature", "red": "evil"})
+    m = Match(seed=1, heroes={"blue": "nature", "red": "dark"})
     snap = snapshot(m)
-    assert [p["hero"] for p in snap["players"]] == ["nature", "evil"]
-    game.start(heroes={"blue": "nature", "red": "evil"})
-    assert game.side_color("blue") == HERO_COLOR["nature"] and game.side_color("red") == HERO_COLOR["evil"]
+    assert [p["hero"] for p in snap["players"]] == ["nature", "dark"]
+    game.start(heroes={"blue": "nature", "red": "dark"})
+    assert game.side_color("blue") == HERO_COLOR["nature"] and game.side_color("red") == HERO_COLOR["dark"]
 
 
 def test_land_background_follows_heroes(game):
@@ -94,13 +94,13 @@ def test_land_background_follows_heroes(game):
         game.start(heroes={"blue": left, "red": right})
         bg = game.field_background()
         seen[left] = tuple(bg.get_at((150, 300)))[:3]
-    assert len(set(seen.values())) == 4
+    assert len(set(seen.values())) == len(HEROES)
 
 
 def test_heroes_do_not_change_rules():
     """Одно зерно и одни команды — та же партия при любых героях."""
     from tools.fingerprint import digest
-    a = Match(seed=5, heroes={"blue": "evil", "red": "nature"})
+    a = Match(seed=5, heroes={"blue": "dark", "red": "nature"})
     b = Match(seed=5)
     for _ in range(600):
         a.step(1 / 60)
@@ -124,10 +124,10 @@ def test_pick_with_left_stick(game):
     stick(game, 100, 32000)                     # держит — второго шага нет
     assert game.pick["blue"]["hero"] == "nature"
     stick(game, 100, 0)                         # отпустил
-    stick(game, 100, 32000)                     # ещё раз -> Зло
-    assert game.pick["blue"]["hero"] == "evil"
-    stick(game, 101, -32000)                    # правый: Огонь -> Зло (занят? нет, только курсор)
-    assert game.pick["red"]["hero"] == "evil"
+    stick(game, 100, 32000)                     # ещё раз -> Тьма
+    assert game.pick["blue"]["hero"] == "dark"
+    stick(game, 101, -32000)                    # правый: Огонь -> Свет (по кругу влево)
+    assert game.pick["red"]["hero"] == "light"
     game.draw_pick()
 
 
@@ -136,3 +136,24 @@ def test_one_pad_moves_right_row(game):
     open_pick(game)
     stick(game, 100, 32000)
     assert game.pick["red"]["hero"] == "frost" and game.pick["blue"]["hero"] == "frost"
+
+
+def test_hud_name_in_hero_color_with_pads(game):
+    """Подпись игрока — цветом героя, даже когда у него геймпад (цвет кнопки не перебивает)."""
+    from duel.config import HERO_COLOR
+    shown = []
+    real = game.font.render
+
+    class Spy:
+        def render(self, text, aa, color):
+            shown.append((text, tuple(color)))
+            return real(text, aa, color)
+    game.pads.pads = [(100, FakePad()), (101, FakePad())]
+    game.start(heroes={"blue": "light", "red": "dark"})
+    font, game.font = game.font, Spy()
+    try:
+        game.draw_hud()
+    finally:
+        game.font = font
+    names = {t.split()[0]: c for t, c in shown if t.startswith((i18n.t("hero.light"), i18n.t("hero.dark")))}
+    assert names[i18n.t("hero.light")] == HERO_COLOR["light"] and names[i18n.t("hero.dark")] == HERO_COLOR["dark"]

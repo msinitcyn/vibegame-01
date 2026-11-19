@@ -216,8 +216,9 @@ class ScreensMixin:
         s.fill(BG)
         img = self.big.render(tr("pick.title"), True, WHITE)
         s.blit(img, img.get_rect(center=(WIDTH // 2, 60)))
-        w, gap = 210, 20
-        x0 = (WIDTH - 4 * w - 3 * gap) // 2
+        n, gap = len(HEROES), 16
+        w = min(210, (WIDTH - 40 - gap * (n - 1)) // n)        # карточки по числу героев
+        x0 = (WIDTH - n * w - (n - 1) * gap) // 2
         for row, pid in enumerate(("blue", "red")):
             me, other = self.pick[pid], self.pick["red" if pid == "blue" else "blue"]
             top = 120 + row * 260
@@ -427,7 +428,7 @@ class ScreensMixin:
             pid = p["id"]
             color = self.side_color(pid)
             left = pid == "blue"
-            has_pad = i_player < len(self.pads.pads)
+            has_pad = self.pad_of(pid) is not None      # ромб кнопок — у того, у кого геймпад
             rects, x0, inv_w = self.inventory_rects(left, has_pad)
             for i, (kind, rect) in enumerate(zip(p["items"], rects)):
                 pygame.draw.rect(s, (22, 24, 34), rect, border_radius=6)
@@ -437,12 +438,12 @@ class ScreensMixin:
                     if "noitems" in p["effects"] and kind != "cleanse":
                         pygame.draw.line(s, ITEMS["foe_noitems"][1], rect.bottomleft, rect.topright, 2)
                 if has_pad:
-                    color = PAD_ITEM_COLORS[i]
+                    pad_color = PAD_ITEM_COLORS[i]
                     if kind:              # значок кнопки в углу
-                        key = self.tiny.render(PAD_ITEM_LABELS[i], True, color)
+                        key = self.tiny.render(PAD_ITEM_LABELS[i], True, pad_color)
                         s.blit(key, (rect.right - key.get_width() - 2, rect.bottom - key.get_height()))
                     else:                 # пустая ячейка — крупный значок кнопки по центру
-                        key = self.font.render(PAD_ITEM_LABELS[i], True, color)
+                        key = self.font.render(PAD_ITEM_LABELS[i], True, pad_color)
                         key.set_alpha(140)
                         s.blit(key, key.get_rect(center=rect.center))
                 else:
