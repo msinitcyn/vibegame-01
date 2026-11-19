@@ -38,9 +38,11 @@ class Server:
         self.started = False          # партия идёт: оба места были заняты
         self.events = []              # события с прошлого снимка
         self.running = True
+        self.games = 0                # номер партии: клиент не сглаживает между партиями
         self.new_match()
 
     def new_match(self):
+        self.games += 1
         self.match = Match()
         self.pending = {pid: Command() for pid in PIDS}
         self.log(f"новая партия (зерно {self.match.seed})")
@@ -101,7 +103,7 @@ class Server:
         if self.started:
             self.play_tick()
         if self.tick_no % SEND_EVERY == 0:
-            msg = {"type": "state", "tick": self.tick_no, "waiting": not self.started,
+            msg = {"type": "state", "tick": self.tick_no, "waiting": not self.started, "game": self.games,
                    "snap": snapshot(self.match), "events": self.events}
             self.events = []
             for conn in self.conns.values():

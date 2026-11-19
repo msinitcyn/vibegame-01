@@ -60,6 +60,9 @@ class ScreensMixin:
             pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
             txt = self.font.render(f"{i + 1}.  {self.menu_label(i)}", True, WHITE if sel else GREY)
             s.blit(txt, txt.get_rect(center=rect.center))
+        if self.menu_message:
+            img = self.font.render(self.menu_message, True, BAD_TEXT)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 500)))
         hints = [(tr("menu.hint", n=len(self.menu)), GREY)]
         n = len(self.pads.pads)
         if n:
@@ -72,6 +75,54 @@ class ScreensMixin:
         for i, (text, color) in enumerate(hints):
             img = self.small.render(text, True, color)
             s.blit(img, img.get_rect(center=(WIDTH // 2, 560 + i * 25)))
+        pygame.display.flip()
+
+    def draw_join(self):
+        """Экран «Подключиться»: поле адреса, ошибка, подсказка."""
+        s = self.screen
+        s.fill(BG)
+        img = self.big.render(tr("net.join_title"), True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 120)))
+        img = self.font.render(tr("net.join_prompt"), True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 230)))
+        box = pygame.Rect(0, 0, 520, 52)
+        box.center = (WIDTH // 2, 290)
+        pygame.draw.rect(s, (26, 29, 40), box, border_radius=10)
+        pygame.draw.rect(s, BLUE, box, 2, border_radius=10)
+        cursor = "_" if pygame.time.get_ticks() // 500 % 2 else " "
+        img = self.font.render(self.address + cursor, True, WHITE)
+        s.blit(img, img.get_rect(midleft=(box.left + 16, box.centery)))
+        if self.join_error:
+            img = self.font.render(self.join_error, True, BAD_TEXT)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 360)))
+        img = self.small.render(tr("net.join_hint"), True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 560)))
+        pygame.display.flip()
+
+    def draw_waiting(self):
+        """Ожидание второго игрока: у создателя — адрес этого компьютера, у гостя — просто ждём."""
+        from .net import local_addresses
+        s = self.screen
+        s.fill(BG)
+        img = self.big.render(tr("net.wait_title"), True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 140)))
+        if self.host_server:
+            if not hasattr(self, "_addresses"):
+                self._addresses = local_addresses()
+            lines = [(tr("net.your_addr"), GREY, self.font)]
+            lines += [(a, BLUE, self.big) for a in self._addresses] or [(tr("net.no_addr"), BAD_TEXT, self.font)]
+            hint = tr("net.host_hint")
+        else:
+            lines = [(tr("net.guest_wait"), GREY, self.font)]
+            hint = tr("net.guest_hint")
+        y = 250
+        for text, color, font in lines:
+            img = font.render(text, True, color)
+            y += img.get_height() // 2
+            s.blit(img, img.get_rect(center=(WIDTH // 2, y)))
+            y += img.get_height() // 2 + 24
+        img = self.small.render(hint, True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 560)))
         pygame.display.flip()
 
     def draw_settings(self):

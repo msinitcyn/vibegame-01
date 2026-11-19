@@ -22,7 +22,9 @@ from .config import (
 from .items import ITEMS, item_name, ring_color
 from .i18n import LANGS, get_lang, set_lang, t
 from . import settings
+from .interp import Playback
 from .match import STEP, Match
+from .net import PORT, connect, error_key
 from .snapshot import player as snap_player, snapshot
 from .gamepad import Gamepads, PAD_DOWN, PAD_FIRE, PAD_ITEM_BUTTONS, PAD_MELEE, PAD_UP
 from .audio import MUSIC_END, Audio
@@ -31,6 +33,8 @@ from .screens import ScreensMixin
 from .sprites import reload_all
 
 MAX_STEPS_PER_FRAME = 5           # после долгого кадра не «догоняем» больше этого
+ADDRESS_MAX = 64                  # длина адреса на экране «Подключиться»
+CONNECT_TIMEOUT = 3.0
 
 
 class Controls:
@@ -54,6 +58,20 @@ CONTROLS = {
                     (pygame.KSCAN_RSHIFT,)),
 }
 PLAYER_IDS = ("blue", "red")      # первый геймпад — синий, второй — красный
+
+# набор адреса по физическим клавишам: цифры, латиница, точка, дефис, двоеточие (Shift + ;)
+_ADDRESS_KEYS = {getattr(pygame, f"KSCAN_{d}"): d for d in "0123456789"}
+_ADDRESS_KEYS.update({getattr(pygame, f"KSCAN_KP_{d}"): d for d in "0123456789"})
+_ADDRESS_KEYS.update({getattr(pygame, f"KSCAN_{c}"): c.lower() for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"})
+_ADDRESS_KEYS.update({pygame.KSCAN_PERIOD: ".", pygame.KSCAN_KP_PERIOD: ".", pygame.KSCAN_MINUS: "-",
+                      pygame.KSCAN_KP_MINUS: "-"})
+
+
+def address_char(sc, shift=False):
+    """Символ адреса для физической клавиши (None — клавиша не для адреса)."""
+    if sc == pygame.KSCAN_SEMICOLON and shift:
+        return ":"
+    return _ADDRESS_KEYS.get(sc)
 
 
 class Game(ScreensMixin):
@@ -81,7 +99,10 @@ class Game(ScreensMixin):
         self.held = set()             # зажатые физические клавиши
         self.pads = Gamepads()
         # пункты меню; подписи — menu_label()
-        self.menu = ["play", "test", "help", "settings"]
+        self.menu = ["play", "host", "join", "test", "help", "settings"]
+        self.menu_message = None      # ошибка или «связь потеряна» — показывается в меню
+        self.address = self.settings.get("last_address", "localhost")
+        self.join_error = None
         self.menu_index = 0
         self.settings_rows = ["lang", "back"]
         self.help_page = 0
@@ -89,12 +110,12 @@ class Game(ScreensMixin):
         self.state = "menu"
         self.start_hp = MAX_HP
         self.net, self.me, self.pad_index = None, None, pad
+        self.host_server = None       # свой сервер («Создать игру»), работает в фоновом потоке
+        self.net_port = PORT          # порт своего сервера (тесты ставят 0 — любой свободный)
+        self.net_waiting = False      # сервер ждёт второго игрока
         self.restart()
         if net:
-            self.net, hello = net
-            self.me = hello["you"]
-            self.state = "play"
-            pygame.display.set_caption(f"{t('title')} — {t('name.' + self.me)} (сеть)")
+            self.enter_net(*net)
 
     # ------------------------------------------------------------------ партия
 
@@ -148,7 +169,8 @@ class Game(ScreensMixin):
                     self.held.discard(e.scancode)
                 if e.type == pygame.KEYDOWN:
                     self.held.add(e.scancode)
-                    if e.scancode == pygame.KSCAN_ESCAPE and (self.state == "menu" or self.net):
+                    if e.scancode == pygame.KSCAN_ESCAPE and self.state == "menu":
+                        self.leave_net()
                         return
                     self.on_key(e.scancode)
                 if e.type == MUSIC_END:
@@ -175,10 +197,16 @@ class Game(ScreensMixin):
             if self.state == "settings":
                 self.draw_settings()
                 continue
+            if self.state == "join":
+                self.draw_join()
+                continue
             if self.net:
                 if not self.net_frame(dt):
-                    print("связь с сервером потеряна")
-                    return
+                    self.leave_net(t("net.lost"))
+                    continue
+                if self.net_waiting:
+                    self.draw_waiting()
+                    continue
             elif not self.snap["winner"]:
                 # фиксированный такт: копим время кадров, делаем целое число шагов
                 self.time_acc += dt
@@ -216,10 +244,99 @@ class Game(ScreensMixin):
             self.time_acc = 0.0
         for msg in self.net.recv():
             if msg.get("type") == "state":
-                self.snap = msg["snap"]
-                self.handle_events([tuple(e) for e in msg["events"]])
+                self.playback.push(msg["tick"], msg["snap"], msg["events"], msg.get("waiting", False),
+                                   msg.get("game", 0))
+        snap, events, waiting = self.playback.advance(dt)
+        if snap is not None:
+            self.snap = snap
+            self.net_waiting = waiting
+        self.handle_events([tuple(e) for e in events])
         self.tick_popups(dt)
         return not self.net.closed
+
+    # ------------------------------------------------------------------ сетевая игра
+
+    def enter_net(self, conn, hello):
+        """Начать сетевую партию: соединение с сервером и его приветствие."""
+        self.restart()
+        self.net, self.me = conn, hello["you"]
+        self.playback = Playback()
+        self.net_waiting = True
+        self.state = "play"
+        self.held.clear()
+        pygame.display.set_caption(f"{t('title')} — {t('net.title_suffix', name=t('name.' + self.me))}")
+
+    def leave_net(self, message=None):
+        """Выйти из сетевой партии в меню; свой сервер — остановить."""
+        if self.net:
+            self.net.close()
+        if self.host_server:
+            self.host_server.stop()
+            self.host_server.thread.join(timeout=2)
+        self.net, self.me, self.host_server = None, None, None
+        self.net_waiting = False
+        self.state = "menu"
+        self.menu_message = message
+        pygame.display.set_caption(t("title"))
+        self.restart()
+
+    def host_game(self):
+        """«Создать игру по сети»: свой сервер в фоновом потоке и подключение к нему синим."""
+        from .server import start_in_thread
+        try:
+            srv = start_in_thread(self.net_port)
+        except OSError:
+            self.menu_message = t("net.port_busy", port=self.net_port)
+            return
+        try:
+            conn, hello = connect(f"127.0.0.1:{srv.port}", timeout=CONNECT_TIMEOUT)
+        except (ConnectionError, OSError) as e:
+            srv.stop()
+            self.menu_message = self.net_error(e)
+            return
+        self.menu_message = None
+        self.enter_net(conn, hello)
+        self.host_server = srv
+        self.__dict__.pop("_addresses", None)       # адрес в сети мог смениться — найти заново
+
+    def join_game(self):
+        """Подключиться по адресу с экрана «Подключиться»."""
+        address = self.address.strip() or "localhost"
+        try:
+            conn, hello = connect(address, timeout=CONNECT_TIMEOUT)
+        except (ConnectionError, OSError, ValueError) as e:
+            self.join_error = self.net_error(e)
+            return
+        self.join_error = None
+        self.settings["last_address"] = address
+        settings.save(self.settings)
+        self.enter_net(conn, hello)
+
+    def net_error(self, e):
+        key = error_key(e)
+        return t("net.fail", err=t("net.err." + key) if key else str(e))
+
+    def take_bot(self):
+        """Экран ожидания создателя: место второго игрока — боту."""
+        if self.host_server and self.net_waiting:
+            self.host_server.bot = True
+
+    def join_key(self, sc):
+        """Экран «Подключиться»: набор адреса по физическим клавишам (в любой раскладке)."""
+        K = pygame
+        if sc == K.KSCAN_ESCAPE:
+            self.state = "menu"
+            return
+        if sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER):
+            self.join_game()
+            return
+        if sc == K.KSCAN_BACKSPACE:
+            self.address = self.address[:-1]
+            return
+        ch = address_char(sc, self.held & {K.KSCAN_LSHIFT, K.KSCAN_RSHIFT})
+        if ch and len(self.address) < ADDRESS_MAX:
+            self.address += ch
+            self.join_error = None
 
     # ------------------------------------------------------------------ события матча
 
@@ -281,8 +398,17 @@ class Game(ScreensMixin):
         if self.state == "settings":
             self.settings_key(sc)
             return
+        if self.state == "join":
+            self.join_key(sc)
+            return
         if sc == pygame.KSCAN_ESCAPE:
+            if self.net:
+                self.leave_net()
             self.state = "menu"
+            return
+        if self.net and self.net_waiting:
+            if sc == pygame.KSCAN_B:
+                self.take_bot()
             return
         if self.snap["winner"] and sc == pygame.KSCAN_R:
             if self.net:
@@ -333,6 +459,18 @@ class Game(ScreensMixin):
                     B.CONTROLLER_BUTTON_START: B.KSCAN_ESCAPE}
             if btn in keys:
                 self.on_key(keys[btn])
+            return
+        if self.state == "join":
+            if btn == B.CONTROLLER_BUTTON_A:
+                self.on_key(B.KSCAN_RETURN)
+            elif btn in (B.CONTROLLER_BUTTON_B, B.CONTROLLER_BUTTON_START):
+                self.on_key(B.KSCAN_ESCAPE)
+            return
+        if self.net and self.net_waiting:
+            if btn == B.CONTROLLER_BUTTON_Y:
+                self.take_bot()
+            elif btn in (B.CONTROLLER_BUTTON_B, B.CONTROLLER_BUTTON_START):
+                self.on_key(B.KSCAN_ESCAPE)
             return
         if btn == B.CONTROLLER_BUTTON_START:
             self.on_key(B.KSCAN_ESCAPE)
@@ -396,14 +534,15 @@ class Game(ScreensMixin):
         pygame.display.set_caption(t("title"))
 
     def update_music(self):
-        in_menu = self.state in ("menu", "help", "settings")
+        in_menu = self.state in ("menu", "help", "settings", "join") or self.net_waiting
         self.audio.music("menu" if in_menu else "game")
 
     def menu_key(self, sc):
         up = (pygame.KSCAN_W, pygame.KSCAN_UP)
         down = (pygame.KSCAN_S, pygame.KSCAN_DOWN)
         ok = (pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER, pygame.KSCAN_SPACE)
-        digits = (pygame.KSCAN_1, pygame.KSCAN_2, pygame.KSCAN_3, pygame.KSCAN_4)
+        digits = (pygame.KSCAN_1, pygame.KSCAN_2, pygame.KSCAN_3, pygame.KSCAN_4, pygame.KSCAN_5,
+                  pygame.KSCAN_6)
         if sc in up:
             self.menu_index = (self.menu_index - 1) % len(self.menu)
         elif sc in down:
@@ -415,11 +554,13 @@ class Game(ScreensMixin):
             self.menu_select()
 
     def menu_label(self, i):
-        return {"play": t("menu.two"), "test": t("menu.test", hp=TEST_HP), "help": t("menu.help"),
+        return {"play": t("menu.two"), "host": t("menu.host"), "join": t("menu.join"),
+                "test": t("menu.test", hp=TEST_HP), "help": t("menu.help"),
                 "settings": t("menu.settings")}[self.menu[i]]
 
     def menu_select(self):
         action = self.menu[self.menu_index]
+        self.menu_message = None
         if action == "help":
             self.state = "help"
             self.help_page = 0
@@ -428,5 +569,10 @@ class Game(ScreensMixin):
             self.settings_index = 0
         elif action == "test":
             self.start(TEST_HP)
+        elif action == "host":
+            self.host_game()
+        elif action == "join":
+            self.state = "join"
+            self.join_error = None
         else:
             self.start()

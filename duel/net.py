@@ -89,6 +89,27 @@ def parse_address(text, default_port=PORT):
     return host or "localhost", int(port) if port else default_port
 
 
+class NetError(ConnectionError):
+    """Ошибка подключения с ключом причины (full, proto, timeout, refused, badhost) для перевода."""
+
+    def __init__(self, key, text):
+        super().__init__(text)
+        self.key = key
+
+
+def error_key(e):
+    """Ключ причины для любой ошибки подключения (None — показать текст как есть)."""
+    if isinstance(e, NetError):
+        return e.key
+    if isinstance(e, ConnectionRefusedError):
+        return "refused"
+    if isinstance(e, (socket.timeout, TimeoutError)):
+        return "timeout"
+    if isinstance(e, socket.gaierror):
+        return "badhost"
+    return None
+
+
 def connect(address, timeout=5.0):
     """Подключиться к серверу и дождаться приветствия. Возвращает (Conn, hello)."""
     import time
@@ -99,14 +120,14 @@ def connect(address, timeout=5.0):
         for msg in conn.recv():
             if msg.get("type") == "hello":
                 if msg.get("proto") != PROTO:
-                    raise ConnectionError(f"другая версия протокола: {msg.get('proto')} (у нас {PROTO})")
+                    raise NetError("proto", f"другая версия протокола: {msg.get('proto')} (у нас {PROTO})")
                 return conn, msg
             if msg.get("type") == "full":
-                raise ConnectionError("на сервере нет свободных мест")
+                raise NetError("full", "на сервере нет свободных мест")
         if conn.closed:
             break
         time.sleep(0.01)
-    raise ConnectionError("сервер не ответил")
+    raise NetError("timeout", "сервер не ответил")
 
 
 def local_addresses():

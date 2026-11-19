@@ -180,24 +180,24 @@ def test_other_protocol_version_refused():
 
 # ------------------------------------------------------------------ клиент
 
-def test_client_game_plays_over_network(game, server):
+def test_client_game_plays_over_network(game):
     """Приложение в режиме клиента: выстрел с клавиатуры доходит до сервера, снимок рисуется."""
-    server.bot = True                           # соперник — бот, партия начинается сразу
-    sock = socket.create_connection(("127.0.0.1", server.port))
-    conn = Conn(sock)
-    wait(server, lambda: "blue" in server.conns)
-    game.net, game.me = conn, "blue"
+    srv = start_in_thread(port=0, bot=True, log=lambda text: None)    # соперник — бот
     try:
+        game.enter_net(*connect(f"127.0.0.1:{srv.port}", timeout=3))
+        deadline = time.monotonic() + 3
+        while game.net_waiting:                     # пока ждём начала, ввод не идёт в партию
+            assert game.net_frame(1 / 60) and time.monotonic() < deadline
+            time.sleep(1 / 120)
         game.on_key(pygame.KSCAN_RETURN)            # любая раскладка управляет своим магом
-        def got_bullet():
-            game.net_frame(1 / 60)
-            return any(b["owner"] == "blue" for b in game.snap["bullets"])
-        wait(server, got_bullet)
-        assert server.match.blue.ammo < 20
+        while not any(b["owner"] == "blue" for b in game.snap["bullets"]):
+            assert game.net_frame(1 / 60) and time.monotonic() < deadline
+            time.sleep(1 / 120)
+        assert not game.net_waiting
         game.draw()
     finally:
-        game.net, game.me = None, None
-        conn.close()
+        game.leave_net()
+        srv.stop()
 
 
 # ------------------------------------------------------------------ ожидание и частота снимков
