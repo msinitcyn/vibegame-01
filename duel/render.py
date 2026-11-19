@@ -137,10 +137,12 @@ def draw_player(surf, p, heroes):
 
 
 def draw_clone(surf, c, heroes):
-    if c["life"] < 2 and int(c["life"] * 8) % 2 == 0:
-        return
+    """Двойник — как настоящий маг: тот же рисунок, метка прицела, вспышка от попадания."""
     owner = c["owner"]
-    draw_unit(surf, HERO_SPRITE[heroes[owner]], _pos(c), c["r"], DIR[owner], alpha=140)
+    aim = c.get("aim", 0.0 if DIR[owner] > 0 else math.pi)
+    facing = 1 if math.cos(aim) >= 0 else -1
+    draw_unit(surf, HERO_SPRITE[heroes[owner]], _pos(c), c["r"], facing, white=c.get("hit_flash", 0) > 0)
+    draw_aim(surf, {**c, "aim": aim}, side_color(heroes, owner))
     draw_effects(surf, c)
 
 

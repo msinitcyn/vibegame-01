@@ -15,6 +15,7 @@ from .config import (
     TREE_TIME,
     ATTACK_RING,
     CLONE_COUNT,
+    CLONE_HP,
     CLONE_TIME,
     DURATION,
     FAST_BULLET_FACTOR,
@@ -64,13 +65,13 @@ ITEMS = {
 
 # Справка: группы артефактов (экран «Артефакты» в меню). Заголовок — section_title(id).
 HELP_SECTIONS = [
-    ("defense", ["heal", "cleanse", "shrink", "speed", "slowfoe", "mobpeace"]),
-    ("weapon", ["triple", "wavy", "rapid", "breaker"]),
-    ("attack", ["clones", "wall", "fastshots"]),
+    ("defense", ["heal", "cleanse", "shrink", "speed"]),
+    ("weapon", ["triple", "wavy"]),
     ("debuff", ["foe_grow", "foe_nofire", "foe_invert", "foe_noitems"]),
     # артефакты героев — свои страницы справки, по героям
-    ("hero", ["beam", "clearfoe", "icewalk", "foe_freeze", "shield", "trees", "bear",
-              "lasso", "firering", "zombies", "mobswap"]),
+    ("hero", ["beam", "clearfoe", "breaker", "mobpeace", "icewalk", "foe_freeze", "shield", "slowfoe",
+              "trees", "bear", "lasso", "firering", "fastshots", "rapid",
+              "zombies", "mobswap", "clones", "wall"]),
 ]
 
 
@@ -91,7 +92,7 @@ def item_help(kind):
         invert=f"{d['invert']:g}", noitems=f"{d['noitems']:g}", triple=f"{d['triple']:.0f}",
         rapid_cd=f"{SHOT_COOLDOWN * RAPID_FACTOR:.1f}", cd=f"{SHOT_COOLDOWN:g}",
         rapid=f"{d['rapid']:.0f}", wavy=f"{d['wavy']:.0f}", clones=CLONE_COUNT,
-        clone_time=f"{CLONE_TIME:.0f}", breaker=f"{d['breaker']:.0f}", wall_time=f"{WALL_TIME:.0f}",
+        clone_time=f"{CLONE_TIME:.0f}", clone_hp=CLONE_HP, breaker=f"{d['breaker']:.0f}", wall_time=f"{WALL_TIME:.0f}",
         fastshots=f"{d['fastshots']:g}", mobpeace=f"{d['mobpeace']:g}",
         beam_len=BEAM_LENGTH, beam_dps=BEAM_DPS,
         icewalk=f"{d['icewalk']:g}", ice_life=f"{ICE_LIFE:g}", trees=f"{TREE_TIME:g}", tree_len=TREE_LENGTH,
@@ -102,8 +103,7 @@ def item_help(kind):
 
 
 WEAPON_ITEMS = ("triple", "wavy", "rapid", "breaker")      # улучшения оружия: на WEAPON_TIME
-ATTACK_ITEMS = WEAPON_ITEMS + tuple(dict(HELP_SECTIONS)["attack"]) + ("beam", "trees", "zombies", "bear",
-                                                                       "mobswap")
+ATTACK_ITEMS = WEAPON_ITEMS + ("clones", "wall", "fastshots", "beam", "trees", "zombies", "bear", "mobswap")
 # эффект на игроке -> артефакт, чей значок показывать в статусе (если имена различаются)
 EFFECT_ICON = {"lassoed": "lasso", "raising": "zombies", "grow2": "foe_grow", "freeze": "foe_freeze", "nofire": "foe_nofire",
                "invert": "foe_invert", "noitems": "foe_noitems"}

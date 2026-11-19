@@ -62,8 +62,9 @@ def snapshot(match):
                    "start": _xy(t.start), "len": _xy(t.length)} for t in m.trees],
         "rings": [{"id": r.id, "owner": r.owner.id, "x": _xy(r.x), "y": _xy(r.y), "life": _t(r.life)}
                   for r in m.rings],
-        "clones": [{"id": c.id, "owner": c.owner.id, "x": _xy(c.x), "y": _xy(c.y),
-                    "r": _xy(c.radius), "life": _t(c.life), "effects": _effects(c)}
+        "clones": [{"id": c.id, "owner": c.owner.id, "x": _xy(c.x), "y": _xy(c.y), "aim": _t(c.aim),
+                    "r": _xy(c.radius), "life": _t(c.life), "hit_flash": _t(c.hit_flash),
+                    "effects": _effects(c)}
                    for c in m.clones],
     }
 

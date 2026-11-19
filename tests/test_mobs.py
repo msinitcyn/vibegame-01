@@ -511,4 +511,7 @@ def test_ammo_and_clones_outside_arena(match):
             assert math.hypot(x - ARENA[0], y - ARENA[1]) >= ARENA_R + 20 and p.land[0] <= x <= p.land[1]
         for _ in range(50):
             c = Clone(p)
-            assert abs(c.x - ARENA[0]) >= ARENA_R + c.radius     # столбец двойника не пересекает арену
+            for _ in range(60):                                # бродит — но не в арену и не с земли
+                c.update(DT, match.other(p))
+                assert math.hypot(c.x - ARENA[0], c.y - ARENA[1]) >= ARENA_R + c.radius - 0.01
+                assert p.land[0] <= c.x <= p.land[1]

@@ -335,12 +335,25 @@ def still_clone(match, y):
     return c
 
 
-def test_clone_dies_from_one_hit(match):
-    from duel.config import BULLET_SPEED
+def test_clone_has_two_lives(match):
+    from duel.config import BULLET_SPEED, CLONE_HP
     c = still_clone(match, 300)
+    assert c.hp == CLONE_HP == 2
+    match.bullets = [Bullet(400, 300, -BULLET_SPEED, 0, match.red)]
+    step(match, 1.0)
+    assert c.alive and c.hp == 1 and match.blue.hp == MAX_HP
     match.bullets = [Bullet(400, 300, -BULLET_SPEED, 0, match.red)]
     step(match, 1.0)
     assert not c.alive and match.blue.hp == MAX_HP
+
+
+def test_clone_picks_up_for_owner(match):
+    from duel.entities import Artifact
+    c = still_clone(match, 300)
+    match.artifacts = [Artifact(c.x, "speed", c.y)]
+    events = match.step(DT)
+    assert match.artifacts == [] and "speed" in match.blue.items
+    assert any(e[0] == "pickup_at" and e[1] == "blue" for e in events)
 
 
 def test_clone_shield_saves_it(match):
@@ -403,13 +416,18 @@ def test_fastshots_speeds_own_bullets(match):
     assert bullet_path(match, match.red) == pytest.approx(normal, rel=0.05)   # чужие — как были
 
 
-def test_fastshots_and_slowfoe_multiply(match):
-    from duel.config import FAST_BULLET_FACTOR, SLOW_BULLET_FACTOR
+def test_slowfoe_stops_foe_bullets_then_they_fly(match):
+    from duel.config import DURATION
     b, r = match.blue, match.red
-    normal = bullet_path(match, b)
     match.apply_item(b, "fastshots")
-    match.apply_item(r, "slowfoe")
-    assert bullet_path(match, b) == pytest.approx(normal * FAST_BULLET_FACTOR * SLOW_BULLET_FACTOR, rel=0.05)
+    match.apply_item(r, "slowfoe")               # пули синего замирают — даже быстрые
+    assert bullet_path(match, b) == 0
+    bl = Bullet(300, 300, 520, 0, b)
+    match.bullets = [bl]
+    step(match, DURATION["slowfoe"] - 0.5)
+    assert bl.x == 300 and bl.alive
+    step(match, 1.0)
+    assert bl.x > 300
 
 
 def test_fastshots_also_for_clone_bullets(match):

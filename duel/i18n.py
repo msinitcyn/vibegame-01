@@ -150,7 +150,7 @@ TEXTS = {
         "item.speed": "скорость",
         "item.wall": "стена-зеркало",
         "item.rapid": "скорострельность",
-        "item.slowfoe": "пули соперника медленнее",
+        "item.slowfoe": "пули соперника замирают",
         "item.shield": "щит",
         "item.heal": "лечение +{heal}",
         "item.clones": "двойники",
@@ -193,8 +193,8 @@ TEXTS = {
         "help.hero_note": "Выпадают только из мобов, добитых своим героем, — но подобрать и применить может любой.",
         "hero.owner": "выпадает только: {hero}",
         "help.clearfoe": "Все пули соперника, что сейчас на экране, исчезают.",
-        "help.slowfoe": "Пули соперника и мобы, которые идут на тебя, примерно вдвое медленнее, "
-                        "{slowfoe} с.",
+        "help.slowfoe": "{slowfoe} с пули соперника висят в воздухе (не касайся!), потом летят дальше. "
+                        "Мобы, что идут на тебя, вдвое медленнее.",
         "help.fastshots": "Твои пули летят в {fast} раза быстрее {fastshots} с, и мобы, "
                           "которые идут на соперника, — тоже.",
         "help.foe_grow": "Соперник больше в 2 раза на {grow2} с — по нему легче попасть.",
@@ -208,8 +208,8 @@ TEXTS = {
         "help.triple": "Каждый выстрел — веер из трёх пуль, {triple} с. Патрон один.",
         "help.rapid": "Пауза между выстрелами {rapid_cd} с вместо {cd} с, {rapid} с.",
         "help.wavy": "Твои пули летят синусоидой {wavy} с — их трудно предугадать.",
-        "help.clones": "{clones} двойника сами ходят и стреляют. Умирают с одного попадания, "
-                       "живут до {clone_time} с.",
+        "help.clones": "{clones} двойника — не отличить от тебя: бродят, стреляют, подбирают тебе "
+                       "артефакты. По {clone_hp} жизни, живут до {clone_time} с.",
         "help.breaker": "{breaker} с твои пули сбивают встречные пули соперника.",
         "help.wall": "Стена перед тобой на {wall_time} с: пули соперника отражаются и становятся "
                      "твоими, свои пролетают насквозь. Мобы сквозь неё не проходят.",
@@ -340,7 +340,7 @@ TEXTS = {
         "item.speed": "speed",
         "item.wall": "mirror wall",
         "item.rapid": "rapid fire",
-        "item.slowfoe": "slow enemy bullets",
+        "item.slowfoe": "freeze enemy bullets",
         "item.shield": "shield",
         "item.heal": "heal +{heal}",
         "item.clones": "clones",
@@ -383,7 +383,8 @@ TEXTS = {
         "help.hero_note": "They drop only from mobs finished off by their hero — but anyone can pick them up and use them.",
         "hero.owner": "drops only for: {hero}",
         "help.clearfoe": "All opponent bullets currently on screen disappear.",
-        "help.slowfoe": "Opponent bullets and mobs coming at you are about twice as slow, {slowfoe} s.",
+        "help.slowfoe": "For {slowfoe} s the opponent's bullets hang in the air (don't touch!), then fly on. "
+                        "Mobs coming at you are twice as slow.",
         "help.fastshots": "Your bullets fly {fast}× faster for {fastshots} s, and so do mobs "
                           "going after the opponent.",
         "help.foe_grow": "The opponent is 2× bigger for {grow2} s — easier to hit.",
@@ -397,8 +398,8 @@ TEXTS = {
         "help.triple": "Every shot is a fan of three bullets, {triple} s. Costs one round.",
         "help.rapid": "Pause between shots {rapid_cd} s instead of {cd} s, {rapid} s.",
         "help.wavy": "Your bullets fly in a sine wave for {wavy} s — hard to predict.",
-        "help.clones": "{clones} clones walk and shoot on their own. They die from one hit "
-                       "and live up to {clone_time} s.",
+        "help.clones": "{clones} clones look just like you: they roam, shoot and pick up artifacts "
+                       "for you. {clone_hp} lives each, up to {clone_time} s.",
         "help.breaker": "For {breaker} s your bullets knock down incoming opponent bullets.",
         "help.wall": "A wall in front of you for {wall_time} s: opponent bullets bounce back "
                      "and become yours, your own fly through. Mobs can't pass it.",
@@ -530,7 +531,7 @@ TEXTS = {
         "item.speed": "nopeus",
         "item.wall": "peilimuuri",
         "item.rapid": "pikatuli",
-        "item.slowfoe": "vastustajan luodit hitaammin",
+        "item.slowfoe": "vastustajan luodit jähmettyvät",
         "item.shield": "kilpi",
         "item.heal": "parannus +{heal}",
         "item.clones": "kloonit",
@@ -573,8 +574,8 @@ TEXTS = {
         "help.hero_note": "Putoavat vain oman sankarin kaatamista hirviöistä — mutta kuka tahansa voi poimia ja käyttää.",
         "hero.owner": "putoaa vain: {hero}",
         "help.clearfoe": "Kaikki ruudulla olevat vastustajan luodit katoavat.",
-        "help.slowfoe": "Vastustajan luodit ja sinua kohti tulevat hirviöt ovat noin puolet "
-                        "hitaampia, {slowfoe} s.",
+        "help.slowfoe": "{slowfoe} s vastustajan luodit leijuvat ilmassa (älä koske!), sitten lentävät "
+                        "eteenpäin. Sinua kohti tulevat hirviöt ovat puolet hitaampia.",
         "help.fastshots": "Luotisi lentävät {fast}× nopeammin {fastshots} s, samoin vastustajaa "
                           "kohti menevät hirviöt.",
         "help.foe_grow": "Vastustaja on 2× suurempi {grow2} s — häneen on helpompi osua.",
@@ -588,8 +589,8 @@ TEXTS = {
         "help.triple": "Jokainen laukaus on kolmen luodin viuhka, {triple} s. Kuluttaa yhden ammuksen.",
         "help.rapid": "Tauko laukausten välillä {rapid_cd} s eikä {cd} s, {rapid} s.",
         "help.wavy": "Luotisi lentävät aaltoillen {wavy} s — vaikea ennakoida.",
-        "help.clones": "{clones} kloonia liikkuu ja ampuu itse. Ne kuolevat yhdestä osumasta "
-                       "ja elävät enintään {clone_time} s.",
+        "help.clones": "{clones} kloonia näyttää aivan sinulta: ne liikkuvat, ampuvat ja poimivat "
+                       "sinulle artefakteja. {clone_hp} elämää, elävät enintään {clone_time} s.",
         "help.breaker": "{breaker} s luotisi torjuvat vastaan tulevat vastustajan luodit.",
         "help.wall": "Muuri edessäsi {wall_time} s: vastustajan luodit kimpoavat takaisin "
                      "ja muuttuvat sinun luodeiksesi, omasi lentävät läpi. Hirviöt eivät pääse läpi.",

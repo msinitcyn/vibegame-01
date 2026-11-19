@@ -5,6 +5,7 @@
 import math
 
 from .config import (
+    CLONE_HP,
     BEAR_SIZE,
     BEAR_SPEED,
     FIRE_RING_HEAT,
@@ -262,12 +263,6 @@ class Player(Unit):
                 return x, y
         return push_out_of_arena(x, y, margin)
 
-    def clone_column(self, margin):
-        """x для двойника: столбец своей земли, который не пересекает арену (двойник ходит вверх-вниз)."""
-        near = ARENA[0] - self.dir * (ARENA_R + margin)          # ближний к центру край столбцов
-        lo, hi = sorted((self.land[0] + margin if self.dir > 0 else self.land[1] - margin, near))
-        return self.rng.uniform(lo, hi)
-
     def on_foe_land(self):
         """Центр мага на половине соперника."""
         return (self.x - ARENA[0]) * self.dir > 0
@@ -357,7 +352,8 @@ class Bullet:
 
 
 class Clone(Unit):
-    """Двойник: сам ходит и стреляет, умирает от первого попадания, артефакты не берёт.
+    """Двойник: выглядит как маг, бродит по своей земле в любую сторону, целится в соперника и
+    стреляет, CLONE_HP жизней, артефакты подбирает хозяину (это делает матч).
 
     Получает баффы и дебаффы хозяина из CLONE_EFFECTS (и веер) — и те, что уже были
     в момент появления, и те, что хозяину дали потом.
@@ -368,43 +364,64 @@ class Clone(Unit):
     def __init__(self, owner):
         self.id = None
         self.owner = owner
-        self.x = owner.clone_column(CLONE_RADIUS + 4)     # на своей земле, мимо арены; ходит вверх-вниз
         self.reset_effects()
         for name, t in owner.effects.items():
             if name in CLONE_EFFECTS:
                 self.effects[name] = t
         self.shield_hits = owner.shield_hits if "shield" in self.effects else 0
-        rng = owner.rng
-        self.y = rng.uniform(TOP + self.radius, BOTTOM - self.radius)
-        self.moving = rng.choice((-1, 0, 1))
-        self.turn_timer = rng.uniform(*CLONE_TURN_EVERY)
-        self.shot_timer = rng.uniform(*CLONE_SHOT_EVERY)
+        self.x, self.y = owner.random_spot(self.radius + 4)      # на своей земле, мимо арены
+        self.hp = CLONE_HP
+        self.hit_flash = 0.0
+        self.aim = 0.0 if owner.dir > 0 else math.pi
+        self.aim_jitter = 0.0
+        self.heading = 0.0
+        self.moving = 0                   # 1 — идёт по heading, 0 — стоит
+        self.turn_timer = 0.0             # сразу выберет направление
+        self.shot_timer = owner.rng.uniform(*CLONE_SHOT_EVERY)
         self.life = CLONE_TIME
         self.alive = True
 
-    def update(self, dt):
+    def turn(self):
+        rng = self.owner.rng
+        self.turn_timer = rng.uniform(*CLONE_TURN_EVERY)
+        self.moving = 1 if rng.random() < 0.8 else 0
+        self.heading = rng.uniform(-math.pi, math.pi)
+        self.aim_jitter = rng.uniform(-0.35, 0.35)
+
+    def hurt(self, n):
+        self.hp -= n
+        self.hit_flash = 0.12
+        if self.hp <= 0:
+            self.alive = False
+
+    def update(self, dt, foe):
         self.life -= dt
         if self.life <= 0:
             self.alive = False
             return []
         self.tick_effects(dt)
+        self.hit_flash = max(0.0, self.hit_flash - dt)
         self.turn_timer -= dt
         if self.turn_timer <= 0:
-            self.turn_timer = self.owner.rng.uniform(*CLONE_TURN_EVERY)
-            self.moving = self.owner.rng.choice((-1, 0, 1))
-        self.y += self.moving * CLONE_SPEED * self.speed_mult * dt
+            self.turn()
         r = self.radius
-        if self.y < TOP + r:
-            self.y, self.moving = TOP + r, 1
-        elif self.y > BOTTOM - r:
-            self.y, self.moving = BOTTOM - r, -1
+        if self.moving:
+            k = CLONE_SPEED * self.speed_mult * dt
+            x = self.x + math.cos(self.heading) * k
+            y = self.y + math.sin(self.heading) * k
+            land = self.owner.land
+            cx = max(land[0] + r, min(land[1] - r, x))
+            cy = max(TOP + r, min(BOTTOM - r, y))
+            if (cx, cy) != (x, y) or in_arena(cx, cy, r):
+                self.turn()                   # край земли или арена — в другую сторону
+            self.x, self.y = push_out_of_arena(cx, cy, r, self.owner.dir)
+        self.aim = math.atan2(foe.y - self.y, foe.x - self.x) + self.aim_jitter
         self.shot_timer -= dt
         if self.shot_timer <= 0:
             pause = self.owner.rng.uniform(*CLONE_SHOT_EVERY)
             self.shot_timer = pause * (RAPID_FACTOR if "rapid" in self.effects else 1)
             if self.can_fire:
-                forward = 0.0 if self.owner.dir > 0 else math.pi      # двойник стреляет прямо вперёд
-                return make_bullets(self.owner, self.x, self.y, forward, r,
+                return make_bullets(self.owner, self.x, self.y, self.aim, r,
                                     self.shot_offsets(), "wavy" in self.effects)
         return []
 

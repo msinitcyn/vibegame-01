@@ -190,7 +190,7 @@ def test_zombie_goes_for_foe_and_expires_without_drop():
     from duel.config import ZOMBIE_TIME
     m = dark_with_mobs(n=1)
     b, r = m.blue, m.red
-    r.x, r.y = 700, TOP + 200
+    r.x, r.y = 470, TOP + 200                            # в пределах поводка от Тьмы
     r.hp = 1000                                          # зомби бьёт красного — не дать партии кончиться
     m.apply_item(b, "zombies")
     z = m.mobs[0]
@@ -291,7 +291,10 @@ def test_ring_keeps_outsiders_out():
 
 def test_former_common_items_belong_to_heroes():
     from duel.match import Match
-    owners = {"shield": "frost", "foe_freeze": "frost", "clearfoe": "light", "mobswap": "dark"}
+    owners = {"shield": "frost", "foe_freeze": "frost", "slowfoe": "frost",
+              "clearfoe": "light", "breaker": "light", "mobpeace": "light",
+              "fastshots": "fire", "rapid": "fire",
+              "mobswap": "dark", "clones": "dark", "wall": "dark"}
     for hero in ("fire", "frost", "nature", "dark", "light"):
         seen = set()
         for seed in range(500):
@@ -321,3 +324,25 @@ def test_hero_items_have_sounds(game):
     assert played == list(ITEM_SOUNDS)
     if game.audio.enabled:
         assert set(game.audio.items) == set(ITEM_SOUNDS)
+
+
+def test_zombie_stays_near_owner():
+    from duel.config import ZOMBIE_LEASH
+    m = dark_with_mobs(n=1)
+    b, r = m.blue, m.red
+    r.x, r.y = 900, TOP + 400                            # соперник далеко
+    m.apply_item(b, "zombies")
+    z = m.mobs[0]
+    for _ in range(int(3 / DT)):
+        m.step(DT, {"blue": Command(move=(0, 1))})       # Тьма уходит — зомби за ней
+        assert math.hypot(z.x - b.x, z.y - b.y) <= ZOMBIE_LEASH + 0.01
+    assert math.hypot(z.x - b.x, z.y - b.y) < 120 and r.hp == MAX_HP
+
+
+def test_nature_walks_through_own_trees():
+    m = new_match()
+    t = nature(m, aim=0.0)
+    b = m.blue
+    b.x, b.y = 400, t.y - 60
+    walk(m, "blue", (0, 1), 0.5)
+    assert b.y > t.y + 20                                # прошёл насквозь

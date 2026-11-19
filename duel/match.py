@@ -38,6 +38,7 @@ from .config import (
     MOB_REACH_EXTRA,
     MOB_SPEED,
     MOB_WINDUP,
+    ZOMBIE_LEASH,
     ZOMBIE_MAX,
     ZOMBIE_RADIUS,
     ZOMBIE_TIME,
@@ -78,6 +79,7 @@ from .config import (
     RED_LAND,
     SHIELD_GAP,
     SLOW_BULLET_FACTOR,
+    STOP_BULLET_FACTOR,
     TOP,
     WIDTH,
 )
@@ -213,7 +215,7 @@ class Match:
                 self.hurt_player(foe, damage)
         for c in self.clones_of(foe):
             if math.hypot(c.x - p.x, c.y - p.y) <= p.radius + c.radius + reach:
-                c.alive = False
+                c.hurt(damage)
 
     def use_item(self, p, slot):
         kind = p.items[slot]
@@ -341,7 +343,7 @@ class Match:
         p.x = max(r, min(WIDTH - r, p.x))
         p.y = max(TOP + r, min(BOTTOM - r, p.y))
         for t in self.trees:
-            if t.hits(p.x, p.y, r):
+            if t.owner is not p and t.hits(p.x, p.y, r):      # сквозь свои ёлки хозяин проходит
                 p.x, p.y = t.push_out(p.x, p.y, r)
         p.x, p.y = push_out_of_arena(p.x, p.y, r, p.dir)
         for ring in self.rings:               # огненную стену не пересечь
@@ -403,13 +405,8 @@ class Match:
         # артефакты сами не появляются — только выпадают из убитых мобов (drop_artifact)
         for p in self.players:
             for a in self.artifacts:
-                instant = a.kind in INSTANT_ITEMS
                 if not a.taken and math.hypot(a.x - p.x, a.y - p.y) < p.radius + ARTIFACT_R:
-                    if instant:
-                        self.apply_item(p, a.kind)    # сразу, в инвентарь не кладём
-                    else:
-                        p.add_item(a.kind)            # в ячейку или в очередь
-                    a.taken = True
+                    self.take_artifact(p, a)
                     self.emit("pickup", p.id, a.kind)
         self.artifacts = [a for a in self.artifacts if not a.taken]
 
@@ -433,10 +430,17 @@ class Match:
         self.walls = [w for w in self.walls if w.life > 0]
 
         for c in self.clones:
-            y0 = c.y
-            self.bullets.extend(c.update(dt))
-            if self.blocked(c.x, c.y, c.radius):      # двойник упёрся в деревья — назад
-                c.y, c.moving = y0, -c.moving
+            x0, y0 = c.x, c.y
+            self.bullets.extend(c.update(dt, self.other(c.owner)))
+            if self.blocked(c.x, c.y, c.radius) or any(r.stops(x0, y0, c.x, c.y) or r.stops(c.x, c.y, x0, y0)
+                                                      for r in self.rings):
+                c.x, c.y = x0, y0                     # деревья и огненная стена — назад и в другую сторону
+                c.turn()
+            for a in self.artifacts:              # двойник подбирает артефакт хозяину
+                if c.alive and not a.taken and math.hypot(a.x - c.x, a.y - c.y) < c.radius + ARTIFACT_R:
+                    self.take_artifact(c.owner, a)
+                    self.emit("pickup_at", c.owner.id, c.x, c.y, a.kind)    # надпись над двойником
+        self.artifacts = [a for a in self.artifacts if not a.taken]
         self.clones = [c for c in self.clones if c.alive]
 
         for b in self.bullets:
@@ -473,7 +477,7 @@ class Match:
                     break
                 if math.hypot(b.x - c.x, b.y - c.y) < c.radius + BULLET_R:
                     b.alive = False
-                    c.alive = False               # двойник умирает с первого попадания
+                    c.hurt(1)
                     break
         self.clones = [c for c in self.clones if c.alive]
         for m in self.mobs:
@@ -489,6 +493,14 @@ class Match:
         for p in self.players:
             if p.hp <= 0:
                 self.winner = self.other(p)
+
+    def take_artifact(self, p, a):
+        """Артефакт — магу p: мгновенный сразу применяется, остальные — в ячейку или очередь."""
+        if a.kind in INSTANT_ITEMS:
+            self.apply_item(p, a.kind)
+        else:
+            p.add_item(a.kind)
+        a.taken = True
 
     def drop_artifact(self, mob):
         """Убитый моб роняет случайный артефакт в месте гибели — только если погиб
@@ -507,16 +519,18 @@ class Match:
         self.artifacts.append(Artifact(x, self.rng.choice(kinds), y))
 
     def bullet_speed(self, owner):
-        """Множитель скорости пуль owner: «быстрые пули» у него, «пули соперника медленнее» у цели."""
-        k = FAST_BULLET_FACTOR if "fastshots" in owner.effects else 1.0
+        """Множитель скорости пуль owner: «быстрые пули» у него; «пули соперника замирают» у цели — стоят."""
         if "slowfoe" in self.other(owner).effects:
-            k *= SLOW_BULLET_FACTOR
-        return k
+            return STOP_BULLET_FACTOR
+        return FAST_BULLET_FACTOR if "fastshots" in owner.effects else 1.0
 
     def chaser_speed(self, target):
-        """Множитель скорости моба, идущего на target: то же правило, что и для пуль —
-        моб «на стороне» соперника target."""
-        return self.bullet_speed(self.other(target))
+        """Множитель скорости моба (и его снаряда), идущего на target: быстрее, если у соперника
+        target «быстрые пули»; вдвое медленнее, если у target «пули соперника замирают»."""
+        k = FAST_BULLET_FACTOR if "fastshots" in self.other(target).effects else 1.0
+        if "slowfoe" in target.effects:
+            k *= SLOW_BULLET_FACTOR
+        return k
 
     # ------------------------------------------------------------------ мобы
 
@@ -534,6 +548,8 @@ class Match:
             x0, y0 = m.x, m.y
             if m.zombie_of is not None:       # зомби Тьмы — своя логика
                 self.update_zombie(m, dt)
+                if m.alive:
+                    self.leash(m)
                 p = None
             else:
                 p = m.update(dt, self.chaser_speed(m.target) if m.target else 1.0, self.walls)
@@ -565,6 +581,22 @@ class Match:
             m.zombie_of, m.zombie_life = p, ZOMBIE_TIME
             m.target, m.windup, m.detour = None, 0.0, None
 
+    def zombie_follow(self, m, owner, dt):
+        """Зомби идёт к хозяину и держится в паре шагов от него."""
+        d = math.hypot(owner.x - m.x, owner.y - m.y)
+        gap = m.radius + owner.radius + 30
+        if d > gap:
+            step = min(MOB_SPEED * dt, d - gap)
+            m.move_around((owner.x - m.x) / d * step, (owner.y - m.y) / d * step, self.walls)
+            m.facing = 1 if owner.x >= m.x else -1
+
+    def leash(self, m):
+        """Зомби не дальше ZOMBIE_LEASH от хозяина."""
+        o = m.zombie_of
+        d = math.hypot(m.x - o.x, m.y - o.y)
+        if d > ZOMBIE_LEASH:
+            m.x, m.y = o.x + (m.x - o.x) / d * ZOMBIE_LEASH, o.y + (m.y - o.y) / d * ZOMBIE_LEASH
+
     def update_zombie(self, m, dt):
         """Зомби: бьёт мобов, нападающих на хозяина, а если их нет — соперника хозяина."""
         m.zombie_life -= dt
@@ -575,9 +607,15 @@ class Match:
             m.alive = False
             return
         owner = m.zombie_of
-        attackers = [x for x in self.mobs if x.alive and x.zombie_of is None and x.target is owner]
+        near = lambda u: math.hypot(u.x - owner.x, u.y - owner.y) <= ZOMBIE_LEASH     # noqa: E731
+        attackers = [x for x in self.mobs if x.alive and x.zombie_of is None and x.target is owner and near(x)]
+        foe = self.other(owner)
         target = (min(attackers, key=lambda x: math.hypot(x.x - m.x, x.y - m.y)) if attackers
-                  else self.other(owner))
+                  else foe if near(foe) else None)
+        if target is None:                    # целей рядом нет — к хозяину
+            m.windup = 0.0
+            self.zombie_follow(m, owner, dt)
+            return
         reach = m.radius + target.radius
         dist = math.hypot(target.x - m.x, target.y - m.y)
         m.facing = 1 if target.x >= m.x else -1
@@ -610,7 +648,7 @@ class Match:
                 self.hurt_player(foe, 1)
             for c in self.clones_of(foe):
                 if beam.tick(c, beam.touches(c.x, c.y, c.radius), dt):
-                    c.alive = False
+                    c.hurt(1)
             for m in self.mobs:
                 if m.zombie_of is owner:
                     continue                  # свои зомби

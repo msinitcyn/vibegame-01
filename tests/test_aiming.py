@@ -55,13 +55,15 @@ def test_wavy_shifts_across_flight(match):
     assert abs(shot.x - x0) > 1
 
 
-def test_clones_shoot_forward(match):
+def test_clones_aim_at_foe(match):
     from duel.entities import Clone
-    match.red.aim = 1.2
+    match.red.aim = 1.2                          # прицел хозяина не важен — двойник целится в соперника
     c = Clone(match.red)
-    c.shot_timer = 0
-    shots = c.update(DT)
-    assert shots and angle_of(shots[0]) == pytest.approx(math.pi)
+    c.turn()
+    c.moving, c.shot_timer = 0, 0
+    shots = c.update(DT, match.blue)
+    to_foe = math.atan2(match.blue.y - c.y, match.blue.x - c.x)
+    assert shots and abs(angle_of(shots[0]) - to_foe) <= 0.36
 
 
 def test_snapshot_has_aim(match):

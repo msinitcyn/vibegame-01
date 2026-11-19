@@ -79,7 +79,7 @@ def test_shield_and_clones(light):
     m.apply_item(r, "clones")
     for c in m.clones:
         c.x, c.y = 400, m.blue.y
-        c.moving, c.turn_timer = 0, 99                   # стоят на линии луча
+        c.moving, c.turn_timer, c.hp = 0, 99, 1          # стоят на линии луча, по жизни
     m.apply_item(m.blue, "beam")
     step(m, 0.8)
     assert r.hp == MAX_HP and r.shield_hits == SHIELD_HITS - 1 and not any(c.alive for c in m.clones)
