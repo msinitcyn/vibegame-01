@@ -263,3 +263,59 @@ def test_r2_and_middle_click_reset_aim(sens):
     game.on_mouse_button(2)                              # средняя кнопка
     game.update(DT)
     assert blue.aim == pytest.approx(0.0, abs=0.01)
+
+
+# ------------------------------------------------------------------ режим «по движению»
+
+def test_aim_by_movement_and_reset_on_stop(sens):
+    game = sens
+    game.settings["aim_mode"] = "move"
+    game.pads.pads = []
+    blue = game.match.blue
+    game.held = {pygame.KSCAN_W, pygame.KSCAN_D}         # вверх-вправо
+    game.update(DT)
+    assert blue.aim == pytest.approx(-math.pi / 4)
+    game.held = set()                                    # остановился — прицел прямо на соперника
+    game.update(DT)
+    assert blue.aim == 0.0
+    game.held = {pygame.KSCAN_A}                         # назад — прицел назад
+    game.update(DT)
+    assert blue.aim == pytest.approx(math.pi)
+
+
+def test_move_mode_ignores_stick_and_mouse(sens):
+    game = sens
+    game.settings["aim_mode"] = "move"
+    pad = FakePad()
+    game.pads.pads = [(100, pad)]
+    pad.right_x, pad.right_y = 0, 32000
+    game.on_mouse_move((10, 10))
+    game.update(DT)
+    assert game.match.red.aim == pytest.approx(math.pi) and game.match.blue.aim == 0.0
+    assert game.mouse_side() is None
+    game.state = "play"
+    game.sync_mouse_capture()
+    assert not game.mouse_captured
+
+
+def test_move_mode_hotseat_without_pad(sens):
+    game = sens
+    game.settings["aim_mode"] = "move"
+    game.pads.pads = []
+    game.heroes = None
+    game.open_pick(100)
+    game.on_key(pygame.KSCAN_SPACE)
+    game.on_key(pygame.KSCAN_RETURN)
+    assert game.state == "play"                          # клавиатуры хватает
+
+
+def test_aim_mode_setting_toggles(sens):
+    from duel import settings
+    game = sens
+    game.state = "settings"
+    game.settings_index = game.settings_rows.index("aim_mode")
+    game.on_key(pygame.KSCAN_D)
+    assert game.settings["aim_mode"] == "move" and settings.load()["aim_mode"] == "move"
+    game.draw_settings()
+    game.on_key(pygame.KSCAN_D)
+    assert game.settings["aim_mode"] == "stick"

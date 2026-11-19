@@ -55,6 +55,7 @@ def game(_game):
     _game.net_port = 0                      # свой сервер — на любом свободном порту
     _game.discovery_port = None             # и не отвечает на поиск в настоящей сети
     _game.pads.pads = []
+    _game.settings["aim_mode"] = "stick"    # прицел стиком и мышью (режим «по движению» — в своих тестах)
     _game.pads.stick.clear()                # стик и триггеры прошлого теста «отпущены»
     _game.pads.trigger.clear()
     _game.start()

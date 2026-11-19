@@ -138,7 +138,7 @@ class Game(ScreensMixin):
         self.join_touched = False     # игрок листал или набирал — тогда игру сами не выбираем
         self.finder = None            # поиск игр в сети, пока открыт экран «Подключиться»
         self.menu_index = 0
-        self.settings_rows = ["lang", "name", "aim_stick", "aim_mouse", "back"]
+        self.settings_rows = ["lang", "name", "aim_mode", "aim_stick", "aim_mouse", "back"]
         self.help_page = 0
         self.settings_index = 0
         self.state = "menu"
@@ -200,7 +200,7 @@ class Game(ScreensMixin):
             c = self.controls[pid]
             cmd = self.pending[pid]
             cmd.move = ((c.right in held) - (c.left in held), (c.down in held) - (c.up in held))
-            cmd.aim = self.aim_for(pid)
+            cmd.aim = self.aim_for(pid, cmd.move)
             commands[pid] = cmd
         self.pending = {pid: Command() for pid in PLAYER_IDS}
         events = self.match.step(dt, commands)
@@ -311,8 +311,9 @@ class Game(ScreensMixin):
                 fire, melee = fire or p.fire, melee or p.melee
                 slot = p.use_slot if p.use_slot is not None else slot
             self.pending = {pid: Command() for pid in PLAYER_IDS}
-            self.net.send({"type": "cmd", "move": [max(-1, min(1, dx)), max(-1, min(1, dy))],
-                           "fire": fire, "melee": melee, "slot": slot, "aim": self.aim_for(self.me)})
+            move = (max(-1, min(1, dx)), max(-1, min(1, dy)))
+            self.net.send({"type": "cmd", "move": list(move), "fire": fire, "melee": melee, "slot": slot,
+                           "aim": self.aim_for(self.me, move)})
         if steps == MAX_STEPS_PER_FRAME:
             self.time_acc = 0.0
         for msg in self.net.recv():
@@ -728,8 +729,15 @@ class Game(ScreensMixin):
                 return i
         return None
 
+    def aim_by_move(self):
+        """Режим прицела «по движению» (временный, для пробы): стик и мышь не целятся."""
+        return self.settings.get("aim_mode", "move") == "move"
+
     def mouse_side(self):
-        """Кто целится мышью: по сети — свой маг; за одним компьютером — левый, если геймпадов меньше двух."""
+        """Кто целится мышью: по сети — свой маг; за одним компьютером — левый, если геймпадов меньше двух.
+        В режиме прицела «по движению» мышь не используется."""
+        if self.aim_by_move():
+            return None
         if self.net:
             return self.me
         return "blue" if len(self.pads.pads) < 2 else None
@@ -805,9 +813,13 @@ class Game(ScreensMixin):
             if p:
                 self.mouse_pos = (p["x"] + DIR[pid] * 150, p["y"])
 
-    def aim_for(self, pid):
-        """Прицел игрока на этот такт: правый стик, если наклонён; иначе — к курсору мыши,
-        если игрок целится мышью; иначе None (прицел не меняется)."""
+    def aim_for(self, pid, move=(0, 0)):
+        """Прицел игрока на этот такт. Режим «по движению»: куда идёт маг, а стоит — прямо на
+        соперника. Режим «стик и мышь»: правый стик, если наклонён; иначе — к перекрестию мыши;
+        иначе None (прицел не меняется)."""
+        if self.aim_by_move():
+            dx, dy = move
+            return math.atan2(dy, dx) if (dx or dy) else (0.0 if DIR[pid] > 0 else math.pi)
         if pid in self.aim_reset:         # сброс прицела — на этот такт, потом как обычно
             return self.aim_reset.pop(pid)
         target = self.pads.aim(self.pad_of(pid))
@@ -876,6 +888,13 @@ class Game(ScreensMixin):
             self.settings_index = (self.settings_index + 1) % len(self.settings_rows)
         elif row == "back" and sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
             self.state = "menu"
+        elif row == "aim_mode":
+            if sc in (K.KSCAN_A, K.KSCAN_LEFT, K.KSCAN_D, K.KSCAN_RIGHT, K.KSCAN_RETURN, K.KSCAN_KP_ENTER,
+                      K.KSCAN_SPACE):
+                modes = settings.AIM_MODES
+                self.settings["aim_mode"] = modes[(modes.index(self.settings.get("aim_mode", "move")) + 1)
+                                                  % len(modes)]
+                settings.save(self.settings)
         elif row in ("aim_stick", "aim_mouse"):
             step = {K.KSCAN_A: -1, K.KSCAN_LEFT: -1, K.KSCAN_D: 1, K.KSCAN_RIGHT: 1}.get(sc)
             if step:
@@ -994,7 +1013,7 @@ class Game(ScreensMixin):
     def pick_confirm(self, pid, ok):
         """Подтвердить (или снять) выбор; героя, подтверждённого соперником, взять нельзя.
         Без геймпада играть нельзя: одному из двоих нужен правый стик для прицела."""
-        if ok and not self.pads.pads:
+        if ok and not self.pads.pads and not self.aim_by_move():
             return
         other = self.pick["red" if pid == "blue" else "blue"]
         if ok and other["ok"] and other["hero"] == self.pick[pid]["hero"]:

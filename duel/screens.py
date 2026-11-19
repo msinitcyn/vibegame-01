@@ -246,7 +246,7 @@ class ScreensMixin:
                 if note:
                     img = self.small.render(note, True, AMMO_COLOR if cur else GREY)
                     s.blit(img, img.get_rect(center=(card.centerx, card.top + 170)))
-        if not self.pads.pads:            # прицел нужен правым стиком хотя бы одному игроку
+        if not self.pads.pads and not self.aim_by_move():    # прицел нужен правым стиком хотя бы одному
             img = self.font.render(tr("pick.need_pad"), True, BAD_TEXT)
             s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 72)))
         img = self.small.render(tr("pick.hint"), True, GREY)
@@ -265,13 +265,14 @@ class ScreensMixin:
         labels = {"lang": f"◀  {tr('settings.lang', lang=LANGS[get_lang()])}  ▶",
                   "name": tr("settings.name", name=name) if name.strip() or row == "name"
                   else tr("settings.name", name=tr("settings.name_empty")),
+                  "aim_mode": f"◀  {tr('settings.aim_mode', mode=tr('aim_mode.' + self.settings.get('aim_mode', 'move')))}  ▶",
                   "aim_stick": f"◀  {tr('settings.aim_stick', n=self.settings.get('aim_stick', 6))}  ▶",
                   "aim_mouse": f"◀  {tr('settings.aim_mouse', n=self.settings.get('aim_mouse', 5))}  ▶",
                   "back": tr("settings.back")}
         for i, line in enumerate(self.settings_rows):
             sel = i == self.settings_index
             rect = pygame.Rect(0, 0, 460, 48)
-            rect.center = (WIDTH // 2, 220 + i * 60)
+            rect.center = (WIDTH // 2, 200 + i * 56)
             pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=10)
             pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
             txt = self.font.render(labels[line], True, WHITE if sel else GREY)
