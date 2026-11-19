@@ -5,6 +5,13 @@
 import math
 
 from .config import (
+    HERO_FADE,
+    ICE_LIFE,
+    ICE_R,
+    TREE_LENGTH,
+    TREE_SPEED,
+    TREE_TIME,
+    TREE_W,
     BEAM_DPS,
     BEAM_WIDTH,
     ARENA,
@@ -521,6 +528,69 @@ class MobShot:
             self.alive = False
 
 
+def dist_to_segment(x, y, ox, oy, angle, a, b):
+    """Расстояние от точки до отрезка луча из (ox, oy) по углу angle, от a до b по длине."""
+    cos, sin = math.cos(angle), math.sin(angle)
+    t = max(a, min(b, (x - ox) * cos + (y - oy) * sin))
+    return math.hypot(x - (ox + cos * t), y - (oy + sin * t))
+
+
+class IceTrail:
+    """Кусок ледяного следа «Ледяной тропы»: земля его хозяина, тает через ICE_LIFE."""
+
+    def __init__(self, x, y, owner):
+        self.id = None
+        self.x, self.y = x, y
+        self.owner = owner
+        self.life = ICE_LIFE
+
+    def under(self, x, y):
+        return math.hypot(x - self.x, y - self.y) < ICE_R
+
+
+class TreeWall:
+    """«Стена деревьев»: отрезок от края мага по прицелу, растёт до TREE_LENGTH, непроходим для
+    магов, мобов, пуль и снарядов; под конец исчезает от мага к концу."""
+
+    def __init__(self, owner):
+        self.id = None
+        self.owner = owner
+        self.angle = owner.aim
+        gap = owner.radius + TREE_W / 2 + 4          # растёт от края мага, а не из него
+        self.x = owner.x + math.cos(self.angle) * gap
+        self.y = owner.y + math.sin(self.angle) * gap
+        self.length = 0.0
+        self.life = TREE_TIME
+
+    @property
+    def start(self):
+        return self.length * max(0.0, 1 - self.life / HERO_FADE)
+
+    def update(self, dt):
+        self.life -= dt
+        self.length = min(TREE_LENGTH, self.length + TREE_SPEED * dt)
+
+    def hits(self, x, y, r):
+        """Круг (x, y, r) задевает деревья."""
+        if self.length <= self.start:
+            return False
+        return dist_to_segment(x, y, self.x, self.y, self.angle, self.start, self.length) < r + TREE_W / 2
+
+    def push_out(self, x, y, r):
+        """Вытолкнуть круг из деревьев по перпендикуляру к стене (или от торца)."""
+        cos, sin = math.cos(self.angle), math.sin(self.angle)
+        t = max(self.start, min(self.length, (x - self.x) * cos + (y - self.y) * sin))
+        px, py = self.x + cos * t, self.y + sin * t
+        dx, dy = x - px, y - py
+        d = math.hypot(dx, dy)
+        need = r + TREE_W / 2
+        if d >= need:
+            return x, y
+        if d < 1e-9:
+            dx, dy, d = -sin, cos, 1.0
+        return px + dx / d * need, py + dy / d * need
+
+
 class Beam:
     """«Луч света»: прямой луч из мага по прицелу, быстро вырастает до BEAM_LENGTH, бьёт насквозь.
     Пока касается цели, снимает BEAM_DPS жизней в секунду (первый удар — сразу)."""
@@ -534,16 +604,17 @@ class Beam:
         self.touching = {}            # цель -> сколько секунд касается с последнего удара
 
     @property
+    def start(self):
+        """Откуда луч сейчас начинается: под конец гаснет от мага к концу."""
+        return self.length * max(0.0, 1 - self.life / HERO_FADE)
+
+    @property
     def end(self):
         return (self.x + math.cos(self.angle) * self.length, self.y + math.sin(self.angle) * self.length)
 
     def touches(self, x, y, r):
-        """Касается ли круга (x, y, r): расстояние до отрезка луча не больше r + половины толщины."""
-        ex, ey = self.end
-        vx, vy = ex - self.x, ey - self.y
-        ll = vx * vx + vy * vy
-        k = 0.0 if ll == 0 else max(0.0, min(1.0, ((x - self.x) * vx + (y - self.y) * vy) / ll))
-        return math.hypot(x - (self.x + vx * k), y - (self.y + vy * k)) <= r + BEAM_WIDTH / 2
+        """Касается ли круга (x, y, r): расстояние до видимого отрезка не больше r + половины толщины."""
+        return dist_to_segment(x, y, self.x, self.y, self.angle, self.start, self.length) <= r + BEAM_WIDTH / 2
 
     def tick(self, target, touching, dt):
         """Сколько ударов нанести цели в этот такт (0 или 1)."""

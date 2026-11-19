@@ -31,6 +31,8 @@ from .config import (
     BEAM_SPEED,
     DURATION,
     HERO_ONLY_ITEMS,
+    ICE_STEP,
+    PULL_SPEED,
     ARENA,
     ARENA_R,
     ARTIFACT_R,
@@ -71,7 +73,8 @@ from .config import (
     TOP,
     WIDTH,
 )
-from .entities import AmmoPack, Artifact, Beam, Clone, Mob, Player, Wall, push_out_of_arena
+from .entities import (AmmoPack, Artifact, Beam, Clone, IceTrail, Mob, Player, TreeWall, Wall,
+                       push_out_of_arena)
 from .items import BAD_EFFECTS, INSTANT_ITEMS, ITEMS
 
 NO_AMMO_EVERY = 1.0               # «нет патронов» — не чаще раза в столько секунд партии
@@ -100,6 +103,9 @@ class Match:
         self.mobs = []
         self.mob_shots = []           # снаряды дальнобойных мобов
         self.beams = []               # «Луч света»
+        self.ice = []                 # «Ледяная тропа»: куски следа
+        self.trees = []               # «Стена деревьев»
+        self.trail_last = {}          # маг под «Ледяной тропой» -> где положен последний кусок следа
         self.match_time = 0.0         # секунд с начала партии
         self.mob_wave = 0             # сколько волн мобов уже пришло
         self.next_wave = MOB_DELAY    # когда придёт следующая (секунды партии)
@@ -131,7 +137,7 @@ class Match:
     def objects(self):
         """Все объекты поля, кроме магов."""
         return (self.bullets + self.mobs + self.mob_shots + self.artifacts + self.ammo_packs
-                + self.walls + self.clones + self.beams)
+                + self.walls + self.clones + self.beams + self.ice + self.trees)
 
     def number_new(self):
         """Выдать номера объектам, появившимся за шаг (в порядке появления в списках)."""
@@ -241,6 +247,12 @@ class Match:
             for m in self.mobs:
                 if m.target is p:
                     m.target = None if "mobpeace" in foe.effects else foe
+        elif kind == "icewalk":               # чужая земля не жжёт, за магом — ледяной след
+            self.give(p, "icewalk")
+        elif kind == "trees":                 # стена деревьев по прицелу
+            self.trees.append(TreeWall(p))
+        elif kind == "pull":                  # соперника тянет к магу
+            self.give(foe, "pulled")
         elif kind == "beam":                  # луч из мага по прицелу; маг на это время стоит
             self.give(p, "beaming")
             self.beams.append(Beam(p, DURATION["beaming"]))
@@ -259,11 +271,62 @@ class Match:
 
     # ------------------------------------------------------------------ такт
 
+    def on_trail(self, p, owner):
+        """Маг p стоит на ледяном следе хозяина owner."""
+        return any(t.owner is owner and t.under(p.x, p.y) for t in self.ice)
+
+    def in_danger(self, p):
+        """Опасная земля: чужая (если нет «Ледяной тропы» и не стоит на своём следе) или след соперника."""
+        foe = self.other(p)
+        if self.on_trail(p, foe):
+            return True
+        return p.on_foe_land() and "icewalk" not in p.effects and not self.on_trail(p, p)
+
+    def blocked(self, x, y, r):
+        return any(t.hits(x, y, r) for t in self.trees)
+
+    def constrain(self, p):
+        """Маг: в пределах поля, не в арене, не в деревьях."""
+        r = p.radius
+        p.x = max(r, min(WIDTH - r, p.x))
+        p.y = max(TOP + r, min(BOTTOM - r, p.y))
+        for t in self.trees:
+            if t.hits(p.x, p.y, r):
+                p.x, p.y = t.push_out(p.x, p.y, r)
+        p.x, p.y = push_out_of_arena(p.x, p.y, r, p.dir)
+
+    def update_ice(self, p):
+        """Под «Ледяной тропой» за магом остаётся след — кусок каждые ICE_STEP пикселей."""
+        if "icewalk" not in p.effects:
+            self.trail_last.pop(p, None)
+            return
+        last = self.trail_last.get(p)
+        if last is None or math.hypot(p.x - last[0], p.y - last[1]) >= ICE_STEP:
+            self.ice.append(IceTrail(p.x, p.y, p))
+            self.trail_last[p] = (p.x, p.y)
+
     def update(self, dt, moves):
+        for t in self.trees:
+            t.update(dt)
+        self.trees = [t for t in self.trees if t.life > 0]
+        for t in self.ice:
+            t.life -= dt
+        self.ice = [t for t in self.ice if t.life > 0]
         for p in self.players:
             p.update(dt, moves.get(p.id, (0, 0)))
-            # на чужой земле отнимаются жизни: FOE_LAND_DPS в секунду (щит не помогает)
-            if p.on_foe_land():
+            if "pulled" in p.effects:         # «Притяжение тьмы»: тянет к сопернику
+                foe = self.other(p)
+                dx, dy = foe.x - p.x, foe.y - p.y
+                d = math.hypot(dx, dy)
+                room = d - p.radius - foe.radius
+                if room > 0:
+                    step = min(PULL_SPEED * dt, room)
+                    p.x += dx / d * step
+                    p.y += dy / d * step
+            self.constrain(p)
+            self.update_ice(p)
+            # на опасной земле отнимаются жизни: FOE_LAND_DPS в секунду (щит не помогает)
+            if self.in_danger(p):
                 p.foe_land_t += dt
                 while p.foe_land_t >= 1 / FOE_LAND_DPS:
                     p.foe_land_t -= 1 / FOE_LAND_DPS
@@ -277,8 +340,6 @@ class Match:
         for p in self.players:
             for a in self.artifacts:
                 instant = a.kind in INSTANT_ITEMS
-                if HERO_ONLY_ITEMS.get(a.kind, p.hero) != p.hero:
-                    continue                      # артефакт другого героя — не подбирается
                 if not a.taken and math.hypot(a.x - p.x, a.y - p.y) < p.radius + ARTIFACT_R:
                     if instant:
                         self.apply_item(p, a.kind)    # сразу, в инвентарь не кладём
@@ -308,13 +369,19 @@ class Match:
         self.walls = [w for w in self.walls if w.life > 0]
 
         for c in self.clones:
+            y0 = c.y
             self.bullets.extend(c.update(dt))
+            if self.blocked(c.x, c.y, c.radius):      # двойник упёрся в деревья — назад
+                c.y, c.moving = y0, -c.moving
         self.clones = [c for c in self.clones if c.alive]
 
         for b in self.bullets:
             prev_x = b.x
             # если у цели «пули соперника медленнее» — эта пуля тормозит
             b.update(dt * self.bullet_speed(b.owner))
+            if self.blocked(b.x, b.y, BULLET_R):      # деревья гасят пулю
+                b.alive = False
+                continue
             for w in self.walls:
                 if b.alive:
                     w.hit(b, prev_x)
@@ -396,7 +463,16 @@ class Match:
         for m in self.mobs:
             if not m.alive:
                 continue                      # добит ударом между тактами — уберётся ниже
+            x0, y0 = m.x, m.y
             p = m.update(dt, self.chaser_speed(m.target) if m.target else 1.0, self.walls)
+            if self.blocked(m.x, m.y, m.radius):      # сквозь деревья не пройти: шаг по одной оси или стоять
+                nx, ny = m.x, m.y
+                if not self.blocked(nx, y0, m.radius):
+                    m.x, m.y = nx, y0
+                elif not self.blocked(x0, ny, m.radius):
+                    m.x, m.y = x0, ny
+                else:
+                    m.x, m.y = x0, y0
             if m.swing == MOB_SWING_TIME:     # удар только что случился (попал или мимо) — звук
                 self.emit("mob_swing", m.x, m.y, m.swing_hit)
             if p and not p.shield_absorb():   # щит гасит и удар моба
@@ -431,6 +507,8 @@ class Match:
         for s in self.mob_shots:
             prev_x = s.x
             s.update(dt, self.chaser_speed(s.target))
+            if s.alive and self.blocked(s.x, s.y, MOB_SHOT_R):     # деревья гасят снаряд
+                s.alive = False
             for w in self.walls:              # зеркало отражает снаряд — он становится пулей хозяина
                 b = w.reflect_shot(s, prev_x) if s.alive else None
                 if b:

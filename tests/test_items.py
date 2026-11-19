@@ -46,7 +46,11 @@ def test_ring_colors_follow_groups():
     from duel.config import ATTACK_RING, FOE_RING, SELF_RING
     expected = {"defense": SELF_RING, "weapon": ATTACK_RING, "attack": ATTACK_RING, "debuff": FOE_RING}
     for section, kinds in HELP_SECTIONS:
-        assert {ring_color(k) for k in kinds} == {expected[section]}, section
+        if section in expected:
+            assert {ring_color(k) for k in kinds} == {expected[section]}, section
+    # артефакты героев — по смыслу: луч и деревья — атака, тропа — защита, притяжение — по сопернику
+    assert [ring_color(k) for k in ("beam", "trees", "icewalk", "pull")] == [ATTACK_RING, ATTACK_RING,
+                                                                           SELF_RING, FOE_RING]
 
 
 # --- инвентарь

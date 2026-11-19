@@ -117,6 +117,17 @@ def draw_icon(surf, kind, center, r):
             a = i * math.pi / 4
             pygame.draw.line(surf, color, P(-0.42 - 0.22 * math.cos(a), 0.22 - 0.22 * math.sin(a)),
                              P(-0.42 + 0.22 * math.cos(a), 0.22 + 0.22 * math.sin(a)), max(1, w // 2))
+    elif kind == "icewalk":                       # следы на льду
+        for u, v in ((-0.4, 0.35), (-0.05, 0.0), (0.3, -0.35)):
+            pygame.draw.polygon(surf, color, [P(u, v - 0.2), P(u + 0.14, v), P(u, v + 0.2), P(u - 0.14, v)])
+    elif kind == "trees":                         # три ёлки в ряд
+        for u in (-0.42, 0.0, 0.42):
+            pygame.draw.polygon(surf, color, [P(u, -0.5), P(u + 0.2, 0.2), P(u - 0.2, 0.2)])
+            pygame.draw.line(surf, (140, 95, 55), P(u, 0.2), P(u, 0.45), max(1, w // 2))
+    elif kind == "pull":                          # стрелка, затягивающая внутрь
+        pygame.draw.circle(surf, color, P(-0.35, 0), r * 0.18)
+        pygame.draw.line(surf, color, P(0.55, 0), P(-0.1, 0), w)
+        pygame.draw.polygon(surf, color, [P(-0.12, 0), P(0.08, -0.18), P(0.08, 0.18)])
     elif kind == "foe_invert":                    # стрелки вверх и вниз
         pygame.draw.line(surf, color, P(-0.22, 0.55), P(-0.22, -0.45), w)
         pygame.draw.polygon(surf, color, [P(-0.22, -0.6), P(-0.42, -0.3), P(-0.02, -0.3)])

@@ -44,6 +44,7 @@ from .screens import ScreensMixin
 from .sprites import reload_all
 
 MAX_STEPS_PER_FRAME = 5           # после долгого кадра не «догоняем» больше этого
+HELP_PAGES = 3                    # справка: общие артефакты, артефакты героев, правила
 ADDRESS_MAX = 64                  # длина адреса на экране «Подключиться»
 CONNECT_TIMEOUT = 3.0
 SILENCE = 3.0                     # столько секунд без сообщений сервера — связь потеряна
@@ -585,7 +586,8 @@ class Game(ScreensMixin):
                       pygame.KSCAN_SPACE, pygame.KSCAN_BACKSPACE):
                 self.state = "menu"
             elif sc in (pygame.KSCAN_A, pygame.KSCAN_D, pygame.KSCAN_LEFT, pygame.KSCAN_RIGHT):
-                self.help_page = 1 - self.help_page        # две страницы — листаем по кругу
+                step = -1 if sc in (pygame.KSCAN_A, pygame.KSCAN_LEFT) else 1
+                self.help_page = (self.help_page + step) % HELP_PAGES     # листаем по кругу
             return
         if self.state == "settings":
             self.settings_key(sc)
@@ -644,7 +646,9 @@ class Game(ScreensMixin):
         if self.state == "help":
             if btn in (B.CONTROLLER_BUTTON_A, *back, B.CONTROLLER_BUTTON_START):
                 self.state = "menu"
-            elif btn in (B.CONTROLLER_BUTTON_DPAD_LEFT, B.CONTROLLER_BUTTON_DPAD_RIGHT, PAD_LEFT, PAD_RIGHT):
+            elif btn in (B.CONTROLLER_BUTTON_DPAD_LEFT, PAD_LEFT):
+                self.on_key(B.KSCAN_LEFT)
+            elif btn in (B.CONTROLLER_BUTTON_DPAD_RIGHT, PAD_RIGHT):
                 self.on_key(B.KSCAN_RIGHT)
             return
         if self.state == "pick":          # геймпад игрока — его строка выбора

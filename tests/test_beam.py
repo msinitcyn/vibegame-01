@@ -87,17 +87,15 @@ def test_beam_drops_only_for_light():
         assert ("beam" in seen) == can
 
 
-def test_only_light_picks_up_beam():
+def test_anyone_picks_up_and_uses_beam():
     m = new_match()
     m.set_heroes({"blue": "frost", "red": "light"})
     b = m.blue
     m.artifacts = [Artifact(b.x, "beam", b.y)]
     step(m)
-    assert m.artifacts and "beam" not in b.items              # Холод проходит мимо
-    r = m.red
-    m.artifacts = [Artifact(r.x, "beam", r.y)]
-    step(m)
-    assert "beam" in r.items
+    assert not m.artifacts and "beam" in b.items             # Холод забрал чужой уникальный артефакт
+    m.use_item(b, b.items.index("beam"))
+    assert m.beams and "beaming" in b.effects
 
 
 def test_beam_draws(game):

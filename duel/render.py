@@ -10,6 +10,8 @@ import pygame
 from .config import (
     AMMO_COLOR,
     BEAM_WIDTH,
+    ICE_R,
+    TREE_W,
     AMMO_PACK,
     ARTIFACT_R,
     BULLET_R,
@@ -202,8 +204,9 @@ def draw_wall(surf, w, heroes):
 
 def draw_beam(surf, b, heroes):
     """Луч света: широкое свечение цвета героя и белая сердцевина; к концу жизни — тоньше."""
-    x, y, a = b["x"], b["y"], b["angle"]
-    ex, ey = x + math.cos(a) * b["len"], y + math.sin(a) * b["len"]
+    ox, oy, a = b["x"], b["y"], b["angle"]
+    x, y = ox + math.cos(a) * b.get("start", 0), oy + math.sin(a) * b.get("start", 0)    # гаснет от мага
+    ex, ey = ox + math.cos(a) * b["len"], oy + math.sin(a) * b["len"]
     k = max(0.3, min(1.0, b["life"] / 0.5))         # затухание в последние полсекунды
     w = max(2, int(BEAM_WIDTH * k))
     glow = side_color(heroes, b["owner"])
@@ -213,10 +216,57 @@ def draw_beam(surf, b, heroes):
     pygame.draw.circle(surf, (255, 255, 235), (int(ex), int(ey)), max(2, w // 2))
 
 
+def draw_ice(surf, t, heroes):
+    """Кусок ледяного следа: полупрозрачный круг цвета героя, тает к концу жизни."""
+    k = max(0.0, min(1.0, t["life"] / 1.5))
+    r = int(ICE_R)
+    spot = pygame.Surface((2 * r + 4,) * 2, pygame.SRCALPHA)
+    c = r + 2
+    color = side_color(heroes, t["owner"])
+    pygame.draw.circle(spot, (*color, int(70 * k)), (c, c), r)
+    pygame.draw.circle(spot, (255, 255, 255, int(60 * k)), (c - 5, c - 5), r // 3)
+    surf.blit(spot, (int(t["x"]) - c, int(t["y"]) - c))
+
+
+def draw_trees(surf, t):
+    """Стена деревьев: ряд деревьев (ствол и крона) от start до len вдоль отрезка."""
+    a = t["angle"]
+    cos, sin = math.cos(a), math.sin(a)
+    d = t["start"]
+    while d <= t["len"]:
+        x, y = t["x"] + cos * d, t["y"] + sin * d
+        h = TREE_W * 0.75                         # ёлка: ствол и два яруса хвои
+        pygame.draw.rect(surf, (16, 12, 20), (x - 4, y + h * 0.3, 8, h * 0.6))
+        pygame.draw.rect(surf, (120, 80, 45), (x - 2, y + h * 0.3, 4, h * 0.55))
+        for top, half, color in ((y - h, h * 0.55, (40, 120, 50)), (y - h * 0.45, h * 0.7, (52, 150, 60))):
+            pts = [(x, top), (x + half, top + h * 0.8), (x - half, top + h * 0.8)]
+            pygame.draw.polygon(surf, (16, 12, 20), pts, 0)
+            pygame.draw.polygon(surf, color, [(x, top + 2), (x + half - 2, top + h * 0.8 - 1),
+                                              (x - half + 2, top + h * 0.8 - 1)])
+        d += TREE_W * 0.85
+
+
+def draw_pull(surf, victim, puller, color):
+    """Нить притяжения: волнистая линия от того, кто тянет, к тому, кого тянут."""
+    x0, y0, x1, y1 = puller["x"], puller["y"], victim["x"], victim["y"]
+    n = 14
+    nx, ny = -(y1 - y0), x1 - x0
+    nl = math.hypot(nx, ny) or 1.0
+    pts = []
+    for i in range(n + 1):
+        k = i / n
+        w = math.sin(k * math.pi * 4) * 7 * math.sin(k * math.pi)
+        pts.append((x0 + (x1 - x0) * k + nx / nl * w, y0 + (y1 - y0) * k + ny / nl * w))
+    pygame.draw.lines(surf, (16, 12, 20), False, pts, 6)
+    pygame.draw.lines(surf, color, False, pts, 3)
+
+
 def draw_field(surf, snap, font):
     """Все объекты поля в порядке слоёв: стены, артефакты, пачки, двойники, мобы,
     снаряды, пули, маги. Цвета и маги — по героям сторон."""
     heroes = heroes_of(snap)
+    for t in snap.get("ice", []):
+        draw_ice(surf, t, heroes)
     for w in snap["walls"]:
         draw_wall(surf, w, heroes)
     for a in snap["artifacts"]:
@@ -231,6 +281,13 @@ def draw_field(surf, snap, font):
         draw_mob_shot(surf, s)
     for b in snap["bullets"]:
         draw_bullet(surf, b, heroes)
+    for t in snap.get("trees", []):
+        draw_trees(surf, t)
+    by_id = {p["id"]: p for p in snap["players"]}
+    for p in snap["players"]:
+        if "pulled" in p.get("effects", {}):
+            puller = by_id["red" if p["id"] == "blue" else "blue"]
+            draw_pull(surf, p, puller, side_color(heroes, puller["id"]))
     for b in snap.get("beams", []):
         draw_beam(surf, b, heroes)
     for p in snap["players"]:
