@@ -8,6 +8,8 @@ import time
 import pygame
 import pytest
 
+from duel import i18n
+
 from duel.net import PROTO, Conn, connect, parse_address
 from duel.server import SEND_EVERY, Server, start_in_thread
 
@@ -273,3 +275,53 @@ def test_server_busy_port_message():
             main(["--port", str(busy.getsockname()[1])])
     finally:
         busy.close()
+
+
+# ------------------------------------------------------------------ имена игроков
+
+def test_names_and_bot_sent_to_clients(server):
+    a = Client(server)
+    a.conn.send({"type": "name", "name": "  Папа\n"})
+    server.bot = True
+    wait(server, lambda: any(s.get("names") == {"blue": "Папа"} for s in a.states()))
+    assert a.states()[-1]["bots"] == ["red"]
+    b = Client(server)                                  # человек занял место бота
+    b.conn.send({"type": "name", "name": "Маша-очень-длинное-имя"})
+    wait(server, lambda: a.states()[-1].get("names", {}).get("red") == "Маша-очень-длинн")
+    assert a.states()[-1]["bots"] == []
+    b.conn.close()
+    wait(server, lambda: "red" not in a.states()[-1].get("names", {}))
+
+
+def test_name_in_discovery_answer():
+    from duel.discovery import Finder
+    from tests.test_discovery import find, free_udp_port
+    port = free_udp_port()
+    srv = Server(port=0, host="127.0.0.1", log=lambda text: None, discovery_port=port)
+    finder = Finder(port=port, targets=["127.0.0.1"])
+    try:
+        a = Client(srv)
+        a.conn.send({"type": "name", "name": "Папа"})
+        find(srv, finder, lambda g: g and g[0]["name"] == "Папа")
+    finally:
+        finder.close()
+        srv.close()
+
+
+def test_client_shows_names(game):
+    game.set_name("Папа")
+    srv = start_in_thread(port=0, bot=True, log=lambda text: None, discovery_port=None)
+    try:
+        game.enter_net(*connect(f"127.0.0.1:{srv.port}", timeout=3))
+        deadline = time.monotonic() + 3
+        while game.net_waiting or not game.net_names:
+            assert game.net_frame(1 / 60) and time.monotonic() < deadline
+            time.sleep(1 / 120)
+        assert game.player_label("blue") == "Папа"
+        assert game.player_label("red") == i18n.t("name.bot")
+        game.draw()
+    finally:
+        game.leave_net()
+        game.set_name("")
+        srv.stop()
+    assert game.player_label("blue") == i18n.t("name.blue")       # хотсит — по цвету

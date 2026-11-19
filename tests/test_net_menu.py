@@ -178,10 +178,8 @@ def test_join_picks_found_game(game):
             game.finder.poll()
             time.sleep(0.02)
         game.draw_join()                              # экран со списком рисуется
-        assert game.join_pick is None                 # сначала выбрана строка ручного ввода
-        game.on_key(pygame.KSCAN_UP)
+        game.on_key(pygame.KSCAN_RETURN)              # найденная игра выбрана сама — сразу Enter
         assert game.join_pick == f"127.0.0.1:{srv.port}"
-        game.on_key(pygame.KSCAN_RETURN)
         assert game.net and game.join_error is None and game.finder is None
         frames(game, lambda: not game.net_waiting)
     finally:
@@ -194,6 +192,14 @@ def test_typing_selects_manual_row(game):
     game.join_pick = "10.0.0.5:5555"
     game.on_key(pygame.KSCAN_1)
     assert game.join_pick is None and game.address.endswith("1")
+    from duel.discovery import Finder
+    from tests.test_discovery import free_udp_port
+    game.finder = Finder(port=free_udp_port(), targets=[])
+    game.finder.found[("10.0.0.9", 5555)] = ({"name": "x", "free": 1, "proto": 2, "port": 5555},
+                                             time.monotonic() + 60)
+    game.join_autopick()
+    assert game.join_pick is None                       # игрок набирал — свою строку не перебиваем
+    game.close_finder()
 
 
 def test_join_screen_with_many_games(game):
@@ -205,7 +211,10 @@ def test_join_screen_with_many_games(game):
     for i, (free, proto) in enumerate([(1, 2), (0, 2), (1, 1)]):
         game.finder.found[(f"10.0.0.{i + 2}", 5555)] = (
             {"name": f"pc-{i}", "free": free, "proto": proto, "port": 5555}, now + 60)
-    game.join_move(-1)
+    game.join_autopick()
+    assert game.join_pick == "10.0.0.2:5555"           # первая игра выбрана сама
+    game.on_key(pygame.KSCAN_DOWN)
+    assert game.join_pick == "10.0.0.3:5555"
     game.draw_join()
     assert [g["name"] for g in game.join_games()] == ["pc-0", "pc-1", "pc-2"]
     game.on_key(pygame.KSCAN_ESCAPE)

@@ -65,7 +65,10 @@ def test_settings_menu_changes_and_saves_language(game, lang_restore):
     game.on_key(pygame.KSCAN_A)
     game.on_key(pygame.KSCAN_LEFT)
     assert i18n.get_lang() == "ru"
-    game.on_key(pygame.KSCAN_S)                 # «Назад»
+    game.on_key(pygame.KSCAN_S)                 # «Имя»
+    game.on_key(pygame.KSCAN_S)                 # на строке имени S — буква, не листает
+    assert game.settings_rows[game.settings_index] == "name"
+    game.on_key(pygame.KSCAN_DOWN)              # «Назад»
     game.on_key(pygame.KSCAN_RETURN)
     assert game.state == "menu"
 
@@ -93,3 +96,44 @@ def test_title_same_in_every_language(lang_restore):
     for code in i18n.LANGS:
         i18n.set_lang(code)
         assert i18n.t("title") == "Spellgunners"
+
+
+def name_row(game):
+    game.state = "settings"
+    game.settings_index = game.settings_rows.index("name")
+
+
+def test_player_name_typed_in_any_language(game):
+    game.settings["name"] = ""
+    name_row(game)
+    for ch in "Маша":
+        game.on_text(ch)
+    game.on_key(pygame.KSCAN_W)                 # буква W не уводит со строки
+    game.on_text("w")
+    assert game.settings["name"] == "Машаw"
+    game.on_key(pygame.KSCAN_BACKSPACE)
+    assert game.settings["name"] == "Маша" and settings.load()["name"] == "Маша"
+    assert game.player_name() == "Маша"
+    game.draw_settings()
+    game.on_key(pygame.KSCAN_UP)
+    assert game.settings_rows[game.settings_index] == "lang"
+
+
+def test_player_name_limited_and_printable(game):
+    game.settings["name"] = ""
+    name_row(game)
+    game.on_text("Очень-очень длинное имя игрока\n\t")
+    assert len(game.settings["name"]) == settings.NAME_MAX and "\n" not in game.settings["name"]
+    game.state = "menu"
+    game.on_text("x")                           # вне строки имени текст никуда не идёт
+    assert len(game.settings["name"]) == settings.NAME_MAX
+    game.set_name("")
+
+
+def test_name_row_shows_typing_hint(game, monkeypatch):
+    shown = []
+    real = game.small.render
+    monkeypatch.setattr(game, "small", type("F", (), {"render": lambda self, text, *a: shown.append(text) or real(text, *a)})())
+    name_row(game)
+    game.draw_settings()
+    assert i18n.t("settings.name_hint") in shown

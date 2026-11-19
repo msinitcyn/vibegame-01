@@ -9,6 +9,8 @@
 Клиент -> сервер:
     {"type": "cmd", "move": [dx, dy], "fire": bool, "melee": bool, "slot": int|null}
     {"type": "restart"}                                               новая партия после победы
+    {"type": "name", "name": "Маша"}                                  имя игрока (необязательно)
+В state есть и необязательные "names": {"blue": "Папа"} и "bots": ["red"] — подписи игроков.
 """
 import json
 import socket

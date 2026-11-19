@@ -162,17 +162,23 @@ class ScreensMixin:
         s.fill(BG)
         img = self.big.render(tr("settings.title"), True, WHITE)
         s.blit(img, img.get_rect(center=(WIDTH // 2, 120)))
+        row = self.settings_rows[self.settings_index]
+        name = self.settings.get("name", "")
+        if row == "name":
+            name += "_" if pygame.time.get_ticks() // 500 % 2 else " "
         labels = {"lang": f"◀  {tr('settings.lang', lang=LANGS[get_lang()])}  ▶",
+                  "name": tr("settings.name", name=name) if name.strip() or row == "name"
+                  else tr("settings.name", name=tr("settings.name_empty")),
                   "back": tr("settings.back")}
-        for i, row in enumerate(self.settings_rows):
+        for i, line in enumerate(self.settings_rows):
             sel = i == self.settings_index
             rect = pygame.Rect(0, 0, 460, 48)
             rect.center = (WIDTH // 2, 260 + i * 64)
             pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=10)
             pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
-            txt = self.font.render(labels[row], True, WHITE if sel else GREY)
+            txt = self.font.render(labels[line], True, WHITE if sel else GREY)
             s.blit(txt, txt.get_rect(center=rect.center))
-        img = self.small.render(tr("settings.hint"), True, GREY)
+        img = self.small.render(tr("settings.name_hint" if row == "name" else "settings.hint"), True, GREY)
         s.blit(img, img.get_rect(center=(WIDTH // 2, 560)))
         pygame.display.flip()
 
@@ -355,7 +361,7 @@ class ScreensMixin:
             hearts = '♥' * min(hp, HEARTS_SHOWN)
             if hp > HEARTS_SHOWN:
                 hearts += f" +{hp - HEARTS_SHOWN}"
-            line1 = self.font.render(f"{tr('name.' + pid)}  {hearts}", True, color)
+            line1 = self.font.render(f"{self.player_label(pid)}  {hearts}", True, color)
             line2 = self.status_chips(p, self.snap)
             for img, cy in ((line1, HUD_H // 2 - 14), (line2, HUD_H // 2 + 14)):
                 if img.get_width() > avail:
@@ -429,7 +435,7 @@ class ScreensMixin:
             shade.fill((0, 0, 0, 150))
             s.blit(shade, (0, 0))
             w = self.snap["winner"]
-            t = self.big.render(tr("win", name=tr("name." + w)), True, COLOR[w])
+            t = self.big.render(tr("win", name=self.player_label(w)), True, COLOR[w])
             s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 20)))
             t = self.font.render(tr("win.hint"), True, WHITE)
             s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 40)))

@@ -1,4 +1,4 @@
-r"""Настройки игрока между запусками: язык, последний адрес сервера.
+r"""Настройки игрока между запусками: язык, имя, последний адрес сервера.
 
 Хранятся в папке настроек пользователя: на Linux — ~/.config/duel/settings.json,
 на Windows — %APPDATA%\duel\settings.json (или в файле из переменной DUEL_SETTINGS).
@@ -8,7 +8,8 @@ import json
 import os
 from pathlib import Path
 
-DEFAULTS = {"lang": "ru", "last_address": "localhost"}
+DEFAULTS = {"lang": "ru", "name": "", "last_address": "localhost"}
+NAME_MAX = 16                     # длина имени игрока
 
 
 def path(system=None):

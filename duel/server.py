@@ -39,6 +39,7 @@ class Server:
             except OSError as e:
                 log(f"поиск игр в сети не работает (порт {discovery_port}: {e}) — подключаться по адресу")
         self.conns = {}               # pid -> Conn
+        self.names = {}               # pid -> имя игрока из его настроек (если задано)
         self.bot = bot
         self.proto = proto            # версия протокола в приветствии (тесты проверяют несовпадение)
         self.bots = {pid: Bot(i + 1) for i, pid in enumerate(PIDS)}
@@ -85,10 +86,17 @@ class Server:
                     slot = msg.get("slot")
                     if slot in (0, 1, 2, 3):
                         c.use_slot = slot
+                elif kind == "name":
+                    name = "".join(ch for ch in str(msg.get("name", "")) if ch.isprintable()).strip()[:16]
+                    if name:
+                        self.names[pid] = name
+                    else:
+                        self.names.pop(pid, None)
                 elif kind == "restart" and self.match.winner:
                     self.new_match()
             if conn.closed:
                 del self.conns[pid]
+                self.names.pop(pid, None)
                 self.pending[pid] = Command()
                 self.log(f"{pid} отключился")
 
@@ -104,8 +112,9 @@ class Server:
             msg = discovery.decode(data)
             if msg and msg["type"] == "who":
                 free = max(0, len(PIDS) - len(self.conns))
+                # в списке игр — имя создателя (он синий), иначе имя компьютера
                 try:
-                    self.finder_sock.sendto(discovery.answer(self.port, free), addr)
+                    self.finder_sock.sendto(discovery.answer(self.port, free, self.names.get("blue")), addr)
                 except OSError:
                     pass
 
@@ -121,6 +130,10 @@ class Server:
         """Оба места заняты (людьми или ботом)."""
         return len(self.conns) == len(PIDS) or (self.bot and self.conns)
 
+    def bot_seats(self):
+        """Места, где сейчас играет бот."""
+        return [pid for pid in PIDS if self.bot and pid not in self.conns] if self.conns else []
+
     def tick(self):
         self.tick_no += 1
         if not self.started and self.full():
@@ -130,6 +143,7 @@ class Server:
             self.play_tick()
         if self.tick_no % SEND_EVERY == 0:
             msg = {"type": "state", "tick": self.tick_no, "waiting": not self.started, "game": self.games,
+                   "names": dict(self.names), "bots": self.bot_seats(),
                    "snap": snapshot(self.match), "events": self.events}
             self.events = []
             for conn in self.conns.values():

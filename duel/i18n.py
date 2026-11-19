@@ -73,6 +73,10 @@ TEXTS = {
         "settings.title": "Настройки",
         "settings.lang": "Язык: {lang}",
         "settings.back": "Назад",
+        "settings.name": "Имя: {name}",
+        "settings.name_empty": "— (по цвету)",
+        "settings.name_hint": "Наберите имя (до 16 букв, любой язык),  Backspace — стереть,  ↑/↓ — другая строка,  Esc — назад",
+        "name.bot": "Бот",
         "settings.hint": "W/S — выбор,  A/D или Enter — изменить,  Esc — назад",
 
         "help.title": "Артефакты",
@@ -109,7 +113,7 @@ TEXTS = {
         "popup.noammo": "нет патронов",
         "popup.ammo": "+{n} патронов",
         "popup.mobdead": "моб повержен",
-        "win": "{name} победил!",
+        "win": "Победа: {name}!",
         "win.hint": "R — ещё раз, Esc — в меню",
 
         "item.triple": "веер",
@@ -210,6 +214,10 @@ TEXTS = {
         "settings.title": "Settings",
         "settings.lang": "Language: {lang}",
         "settings.back": "Back",
+        "settings.name": "Name: {name}",
+        "settings.name_empty": "— (by colour)",
+        "settings.name_hint": "Type your name (up to 16 letters),  Backspace — erase,  ↑/↓ — other row,  Esc — back",
+        "name.bot": "Bot",
         "settings.hint": "W/S — move,  A/D or Enter — change,  Esc — back",
 
         "help.title": "Artifacts",
@@ -345,6 +353,10 @@ TEXTS = {
         "settings.title": "Asetukset",
         "settings.lang": "Kieli: {lang}",
         "settings.back": "Takaisin",
+        "settings.name": "Nimi: {name}",
+        "settings.name_empty": "— (värin mukaan)",
+        "settings.name_hint": "Kirjoita nimesi (enintään 16 merkkiä),  Backspace — poista,  ↑/↓ — toinen rivi,  Esc — takaisin",
+        "name.bot": "Botti",
         "settings.hint": "W/S — liiku,  A/D tai Enter — vaihda,  Esc — takaisin",
 
         "help.title": "Artefaktit",

@@ -121,9 +121,10 @@ class Game(ScreensMixin):
         self.address = self.settings.get("last_address", "localhost")
         self.join_error = None
         self.join_pick = None         # адрес выбранной найденной игры (None — строка ручного ввода)
+        self.join_touched = False     # игрок листал или набирал — тогда игру сами не выбираем
         self.finder = None            # поиск игр в сети, пока открыт экран «Подключиться»
         self.menu_index = 0
-        self.settings_rows = ["lang", "back"]
+        self.settings_rows = ["lang", "name", "back"]
         self.help_page = 0
         self.settings_index = 0
         self.state = "menu"
@@ -133,6 +134,7 @@ class Game(ScreensMixin):
         self.net_port = PORT          # порт своего сервера (тесты ставят 0 — любой свободный)
         self.discovery_port = DISCOVERY_PORT    # порт поиска игр (тесты ставят None — не отвечать в сеть)
         self.net_waiting = False      # сервер ждёт второго игрока
+        self.net_names, self.net_bots = {}, []   # подписи игроков из сообщений сервера
         self.restart()
         if net:
             self.enter_net(*net)
@@ -193,6 +195,8 @@ class Game(ScreensMixin):
                         self.leave_net()
                         return
                     self.on_key(e.scancode)
+                if e.type == pygame.TEXTINPUT:
+                    self.on_text(e.text)
                 if e.type == MUSIC_END:
                     self.audio.on_music_end()
                 if e.type == pygame.CONTROLLERDEVICEADDED:
@@ -220,6 +224,7 @@ class Game(ScreensMixin):
             if self.state == "join":
                 if self.finder:
                     self.finder.poll()
+                self.join_autopick()
                 self.draw_join()
                 continue
             if self.net:
@@ -266,6 +271,8 @@ class Game(ScreensMixin):
             self.time_acc = 0.0
         for msg in self.net.recv():
             if msg.get("type") == "state":
+                self.net_names = msg.get("names") or {}
+                self.net_bots = msg.get("bots") or []
                 self.playback.push(msg["tick"], msg["snap"], msg["events"], msg.get("waiting", False),
                                    msg.get("game", 0))
         snap, events, waiting = self.playback.advance(dt)
@@ -282,6 +289,9 @@ class Game(ScreensMixin):
         """Начать сетевую партию: соединение с сервером и его приветствие."""
         self.restart()
         self.net, self.me = conn, hello["you"]
+        self.net_names, self.net_bots = {}, []
+        if self.player_name():
+            conn.send({"type": "name", "name": self.player_name()})
         self.playback = Playback()
         self.net_waiting = True
         self.state = "play"
@@ -326,6 +336,7 @@ class Game(ScreensMixin):
         self.state = "join"
         self.join_error = None
         self.join_pick = None
+        self.join_touched = False
         self.close_finder()
         if self.discovery_port:
             try:
@@ -342,6 +353,13 @@ class Game(ScreensMixin):
         """Найденные в сети игры для экрана «Подключиться»."""
         return self.finder.games() if self.finder else []
 
+    def join_autopick(self):
+        """Пока игрок ничего не трогал, выбрана первая найденная игра — сразу Enter."""
+        if not self.join_touched and self.join_pick is None:
+            games = self.join_games()
+            if games:
+                self.join_pick = games[0]["address"]
+
     def join_move(self, step):
         """Сдвинуть выбор по списку: найденные игры, затем строка ручного ввода."""
         rows = [g["address"] for g in self.join_games()] + [None]
@@ -350,6 +368,7 @@ class Game(ScreensMixin):
 
     def join_game(self):
         """Подключиться к выбранной игре или по адресу, введённому вручную."""
+        self.join_autopick()
         found = [g["address"] for g in self.join_games()]
         address = self.join_pick if self.join_pick in found else (self.address.strip() or "localhost")
         try:
@@ -383,14 +402,17 @@ class Game(ScreensMixin):
             self.join_game()
             return
         if sc in (K.KSCAN_UP, K.KSCAN_DOWN):
+            self.join_touched = True
             self.join_move(-1 if sc == K.KSCAN_UP else 1)
             return
         if sc == K.KSCAN_BACKSPACE:
+            self.join_touched = True
             self.join_pick = None
             self.address = self.address[:-1]
             return
         ch = address_char(sc, self.held & {K.KSCAN_LSHIFT, K.KSCAN_RSHIFT})
         if ch and len(self.address) < ADDRESS_MAX:
+            self.join_touched = True
             self.join_pick = None     # набор адреса — строка ручного ввода
             self.address += ch
             self.join_error = None
@@ -569,9 +591,20 @@ class Game(ScreensMixin):
     # ------------------------------------------------------------------ меню и настройки
 
     def settings_key(self, sc):
-        """Экран настроек: W/S — строка, A/D или Enter — изменить, Esc — назад."""
+        """Экран настроек: W/S — строка, A/D или Enter — изменить, Esc — назад.
+        На строке «Имя» буквы набирают имя (on_text), строки листаются только стрелками."""
         K = pygame
         row = self.settings_rows[self.settings_index]
+        if row == "name":
+            if sc == K.KSCAN_ESCAPE:
+                self.state = "menu"
+            elif sc == K.KSCAN_BACKSPACE:
+                self.set_name(self.settings["name"][:-1])
+            elif sc == K.KSCAN_UP:
+                self.settings_index -= 1
+            elif sc in (K.KSCAN_DOWN, K.KSCAN_RETURN, K.KSCAN_KP_ENTER):
+                self.settings_index += 1
+            return
         if sc in (K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE):
             self.state = "menu"
         elif sc in (K.KSCAN_W, K.KSCAN_UP):
@@ -586,6 +619,30 @@ class Game(ScreensMixin):
             if step:
                 codes = list(LANGS)
                 self.set_language(codes[(codes.index(get_lang()) + step) % len(codes)])
+
+    def on_text(self, text):
+        """Набранный текст (по раскладке, любой язык) — в имя игрока, если выбрана строка «Имя»."""
+        if self.state == "settings" and self.settings_rows[self.settings_index] == "name":
+            chars = "".join(ch for ch in text if ch.isprintable())
+            self.set_name((self.settings["name"] + chars)[:settings.NAME_MAX])
+
+    def set_name(self, name):
+        self.settings["name"] = name
+        settings.save(self.settings)
+
+    def player_label(self, pid):
+        """Подпись игрока: в сетевой игре — имя или «Бот», иначе (и без имени) — цвет."""
+        if self.net:
+            name = self.net_names.get(pid)
+            if name:
+                return name
+            if pid in self.net_bots:
+                return t("name.bot")
+        return t("name." + pid)
+
+    def player_name(self):
+        """Своё имя для сетевой игры ('' — называть по цвету)."""
+        return self.settings.get("name", "").strip()[:settings.NAME_MAX]
 
     def set_language(self, code):
         """Сменить язык сразу и запомнить его между запусками."""
