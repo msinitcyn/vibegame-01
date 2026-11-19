@@ -3,6 +3,8 @@
 Поле и верхняя панель рисуются только по снимку матча `self.snap` (duel/snapshot.py),
 объекты поля — функциями duel/render.py."""
 
+import math
+
 import pygame
 
 from .config import (
@@ -11,8 +13,6 @@ from .config import (
     AMMO_COLOR,
     HUD_CENTER,
     MOB_IDLE_COLOR,
-    MOB_ZONE,
-    MOB_ZONE_EDGE,
     MOB_EVERY,
     MOB_MAX,
     MOB_MAX_HP,
@@ -25,6 +25,8 @@ from .config import (
     BOTTOM,
     GREY,
     HEARTS_SHOWN,
+    ARENA,
+    ARENA_R,
     HEIGHT,
     HERO_COLOR,
     HERO_EDGE,
@@ -47,7 +49,7 @@ from .i18n import t as tr
 from .icons import draw_ammo_icon, draw_icon
 from .gamepad import PAD_ITEM_COLORS, PAD_ITEM_LABELS, PAD_ITEM_LAYOUT
 from .render import draw_field
-from .sprites import draw_unit, recolored_image, sprite_image
+from .sprites import draw_unit, sprite_image
 
 
 class ScreensMixin:
@@ -468,7 +470,8 @@ class ScreensMixin:
                 s.blit(img, rect)
 
     def field_background(self):
-        """Поле: земли игроков — фонами их героев (кромкой к середине), посередине — полоса мобов.
+        """Поле: земли игроков — фонами их героев по половинам (кромками к центральной линии),
+        в центре — круглая арена мобов с кромкой цветами обоих героев.
         Рисуется заново, только когда сменились герои."""
         heroes = (self.side_hero("blue"), self.side_hero("red"))
         cached = getattr(self, "_field_bg", None)
@@ -482,11 +485,20 @@ class ScreensMixin:
                 if drawn_for != side:
                     img = pygame.transform.flip(img, True, False)
                 bg.blit(img, (x, 0))
-            x0, x1 = round(WIDTH * MOB_ZONE[0]), round(WIDTH * MOB_ZONE[1])
-            # края полосы мобов — цветом кромки земли соседнего героя
-            palette = tuple((was, now) for side, hero in zip(("left", "right"), heroes)
-                            for was, now in zip(MOB_ZONE_EDGE[side], HERO_EDGE[hero]) if was != now)
-            bg.blit(recolored_image("bg_mob", palette, (x1 - x0, h)), (x0, 0))
+            # арена: круг текстуры по маске, потом кромка — левая дуга цветом левого героя, правая — правого
+            r = ARENA_R
+            cx, cy = int(ARENA[0]), int(ARENA[1] - TOP)
+            arena = sprite_image("bg_arena", (2 * r, 2 * r)).convert_alpha()
+            mask = pygame.Surface((2 * r, 2 * r), pygame.SRCALPHA)
+            pygame.draw.circle(mask, (255, 255, 255, 255), (r, r), r)
+            arena.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+            bg.blit(arena, (cx - r, cy - r))
+            ring = pygame.Rect(cx - r - 3, cy - r - 3, 2 * r + 6, 2 * r + 6)
+            for hero, start, stop in ((heroes[0], math.pi / 2, 3 * math.pi / 2),
+                                      (heroes[1], -math.pi / 2, math.pi / 2)):
+                light, dark = HERO_EDGE[hero]
+                pygame.draw.arc(bg, dark, ring.inflate(4, 4), start, stop, 5)
+                pygame.draw.arc(bg, light, ring, start, stop, 3)
             self._field_bg = cached = (heroes, bg)
         return cached[1]
 

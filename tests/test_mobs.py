@@ -4,10 +4,8 @@ import math
 import pytest
 
 from duel.config import (
-    BOTTOM,
     BULLET_SPEED,
     MAX_HP,
-    MOB_ZONE,
     MOB_COUNT,
     MOB_DELAY,
     MOB_EVERY,
@@ -47,12 +45,12 @@ def test_first_wave_right_at_start(match):
 
 
 def test_mobs_appear_in_random_places_and_stand():
-    lo, hi = WIDTH * MOB_ZONE[0], WIDTH * MOB_ZONE[1]
+    from duel.config import ARENA, ARENA_R
     places = []
     for seed in range(5):
         match = new_match(seed=seed)
         mobs = spawn(match)
-        assert all(lo <= m.x <= hi and TOP < m.y < BOTTOM for m in mobs)
+        assert all(math.hypot(m.x - ARENA[0], m.y - ARENA[1]) + m.radius <= ARENA_R for m in mobs)   # в арене
         places.append(tuple((round(m.x), round(m.y)) for m in mobs))
     assert len(set(places)) == len(places)      # каждый раз в других местах
     before = [(m.x, m.y) for m in match.mobs]
@@ -211,7 +209,7 @@ def test_drop_near_land_edge_pulled_inside(match):
     """Моб погиб у самой границы своей земли — артефакт подтянут внутрь, чтобы его можно было достать."""
     from duel.config import ARTIFACT_R
     r = match.red
-    kill_mob_at(match, r, r.land[0] + 2, 300)
+    kill_mob_at(match, r, r.land[0] + 2, TOP + 40)          # у центральной линии, над ареной
     art = match.artifacts[0]
     assert art.x - ARTIFACT_R >= r.land[0]
 
@@ -486,3 +484,31 @@ def test_mob_attack_draws(game):
     game.refresh_snap()
     assert game.snap["mobs"][0]["swing"] > 0
     game.draw()
+
+
+# --- круглая арена
+
+def test_no_drop_inside_arena(match):
+    from duel.config import ARENA
+    kill_mob_at(match, match.red, ARENA[0] + 40, ARENA[1])    # на «красной» половине, но в арене
+    assert match.artifacts == []
+
+
+def test_drop_next_to_arena_pushed_out(match):
+    from duel.config import ARENA, ARENA_R, ARTIFACT_R
+    r = match.red
+    kill_mob_at(match, r, ARENA[0] + ARENA_R + 3, ARENA[1])   # у самой кромки арены, на земле красного
+    art = match.artifacts[0]
+    assert math.hypot(art.x - ARENA[0], art.y - ARENA[1]) >= ARENA_R + ARTIFACT_R
+
+
+def test_ammo_and_clones_outside_arena(match):
+    from duel.config import ARENA, ARENA_R
+    from duel.entities import Clone
+    for p in match.players:
+        for _ in range(200):
+            x, y = p.random_spot(20)
+            assert math.hypot(x - ARENA[0], y - ARENA[1]) >= ARENA_R + 20 and p.land[0] <= x <= p.land[1]
+        for _ in range(50):
+            c = Clone(p)
+            assert abs(c.x - ARENA[0]) >= ARENA_R + c.radius     # столбец двойника не пересекает арену

@@ -5,6 +5,8 @@
 import math
 
 from .config import (
+    ARENA,
+    ARENA_R,
     MOB_KEEP_DISTANCE,
     MOB_RANGE,
     MOB_SHOT_COOLDOWN,
@@ -67,6 +69,23 @@ def make_bullets(owner, x, y, angle, radius, offsets, wavy=False):
             b.wave_phase = rng.uniform(0, 2 * math.pi)
         bullets.append(b)
     return bullets
+
+
+def in_arena(x, y, r=0.0):
+    """Круг (x, y, r) задевает арену мобов."""
+    return math.hypot(x - ARENA[0], y - ARENA[1]) < ARENA_R + r
+
+
+def push_out_of_arena(x, y, r, side=None):
+    """Вытолкнуть круг (x, y, r) из арены по радиусу (в самом центре — в сторону side)."""
+    dx, dy = x - ARENA[0], y - ARENA[1]
+    d = math.hypot(dx, dy)
+    lim = ARENA_R + r
+    if d >= lim:
+        return x, y
+    if d < 1e-9:
+        dx, dy, d = (-1 if (side or -1) > 0 else 1), 0.0, 1.0
+    return ARENA[0] + dx / d * lim, ARENA[1] + dy / d * lim
 
 
 class Unit:
@@ -211,11 +230,26 @@ class Player(Unit):
         r = self.radius
         self.x = max(self.land[0] + r, min(self.land[1] - r, self.x))
         self.y = max(TOP + r, min(BOTTOM - r, self.y))
+        self.x, self.y = push_out_of_arena(self.x, self.y, r, self.dir)      # в арену мобов не заходит
 
     def random_spot(self, margin):
-        """Случайная точка на своей земле (для патронов, двойников)."""
-        return (self.rng.uniform(self.land[0] + margin, self.land[1] - margin),
-                self.rng.uniform(TOP + margin, BOTTOM - margin))
+        """Случайная точка на своей земле вне арены (для пачек патронов)."""
+        for _ in range(50):
+            x = self.rng.uniform(self.land[0] + margin, self.land[1] - margin)
+            y = self.rng.uniform(TOP + margin, BOTTOM - margin)
+            if not in_arena(x, y, margin):
+                return x, y
+        return push_out_of_arena(x, y, margin)
+
+    def clone_column(self, margin):
+        """x для двойника: столбец своей земли, который не пересекает арену (двойник ходит вверх-вниз)."""
+        near = ARENA[0] - self.dir * (ARENA_R + margin)          # ближний к центру край столбцов
+        lo, hi = sorted((self.land[0] + margin if self.dir > 0 else self.land[1] - margin, near))
+        return self.rng.uniform(lo, hi)
+
+    def in_land(self, x, y):
+        """Точка на своей земле: в своей половине и не в арене."""
+        return self.land[0] <= x <= self.land[1] and not in_arena(x, y)
 
     def shoot(self):
         # заморозка мешает только двигаться — стрелять можно
@@ -276,7 +310,7 @@ class Clone(Unit):
     def __init__(self, owner):
         self.id = None
         self.owner = owner
-        self.x = owner.random_spot(CLONE_RADIUS + 4)[0]   # на своей земле; ходит вверх-вниз
+        self.x = owner.clone_column(CLONE_RADIUS + 4)     # на своей земле, мимо арены; ходит вверх-вниз
         self.reset_effects()
         for name, t in owner.effects.items():
             if name in CLONE_EFFECTS:

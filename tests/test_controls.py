@@ -35,12 +35,17 @@ def test_diagonal_not_faster(game):
 
 
 def test_mages_stay_on_own_land(game):
-    from duel.config import MOB_ZONE, WIDTH
+    import math
+    from duel.config import ARENA, ARENA_R, TOP, WIDTH
     b, r = game.match.blue, game.match.red
     game.held = {pygame.KSCAN_D, pygame.KSCAN_LEFT}
     step(game, 5)
-    assert b.x + b.radius <= WIDTH * MOB_ZONE[0] + 0.01
-    assert r.x - r.radius >= WIDTH * MOB_ZONE[1] - 0.01
+    for p in (b, r):                            # на высоте арены упираются в её край
+        assert math.hypot(p.x - ARENA[0], p.y - ARENA[1]) >= ARENA_R + p.radius - 0.01
+    assert b.x < ARENA[0] < r.x
+    b.y = r.y = TOP + 40                        # над ареной — сходятся у центральной линии
+    step(game, 5)
+    assert b.x + b.radius == pytest.approx(WIDTH / 2) and r.x - r.radius == pytest.approx(WIDTH / 2)
     game.held = {pygame.KSCAN_A, pygame.KSCAN_RIGHT}
     step(game, 5)
     assert b.x - b.radius >= -0.01 and r.x + r.radius <= WIDTH + 0.01

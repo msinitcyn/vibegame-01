@@ -122,7 +122,7 @@ TEXTS = {
         "note.5": "Повтор любого эффекта добавляет время (щиту — и удары). Двойникам передаются щит, "
                   "оружие, размер, скорость, «не стреляет».",
         "note.6": "Патроны: в начале {ammo}, выстрел — 1. Пачки по {pack} подбираются сразу.",
-        "note.7": "Мобы: волна каждые {every} с в случайных местах, в новой волне +1 моб и +1 жизнь "
+        "note.7": "Мобы: волна каждые {every} с в случайных местах круглой арены в центре, в новой волне +1 моб и +1 жизнь "
                   "(уже живые не лечатся); "
                   "максимум {mmax} мобов по {mhp}, дальше волны всё чаще. Каждый {ranged}-й моб — "
                   "дальнобойный (зелёный, с кристаллом): держится на расстоянии и стреляет "
@@ -293,7 +293,7 @@ TEXTS = {
         "note.5": "Repeating any effect adds time (and hits for the shield). Clones get the shield, "
                   "weapons, size, speed and \"can't shoot\".",
         "note.6": "Ammo: {ammo} at start, 1 per shot. Packs of {pack} are picked up instantly.",
-        "note.7": "Mobs: a wave every {every} s in random spots, each new wave +1 mob and +1 life "
+        "note.7": "Mobs: a wave every {every} s in random spots of the round arena in the middle, each new wave +1 mob and +1 life "
                   "(mobs already on the field don't heal); "
                   "at most {mmax} mobs with {mhp} lives, then waves come faster. One mob in {ranged} "
                   "is ranged (green, with a crystal): it keeps its distance and shoots up to {range} px.",
@@ -462,7 +462,7 @@ TEXTS = {
         "note.5": "Saman vaikutuksen toisto lisää aikaa (kilvelle myös osumia). Kloonit saavat kilven, "
                   "aseet, koon, nopeuden ja \"ei voi ampua\".",
         "note.6": "Ammukset: alussa {ammo}, laukaus vie 1. {pack} ammuksen laatikot poimitaan heti.",
-        "note.7": "Hirviöt: aalto {every} s välein satunnaisiin paikkoihin, uudessa aallossa +1 hirviö "
+        "note.7": "Hirviöt: aalto {every} s välein satunnaisiin paikkoihin keskellä olevalla areenalla, uudessa aallossa +1 hirviö "
                   "ja +1 elämä (kentällä olevat eivät parane); "
                   "enintään {mmax} hirviötä, {mhp} elämää, sitten aallot tihenevät. Joka {ranged}. "
                   "hirviö ampuu kaukaa (vihreä, kristallipäinen): pysyy etäällä ja ampuu enintään "

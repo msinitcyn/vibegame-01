@@ -308,6 +308,35 @@ def draw_mob_zone():
     return surf
 
 
+ARENA_SIDE = 300 // BG_SCALE      # арена мобов: круг диаметром 300 px (игра вырезает круг из квадрата)
+
+
+def draw_arena():
+    """Арена мобов: тёмный обсидиан с фиолетовыми прожилками (квадрат, игра вырезает круг)."""
+    import random
+    rng = random.Random(23)
+    w = h = ARENA_SIDE
+    surf = pygame.Surface((w, h))
+    surf.fill((26, 20, 38))
+
+    def put(x, y, c):
+        if 0 <= x < w and 0 <= y < h:
+            surf.set_at((x, y), c)
+
+    for _ in range(110):                         # пятна камня
+        c = rng.choice([(34, 26, 50), (20, 15, 30), (40, 30, 58)])
+        x, y = rng.randrange(w), rng.randrange(h)
+        for _ in range(rng.randint(4, 12)):
+            put(x, y, c)
+            x += rng.choice((-1, 0, 1))
+            y += rng.choice((-1, 0, 1))
+    for _ in range(12):                          # фиолетовые прожилки
+        walk(rng, w, h, put, rng.randint(6, 18), (78, 46, 110), core=(120, 70, 170), core_every=5)
+    for _ in range(22):                          # тусклые кристаллы
+        put(rng.randrange(w), rng.randrange(h), (96, 70, 140))
+    return surf
+
+
 def main(argv):
     pygame.init()
     OUT.mkdir(parents=True, exist_ok=True)
@@ -322,6 +351,7 @@ def main(argv):
         "mob.png": draw_mob,
         "mob_ranged.png": lambda: draw_mob(ranged=True),
         "bg_mob.png": draw_mob_zone,
+        "bg_arena.png": draw_arena,
     }
     for fname, make in files.items():
         path = OUT / fname

@@ -27,6 +27,8 @@ from .commands import Command
 from .config import (
     AMMO_PACK,
     AMMO_SPAWN,
+    ARENA,
+    ARENA_R,
     ARTIFACT_R,
     BLUE,
     BLUE_LAND,
@@ -57,7 +59,6 @@ from .config import (
     MOB_SHOT_R,
     MOB_SPEEDUP,
     MOB_SWING_TIME,
-    MOB_ZONE,
     RED,
     RED_LAND,
     SHIELD_GAP,
@@ -65,7 +66,7 @@ from .config import (
     TOP,
     WIDTH,
 )
-from .entities import AmmoPack, Artifact, Clone, Mob, Player, Wall
+from .entities import AmmoPack, Artifact, Clone, Mob, Player, Wall, push_out_of_arena
 from .items import BAD_EFFECTS, INSTANT_ITEMS, ITEMS
 
 NO_AMMO_EVERY = 1.0               # «нет патронов» — не чаще раза в столько секунд партии
@@ -330,12 +331,13 @@ class Match:
         на земле того, кто его добил. На полосе мобов и на чужой земле — ничего."""
         self.emit("mob_dead", mob.x, mob.y)
         killer = mob.target
-        if killer is None or not killer.land[0] <= mob.x <= killer.land[1]:
+        if killer is None or not killer.in_land(mob.x, mob.y):     # в арене и на чужой земле — нет
             return
         # на месте гибели; чуть внутрь земли, чтобы артефакт целиком был досягаем
         m = ARTIFACT_R + 4
         x = max(killer.land[0] + m, min(killer.land[1] - m, mob.x))
         y = max(TOP + m, min(BOTTOM - m, mob.y))
+        x, y = push_out_of_arena(x, y, m, killer.dir)             # целиком на земле, не в арене
         self.artifacts.append(Artifact(x, self.rng.choice(list(ITEMS)), y))
 
     def bullet_speed(self, owner):
@@ -412,11 +414,12 @@ class Match:
         return want >= MOB_MAX and MOB_HP + k >= MOB_MAX_HP
 
     def free_mob_spot(self):
-        """Случайное место в средней части поля, по возможности не на другом мобе."""
+        """Случайное место в круглой арене, по возможности не на другом мобе."""
         r = MOB_RADIUS
         for _ in range(20):
-            x = self.rng.uniform(WIDTH * MOB_ZONE[0] + r + 4, WIDTH * MOB_ZONE[1] - r - 4)
-            y = self.rng.uniform(TOP + r + 4, BOTTOM - r - 4)
+            a = self.rng.uniform(0, 2 * math.pi)
+            d = (ARENA_R - r - 4) * math.sqrt(self.rng.random())    # равномерно по площади круга
+            x, y = ARENA[0] + d * math.cos(a), ARENA[1] + d * math.sin(a)
             if all(math.hypot(x - m.x, y - m.y) > 2 * r + 6 for m in self.mobs):
                 return x, y
         return x, y
