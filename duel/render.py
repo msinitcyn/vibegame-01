@@ -12,6 +12,7 @@ from .config import (
     BEAM_WIDTH,
     ICE_R,
     BEAR_REACH,
+    SENTRY_R,
     FIRE_RING_HEAT,
     FIRE_RING_R,
     ZOMBIE_RADIUS,
@@ -64,6 +65,9 @@ def draw_effects(surf, u):
         pygame.draw.circle(surf, ITEMS["foe_freeze"][1], pos, r + 4, 3)
     if "speed" in effects:
         pygame.draw.circle(surf, ITEMS["speed"][1], pos, r + 8, 1)
+    if "immune" in effects:                       # дубовая кора — золотисто-бурое кольцо
+        pygame.draw.circle(surf, (16, 12, 20), pos, r + 12, 6)
+        pygame.draw.circle(surf, ITEMS["immune"][1], pos, r + 12, 4)
     if "shield" in effects:
         t = effects["shield"]
         if t > 1.5 or int(t * 8) % 2:
@@ -230,7 +234,7 @@ def draw_mob(surf, m, font=None, heroes=DEFAULT_HERO):
 def draw_mob_shot(surf, s):
     pos = _pos(s)
     pygame.draw.circle(surf, (16, 12, 20), pos, MOB_SHOT_R + 1)
-    pygame.draw.circle(surf, MOB_SHOT_COLOR, pos, MOB_SHOT_R)
+    pygame.draw.circle(surf, SEED_COLOR if s.get("owner") else MOB_SHOT_COLOR, pos, MOB_SHOT_R)
     pygame.draw.circle(surf, (250, 255, 230), pos, MOB_SHOT_R // 2)
 
 
@@ -287,6 +291,28 @@ def draw_trees(surf, t):
             pygame.draw.polygon(surf, color, [(x, top + 2), (x + half - 2, top + h * 0.8 - 1),
                                               (x - half + 2, top + h * 0.8 - 1)])
         d += TREE_W * 0.85
+
+
+SEED_COLOR = (150, 230, 90)          # семя лесного стража
+
+
+def draw_sentry(surf, st, heroes):
+    """Лесной страж: ствол, круглая крона, кольцо цвета хозяина, жизни точками; мигает перед концом."""
+    if st["life"] < 1 and int(st["life"] * 8) % 2 == 0:
+        return
+    x, y = int(st["x"]), int(st["y"])
+    r = SENTRY_R
+    white = st.get("flash", 0) > 0
+    pygame.draw.circle(surf, side_color(heroes, st["owner"]), (x, y + r // 2), r, 3)
+    pygame.draw.rect(surf, (16, 12, 20), (x - 5, y - 2, 10, r))
+    pygame.draw.rect(surf, (120, 80, 45), (x - 3, y, 6, r - 3))
+    crown = (255, 255, 255) if white else (46, 140, 60)
+    pygame.draw.circle(surf, (16, 12, 20), (x, y - r // 2), r - 2)
+    pygame.draw.circle(surf, crown, (x, y - r // 2), r - 4)
+    pygame.draw.circle(surf, (255, 255, 255) if white else (90, 195, 90), (x - 5, y - r // 2 - 5), r // 3)
+    pygame.draw.circle(surf, (16, 12, 20), (x + 4, y - r // 2 + 2), 3)      # дупло-«пушка»
+    for i in range(st["hp"]):
+        pygame.draw.circle(surf, SEED_COLOR, (x - 8 + i * 8, y - r - 6), 3)
 
 
 def draw_fire_ring(surf, ring, t):
@@ -352,6 +378,8 @@ def draw_field(surf, snap, font):
         draw_trees(surf, t)
     for ring in snap.get("rings", []):
         draw_fire_ring(surf, ring, snap.get("time", 0))
+    for st in snap.get("sentries", []):
+        draw_sentry(surf, st, heroes)
     by_id = {p["id"]: p for p in snap["players"]}
     for p in snap["players"]:
         raising = p.get("effects", {}).get("raising")

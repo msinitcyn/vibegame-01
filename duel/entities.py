@@ -5,6 +5,11 @@
 import math
 
 from .config import (
+    SENTRY_EVERY,
+    SENTRY_HP,
+    SENTRY_R,
+    SENTRY_RANGE,
+    SENTRY_TIME,
     CLONE_HP,
     BEAR_SIZE,
     BEAR_SPEED,
@@ -280,6 +285,39 @@ class Player(Unit):
         # пуля летит по прицелу; движение на направление не влияет
         return make_bullets(self, self.x, self.y, self.aim, self.radius,
                             self.shot_offsets(), "wavy" in self.effects)
+
+
+class Sentry:
+    """«Лесные стражи»: дерево-стрелок на земле соперника. Стреляет семенем в соперника хозяина,
+    если тот не дальше SENTRY_RANGE; пули соперника его рубят."""
+
+    def __init__(self, owner, x, y):
+        self.id = None
+        self.owner = owner
+        self.x, self.y = x, y
+        self.radius = SENTRY_R
+        self.hp = SENTRY_HP
+        self.life = SENTRY_TIME
+        self.shot_timer = owner.rng.uniform(0.2, SENTRY_EVERY)
+        self.flash = 0.0
+
+    def update(self, dt, foe):
+        """Возвращает снаряд, если выстрелил."""
+        self.life -= dt
+        self.flash = max(0.0, self.flash - dt)
+        self.shot_timer -= dt
+        if self.shot_timer > 0 or math.hypot(foe.x - self.x, foe.y - self.y) > SENTRY_RANGE:
+            return None
+        self.shot_timer = SENTRY_EVERY
+        return MobShot(self.x, self.y - self.radius * 0.6, foe, owner=self.owner)
+
+    def hurt(self, n=1):
+        self.hp -= n
+        self.flash = 0.12
+
+    @property
+    def alive(self):
+        return self.hp > 0 and self.life > 0
 
 
 class FireRing:
@@ -573,10 +611,11 @@ class MobShot:
     """Снаряд дальнобойного моба: летит прямо в точку, где была цель в момент выстрела,
     исчезает, пролетев MOB_RANGE или у края поля. Стены и «сбиваешь пули» на него не действуют."""
 
-    def __init__(self, x, y, target):
+    def __init__(self, x, y, target, owner=None):
         self.id = None
         self.x, self.y = x, y
         self.target = target
+        self.owner = owner            # маг, чей это снаряд (страж Природы), — его не ранит
         d = math.hypot(target.x - x, target.y - y) or 1.0
         self.dx, self.dy = (target.x - x) / d, (target.y - y) / d
         self.travelled = 0.0

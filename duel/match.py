@@ -39,6 +39,8 @@ from .config import (
     MOB_SPEED,
     MOB_WINDUP,
     ZOMBIE_LEASH,
+    SENTRY_COUNT,
+    SENTRY_R,
     ZOMBIE_MAX,
     ZOMBIE_RADIUS,
     ZOMBIE_TIME,
@@ -83,9 +85,8 @@ from .config import (
     TOP,
     WIDTH,
 )
-from .entities import (
-    FireRing,AmmoPack, Artifact, Beam, Clone, IceTrail, Mob, Player, TreeWall, Wall,
-                       push_out_of_arena)
+from .entities import (AmmoPack, Artifact, Beam, Clone, FireRing, IceTrail, Mob, Player, Sentry,
+                       TreeWall, Wall, push_out_of_arena)
 from .items import BAD_EFFECTS, INSTANT_ITEMS, ITEMS
 
 NO_AMMO_EVERY = 1.0               # «нет патронов» — не чаще раза в столько секунд партии
@@ -117,6 +118,7 @@ class Match:
         self.ice = []                 # «Ледяная тропа»: куски следа
         self.trees = []               # «Стена деревьев»
         self.rings = []               # «Огненный круг»
+        self.sentries = []            # «Лесные стражи»
         self.trail_last = {}          # маг под «Ледяной тропой» -> где положен последний кусок следа
         self.match_time = 0.0         # секунд с начала партии
         self.mob_wave = 0             # сколько волн мобов уже пришло
@@ -149,7 +151,7 @@ class Match:
     def objects(self):
         """Все объекты поля, кроме магов."""
         return (self.bullets + self.mobs + self.mob_shots + self.artifacts + self.ammo_packs
-                + self.walls + self.clones + self.beams + self.ice + self.trees + self.rings)
+                + self.walls + self.clones + self.beams + self.ice + self.trees + self.rings + self.sentries)
 
     def number_new(self):
         """Выдать номера объектам, появившимся за шаг (в порядке появления в списках)."""
@@ -216,6 +218,9 @@ class Match:
         for c in self.clones_of(foe):
             if math.hypot(c.x - p.x, c.y - p.y) <= p.radius + c.radius + reach:
                 c.hurt(damage)
+        for st in self.sentries:
+            if st.owner is foe and math.hypot(st.x - p.x, st.y - p.y) <= p.radius + st.radius + reach:
+                st.hurt(damage)
 
     def use_item(self, p, slot):
         kind = p.items[slot]
@@ -239,6 +244,9 @@ class Match:
 
     def apply_item(self, p, kind):
         foe = self.other(p)
+        if ITEMS[kind][0] == "foe" and "immune" in foe.effects:
+            self.emit("immune", foe.id, kind)     # «Дубовая кора»: на Природу не действует
+            return
         if kind == "heal":
             p.hp = min(p.max_hp, p.hp + HEAL_AMOUNT)
         elif kind == "wall":
@@ -268,6 +276,14 @@ class Match:
                 p.bear_saved = p.hp
             p.hp = BEAR_HP
             self.give(p, "bear")
+        elif kind == "immune":                # дубовая кора: долой дебаффы, артефакты соперника не действуют
+            for u in [p] + self.clones_of(p):
+                for e in BAD_EFFECTS:
+                    u.effects.pop(e, None)
+            self.give(p, "immune")
+        elif kind == "sentries":              # деревья-стрелки на земле соперника
+            for _ in range(SENTRY_COUNT):
+                self.sentries.append(Sentry(p, *foe.random_spot(SENTRY_R + 6)))
         elif kind == "firering":              # огненное кольцо вокруг соперника
             self.rings.append(FireRing(p, foe, self.players))
         elif kind == "zombies":               # мобы рядом — зомби мага
@@ -459,6 +475,11 @@ class Match:
                 if b.alive and m.alive and math.hypot(b.x - m.x, b.y - m.y) < m.radius + BULLET_R:
                     b.alive = False
                     m.hurt(b.owner)           # моб злится на того, чья пуля
+            for st in self.sentries:          # пули соперника рубят стражей
+                if b.alive and st.owner is not b.owner and st.alive and \
+                        math.hypot(b.x - st.x, b.y - st.y) < st.radius + BULLET_R:
+                    b.alive = False
+                    st.hurt()
             if not b.alive:
                 continue
             target = self.other(b.owner)      # владелец мог смениться после зеркала
@@ -568,6 +589,11 @@ class Match:
             shot = m.shoot(dt) if m.zombie_of is None else None
             if shot:
                 self.mob_shots.append(shot)
+        for st in self.sentries:              # лесные стражи стреляют по сопернику хозяина
+            shot = st.update(dt, self.other(st.owner))
+            if shot:
+                self.mob_shots.append(shot)
+        self.sentries = [st for st in self.sentries if st.alive]
         self.update_mob_shots(dt)
         self.update_beams(dt)
 
@@ -670,6 +696,8 @@ class Match:
             if not s.alive:
                 continue
             for p in self.players:
+                if p is s.owner:
+                    continue                  # семя стража не ранит Природу
                 guard = SHIELD_GAP if "shield" in p.effects else 0
                 if math.hypot(s.x - p.x, s.y - p.y) < p.radius + guard + MOB_SHOT_R:
                     s.alive = False

@@ -198,7 +198,7 @@ def test_nofire_survives_all_other_items(match):
     b = match.blue
     match.apply_item(match.red, "foe_nofire")
     for kind in ITEMS:
-        if kind != "cleanse":
+        if kind not in ("cleanse", "immune"):      # снимают дебаффы только очищение и дубовая кора
             match.apply_item(b, kind)
     assert "nofire" in b.effects
 

@@ -52,13 +52,20 @@ FIRE_RING_R = 95                 # радиус кольца вокруг соп
 FIRE_RING_TIME = 6.0             # сколько горит
 FIRE_RING_HEAT = 25              # ближе этого к стене — жжёт, пикс
 FIRE_RING_DPS = 4                # жизней в секунду у стены
+# «Лесные стражи» (Природа)
+SENTRY_COUNT = 3                 # сколько деревьев-стрелков
+SENTRY_TIME = 10.0               # сколько стоят
+SENTRY_RANGE = 260               # стреляют, если соперник не дальше, пикс (семя летит 280)
+SENTRY_EVERY = 1.2               # пауза между выстрелами, сек
+SENTRY_HP = 3                    # жизней у дерева
+SENTRY_R = 20                    # размер дерева, пикс
 # справка: страницы артефактов героев (герои по порядку) и всего страниц
 HELP_HERO_PAGES = (("light", "nature"), ("frost", "fire"), ("dark",))
 HELP_PAGES = 2 + len(HELP_HERO_PAGES)
 # артефакт -> герой: выпадает только ему (подобрать может любой)
 HERO_ONLY_ITEMS = {"beam": "light", "clearfoe": "light", "breaker": "light", "mobpeace": "light",
                    "icewalk": "frost", "foe_freeze": "frost", "shield": "frost", "slowfoe": "frost",
-                   "trees": "nature", "bear": "nature",
+                   "trees": "nature", "bear": "nature", "immune": "nature", "sentries": "nature",
                    "lasso": "fire", "firering": "fire", "fastshots": "fire", "rapid": "fire",
                    "zombies": "dark", "mobswap": "dark", "clones": "dark", "wall": "dark"}
 
@@ -221,6 +228,7 @@ DURATION = {"grow2": 7, "shrink": 7, "freeze": 2.5, "speed": 7, "nofire": 4, "sl
             "lassoed": 3,                 # «Огненное лассо»: соперника тянет к Огню
             "raising": 0.6,               # «Восставшие мертвецы»: сколько видно кольцо оживления
             "bear": 10,                   # «Медведь»: сколько маг — медведь
+            "immune": 6,                  # «Дубовая кора»: артефакты соперника на Природу не действуют
             # улучшения оружия
             "triple": WEAPON_TIME, "wavy": WEAPON_TIME, "rapid": WEAPON_TIME, "breaker": WEAPON_TIME}
 RAPID_FACTOR = 0.4               # пауза между выстрелами x0.4

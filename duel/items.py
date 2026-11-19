@@ -5,6 +5,10 @@ from .config import (
     BEAM_LENGTH,
     ICE_LIFE,
     BEAR_HP,
+    SENTRY_COUNT,
+    SENTRY_HP,
+    SENTRY_RANGE,
+    SENTRY_TIME,
     FIRE_RING_DPS,
     FIRE_RING_R,
     FIRE_RING_TIME,
@@ -55,6 +59,8 @@ ITEMS = {
     "lasso": ("foe", (255, 130, 50)),
     "zombies": ("self", (175, 230, 140)),
     "bear": ("self", (200, 140, 80)),
+    "immune": ("self", (215, 175, 95)),
+    "sentries": ("self", (80, 190, 110)),
     "firering": ("foe", (255, 110, 40)),
     "foe_grow": ("foe", (190, 120, 255)),
     "foe_freeze": ("foe", (170, 220, 255)),
@@ -70,7 +76,7 @@ HELP_SECTIONS = [
     ("debuff", ["foe_grow", "foe_nofire", "foe_invert", "foe_noitems"]),
     # артефакты героев — свои страницы справки, по героям
     ("hero", ["beam", "clearfoe", "breaker", "mobpeace", "icewalk", "foe_freeze", "shield", "slowfoe",
-              "trees", "bear", "lasso", "firering", "fastshots", "rapid",
+              "trees", "bear", "immune", "sentries", "lasso", "firering", "fastshots", "rapid",
               "zombies", "mobswap", "clones", "wall"]),
 ]
 
@@ -96,14 +102,16 @@ def item_help(kind):
         fastshots=f"{d['fastshots']:g}", mobpeace=f"{d['mobpeace']:g}",
         beam_len=BEAM_LENGTH, beam_dps=BEAM_DPS,
         icewalk=f"{d['icewalk']:g}", ice_life=f"{ICE_LIFE:g}", trees=f"{TREE_TIME:g}", tree_len=TREE_LENGTH,
-        lasso=f"{d['lassoed']:g}", bear=f"{d['bear']:g}", bear_hp=BEAR_HP,
+        lasso=f"{d['lassoed']:g}", bear=f"{d['bear']:g}", bear_hp=BEAR_HP, immune=f"{d['immune']:g}",
+        sentries=SENTRY_COUNT, sentry_time=f"{SENTRY_TIME:g}", sentry_range=SENTRY_RANGE, sentry_hp=SENTRY_HP,
         ring_r=FIRE_RING_R, ring_time=f"{FIRE_RING_TIME:g}", ring_dps=FIRE_RING_DPS, zmax=ZOMBIE_MAX, zr=ZOMBIE_RADIUS, ztime=f"{ZOMBIE_TIME:g}", fast=f"{FAST_BULLET_FACTOR:g}".replace(".", t("decimal")),
     )
     return t(f"help.{kind}", **numbers)
 
 
 WEAPON_ITEMS = ("triple", "wavy", "rapid", "breaker")      # улучшения оружия: на WEAPON_TIME
-ATTACK_ITEMS = WEAPON_ITEMS + ("clones", "wall", "fastshots", "beam", "trees", "zombies", "bear", "mobswap")
+ATTACK_ITEMS = WEAPON_ITEMS + ("clones", "wall", "fastshots", "beam", "trees", "zombies", "bear", "mobswap",
+                              "sentries")
 # эффект на игроке -> артефакт, чей значок показывать в статусе (если имена различаются)
 EFFECT_ICON = {"lassoed": "lasso", "raising": "zombies", "grow2": "foe_grow", "freeze": "foe_freeze", "nofire": "foe_nofire",
                "invert": "foe_invert", "noitems": "foe_noitems"}

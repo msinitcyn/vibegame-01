@@ -346,3 +346,90 @@ def test_nature_walks_through_own_trees():
     b.x, b.y = 400, t.y - 60
     walk(m, "blue", (0, 1), 0.5)
     assert b.y > t.y + 20                                # прошёл насквозь
+
+
+# ------------------------------------------------------------------ дубовая кора
+
+def test_bark_blocks_foe_artifacts_and_cleanses():
+    m = new_match()
+    b, r = m.blue, m.red
+    m.apply_item(r, "foe_freeze")
+    assert "freeze" in b.effects
+    m.apply_item(b, "immune")
+    assert "freeze" not in b.effects and "immune" in b.effects        # кора сняла заморозку
+    for kind in ("foe_freeze", "foe_grow", "foe_nofire", "foe_invert", "foe_noitems", "lasso"):
+        m.apply_item(r, kind)
+    m.apply_item(r, "firering")
+    assert not {"freeze", "grow2", "nofire", "invert", "noitems", "lassoed"} & set(b.effects)
+    assert m.rings == []
+    hp = b.hp
+    m.hurt_player(b, 1)                                  # урон кора не гасит
+    assert b.hp == hp - 1
+
+
+def test_bark_ends():
+    from duel.config import DURATION
+    m = new_match()
+    b, r = m.blue, m.red
+    m.apply_item(b, "immune")
+    step(m, DURATION["immune"] + 0.1)
+    m.apply_item(r, "foe_freeze")
+    assert "freeze" in b.effects
+
+
+# ------------------------------------------------------------------ лесные стражи
+
+def sentry_match():
+    m = new_match()
+    m.set_heroes({"blue": "nature", "red": "fire"})
+    m.next_wave = 1e9
+    b, r = m.blue, m.red
+    r.hp = 1000
+    m.apply_item(b, "sentries")
+    return m, b, r
+
+
+def test_sentries_grow_on_foe_land():
+    from duel.config import SENTRY_COUNT
+    m, b, r = sentry_match()
+    assert len(m.sentries) == SENTRY_COUNT
+    assert all(r.in_land(st.x, st.y) for st in m.sentries)
+
+
+def test_sentry_shoots_foe_in_range_only():
+    from duel.config import SENTRY_RANGE
+    m, b, r = sentry_match()
+    st = m.sentries[0]
+    m.sentries = [st]
+    r.x, r.y = st.x, st.y + 150 if st.y < 400 else st.y - 150
+    r.effects["icewalk"] = 99
+    step(m, 2.0)
+    assert r.hp < 1000                                   # попал
+    from types import SimpleNamespace
+    st.shot_timer = 0
+    far = SimpleNamespace(x=st.x + SENTRY_RANGE + 1, y=st.y)
+    assert st.update(DT, far) is None                    # дальше дальности — не стреляет
+    near = SimpleNamespace(x=st.x + SENTRY_RANGE - 1, y=st.y)
+    assert st.update(DT, near) is not None
+
+
+def test_sentry_seed_does_not_hurt_nature_and_bullets_chop_it():
+    from duel.entities import MobShot
+    m, b, r = sentry_match()
+    st = m.sentries[0]
+    m.mob_shots = [MobShot(b.x - 30, b.y, b, owner=b)]   # семя летит прямо в Природу — не ранит
+    hp = b.hp
+    step(m, 0.3)
+    assert b.hp == hp
+    for _ in range(3):
+        m.bullets = [Bullet(st.x - 60, st.y, 520, 0, r)]
+        step(m, 0.2)
+    assert st not in m.sentries
+
+
+def test_sentries_wither():
+    from duel.config import SENTRY_TIME
+    m, b, r = sentry_match()
+    r.x, r.y = 50, TOP + 40
+    step(m, SENTRY_TIME + 0.1)
+    assert m.sentries == []

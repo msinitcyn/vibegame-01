@@ -125,6 +125,15 @@ def draw_icon(surf, kind, center, r):
         pygame.draw.circle(surf, (20, 16, 26), P(0, 0.12), max(2, r * 0.07))
         for u in (-0.17, 0.17):
             pygame.draw.circle(surf, (20, 16, 26), P(u, -0.08), max(2, r * 0.06))
+    elif kind == "immune":                        # щит из коры
+        pygame.draw.polygon(surf, color, [P(0, -0.5), P(0.42, -0.3), P(0.35, 0.2), P(0, 0.5),
+                                          P(-0.35, 0.2), P(-0.42, -0.3)])
+        for u in (-0.15, 0.15):
+            pygame.draw.line(surf, (110, 75, 40), P(u, -0.35), P(u, 0.35), max(1, w // 2))
+    elif kind == "sentries":                      # дерево и семя
+        pygame.draw.rect(surf, (140, 95, 55), (*P(-0.08, 0.05), r * 0.16, r * 0.4))
+        pygame.draw.circle(surf, color, P(0, -0.15), r * 0.36)
+        pygame.draw.circle(surf, (230, 255, 160), P(0.42, -0.35), max(2, r * 0.1))
     elif kind == "firering":                      # кольцо огня
         pygame.draw.circle(surf, color, P(0, 0), r * 0.42, max(2, w))
         for k in range(8):
