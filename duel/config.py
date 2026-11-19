@@ -130,6 +130,7 @@ ICON_BG = (35, 38, 52)
 # эффекты на игроке: длительность
 DURATION = {"grow2": 7, "shrink": 7, "freeze": 2.5, "speed": 7, "nofire": 4, "slowfoe": 7,
             "shield": 7, "invert": 5, "noitems": 5, "fastshots": 7,
+            "mobpeace": 8,                # «Мир с мобами»: попадания не злят мобов
             # улучшения оружия
             "triple": WEAPON_TIME, "wavy": WEAPON_TIME, "rapid": WEAPON_TIME, "breaker": WEAPON_TIME}
 RAPID_FACTOR = 0.4               # пауза между выстрелами x0.4

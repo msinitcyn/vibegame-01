@@ -205,6 +205,15 @@ class Match:
                 c.life += CLONE_TIME
             for _ in range(max(0, min(CLONE_COUNT, MAX_CLONES - len(mine)))):
                 self.clones.append(Clone(p))
+        elif kind == "mobpeace":
+            self.give(p, "mobpeace")          # мобы, что шли на тебя, успокаиваются
+            for m in self.mobs:
+                if m.target is p:
+                    m.target = None
+        elif kind == "mobswap":               # мобы, что шли на тебя, — на соперника
+            for m in self.mobs:
+                if m.target is p:
+                    m.target = None if "mobpeace" in foe.effects else foe
         elif kind == "cleanse":
             for u in [p] + self.clones_of(p):
                 for e in BAD_EFFECTS:

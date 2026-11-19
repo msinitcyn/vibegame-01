@@ -421,3 +421,47 @@ def test_mob_goes_around_wall_at_field_edge(match):
     w, m, path = mob_vs_wall(match, TOP + WALL_H / 2, TOP + 30, 6.0)
     b = match.blue
     assert math.hypot(m.x - b.x, m.y - b.y) < b.radius + m.radius + 10
+
+
+# --- мобы: «Мир с мобами» и «Перевод стрелок»
+
+def chasing(match, target, n=2):
+    from duel.entities import Mob
+    mobs = [Mob(500, 200 + 100 * i, 5) for i in range(n)]
+    for m in mobs:
+        m.target = target
+    match.mobs = mobs
+    return mobs
+
+
+def test_mobpeace_calms_chasers_and_hits_dont_anger(match):
+    b, r = match.blue, match.red
+    mobs = chasing(match, b)
+    other = chasing(match, r, 1)[0]
+    match.mobs = mobs + [other]
+    match.apply_item(b, "mobpeace")
+    assert all(m.target is None for m in mobs) and other.target is r     # чужих не трогает
+    assert "mobpeace" in b.effects
+    mobs[0].hurt(b)                                 # попадание не злит
+    assert mobs[0].target is None and mobs[0].hp == 4
+    other.hurt(b)                                   # моб соперника не переключается на синего
+    assert other.target is r
+    match.melee(b)                                  # удар тоже не злит (если моб рядом)
+    b.effects.pop("mobpeace")
+    mobs[1].hurt(b)
+    assert mobs[1].target is b                      # эффект кончился — злится как обычно
+
+
+def test_mobswap_sends_chasers_to_foe(match):
+    b, r = match.blue, match.red
+    mobs = chasing(match, b, 3)
+    match.apply_item(b, "mobswap")
+    assert all(m.target is r for m in mobs)
+
+
+def test_mobswap_against_peaceful_foe_calms(match):
+    b, r = match.blue, match.red
+    mobs = chasing(match, b, 2)
+    r.apply("mobpeace")
+    match.apply_item(b, "mobswap")
+    assert all(m.target is None for m in mobs)

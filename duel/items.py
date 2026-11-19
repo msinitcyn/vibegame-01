@@ -34,6 +34,8 @@ ITEMS = {
     "wavy": ("self", (255, 140, 255)),
     "clearfoe": ("self", (150, 255, 200)),
     "cleanse": ("self", (210, 255, 230)),
+    "mobpeace": ("self", (235, 245, 255)),
+    "mobswap": ("self", (255, 120, 210)),
     "foe_grow": ("foe", (190, 120, 255)),
     "foe_freeze": ("foe", (170, 220, 255)),
     "foe_nofire": ("foe", (255, 110, 90)),
@@ -43,9 +45,9 @@ ITEMS = {
 
 # Справка: группы артефактов (экран «Артефакты» в меню). Заголовок — section_title(id).
 HELP_SECTIONS = [
-    ("defense", ["shield", "heal", "cleanse", "shrink", "speed", "clearfoe", "slowfoe"]),
+    ("defense", ["shield", "heal", "cleanse", "shrink", "speed", "clearfoe", "slowfoe", "mobpeace"]),
     ("weapon", ["triple", "wavy", "rapid", "breaker"]),
-    ("attack", ["clones", "wall", "fastshots"]),
+    ("attack", ["clones", "wall", "fastshots", "mobswap"]),
     ("debuff", ["foe_grow", "foe_freeze", "foe_nofire", "foe_invert", "foe_noitems"]),
 ]
 
@@ -68,7 +70,7 @@ def item_help(kind):
         rapid_cd=f"{SHOT_COOLDOWN * RAPID_FACTOR:.1f}", cd=f"{SHOT_COOLDOWN:g}",
         rapid=f"{d['rapid']:.0f}", wavy=f"{d['wavy']:.0f}", clones=CLONE_COUNT,
         clone_time=f"{CLONE_TIME:.0f}", breaker=f"{d['breaker']:.0f}", wall_time=f"{WALL_TIME:.0f}",
-        fastshots=f"{d['fastshots']:g}", fast=f"{FAST_BULLET_FACTOR:g}".replace(".", t("decimal")),
+        fastshots=f"{d['fastshots']:g}", mobpeace=f"{d['mobpeace']:g}", fast=f"{FAST_BULLET_FACTOR:g}".replace(".", t("decimal")),
     )
     return t(f"help.{kind}", **numbers)
 

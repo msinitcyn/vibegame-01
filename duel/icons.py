@@ -4,7 +4,7 @@ import math
 
 import pygame
 
-from .config import AMMO_COLOR, ICON_BG, RED, WHITE
+from .config import AMMO_COLOR, ICON_BG, MOB_IDLE_COLOR, RED, WHITE
 from .items import ITEMS, ring_color
 
 
@@ -100,6 +100,16 @@ def draw_icon(surf, kind, center, r):
         pygame.draw.line(surf, color, P(-0.55, 0.55), P(0.55, -0.55), w + 1)
     elif kind == "cleanse":                       # галочка
         pygame.draw.lines(surf, color, False, [P(-0.45, 0.0), P(-0.12, 0.35), P(0.5, -0.4)], w + 1)
+    elif kind == "mobpeace":                      # белый флаг
+        pygame.draw.line(surf, color, P(-0.35, -0.55), P(-0.35, 0.6), w)
+        pygame.draw.polygon(surf, color, [P(-0.3, -0.55), P(0.5, -0.4), P(0.3, -0.18), P(0.5, 0.05),
+                                          P(-0.3, 0.0)])
+    elif kind == "mobswap":                       # моб и стрелка в сторону
+        pygame.draw.circle(surf, MOB_IDLE_COLOR, P(-0.3, 0.05), r * 0.3)
+        pygame.draw.circle(surf, (20, 20, 30), P(-0.38, -0.02), max(1, r * 0.06))
+        pygame.draw.circle(surf, (20, 20, 30), P(-0.22, -0.02), max(1, r * 0.06))
+        pygame.draw.line(surf, color, P(0.05, 0.05), P(0.5, 0.05), w)
+        pygame.draw.polygon(surf, color, [P(0.62, 0.05), P(0.38, -0.18), P(0.38, 0.28)])
     elif kind == "foe_invert":                    # стрелки вверх и вниз
         pygame.draw.line(surf, color, P(-0.22, 0.55), P(-0.22, -0.45), w)
         pygame.draw.polygon(surf, color, [P(-0.22, -0.6), P(-0.42, -0.3), P(-0.02, -0.3)])

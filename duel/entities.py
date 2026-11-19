@@ -346,7 +346,11 @@ class Mob:
     def hurt(self, attacker, damage=1):
         self.hp -= damage
         self.flash = 0.12
-        self.target = attacker
+        if "mobpeace" in attacker.effects:    # «Мир с мобами»: попадание не злит
+            if self.target is attacker:
+                self.target = None
+        else:
+            self.target = attacker
         if self.hp <= 0:
             self.alive = False
 
