@@ -263,3 +263,13 @@ def test_server_in_thread_starts_and_stops():
     assert conn.closed                           # клиент узнал, что сервера нет
     s = socket.create_server(("0.0.0.0", port))  # порт свободен
     s.close()
+
+
+def test_server_busy_port_message():
+    from duel.server import main
+    busy = socket.create_server(("0.0.0.0", 0))
+    try:
+        with pytest.raises(SystemExit, match="Порт занят"):
+            main(["--port", str(busy.getsockname()[1])])
+    finally:
+        busy.close()

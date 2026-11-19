@@ -207,7 +207,13 @@ def main(argv=None):
     ap.add_argument("--bot", action="store_true", help="пустое место занимает бот")
     args = ap.parse_args(argv)
     try:
-        Server(args.port, args.bot, log=lambda text: print(text, flush=True)).run()
+        srv = Server(args.port, args.bot, log=lambda text: print(text, flush=True))
+    except OSError as e:
+        raise SystemExit(f"не удалось запустить сервер на порту {args.port}: {e.strerror or e}.\n"
+                         f"Порт занят — уже работает другой сервер или игра «Создать игру по сети»; "
+                         f"остановите её или запустите на другом порту: --port {args.port + 10}")
+    try:
+        srv.run()
     except KeyboardInterrupt:
         print("сервер остановлен")
 
