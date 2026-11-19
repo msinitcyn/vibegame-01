@@ -558,6 +558,7 @@ class Game(ScreensMixin):
                 self.popup(item_name(ev[2]), ev[1], ring_color(ev[2]))
             elif kind == "used":
                 self.popup(item_name(ev[2]) + "!", ev[1], ITEMS[ev[2]][1])
+                self.audio.item(ev[2])
             elif kind == "ammo":
                 self.popup(t("popup.ammo", n=ev[2]), ev[1], AMMO_COLOR)
             elif kind == "mob_dead":

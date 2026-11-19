@@ -1,10 +1,11 @@
-"""Музыка и звуки выстрелов."""
+"""Музыка, звуки выстрелов и артефактов."""
 
 import random
 
 import pygame
 
 from .config import (
+    ITEM_SOUNDS,
     MUSIC,
     MUSIC_DIR,
     MUSIC_FADE_MS,
@@ -21,6 +22,7 @@ class Audio:
 
     def __init__(self):
         self.shots = {}
+        self.items = {}               # артефакт -> звук применения
         self.enabled = False
         self.kind = None              # какая музыка сейчас: menu / game
         self.track = None
@@ -43,6 +45,13 @@ class Audio:
                 snd.set_volume(SHOOT_VOLUME)
                 self.shots[who] = snd
             except pygame.error as e:
+                print(f"Не загрузился {fname}:", e)
+        for kind, (fname, volume) in ITEM_SOUNDS.items():
+            try:
+                snd = pygame.mixer.Sound(SOUNDS_DIR / fname)
+                snd.set_volume(volume)
+                self.items[kind] = snd
+            except (pygame.error, FileNotFoundError) as e:
                 print(f"Не загрузился {fname}:", e)
 
     def music(self, kind):
@@ -72,6 +81,12 @@ class Audio:
         # событие приходит и когда мы сами меняем трек — тогда музыка уже снова играет
         if self.enabled and self.kind == "game" and not pygame.mixer.music.get_busy():
             self.play_next()
+
+    def item(self, kind):
+        """Звук применённого артефакта (если у него есть свой)."""
+        snd = self.items.get(kind)
+        if snd:
+            snd.play()
 
     def melee(self):
         self.shoot("melee")

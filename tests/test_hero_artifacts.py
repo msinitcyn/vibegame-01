@@ -303,3 +303,21 @@ def test_former_common_items_belong_to_heroes():
             seen.add(m.artifacts[0].kind)
         for kind, owner in owners.items():
             assert (kind in seen) == (hero == owner), (hero, kind)
+
+
+# ------------------------------------------------------------------ звуки
+
+def test_hero_items_have_sounds(game):
+    """У луча, огненного круга и медведя — свой звук: файл есть, звучит при применении."""
+    from duel.config import ITEM_SOUNDS, SOUNDS_DIR
+    for kind, (fname, _) in ITEM_SOUNDS.items():
+        assert (SOUNDS_DIR / fname).is_file(), fname
+    played = []
+    game.audio.item = played.append
+    m = game.match
+    for kind in ITEM_SOUNDS:
+        m.blue.items[0] = kind
+        game.handle_events(m.step(DT, {"blue": Command(use_slot=0)}))
+    assert played == list(ITEM_SOUNDS)
+    if game.audio.enabled:
+        assert set(game.audio.items) == set(ITEM_SOUNDS)

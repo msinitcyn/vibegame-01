@@ -127,6 +127,8 @@ MUSIC = {
 }
 MUSIC_FADE_MS = 800
 SHOOT_VOLUME = 0.6
+# звуки артефактов героев: артефакт -> (файл в assets/sounds, громкость; файлы разной громкости)
+ITEM_SOUNDS = {"beam": ("sun-ray.mp3", 0.9), "firering": ("fire-ring.mp3", 0.45), "bear": ("bear.mp3", 0.75)}
 
 BASE_RADIUS = 18
 BASE_SPEED = 300                 # пикс/сек
