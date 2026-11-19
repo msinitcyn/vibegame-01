@@ -52,9 +52,11 @@ def run(seconds=None):
 
     srv = start_in_thread(port=0, bot=True, log=lambda text: None, discovery_port=None)
     try:
-        g.enter_net(*connect(f"127.0.0.1:{srv.port}", timeout=5))
+        address = f"127.0.0.1:{srv.port}"
+        g.enter_net(*connect(address, timeout=5), address)
         deadline = time.monotonic() + 5
         frames = 0
+        g.send_ready(True)                        # лобби: игрок готов, соперник — бот
         while frames < 60:
             assert time.monotonic() < deadline, "сетевая партия не началась"
             assert g.net_frame(STEP), "связь с сервером пропала"

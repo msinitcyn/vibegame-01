@@ -1,21 +1,24 @@
-"""Сеть: сообщения JSON по TCP, по одному в строке (прототип этапа 2).
+"""Сеть: сообщения JSON по TCP, по одному в строке.
 
-Сервер -> клиент:
-    {"type": "hello", "proto": 1, "role": "player", "you": "blue"}   после подключения
-    {"type": "full"}                                                  мест нет
-    {"type": "state", "tick": N, "waiting": bool, "snap": {...}, "events": [[...], ...]}
-                                       раз в 2 такта (30/с); события — все с прошлого снимка;
-                                       waiting — партия ещё не началась (ждём второго игрока)
+Рукопожатие (протокол 3):
+    сервер -> {"type": "hello", "proto": 3, "role": "player"}
+    клиент -> {"type": "join", "name": "Маша", "token": null | "ключ места при возврате"}
+    сервер -> {"type": "seat", "you": "red", "token": "…"}   или   {"type": "full"}
+Сервер -> клиент, 30 раз в секунду:
+    {"type": "state", "tick": N, "game": K, "phase": "lobby" | "play" | "over", "waiting": bool,
+     "paused": bool, "seats": {"blue": {"who": "human"|"bot"|"away"|null, "name", "ready", "away_left"}},
+     "snap": {...}, "events": [[...], ...]}
+    {"type": "bye"}                                  создатель игры вышел, сервер закрывается
 Клиент -> сервер:
-    {"type": "cmd", "move": [dx, dy], "fire": bool, "melee": bool, "slot": int|null}
-    {"type": "restart"}                                               новая партия после победы
-    {"type": "name", "name": "Маша"}                                  имя игрока (необязательно)
-В state есть и необязательные "names": {"blue": "Папа"} и "bots": ["red"] — подписи игроков.
+    {"type": "cmd", "move": [dx, dy], "fire": bool, "melee": bool, "slot": int|null}   каждый такт
+    {"type": "ready", "ready": bool}                 готов к партии (в лобби) или к реваншу (после победы)
+    {"type": "name", "name": "Маша"}                 сменить имя
+    {"type": "leave"}                                ушёл сам (Esc) — место свободно сразу
 """
 import json
 import socket
 
-PROTO = 2                          # 2: снимки раз в 2 такта, с номером такта и ожиданием
+PROTO = 3                          # 3: место по запросу join, лобби, готовность, возврат на место
 PORT = 5555
 MAX_OUT = 1024 * 1024              # клиент не читает (~7 с снимков) — отключаем, а не копим
 
@@ -112,23 +115,35 @@ def error_key(e):
     return None
 
 
-def connect(address, timeout=5.0):
-    """Подключиться к серверу и дождаться приветствия. Возвращает (Conn, hello)."""
+def connect(address, timeout=5.0, name="", token=None):
+    """Подключиться к серверу: приветствие, проверка версии, просьба о месте.
+    Возвращает (Conn, seat), где seat = {"you": цвет, "token": ключ места}."""
     import time
     sock = socket.create_connection(parse_address(address), timeout=timeout)
     conn = Conn(sock)
     deadline = time.monotonic() + timeout
+    asked = False
     while time.monotonic() < deadline:
         for msg in conn.recv():
-            if msg.get("type") == "hello":
+            kind = msg.get("type")
+            if kind == "hello":
                 if msg.get("proto") != PROTO:
+                    conn.close()
                     raise NetError("proto", f"другая версия протокола: {msg.get('proto')} (у нас {PROTO})")
+                conn.send({"type": "join", "name": name, "token": token})
+                asked = True
+            elif kind == "seat" and asked:
                 return conn, msg
-            if msg.get("type") == "full":
+            elif kind == "full":
+                conn.close()
                 raise NetError("full", "на сервере нет свободных мест")
+            elif kind == "bye":
+                conn.close()
+                raise NetError("timeout", "сервер закрывается")
         if conn.closed:
             break
         time.sleep(0.01)
+    conn.close()
     raise NetError("timeout", "сервер не ответил")
 
 

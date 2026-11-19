@@ -61,9 +61,10 @@ def test_finder_finds_server_and_free_places():
         games = find(srv, finder, lambda g: g)
         assert games == [{"address": f"127.0.0.1:{srv.port}", "name": socket.gethostname(),
                           "free": 2, "proto": PROTO}]
-        c = socket.create_connection(("127.0.0.1", srv.port))
+        from tests.test_network import Client
+        c = Client(srv)
         find(srv, finder, lambda g: g and g[0]["free"] == 1)
-        c.close()
+        c.conn.close()
     finally:
         finder.close()
         srv.close()
@@ -96,10 +97,10 @@ def test_server_works_when_discovery_port_busy():
     try:
         srv = Server(port=0, host="127.0.0.1", log=logs.append, discovery_port=port)
         assert srv.finder_sock is None and any("поиск игр" in line for line in logs)
-        c = socket.create_connection(("127.0.0.1", srv.port))
-        srv.step()
-        assert "blue" in srv.conns
-        c.close()
+        from tests.test_network import Client
+        c = Client(srv)
+        assert c.you == "blue" and "blue" in srv.conns
+        c.conn.close()
         srv.close()
     finally:
         busy.close()

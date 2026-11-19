@@ -5,28 +5,31 @@ import time
 import pygame
 
 from duel import i18n, settings
-from duel.net import Conn
+from duel.net import connect
 from duel.server import start_in_thread
 
 
-def frames(game, until, timeout=3.0):
-    """Кадры сетевого клиента (как в run), пока until() не станет истинным."""
+def frames(game, until, timeout=3.0, keep=()):
+    """Кадры сетевого клиента (как в run), пока until() не станет истинным.
+    keep — соединения гостей-заглушек: шлют команды, чтобы сервер не счёл их пропавшими."""
     deadline = time.monotonic() + timeout
     while not until():
         assert time.monotonic() < deadline, "не дождались"
+        for c in keep:
+            if not c.closed:
+                c.send({"type": "cmd", "move": [0, 0]})
+                c.recv()
         if game.net and not game.net_frame(1 / 60):
-            game.leave_net(i18n.t("net.lost"))
+            game.leave_net(i18n.t(game.net_end), voluntary=False)
         time.sleep(1 / 240)
 
 
-def guest_conn(port):
-    conn = Conn(socket.create_connection(("127.0.0.1", port)))
-    deadline = time.monotonic() + 3
-    msgs = []
-    while not any(m["type"] == "hello" for m in msgs):
-        assert time.monotonic() < deadline
-        msgs += conn.recv()
-        time.sleep(0.005)
+def guest_conn(port, ready=True):
+    """Гость-заглушка: настоящее рукопожатие и сразу «готов»."""
+    conn, seat = connect(f"127.0.0.1:{port}", timeout=3, name="Маша")
+    assert seat["you"] == "red"
+    if ready:
+        conn.send({"type": "ready", "ready": True})
     return conn
 
 
@@ -39,12 +42,17 @@ def test_host_waits_then_guest_joins(game):
     press_menu_item(game, "host")
     srv = game.host_server
     assert srv and game.net and game.me == "blue" and game.state == "play"
-    frames(game, lambda: game.snap is not None and game.net_waiting)
-    game.draw_waiting()                           # экран ожидания с адресом рисуется
+    frames(game, lambda: game.net_seats and game.net_waiting)
+    game.draw_lobby()                             # лобби с адресом рисуется
     assert not srv.started
     guest = guest_conn(srv.port)
-    frames(game, lambda: not game.net_waiting)
+    frames(game, lambda: game.net_seats.get("red", {}).get("ready"), keep=(guest,))
+    assert game.net_waiting                       # гость готов, создатель — ещё нет
+    game.draw_lobby()
+    game.on_key(pygame.KSCAN_RETURN)              # создатель готов
+    frames(game, lambda: not game.net_waiting, keep=(guest,))
     assert srv.started and "red" in srv.conns
+    assert game.player_label("red") == "Маша"
     game.draw()
     guest.close()
 
@@ -61,15 +69,18 @@ def test_host_leaves_guest_gets_lost(game):
     press_menu_item(game, "host")
     srv = game.host_server
     guest = guest_conn(srv.port)
-    frames(game, lambda: not game.net_waiting)
+    game.on_key(pygame.KSCAN_RETURN)
+    frames(game, lambda: not game.net_waiting, keep=(guest,))
     game.on_key(pygame.KSCAN_ESCAPE)              # создатель вышел в меню
     assert game.state == "menu" and game.net is None and game.host_server is None
     assert not srv.thread.is_alive()
+    got = []
     deadline = time.monotonic() + 2
     while not guest.closed:
         assert time.monotonic() < deadline
-        guest.recv()
+        got += guest.recv()
         time.sleep(0.01)
+    assert any(m["type"] == "bye" for m in got)   # гостю сказали «создатель вышел»
 
 
 def test_lost_connection_returns_to_menu(game):
@@ -78,10 +89,11 @@ def test_lost_connection_returns_to_menu(game):
     game.address = f"127.0.0.1:{srv.port}"
     game.on_key(pygame.KSCAN_RETURN)
     assert game.net and game.state == "play"
+    game.on_key(pygame.KSCAN_RETURN)              # готов (соперник — бот)
     frames(game, lambda: not game.net_waiting)
-    srv.stop()
+    srv.stop()                                    # создатель закрыл игру
     frames(game, lambda: game.state == "menu")
-    assert game.menu_message == i18n.t("net.lost")
+    assert game.menu_message == i18n.t("net.host_left")
     game.draw_menu()
 
 
@@ -125,6 +137,7 @@ def test_join_typed_address_and_remember(game):
         game.on_key(pygame.KSCAN_RETURN)
         assert game.net and game.join_error is None
         assert settings.load()["last_address"] == f"127.0.0.1:{srv.port}"
+        game.on_key(pygame.KSCAN_RETURN)              # готов
         frames(game, lambda: not game.net_waiting)
     finally:
         game.leave_net()
@@ -181,6 +194,7 @@ def test_join_picks_found_game(game):
         game.on_key(pygame.KSCAN_RETURN)              # найденная игра выбрана сама — сразу Enter
         assert game.join_pick == f"127.0.0.1:{srv.port}"
         assert game.net and game.join_error is None and game.finder is None
+        game.on_key(pygame.KSCAN_RETURN)              # готов
         frames(game, lambda: not game.net_waiting)
     finally:
         game.leave_net()

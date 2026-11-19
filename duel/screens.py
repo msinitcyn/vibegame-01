@@ -131,31 +131,71 @@ class ScreensMixin:
         s.blit(img, img.get_rect(center=(WIDTH // 2, 640)))
         pygame.display.flip()
 
-    def draw_waiting(self):
-        """Ожидание второго игрока: у создателя — адрес этого компьютера, у гостя — просто ждём."""
+    def draw_lobby(self):
+        """Лобби сетевой игры: два места (кто сел, готов ли), у создателя — адрес компьютера."""
         from .net import local_addresses
         s = self.screen
         s.fill(BG)
-        img = self.big.render(tr("net.wait_title"), True, WHITE)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 140)))
+        img = self.big.render(tr("net.lobby_title"), True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 100)))
+        for i, pid in enumerate(("blue", "red")):
+            seat = self.net_seats.get(pid) or {}
+            who = seat.get("who")
+            card = pygame.Rect(0, 0, 380, 150)
+            card.center = (WIDTH // 2 + (-210 if i == 0 else 210), 260)
+            pygame.draw.rect(s, (26, 29, 40), card, border_radius=14)
+            pygame.draw.rect(s, COLOR[pid], card, 3 if pid == self.me else 1, border_radius=14)
+            if who is None:
+                name, status, color = tr("net.free_seat"), "", GREY
+            elif who == "away":
+                name, status, color = self.player_label(pid), tr("net.away"), BAD_TEXT
+            else:
+                ready = seat.get("ready")
+                name = self.player_label(pid)
+                status, color = (tr("net.ready"), AMMO_COLOR) if ready else (tr("net.not_ready"), GREY)
+            img = self.font.render(name, True, COLOR[pid] if who else GREY)
+            s.blit(img, img.get_rect(center=(card.centerx, card.top + 40)))
+            if status:
+                img = self.font.render(status, True, color)
+                s.blit(img, img.get_rect(center=(card.centerx, card.top + 82)))
+            if pid == self.me:
+                img = self.small.render(tr("net.you"), True, WHITE)
+                s.blit(img, img.get_rect(center=(card.centerx, card.bottom - 22)))
+        y = 380
         if self.host_server:
             if not hasattr(self, "_addresses"):
                 self._addresses = local_addresses()
-            lines = [(tr("net.your_addr"), GREY, self.font)]
-            lines += [(a, BLUE, self.big) for a in self._addresses] or [(tr("net.no_addr"), BAD_TEXT, self.font)]
-            hint = tr("net.host_hint")
-        else:
-            lines = [(tr("net.guest_wait"), GREY, self.font)]
-            hint = tr("net.guest_hint")
-        y = 250
-        for text, color, font in lines:
-            img = font.render(text, True, color)
-            y += img.get_height() // 2
+            img = self.small.render(tr("net.your_addr"), True, GREY)
             s.blit(img, img.get_rect(center=(WIDTH // 2, y)))
-            y += img.get_height() // 2 + 24
-        img = self.small.render(hint, True, GREY)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 560)))
+            text = "   ".join(self._addresses) if self._addresses else tr("net.no_addr")
+            img = self.font.render(text, True, BLUE if self._addresses else BAD_TEXT)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, y + 32)))
+        hints = [tr("net.lobby_hint")] + ([tr("net.lobby_hint_host")] if self.host_server else [])
+        for i, text in enumerate(hints):
+            img = self.small.render(text, True, GREY)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 560 + i * 24)))
+        self.draw_net_notice()
         pygame.display.flip()
+
+    def draw_net_notice(self):
+        """Поверх экрана: «переподключаемся…» у себя или «у соперника пропала связь — пауза»."""
+        import time
+        lines = []
+        if getattr(self, "reconnect_until", None) is not None:
+            lines.append(tr("net.reconnecting", s=f"{max(0, self.reconnect_until - time.monotonic()):.0f}"))
+        elif self.net and self.net_paused:
+            for pid, seat in self.net_seats.items():
+                if seat.get("who") == "away":
+                    lines.append(tr("net.paused", name=self.player_label(pid), s=seat.get("away_left", 0)))
+        if not lines:
+            return
+        s = self.screen
+        shade = pygame.Surface((WIDTH, 110), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, 190))
+        s.blit(shade, (0, HEIGHT // 2 - 55))
+        for i, text in enumerate(lines[:2]):
+            img = self.font.render(text, True, WHITE)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 12 * (len(lines) - 1) + i * 28)))
 
     def draw_settings(self):
         s = self.screen
@@ -437,6 +477,15 @@ class ScreensMixin:
             w = self.snap["winner"]
             t = self.big.render(tr("win", name=self.player_label(w)), True, COLOR[w])
             s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 20)))
-            t = self.font.render(tr("win.hint"), True, WHITE)
+            hint = tr("win.hint")
+            if self.net:
+                other = "red" if self.me == "blue" else "blue"
+                if self.my_ready():
+                    hint = tr("net.rematch_wait")
+                elif (self.net_seats.get(other) or {}).get("ready"):
+                    hint = tr("net.rematch_other", name=self.player_label(other))
+            t = self.font.render(hint, True, WHITE)
             s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 40)))
+        if self.net:
+            self.draw_net_notice()
         pygame.display.flip()

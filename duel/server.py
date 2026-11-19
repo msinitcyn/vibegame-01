@@ -1,14 +1,19 @@
-"""Сервер матча без окна (прототип этапа 2).
+"""Сервер матча без окна.
 
     python -m duel.server                 # ждёт двух игроков
     python -m duel.server --bot           # пустое место занимает бот
     python -m duel.server --port 5555
 
-Первый подключившийся — синий, второй — красный. Партия начинается, когда заняты оба места
-(два игрока или игрок и бот), и дальше идёт, пока подключён хоть один игрок.
+Рукопожатие (протокол 3): сервер шлёт hello, клиент просит место join (имя, ключ места при
+возврате), сервер отвечает seat (цвет, ключ) или full. Первый получивший место — синий.
+
+Фазы: lobby (ждём, пока оба места заняты и все люди «готов»), play (матч идёт; пауза, пока
+кто-то потерял связь), over (есть победитель; новая партия, когда все люди «готов»).
+Потерявшему связь место держится HOLD секунд; Esc у клиента (leave) освобождает сразу.
 Снимки — раз в SEND_EVERY тактов (30 в секунду) со всеми событиями с прошлого снимка.
 """
 import argparse
+import secrets
 import select
 import socket
 import threading
@@ -23,12 +28,37 @@ from .snapshot import snapshot
 
 PIDS = ("blue", "red")
 SEND_EVERY = 2                    # снимок раз в 2 такта — 30 в секунду
+HOLD = 30.0                       # секунд держим место потерявшему связь
+SILENCE = 3.0                     # столько секунд без сообщений — связь потеряна
+JOIN_WAIT = 5.0                   # новичок без join столько секунд — закрываем
+NAME_MAX = 16
+
+
+def clean_name(text):
+    return "".join(ch for ch in str(text or "") if ch.isprintable()).strip()[:NAME_MAX]
+
+
+class Seat:
+    """Место игрока: соединение, ключ для возврата, имя, готовность, удержание после обрыва."""
+
+    def __init__(self):
+        self.conn = None
+        self.token = None
+        self.name = ""
+        self.ready = False
+        self.away_until = None        # момент (monotonic), до которого место держится за отошедшим
+        self.last_seen = 0.0
+
+    @property
+    def free(self):
+        return self.conn is None and self.away_until is None
 
 
 class Server:
     def __init__(self, port=PORT, bot=False, host="0.0.0.0", proto=PROTO, log=print,
-                 discovery_port=discovery.DISCOVERY_PORT):
+                 discovery_port=discovery.DISCOVERY_PORT, clock=time.monotonic):
         self.log = log
+        self.clock = clock            # часы (тесты подменяют, чтобы не ждать секунды)
         self.listener = socket.create_server((host, port))
         self.listener.setblocking(False)
         self.port = self.listener.getsockname()[1]
@@ -38,44 +68,137 @@ class Server:
                 self.finder_sock = discovery.listen_socket(discovery_port)
             except OSError as e:
                 log(f"поиск игр в сети не работает (порт {discovery_port}: {e}) — подключаться по адресу")
-        self.conns = {}               # pid -> Conn
-        self.names = {}               # pid -> имя игрока из его настроек (если задано)
+        self.seats = {pid: Seat() for pid in PIDS}
+        self.newcomers = []           # [(Conn, когда подключился)] — ещё не прислали join
         self.bot = bot
         self.proto = proto            # версия протокола в приветствии (тесты проверяют несовпадение)
         self.bots = {pid: Bot(i + 1) for i, pid in enumerate(PIDS)}
         self.tick_no = 0              # номер такта сервера (для плавной анимации у клиентов)
-        self.started = False          # партия идёт: оба места были заняты
+        self.phase = "lobby"
         self.events = []              # события с прошлого снимка
         self.running = True
         self.games = 0                # номер партии: клиент не сглаживает между партиями
         self.new_match()
 
+    # ------------------------------------------------------------------ места
+
+    @property
+    def conns(self):
+        """Подключённые игроки: цвет -> соединение."""
+        return {pid: s.conn for pid, s in self.seats.items() if s.conn}
+
+    @property
+    def names(self):
+        return {pid: s.name for pid, s in self.seats.items() if s.name and not s.free}
+
+    @property
+    def started(self):
+        return self.phase != "lobby"
+
+    def bot_seats(self):
+        """Места, где сейчас играет бот (свободные, если бот разрешён и кто-то подключён)."""
+        if not self.bot or not self.conns:
+            return []
+        return [pid for pid, s in self.seats.items() if s.free]
+
+    def full(self):
+        """Оба места заняты (людьми, отошедшими или ботом)."""
+        return all(not s.free for s in self.seats.values()) or bool(self.bot_seats())
+
+    def all_ready(self):
+        humans = [s for s in self.seats.values() if not s.free]
+        return self.full() and all(s.ready for s in humans)
+
     def new_match(self):
         self.games += 1
         self.match = Match()
         self.pending = {pid: Command() for pid in PIDS}
+        for s in self.seats.values():
+            s.ready = False
         self.log(f"новая партия (зерно {self.match.seed})")
+
+    def to_lobby(self, why):
+        self.log(why + " — снова лобби")
+        self.phase = "lobby"
+        self.new_match()
+
+    def free_seat(self, pid, why):
+        """Место освободилось окончательно (ушёл сам или не вернулся)."""
+        s = self.seats[pid]
+        if s.conn:
+            s.conn.close()
+        self.seats[pid] = Seat()
+        self.log(f"{pid} {why}")
+        if self.phase != "lobby":
+            self.to_lobby("соперник вышел")
+
+    def drop(self, pid):
+        """Связь с игроком потеряна: в партии место держится HOLD секунд, в лобби — свободно."""
+        s = self.seats[pid]
+        if s.conn:
+            s.conn.close()
+            s.conn = None
+        if self.phase == "lobby":
+            self.free_seat(pid, "отключился")
+        else:
+            s.away_until = self.clock() + HOLD
+            self.log(f"{pid} потерял связь — держим место {HOLD:.0f} с")
+
+    # ------------------------------------------------------------------ подключения
 
     def accept(self):
         while True:
             try:
                 sock, addr = self.listener.accept()
-            except BlockingIOError:
+            except (BlockingIOError, OSError):
                 return
             conn = Conn(sock)
-            free = [pid for pid in PIDS if pid not in self.conns]
-            if not free:
+            conn.addr = addr
+            conn.send({"type": "hello", "proto": self.proto, "role": "player"})
+            self.newcomers.append((conn, self.clock()))
+
+    def seat_newcomers(self):
+        now = self.clock()
+        keep = []
+        for conn, since in self.newcomers:
+            join = next((m for m in conn.recv() if m.get("type") == "join"), None)
+            if join is None:
+                if conn.closed or now - since > JOIN_WAIT:
+                    conn.close()
+                else:
+                    keep.append((conn, since))
+                continue
+            token = join.get("token")
+            pid = next((p for p, s in self.seats.items() if token and s.token == token and s.conn is None),
+                       None)
+            back = pid is not None
+            if pid is None:
+                pid = next((p for p, s in self.seats.items() if s.free), None)
+            if pid is None:
                 conn.send({"type": "full"})
                 conn.close()
                 continue
-            pid = free[0]
-            self.conns[pid] = conn
-            conn.send({"type": "hello", "proto": self.proto, "role": "player", "you": pid})
-            self.log(f"{addr[0]}:{addr[1]} подключился — {pid}")
+            s = self.seats[pid]
+            s.conn, s.away_until, s.last_seen = conn, None, now
+            if not back:
+                s.token = secrets.token_hex(8)
+                s.ready = False
+                self.pending[pid] = Command()
+            s.name = clean_name(join.get("name")) or s.name
+            conn.send({"type": "seat", "you": pid, "token": s.token})
+            self.log(f"{conn.addr[0]}:{conn.addr[1]} {'вернулся' if back else 'подключился'} — {pid}")
+        self.newcomers = keep
 
     def read(self):
-        for pid, conn in list(self.conns.items()):
-            for msg in conn.recv():
+        self.seat_newcomers()
+        now = self.clock()
+        for pid, s in self.seats.items():
+            if s.conn is None:
+                if s.away_until is not None and now > s.away_until:
+                    self.free_seat(pid, "не вернулся")
+                continue
+            for msg in s.conn.recv():
+                s.last_seen = now
                 kind = msg.get("type")
                 if kind == "cmd":
                     c = self.pending[pid]
@@ -87,21 +210,19 @@ class Server:
                     if slot in (0, 1, 2, 3):
                         c.use_slot = slot
                 elif kind == "name":
-                    name = "".join(ch for ch in str(msg.get("name", "")) if ch.isprintable()).strip()[:16]
-                    if name:
-                        self.names[pid] = name
-                    else:
-                        self.names.pop(pid, None)
-                elif kind == "restart" and self.match.winner:
-                    self.new_match()
-            if conn.closed:
-                del self.conns[pid]
-                self.names.pop(pid, None)
-                self.pending[pid] = Command()
-                self.log(f"{pid} отключился")
+                    s.name = clean_name(msg.get("name"))
+                elif kind == "ready":
+                    s.ready = bool(msg.get("ready", True))
+                elif kind == "leave":
+                    self.free_seat(pid, "вышел")
+                    break
+            if self.seats[pid] is not s or s.conn is None:
+                continue              # место освободили выше
+            if s.conn.closed or now - s.last_seen > SILENCE:
+                self.drop(pid)
 
     def answer_finders(self):
-        """Ответить всем, кто ищет игры в сети: порт игры, имя компьютера, свободные места."""
+        """Ответить всем, кто ищет игры в сети: порт игры, имя создателя, свободные места."""
         while self.finder_sock:
             try:
                 data, addr = self.finder_sock.recvfrom(discovery.MAX_PACKET + 1)
@@ -111,39 +232,62 @@ class Server:
                 return
             msg = discovery.decode(data)
             if msg and msg["type"] == "who":
-                free = max(0, len(PIDS) - len(self.conns))
+                free = sum(1 for s in self.seats.values() if s.free)
                 # в списке игр — имя создателя (он синий), иначе имя компьютера
                 try:
-                    self.finder_sock.sendto(discovery.answer(self.port, free, self.names.get("blue")), addr)
+                    self.finder_sock.sendto(discovery.answer(self.port, free, self.seats["blue"].name or None),
+                                            addr)
                 except OSError:
                     pass
+
+    # ------------------------------------------------------------------ такт
 
     def step(self):
         """Один такт сервера: подключения, команды, шаг матча (если есть игроки)."""
         self.answer_finders()
         self.accept()
         self.read()
-        if self.conns:                # без игроков матч стоит
+        if self.conns or any(s.away_until for s in self.seats.values()):
             self.tick()
 
-    def full(self):
-        """Оба места заняты (людьми или ботом)."""
-        return len(self.conns) == len(PIDS) or (self.bot and self.conns)
-
-    def bot_seats(self):
-        """Места, где сейчас играет бот."""
-        return [pid for pid in PIDS if self.bot and pid not in self.conns] if self.conns else []
+    def seats_info(self):
+        now = self.clock()
+        out = {}
+        bots = self.bot_seats()
+        for pid, s in self.seats.items():
+            if s.conn:
+                who = "human"
+            elif s.away_until is not None:
+                who = "away"
+            elif pid in bots:
+                who = "bot"
+            else:
+                who = None
+            out[pid] = {"who": who, "name": s.name if who in ("human", "away") else "",
+                        "ready": s.ready or who == "bot",
+                        "away_left": max(0, round(s.away_until - now)) if who == "away" else 0}
+        return out
 
     def tick(self):
         self.tick_no += 1
-        if not self.started and self.full():
-            self.started = True
-            self.log("оба места заняты — партия началась")
-        if self.started:
+        if self.phase == "lobby" and self.all_ready():
+            self.phase = "play"
+            for s in self.seats.values():
+                s.ready = False
+            self.log("все готовы — партия началась")
+        elif self.phase == "over" and self.all_ready():
+            self.phase = "play"
+            self.new_match()
+            self.log("реванш")
+        paused = any(s.away_until is not None for s in self.seats.values())
+        if self.phase == "play" and not paused:
             self.play_tick()
+            if self.match.winner:
+                self.phase = "over"
         if self.tick_no % SEND_EVERY == 0:
-            msg = {"type": "state", "tick": self.tick_no, "waiting": not self.started, "game": self.games,
-                   "names": dict(self.names), "bots": self.bot_seats(),
+            seats = self.seats_info()
+            msg = {"type": "state", "tick": self.tick_no, "game": self.games, "phase": self.phase,
+                   "waiting": self.phase == "lobby", "paused": paused, "seats": seats,
                    "snap": snapshot(self.match), "events": self.events}
             self.events = []
             for conn in self.conns.values():
@@ -151,10 +295,11 @@ class Server:
 
     def play_tick(self):
         commands = {}
+        bots = self.bot_seats()
         for pid in PIDS:
-            if pid in self.conns:
+            if self.seats[pid].conn:
                 commands[pid] = self.pending[pid]
-            elif self.bot:
+            elif pid in bots:
                 commands[pid] = Command(*self.bots[pid].act())
         # нажатия — один раз; направление держится до следующей команды клиента
         self.pending = {pid: Command(move=self.pending[pid].move) for pid in PIDS}
@@ -165,9 +310,13 @@ class Server:
         self.running = False
 
     def close(self):
-        for conn in self.conns.values():
+        """Закрыть всё; подключённым — «bye»: создатель вышел, переподключаться некуда."""
+        for conn in list(self.conns.values()) + [c for c, _ in self.newcomers]:
+            conn.send({"type": "bye"})
+            conn.flush()
             conn.close()
-        self.conns = {}
+        self.seats = {pid: Seat() for pid in PIDS}
+        self.newcomers = []
         for s in (self.listener, self.finder_sock):
             try:
                 if s:
@@ -187,7 +336,7 @@ class Server:
         while self.running:
             # не дольше 0,1 с, чтобы stop() из другого потока срабатывал быстро
             wait = min(0.1, max(0.0, next_tick - time.monotonic()))
-            socks = [self.listener] + list(self.conns.values())
+            socks = [self.listener] + list(self.conns.values()) + [c for c, _ in self.newcomers]
             if self.finder_sock:
                 socks.append(self.finder_sock)
             select.select(socks, [], [], wait)
@@ -196,12 +345,12 @@ class Server:
             self.read()
             now = time.monotonic()
             while now >= next_tick:
-                if self.conns:            # без игроков матч стоит
-                    self.tick()
+                if self.conns or any(s.away_until for s in self.seats.values()):
+                    self.tick()           # без игроков матч стоит
                 next_tick += STEP
                 if now - next_tick > 0.25:  # после долгой паузы не догоняем
                     next_tick = now
-            for conn in self.conns.values():
+            for conn in list(self.conns.values()) + [c for c, _ in self.newcomers]:
                 conn.flush()
 
 
@@ -216,7 +365,7 @@ def start_in_thread(port=PORT, bot=False, log=None, discovery_port=discovery.DIS
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="python -m duel.server", description="Сервер «Дуэли шариков»")
+    ap = argparse.ArgumentParser(prog="python -m duel.server", description="Сервер Spellgunners")
     ap.add_argument("--port", type=int, default=PORT)
     ap.add_argument("--bot", action="store_true", help="пустое место занимает бот")
     args = ap.parse_args(argv)

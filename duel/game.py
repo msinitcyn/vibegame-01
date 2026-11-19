@@ -4,6 +4,8 @@
 делает шаги матча с фиксированным тактом и превращает события матча в звук и
 всплывающие надписи на языке игрока. Отрисовка — в ScreensMixin (duel/screens.py).
 """
+import time
+
 import pygame
 
 from .commands import Command
@@ -39,6 +41,9 @@ from .sprites import reload_all
 MAX_STEPS_PER_FRAME = 5           # после долгого кадра не «догоняем» больше этого
 ADDRESS_MAX = 64                  # длина адреса на экране «Подключиться»
 CONNECT_TIMEOUT = 3.0
+SILENCE = 3.0                     # столько секунд без сообщений сервера — связь потеряна
+RECONNECT_FOR = 30.0              # столько секунд пытаемся вернуться на своё место
+RECONNECT_EVERY = 1.0
 
 
 def load_font(size, bold=False):
@@ -94,7 +99,7 @@ class Game(ScreensMixin):
     """Приложение поверх матча: хотсит — оба игрока за одним компьютером."""
 
     def __init__(self, windowed=False, net=None, pad=0):
-        """net — (соединение, приветствие сервера) для сетевого клиента; pad — номер своего геймпада."""
+        """net — (соединение, место от сервера, адрес) для сетевого клиента; pad — номер своего геймпада."""
         pygame.init()
         self.settings = settings.load()
         set_lang(self.settings["lang"])
@@ -134,7 +139,12 @@ class Game(ScreensMixin):
         self.net_port = PORT          # порт своего сервера (тесты ставят 0 — любой свободный)
         self.discovery_port = DISCOVERY_PORT    # порт поиска игр (тесты ставят None — не отвечать в сеть)
         self.net_waiting = False      # сервер ждёт второго игрока
-        self.net_names, self.net_bots = {}, []   # подписи игроков из сообщений сервера
+        self.net_seats = {}           # места из сообщений сервера: кто сидит, имя, готовность
+        self.net_phase = "lobby"      # lobby / play / over
+        self.net_paused = False       # кто-то потерял связь — партия на паузе
+        self.net_addr = self.net_token = None    # куда и с каким ключом возвращаться после обрыва
+        self.reconnect_until = None   # пока не None — связь потеряна, пытаемся вернуться
+        self.net_end = "net.lost"     # почему закончилась сетевая игра (текст для меню)
         self.restart()
         if net:
             self.enter_net(*net)
@@ -229,10 +239,10 @@ class Game(ScreensMixin):
                 continue
             if self.net:
                 if not self.net_frame(dt):
-                    self.leave_net(t("net.lost"))
+                    self.leave_net(t(self.net_end), voluntary=False)
                     continue
                 if self.net_waiting:
-                    self.draw_waiting()
+                    self.draw_lobby()
                     continue
             elif not self.snap["winner"]:
                 # фиксированный такт: копим время кадров, делаем целое число шагов
@@ -248,7 +258,11 @@ class Game(ScreensMixin):
 
     def net_frame(self, dt):
         """Сетевой клиент: команды своего мага на сервер (60 раз в секунду), снимки и события
-        с сервера. Обе раскладки клавиатуры управляют своим магом. False — связь потеряна."""
+        с сервера. Обе раскладки клавиатуры управляют своим магом.
+        Обрыв — пытаемся вернуться на своё место. False — сетевая игра закончилась (причина в net_end)."""
+        now = time.monotonic()
+        if self.reconnect_until is not None:
+            return self.try_reconnect(now, dt)
         self.time_acc += dt
         steps = 0
         while self.time_acc >= STEP and steps < MAX_STEPS_PER_FRAME:
@@ -270,38 +284,87 @@ class Game(ScreensMixin):
         if steps == MAX_STEPS_PER_FRAME:
             self.time_acc = 0.0
         for msg in self.net.recv():
+            self.net_heard = now
             if msg.get("type") == "state":
-                self.net_names = msg.get("names") or {}
-                self.net_bots = msg.get("bots") or []
+                self.net_seats = msg.get("seats") or {}
+                self.net_phase = msg.get("phase", "play")
+                self.net_paused = bool(msg.get("paused"))
                 self.playback.push(msg["tick"], msg["snap"], msg["events"], msg.get("waiting", False),
                                    msg.get("game", 0))
+            elif msg.get("type") == "bye":
+                self.net_end = "net.host_left"
+                return False
+        self.show_playback(dt)
+        if self.net.closed or now - self.net_heard > SILENCE:
+            if self.host_server:          # свой сервер в этой же программе — возвращаться некуда
+                self.net_end = "net.lost"
+                return False
+            self.net.close()
+            self.reconnect_until = now + RECONNECT_FOR
+            self.next_try = now
+        return True
+
+    def show_playback(self, dt):
         snap, events, waiting = self.playback.advance(dt)
         if snap is not None:
             self.snap = snap
             self.net_waiting = waiting
         self.handle_events([tuple(e) for e in events])
         self.tick_popups(dt)
-        return not self.net.closed
+
+    def try_reconnect(self, now, dt):
+        """Связь потеряна: раз в секунду пробуем вернуться на своё место по ключу."""
+        self.show_playback(dt)        # картинка стоит на последнем снимке
+        if now > self.reconnect_until:
+            self.net_end = "net.lost"
+            return False
+        if now >= self.next_try:
+            self.next_try = now + RECONNECT_EVERY
+            try:
+                conn, seat = connect(self.net_addr, timeout=RECONNECT_EVERY, name=self.player_name(),
+                                     token=self.net_token)
+            except (ConnectionError, OSError) as e:
+                if error_key(e) in ("full", "proto"):    # место уже отдали — вернуться не выйдет
+                    self.net_end = "net.lost"
+                    return False
+                return True
+            self.net, self.me, self.net_token = conn, seat["you"], seat["token"]
+            self.playback = Playback()
+            self.net_heard = time.monotonic()
+            self.reconnect_until = None
+        return True
+
+    def my_ready(self):
+        return bool(self.net_seats.get(self.me, {}).get("ready"))
+
+    def send_ready(self, ready):
+        if self.net and self.reconnect_until is None:
+            self.net.send({"type": "ready", "ready": ready})
 
     # ------------------------------------------------------------------ сетевая игра
 
-    def enter_net(self, conn, hello):
-        """Начать сетевую партию: соединение с сервером и его приветствие."""
+    def enter_net(self, conn, seat, address=None):
+        """Начать сетевую игру: соединение и место от сервера (seat: цвет и ключ для возврата)."""
         self.restart()
-        self.net, self.me = conn, hello["you"]
-        self.net_names, self.net_bots = {}, []
-        if self.player_name():
-            conn.send({"type": "name", "name": self.player_name()})
+        self.net, self.me = conn, seat["you"]
+        self.net_addr, self.net_token = address, seat.get("token")
+        self.net_seats, self.net_phase, self.net_paused = {}, "lobby", False
+        self.reconnect_until = None
+        self.net_heard = time.monotonic()
         self.playback = Playback()
         self.net_waiting = True
         self.state = "play"
         self.held.clear()
         pygame.display.set_caption(f"{t('title')} — {t('net.title_suffix', name=t('name.' + self.me))}")
 
-    def leave_net(self, message=None):
-        """Выйти из сетевой партии в меню; свой сервер — остановить."""
+    def leave_net(self, message=None, voluntary=True):
+        """Выйти из сетевой игры в меню; свой сервер — остановить. Сам ушёл — место освобождается сразу."""
         if self.net:
+            if voluntary and not self.net.closed:
+                self.net.send({"type": "leave"})
+                self.net.flush()
             self.net.close()
+        self.reconnect_until = None
         if self.host_server:
             self.host_server.stop()
             self.host_server.thread.join(timeout=2)
@@ -321,13 +384,14 @@ class Game(ScreensMixin):
             self.menu_message = t("net.port_busy", port=self.net_port)
             return
         try:
-            conn, hello = connect(f"127.0.0.1:{srv.port}", timeout=CONNECT_TIMEOUT)
+            address = f"127.0.0.1:{srv.port}"
+            conn, seat = connect(address, timeout=CONNECT_TIMEOUT, name=self.player_name())
         except (ConnectionError, OSError) as e:
             srv.stop()
             self.menu_message = self.net_error(e)
             return
         self.menu_message = None
-        self.enter_net(conn, hello)
+        self.enter_net(conn, seat, address)
         self.host_server = srv
         self.__dict__.pop("_addresses", None)       # адрес в сети мог смениться — найти заново
 
@@ -372,7 +436,7 @@ class Game(ScreensMixin):
         found = [g["address"] for g in self.join_games()]
         address = self.join_pick if self.join_pick in found else (self.address.strip() or "localhost")
         try:
-            conn, hello = connect(address, timeout=CONNECT_TIMEOUT)
+            conn, seat = connect(address, timeout=CONNECT_TIMEOUT, name=self.player_name())
         except (ConnectionError, OSError, ValueError) as e:
             self.join_error = self.net_error(e)
             return
@@ -380,16 +444,17 @@ class Game(ScreensMixin):
         self.settings["last_address"] = address
         settings.save(self.settings)
         self.close_finder()
-        self.enter_net(conn, hello)
+        self.enter_net(conn, seat, address)
 
     def net_error(self, e):
         key = error_key(e)
         return t("net.fail", err=t("net.err." + key) if key else str(e))
 
     def take_bot(self):
-        """Экран ожидания создателя: место второго игрока — боту."""
+        """Лобби у создателя: свободное место — боту, а сам создатель готов."""
         if self.host_server and self.net_waiting:
             self.host_server.bot = True
+            self.send_ready(True)
 
     def join_key(self, sc):
         """Экран «Подключиться»: набор адреса по физическим клавишам (в любой раскладке)."""
@@ -488,10 +553,12 @@ class Game(ScreensMixin):
         if self.net and self.net_waiting:
             if sc == pygame.KSCAN_B:
                 self.take_bot()
+            elif sc in (pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER, pygame.KSCAN_SPACE):
+                self.send_ready(not self.my_ready())
             return
         if self.snap["winner"] and sc == pygame.KSCAN_R:
             if self.net:
-                self.net.send({"type": "restart"})
+                self.send_ready(True)     # реванш — когда готовы оба
             else:
                 self.restart()
         if not self.snap["winner"]:
@@ -552,6 +619,8 @@ class Game(ScreensMixin):
         if self.net and self.net_waiting:
             if btn == B.CONTROLLER_BUTTON_Y:
                 self.take_bot()
+            elif btn == B.CONTROLLER_BUTTON_A:
+                self.on_key(B.KSCAN_RETURN)
             elif btn in (B.CONTROLLER_BUTTON_B, B.CONTROLLER_BUTTON_START):
                 self.on_key(B.KSCAN_ESCAPE)
             return
@@ -633,11 +702,11 @@ class Game(ScreensMixin):
     def player_label(self, pid):
         """Подпись игрока: в сетевой игре — имя или «Бот», иначе (и без имени) — цвет."""
         if self.net:
-            name = self.net_names.get(pid)
-            if name:
-                return name
-            if pid in self.net_bots:
+            seat = self.net_seats.get(pid) or {}
+            if seat.get("who") == "bot":
                 return t("name.bot")
+            if seat.get("name"):
+                return seat["name"]
         return t("name." + pid)
 
     def player_name(self):
