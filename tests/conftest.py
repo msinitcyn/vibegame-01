@@ -53,6 +53,7 @@ def game(_game):
     _game.leave_net()                       # прошлый тест мог оставить сетевую партию
     _game.menu_message = None
     _game.net_port = 0                      # свой сервер — на любом свободном порту
+    _game.discovery_port = None             # и не отвечает на поиск в настоящей сети
     _game.pads.pads = []
     _game.start()
     _game.held = set()

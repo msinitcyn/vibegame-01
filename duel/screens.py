@@ -77,26 +77,58 @@ class ScreensMixin:
             s.blit(img, img.get_rect(center=(WIDTH // 2, 560 + i * 25)))
         pygame.display.flip()
 
+    JOIN_ROWS = 5                     # сколько найденных игр помещается на экране
+
     def draw_join(self):
-        """Экран «Подключиться»: поле адреса, ошибка, подсказка."""
+        """Экран «Подключиться»: найденные в сети игры, строка ручного ввода, ошибка, подсказка."""
+        from .net import PROTO
         s = self.screen
         s.fill(BG)
         img = self.big.render(tr("net.join_title"), True, WHITE)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 120)))
-        img = self.font.render(tr("net.join_prompt"), True, GREY)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 230)))
-        box = pygame.Rect(0, 0, 520, 52)
-        box.center = (WIDTH // 2, 290)
-        pygame.draw.rect(s, (26, 29, 40), box, border_radius=10)
-        pygame.draw.rect(s, BLUE, box, 2, border_radius=10)
-        cursor = "_" if pygame.time.get_ticks() // 500 % 2 else " "
-        img = self.font.render(self.address + cursor, True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 80)))
+        games = self.join_games()
+        found = [g["address"] for g in games]
+        manual_sel = self.join_pick not in found
+
+        img = self.font.render(tr("net.found") if games else tr("net.searching"), True, GREY)
+        s.blit(img, img.get_rect(midleft=(WIDTH // 2 - 300, 160)))
+        if not games:
+            for i, line in enumerate(self.wrap(tr("net.none_hint"), 600, self.small)):
+                img = self.small.render(line, True, GREY)
+                s.blit(img, img.get_rect(midleft=(WIDTH // 2 - 300, 200 + i * 22)))
+        for i, g in enumerate(games[:self.JOIN_ROWS]):
+            sel = g["address"] == self.join_pick
+            rect = pygame.Rect(0, 0, 600, 40)
+            rect.center = (WIDTH // 2, 205 + i * 46)
+            pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=10)
+            pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
+            if g["proto"] != PROTO:
+                status, color = tr("net.st_proto"), BAD_TEXT
+            elif g["free"] > 0:
+                status, color = tr("net.st_wait"), AMMO_COLOR
+            else:
+                status, color = tr("net.st_full"), GREY
+            name = self.font.render(f"{g['name']}  ", True, WHITE if sel else GREY)
+            addr = self.small.render(g["address"].rsplit(":", 1)[0], True, GREY)
+            st = self.small.render(status, True, color)
+            s.blit(name, name.get_rect(midleft=(rect.left + 16, rect.centery)))
+            s.blit(addr, addr.get_rect(midleft=(rect.left + 16 + name.get_width(), rect.centery)))
+            s.blit(st, st.get_rect(midright=(rect.right - 16, rect.centery)))
+
+        img = self.font.render(tr("net.manual"), True, GREY)
+        s.blit(img, img.get_rect(midleft=(WIDTH // 2 - 300, 470)))
+        box = pygame.Rect(0, 0, 600, 48)
+        box.center = (WIDTH // 2, 515)
+        pygame.draw.rect(s, (40, 46, 66) if manual_sel else (26, 29, 40), box, border_radius=10)
+        pygame.draw.rect(s, BLUE if manual_sel else GREY, box, 2, border_radius=10)
+        cursor = "_" if manual_sel and pygame.time.get_ticks() // 500 % 2 else " "
+        img = self.font.render(self.address + cursor, True, WHITE if manual_sel else GREY)
         s.blit(img, img.get_rect(midleft=(box.left + 16, box.centery)))
         if self.join_error:
             img = self.font.render(self.join_error, True, BAD_TEXT)
-            s.blit(img, img.get_rect(center=(WIDTH // 2, 360)))
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 575)))
         img = self.small.render(tr("net.join_hint"), True, GREY)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 560)))
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 640)))
         pygame.display.flip()
 
     def draw_waiting(self):

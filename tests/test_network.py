@@ -46,7 +46,7 @@ class Client:
 
 @pytest.fixture
 def server():
-    srv = Server(port=0, host="127.0.0.1", log=lambda text: None)
+    srv = Server(port=0, host="127.0.0.1", log=lambda text: None, discovery_port=None)
     yield srv
     for c in list(srv.conns.values()):
         c.close()
@@ -112,7 +112,7 @@ def test_bad_command_values_are_clamped(server):
 
 
 def test_bot_takes_empty_place_and_yields():
-    srv = Server(port=0, host="127.0.0.1", bot=True, log=lambda text: None)
+    srv = Server(port=0, host="127.0.0.1", bot=True, log=lambda text: None, discovery_port=None)
     try:
         human = Client(srv)                                 # ссылка держит соединение открытым
         red = srv.match.red
@@ -159,7 +159,7 @@ def test_restart_after_win(server):
 
 
 def test_other_protocol_version_refused():
-    srv = Server(port=0, host="127.0.0.1", proto=PROTO + 1, log=lambda text: None)
+    srv = Server(port=0, host="127.0.0.1", proto=PROTO + 1, log=lambda text: None, discovery_port=None)
     import threading
     stop = threading.Event()
 
@@ -182,7 +182,7 @@ def test_other_protocol_version_refused():
 
 def test_client_game_plays_over_network(game):
     """Приложение в режиме клиента: выстрел с клавиатуры доходит до сервера, снимок рисуется."""
-    srv = start_in_thread(port=0, bot=True, log=lambda text: None)    # соперник — бот
+    srv = start_in_thread(port=0, bot=True, log=lambda text: None, discovery_port=None)    # соперник — бот
     try:
         game.enter_net(*connect(f"127.0.0.1:{srv.port}", timeout=3))
         deadline = time.monotonic() + 3
@@ -214,7 +214,7 @@ def test_waits_for_second_player(server):
 
 
 def test_bot_starts_at_once():
-    srv = Server(port=0, host="127.0.0.1", bot=True, log=lambda text: None)
+    srv = Server(port=0, host="127.0.0.1", bot=True, log=lambda text: None, discovery_port=None)
     try:
         a = Client(srv)
         wait(srv, lambda: srv.match.match_time > 0)
@@ -249,7 +249,7 @@ def test_snapshots_30_per_second_and_no_lost_events(server):
 
 
 def test_server_in_thread_starts_and_stops():
-    srv = start_in_thread(port=0, log=lambda text: None)
+    srv = start_in_thread(port=0, log=lambda text: None, discovery_port=None)
     conn, hello = connect(f"127.0.0.1:{srv.port}", timeout=3)
     assert hello["you"] == "blue"
     port = srv.port

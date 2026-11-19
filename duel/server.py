@@ -14,6 +14,7 @@ import socket
 import threading
 import time
 
+from . import discovery
 from .bot import Bot
 from .commands import Command
 from .match import STEP, Match
@@ -25,11 +26,18 @@ SEND_EVERY = 2                    # снимок раз в 2 такта — 30 �
 
 
 class Server:
-    def __init__(self, port=PORT, bot=False, host="0.0.0.0", proto=PROTO, log=print):
+    def __init__(self, port=PORT, bot=False, host="0.0.0.0", proto=PROTO, log=print,
+                 discovery_port=discovery.DISCOVERY_PORT):
         self.log = log
         self.listener = socket.create_server((host, port))
         self.listener.setblocking(False)
         self.port = self.listener.getsockname()[1]
+        self.finder_sock = None       # отвечает на поиск игр в сети (None — поиск выключен)
+        if discovery_port is not None:
+            try:
+                self.finder_sock = discovery.listen_socket(discovery_port)
+            except OSError as e:
+                log(f"поиск игр в сети не работает (порт {discovery_port}: {e}) — подключаться по адресу")
         self.conns = {}               # pid -> Conn
         self.bot = bot
         self.proto = proto            # версия протокола в приветствии (тесты проверяют несовпадение)
@@ -84,8 +92,26 @@ class Server:
                 self.pending[pid] = Command()
                 self.log(f"{pid} отключился")
 
+    def answer_finders(self):
+        """Ответить всем, кто ищет игры в сети: порт игры, имя компьютера, свободные места."""
+        while self.finder_sock:
+            try:
+                data, addr = self.finder_sock.recvfrom(discovery.MAX_PACKET + 1)
+            except (BlockingIOError, InterruptedError):
+                return
+            except OSError:
+                return
+            msg = discovery.decode(data)
+            if msg and msg["type"] == "who":
+                free = max(0, len(PIDS) - len(self.conns))
+                try:
+                    self.finder_sock.sendto(discovery.answer(self.port, free), addr)
+                except OSError:
+                    pass
+
     def step(self):
         """Один такт сервера: подключения, команды, шаг матча (если есть игроки)."""
+        self.answer_finders()
         self.accept()
         self.read()
         if self.conns:                # без игроков матч стоит
@@ -128,10 +154,12 @@ class Server:
         for conn in self.conns.values():
             conn.close()
         self.conns = {}
-        try:
-            self.listener.close()
-        except OSError:
-            pass
+        for s in (self.listener, self.finder_sock):
+            try:
+                if s:
+                    s.close()
+            except OSError:
+                pass
 
     def run(self):
         self.log(f"сервер ждёт игроков на порту {self.port}" + (" (пустое место — бот)" if self.bot else ""))
@@ -146,7 +174,10 @@ class Server:
             # не дольше 0,1 с, чтобы stop() из другого потока срабатывал быстро
             wait = min(0.1, max(0.0, next_tick - time.monotonic()))
             socks = [self.listener] + list(self.conns.values())
+            if self.finder_sock:
+                socks.append(self.finder_sock)
             select.select(socks, [], [], wait)
+            self.answer_finders()
             self.accept()
             self.read()
             now = time.monotonic()
@@ -160,10 +191,11 @@ class Server:
                 conn.flush()
 
 
-def start_in_thread(port=PORT, bot=False, log=None):
+def start_in_thread(port=PORT, bot=False, log=None, discovery_port=discovery.DISCOVERY_PORT):
     """Сервер в фоновом потоке (кнопка «Создать игру»). Порт занят — OSError сразу.
     Остановить: server.stop(); server.thread.join()."""
-    srv = Server(port, bot, log=log or (lambda text: print("[сервер]", text, flush=True)))
+    srv = Server(port, bot, log=log or (lambda text: print("[сервер]", text, flush=True)),
+                 discovery_port=discovery_port)
     srv.thread = threading.Thread(target=srv.run, name="duel-server", daemon=True)
     srv.thread.start()
     return srv

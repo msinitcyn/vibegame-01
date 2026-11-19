@@ -73,7 +73,7 @@ def test_host_leaves_guest_gets_lost(game):
 
 
 def test_lost_connection_returns_to_menu(game):
-    srv = start_in_thread(port=0, bot=True, log=lambda text: None)
+    srv = start_in_thread(port=0, bot=True, log=lambda text: None, discovery_port=None)
     game.state = "join"
     game.address = f"127.0.0.1:{srv.port}"
     game.on_key(pygame.KSCAN_RETURN)
@@ -113,7 +113,7 @@ def type_address(game, text):
 
 
 def test_join_typed_address_and_remember(game):
-    srv = start_in_thread(port=0, bot=True, log=lambda text: None)
+    srv = start_in_thread(port=0, bot=True, log=lambda text: None, discovery_port=None)
     try:
         press_menu_item(game, "join")
         assert game.state == "join"
@@ -159,3 +159,54 @@ def test_join_gamepad_buttons(game):
     game.pads.pads = [(100, FakePad())]
     game.on_pad(100, pygame.CONTROLLER_BUTTON_B)
     assert game.state == "menu"
+
+
+# ------------------------------------------------------------------ найденные в сети игры
+
+def test_join_picks_found_game(game):
+    from tests.test_discovery import free_udp_port
+    port = free_udp_port()
+    srv = start_in_thread(port=0, bot=True, log=lambda text: None, discovery_port=port)
+    try:
+        game.discovery_port = port
+        press_menu_item(game, "join")
+        game.finder.targets = ["127.0.0.1"]           # спрашиваем свой компьютер напрямую
+        game.address = "nowhere.invalid"
+        deadline = time.monotonic() + 3
+        while not game.join_games():
+            assert time.monotonic() < deadline
+            game.finder.poll()
+            time.sleep(0.02)
+        game.draw_join()                              # экран со списком рисуется
+        assert game.join_pick is None                 # сначала выбрана строка ручного ввода
+        game.on_key(pygame.KSCAN_UP)
+        assert game.join_pick == f"127.0.0.1:{srv.port}"
+        game.on_key(pygame.KSCAN_RETURN)
+        assert game.net and game.join_error is None and game.finder is None
+        frames(game, lambda: not game.net_waiting)
+    finally:
+        game.leave_net()
+        srv.stop()
+
+
+def test_typing_selects_manual_row(game):
+    press_menu_item(game, "join")
+    game.join_pick = "10.0.0.5:5555"
+    game.on_key(pygame.KSCAN_1)
+    assert game.join_pick is None and game.address.endswith("1")
+
+
+def test_join_screen_with_many_games(game):
+    from duel.discovery import Finder
+    from tests.test_discovery import free_udp_port
+    press_menu_item(game, "join")
+    game.finder = Finder(port=free_udp_port(), targets=[])
+    now = time.monotonic()
+    for i, (free, proto) in enumerate([(1, 2), (0, 2), (1, 1)]):
+        game.finder.found[(f"10.0.0.{i + 2}", 5555)] = (
+            {"name": f"pc-{i}", "free": free, "proto": proto, "port": 5555}, now + 60)
+    game.join_move(-1)
+    game.draw_join()
+    assert [g["name"] for g in game.join_games()] == ["pc-0", "pc-1", "pc-2"]
+    game.on_key(pygame.KSCAN_ESCAPE)
+    assert game.finder is None and game.state == "menu"

@@ -24,6 +24,7 @@ from .i18n import LANGS, get_lang, set_lang, t
 from . import settings
 from .interp import Playback
 from .match import STEP, Match
+from .discovery import DISCOVERY_PORT, Finder
 from .net import PORT, connect, error_key
 from .snapshot import player as snap_player, snapshot
 from .gamepad import Gamepads, PAD_DOWN, PAD_FIRE, PAD_ITEM_BUTTONS, PAD_MELEE, PAD_UP
@@ -103,6 +104,8 @@ class Game(ScreensMixin):
         self.menu_message = None      # ошибка или «связь потеряна» — показывается в меню
         self.address = self.settings.get("last_address", "localhost")
         self.join_error = None
+        self.join_pick = None         # адрес выбранной найденной игры (None — строка ручного ввода)
+        self.finder = None            # поиск игр в сети, пока открыт экран «Подключиться»
         self.menu_index = 0
         self.settings_rows = ["lang", "back"]
         self.help_page = 0
@@ -112,6 +115,7 @@ class Game(ScreensMixin):
         self.net, self.me, self.pad_index = None, None, pad
         self.host_server = None       # свой сервер («Создать игру»), работает в фоновом потоке
         self.net_port = PORT          # порт своего сервера (тесты ставят 0 — любой свободный)
+        self.discovery_port = DISCOVERY_PORT    # порт поиска игр (тесты ставят None — не отвечать в сеть)
         self.net_waiting = False      # сервер ждёт второго игрока
         self.restart()
         if net:
@@ -198,6 +202,8 @@ class Game(ScreensMixin):
                 self.draw_settings()
                 continue
             if self.state == "join":
+                if self.finder:
+                    self.finder.poll()
                 self.draw_join()
                 continue
             if self.net:
@@ -284,7 +290,7 @@ class Game(ScreensMixin):
         """«Создать игру по сети»: свой сервер в фоновом потоке и подключение к нему синим."""
         from .server import start_in_thread
         try:
-            srv = start_in_thread(self.net_port)
+            srv = start_in_thread(self.net_port, discovery_port=self.discovery_port)
         except OSError:
             self.menu_message = t("net.port_busy", port=self.net_port)
             return
@@ -299,9 +305,37 @@ class Game(ScreensMixin):
         self.host_server = srv
         self.__dict__.pop("_addresses", None)       # адрес в сети мог смениться — найти заново
 
+    def open_join(self):
+        """Экран «Подключиться»: начать искать игры в сети."""
+        self.state = "join"
+        self.join_error = None
+        self.join_pick = None
+        self.close_finder()
+        if self.discovery_port:
+            try:
+                self.finder = Finder(port=self.discovery_port)
+            except OSError:
+                self.finder = None    # без сети поиска — остаётся ручной ввод
+
+    def close_finder(self):
+        if self.finder:
+            self.finder.close()
+        self.finder = None
+
+    def join_games(self):
+        """Найденные в сети игры для экрана «Подключиться»."""
+        return self.finder.games() if self.finder else []
+
+    def join_move(self, step):
+        """Сдвинуть выбор по списку: найденные игры, затем строка ручного ввода."""
+        rows = [g["address"] for g in self.join_games()] + [None]
+        i = rows.index(self.join_pick) if self.join_pick in rows else len(rows) - 1
+        self.join_pick = rows[max(0, min(len(rows) - 1, i + step))]
+
     def join_game(self):
-        """Подключиться по адресу с экрана «Подключиться»."""
-        address = self.address.strip() or "localhost"
+        """Подключиться к выбранной игре или по адресу, введённому вручную."""
+        found = [g["address"] for g in self.join_games()]
+        address = self.join_pick if self.join_pick in found else (self.address.strip() or "localhost")
         try:
             conn, hello = connect(address, timeout=CONNECT_TIMEOUT)
         except (ConnectionError, OSError, ValueError) as e:
@@ -310,6 +344,7 @@ class Game(ScreensMixin):
         self.join_error = None
         self.settings["last_address"] = address
         settings.save(self.settings)
+        self.close_finder()
         self.enter_net(conn, hello)
 
     def net_error(self, e):
@@ -325,16 +360,22 @@ class Game(ScreensMixin):
         """Экран «Подключиться»: набор адреса по физическим клавишам (в любой раскладке)."""
         K = pygame
         if sc == K.KSCAN_ESCAPE:
+            self.close_finder()
             self.state = "menu"
             return
         if sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER):
             self.join_game()
             return
+        if sc in (K.KSCAN_UP, K.KSCAN_DOWN):
+            self.join_move(-1 if sc == K.KSCAN_UP else 1)
+            return
         if sc == K.KSCAN_BACKSPACE:
+            self.join_pick = None
             self.address = self.address[:-1]
             return
         ch = address_char(sc, self.held & {K.KSCAN_LSHIFT, K.KSCAN_RSHIFT})
         if ch and len(self.address) < ADDRESS_MAX:
+            self.join_pick = None     # набор адреса — строка ручного ввода
             self.address += ch
             self.join_error = None
 
@@ -461,7 +502,11 @@ class Game(ScreensMixin):
                 self.on_key(keys[btn])
             return
         if self.state == "join":
-            if btn == B.CONTROLLER_BUTTON_A:
+            if btn in (B.CONTROLLER_BUTTON_DPAD_UP, PAD_UP):
+                self.on_key(B.KSCAN_UP)
+            elif btn in (B.CONTROLLER_BUTTON_DPAD_DOWN, PAD_DOWN):
+                self.on_key(B.KSCAN_DOWN)
+            elif btn == B.CONTROLLER_BUTTON_A:
                 self.on_key(B.KSCAN_RETURN)
             elif btn in (B.CONTROLLER_BUTTON_B, B.CONTROLLER_BUTTON_START):
                 self.on_key(B.KSCAN_ESCAPE)
@@ -572,7 +617,6 @@ class Game(ScreensMixin):
         elif action == "host":
             self.host_game()
         elif action == "join":
-            self.state = "join"
-            self.join_error = None
+            self.open_join()
         else:
             self.start()
