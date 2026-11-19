@@ -87,3 +87,9 @@ def test_saved_language_loaded_on_start(tmp_path, monkeypatch):
     assert settings.load()["lang"] == "fi"
     (tmp_path / "s.json").write_text("не json")
     assert settings.load()["lang"] == "ru"      # битый файл — настройки по умолчанию
+
+
+def test_title_same_in_every_language(lang_restore):
+    for code in i18n.LANGS:
+        i18n.set_lang(code)
+        assert i18n.t("title") == "Spellgunners"

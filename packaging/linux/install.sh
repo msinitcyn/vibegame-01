@@ -1,6 +1,6 @@
 #!/bin/sh
-# Установка «Дуэли шариков» для текущего пользователя (без sudo):
-#   ./install.sh              — игра в ~/.local/bin/duel и в меню приложений
+# Установка Spellgunners для текущего пользователя (без sudo):
+#   ./install.sh              — игра в ~/.local/bin/spellgunners и в меню приложений
 #   ./install.sh --uninstall  — удалить (настройки в ~/.config/duel остаются)
 set -e
 
@@ -11,37 +11,36 @@ APPS="$DATA/applications"
 ICONS="$DATA/icons/hicolor/256x256/apps"
 
 if [ "$1" = "--uninstall" ]; then
-    rm -f "$BIN/duel" "$APPS/duel.desktop" "$ICONS/duel.png"
+    rm -f "$BIN/spellgunners" "$APPS/spellgunners.desktop" "$ICONS/spellgunners.png"
     command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$APPS" || true
     echo "Игра удалена."
     exit 0
 fi
 
-if [ ! -f "$DIR/duel-linux" ]; then
-    echo "Рядом со скриптом нет файла duel-linux" >&2
+if [ ! -f "$DIR/spellgunners-linux" ]; then
+    echo "Рядом со скриптом нет файла spellgunners-linux" >&2
     exit 1
 fi
 
 mkdir -p "$BIN" "$APPS" "$ICONS"
-install -m 755 "$DIR/duel-linux" "$BIN/duel"
-install -m 644 "$DIR/duel.png" "$ICONS/duel.png"
-cat > "$APPS/duel.desktop" <<EOF
+install -m 755 "$DIR/spellgunners-linux" "$BIN/spellgunners"
+install -m 644 "$DIR/spellgunners.png" "$ICONS/spellgunners.png"
+cat > "$APPS/spellgunners.desktop" <<EOF
 [Desktop Entry]
 Type=Application
-Name=Дуэль шариков
-Name[en]=Ball Duel
-Name[fi]=Pallojen kaksintaistelu
-Comment=Дуэль двух магов с артефактами и мобами
-Comment[en]=Duel of two mages with artifacts and mobs
-Exec=$BIN/duel
-Icon=duel
+Name=Spellgunners
+Comment=Дуэль магов со стволами: артефакты, мобы, игра по сети
+Comment[en]=Duel of mages with guns: artifacts, mobs, network play
+Comment[fi]=Taikureiden kaksintaistelu aseilla
+Exec=$BIN/spellgunners
+Icon=spellgunners
 Terminal=false
 Categories=Game;ArcadeGame;
 EOF
 command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$APPS" || true
 command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q "$DATA/icons/hicolor" 2>/dev/null || true
 
-echo "Готово: «Дуэль шариков» в меню приложений, запуск из терминала — $BIN/duel"
+echo "Готово: Spellgunners в меню приложений, запуск из терминала — $BIN/spellgunners"
 case ":$PATH:" in
     *":$BIN:"*) ;;
     *) echo "(папки $BIN нет в PATH — из терминала запускайте полным путём)";;

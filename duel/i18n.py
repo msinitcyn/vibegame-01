@@ -26,7 +26,7 @@ def t(key, **kw):
 TEXTS = {
     # ------------------------------------------------------------------ русский
     "ru": {
-        "title": "Дуэль шариков",
+        "title": "Spellgunners",
         "name.blue": "Синий",
         "name.red": "Красный",
 
@@ -163,7 +163,7 @@ TEXTS = {
 
     # ------------------------------------------------------------------ English
     "en": {
-        "title": "Ball Duel",
+        "title": "Spellgunners",
         "name.blue": "Blue",
         "name.red": "Red",
 
@@ -298,7 +298,7 @@ TEXTS = {
 
     # ------------------------------------------------------------------ suomi
     "fi": {
-        "title": "Pallojen kaksintaistelu",
+        "title": "Spellgunners",
         "name.blue": "Sininen",
         "name.red": "Punainen",
 

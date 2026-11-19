@@ -1,7 +1,7 @@
-"""Сборка игры в один файл со всем внутри (PyInstaller): Python, pygame, картинки, звуки, шрифты.
+"""Сборка Spellgunners в один файл со всем внутри (PyInstaller): Python, pygame, картинки, звуки, шрифты.
 
-    .venv/bin/python tools/build.py           # Linux: dist/duel-linux, install.sh, duel.png, duel-linux.tar.gz
-    python tools\\build.py                     # Windows: dist\\duel-windows.exe (+ duel-setup.exe, если есть Inno Setup)
+    .venv/bin/python tools/build.py           # Linux: dist/spellgunners-linux, install.sh, spellgunners.png, spellgunners-linux.tar.gz
+    python tools\\build.py                     # Windows: dist\\spellgunners-windows.exe (+ spellgunners-setup.exe, если есть Inno Setup)
     .venv/bin/python tools/build.py --icon    # только перерисовать assets/icon.png
 
 Нужны только для сборки: pip install pyinstaller pillow (Pillow — значок .ico для Windows).
@@ -19,7 +19,7 @@ DIST = ROOT / "dist"
 WORK = ROOT / "build"
 ICON = ROOT / "assets" / "icon.png"
 WINDOWS = os.name == "nt"
-NAME = "duel-windows" if WINDOWS else "duel-linux"
+NAME = "spellgunners-windows" if WINDOWS else "spellgunners-linux"
 
 
 def version():
@@ -81,21 +81,21 @@ def build():
         iscc = find_iscc()
         if iscc:
             subprocess.check_call([iscc, f"/DAppVersion={version()}",
-                                   str(ROOT / "packaging" / "windows" / "duel.iss")], cwd=ROOT)
-            out.append(DIST / "duel-setup.exe")
+                                   str(ROOT / "packaging" / "windows" / "spellgunners.iss")], cwd=ROOT)
+            out.append(DIST / "spellgunners-setup.exe")
         else:
-            print("Inno Setup не найден — установщик не собран (только duel-windows.exe)")
+            print("Inno Setup не найден — установщик не собран (только spellgunners-windows.exe)")
     else:
         for src, dst in ((ROOT / "packaging" / "linux" / "install.sh", DIST / "install.sh"),
-                         (ICON, DIST / "duel.png")):
+                         (ICON, DIST / "spellgunners.png")):
             shutil.copy2(src, dst)
         os.chmod(DIST / "install.sh", 0o755)
         # архив сохраняет права на запуск (отдельные файлы из браузера их теряют)
         import tarfile
-        with tarfile.open(DIST / "duel-linux.tar.gz", "w:gz") as tar:
-            for name in ("duel-linux", "install.sh", "duel.png"):
-                tar.add(DIST / name, arcname=f"duel/{name}")
-        out += [DIST / "install.sh", DIST / "duel.png", DIST / "duel-linux.tar.gz"]
+        with tarfile.open(DIST / "spellgunners-linux.tar.gz", "w:gz") as tar:
+            for name in ("spellgunners-linux", "install.sh", "spellgunners.png"):
+                tar.add(DIST / name, arcname=f"spellgunners/{name}")
+        out += [DIST / "install.sh", DIST / "spellgunners.png", DIST / "spellgunners-linux.tar.gz"]
     print("готово, версия", version())
     for p in out:
         print(f"  {p.relative_to(ROOT)}  ({p.stat().st_size / 1e6:.1f} МБ)")

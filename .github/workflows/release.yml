@@ -48,25 +48,25 @@ jobs:
 
       - name: Самопроверка сборки (Linux)
         if: runner.os == 'Linux'
-        run: ./dist/duel-linux --selftest
+        run: ./dist/spellgunners-linux --selftest
 
       - name: Самопроверка сборки (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $p = Start-Process -FilePath dist\duel-windows.exe -ArgumentList '--selftest' -Wait -PassThru
+          $p = Start-Process -FilePath dist\spellgunners-windows.exe -ArgumentList '--selftest' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "самопроверка не прошла: код $($p.ExitCode)" }
 
       - uses: actions/upload-artifact@v4
         with:
-          name: duel-${{ runner.os }}
+          name: spellgunners-${{ runner.os }}
           if-no-files-found: ignore
           path: |
-            dist/duel-linux.tar.gz
-            dist/duel-linux
+            dist/spellgunners-linux.tar.gz
+            dist/spellgunners-linux
             dist/install.sh
-            dist/duel-windows.exe
-            dist/duel-setup.exe
+            dist/spellgunners-windows.exe
+            dist/spellgunners-setup.exe
 
   release:
     if: github.ref_type == 'tag'

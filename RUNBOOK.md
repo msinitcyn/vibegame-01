@@ -1,4 +1,4 @@
-# Дуэль шариков — ранбук
+# Spellgunners — ранбук
 
 ## Запуск
 
@@ -27,32 +27,32 @@ pytest и pyflakes нужны только для проверок (см. ниж
 
 Готовая сборка — один файл, внутри всё: Python, pygame, картинки, звуки, шрифты. Ставить заранее ничего не нужно. Сборки лежат на странице выпуска на GitHub (Releases), как они туда попадают — в «Выпуск версии».
 
-**Windows** — скачать `duel-setup.exe` и запустить:
+**Windows** — скачать `spellgunners-setup.exe` и запустить:
 
 - Windows покажет «Система Windows защитила ваш компьютер» (SmartScreen: сборка не подписана платным сертификатом) → «Подробнее» → «Выполнить в любом случае».
-- Установщик спросит про ярлык на рабочем столе; права администратора не нужны. Игра появится в «Пуск» как «Дуэль шариков», удалить — «Параметры» → «Приложения».
+- Установщик спросит про ярлык на рабочем столе; права администратора не нужны. Игра появится в «Пуск» как «Spellgunners», удалить — «Параметры» → «Приложения».
 - При первой сетевой игре брандмауэр спросит разрешение — разрешить для **частных** сетей.
-- Без установки: `duel-windows.exe` — тот же файл игры, просто запустить.
+- Без установки: `spellgunners-windows.exe` — тот же файл игры, просто запустить.
 - Настройки — в `%APPDATA%\duel`, при обновлении сохраняются.
 
-**Linux** — скачать `duel-linux.tar.gz`, в терминале:
+**Linux** — скачать `spellgunners-linux.tar.gz`, в терминале:
 
 ```bash
-tar xf duel-linux.tar.gz
-sh duel/install.sh            # в меню приложений и ~/.local/bin/duel, без sudo
-sh duel/install.sh --uninstall   # удалить (настройки в ~/.config/duel остаются)
+tar xf spellgunners-linux.tar.gz
+sh spellgunners/install.sh              # в меню приложений и ~/.local/bin/spellgunners, без sudo
+sh spellgunners/install.sh --uninstall  # удалить (настройки в ~/.config/duel остаются)
 ```
 
-Можно и без установки: `./duel/duel-linux`. Обновление — то же самое с новым архивом.
+Можно и без установки: `./spellgunners/spellgunners-linux`. Обновление — то же самое с новым архивом.
 
-Проверить сборку без окна: `duel-linux --selftest` (или `duel-windows.exe --selftest`) — проиграет несколько секунд и сетевую игру с ботом, код выхода 0 — всё в порядке.
+Проверить сборку без окна: `spellgunners-linux --selftest` (или `spellgunners-windows.exe --selftest`) — проиграет несколько секунд и сетевую игру с ботом, код выхода 0 — всё в порядке.
 
 ## Выпуск версии (GitHub)
 
-Один раз — создать пустой репозиторий на GitHub и отправить туда код:
+Один раз — создать на GitHub пустой репозиторий `spellgunners` (без README, без .gitignore) и отправить туда код:
 
 ```bash
-git remote add origin git@github.com:ИМЯ/fast-game.git
+git remote add origin git@github.com:ИМЯ/spellgunners.git
 git push -u origin master
 ```
 
@@ -63,14 +63,14 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-GitHub сам (`.github/workflows/release.yml`, 5–10 минут) прогонит тесты, соберёт Linux и Windows, проверит обе сборки `--selftest` и выложит на страницу выпуска `v0.2.0`: `duel-setup.exe`, `duel-windows.exe`, `duel-linux.tar.gz`, `duel-linux`, `install.sh`. Ход сборки — вкладка Actions. Собрать без выпуска — Actions → «Сборка и выпуск» → Run workflow (файлы — в результатах запуска).
+GitHub сам (`.github/workflows/release.yml`, 5–10 минут) прогонит тесты, соберёт Linux и Windows, проверит обе сборки `--selftest` и выложит на страницу выпуска `v0.2.0`: `spellgunners-setup.exe`, `spellgunners-windows.exe`, `spellgunners-linux.tar.gz`, `spellgunners-linux`, `install.sh`. Ход сборки — вкладка Actions. Собрать без выпуска — Actions → «Сборка и выпуск» → Run workflow (файлы — в результатах запуска).
 
 **Собрать на этом ноутбуке** (только Linux; Windows-сборку собирает GitHub):
 
 ```bash
 .venv/bin/pip install pyinstaller pillow     # один раз
-.venv/bin/python tools/build.py              # dist/duel-linux, install.sh, duel-linux.tar.gz
-dist/duel-linux --selftest
+.venv/bin/python tools/build.py              # dist/spellgunners-linux, install.sh, spellgunners-linux.tar.gz
+dist/spellgunners-linux --selftest
 ```
 
 ## Поле
@@ -244,7 +244,7 @@ assets/sprites/      пиксельная графика (PNG) — правит�
 tools/make_sprites.py  начальные версии картинок (существующие не трогает)
 tools/fingerprint.py   отпечаток партии: доказывает, что правила не изменились
 tools/build.py         сборка в один файл (PyInstaller), значок
-packaging/             установка: linux/install.sh, windows/duel.iss (Inno Setup)
+packaging/             установка: linux/install.sh, windows/spellgunners.iss (Inno Setup)
 .github/workflows/     сборка и выпуск на GitHub по метке v*
 assets/fonts/          шрифт DejaVu Sans Condensed (внутри игры, лицензия рядом)
 assets/icon.png        значок игры

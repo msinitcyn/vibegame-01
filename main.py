@@ -1,4 +1,4 @@
-"""Запуск игры «Дуэль шариков». Подробности — в RUNBOOK.md.
+"""Запуск игры Spellgunners. Подробности — в RUNBOOK.md.
 
     python main.py                                   # хотсит, полный экран
     python main.py --connect localhost --windowed    # сетевой клиент (сервер: python -m duel.server)
@@ -10,7 +10,7 @@ import os
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(description="Дуэль шариков")
+    ap = argparse.ArgumentParser(description="Spellgunners")
     ap.add_argument("--connect", metavar="АДРЕС", help="подключиться к серверу (host или host:port)")
     ap.add_argument("--windowed", action="store_true", help="в окне, а не на весь экран")
     ap.add_argument("--pad", type=int, default=0, help="номер своего геймпада (с 0) в сетевой игре")

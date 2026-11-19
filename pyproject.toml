@@ -1,7 +1,7 @@
 [project]
-name = "fast-game"
+name = "spellgunners"
 version = "0.2.0"
-description = "Дуэль двух шариков с артефактами"
+description = "Spellgunners — дуэль магов со стволами: артефакты, мобы, игра по сети"
 requires-python = ">=3.10"
 dependencies = ["pygame>=2.5"]
 
