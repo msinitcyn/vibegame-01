@@ -1214,10 +1214,17 @@ class Game(ScreensMixin):
             return None
         return math.radians(120 * 1.35 ** (level - 1))
 
+    def mouse_button_side(self):
+        """Чей маг слушается кнопок мыши — при любом режиме прицела: по сети (и в разминке) — свой,
+        за одним компьютером — левый, если геймпадов меньше двух."""
+        if self.net:
+            return self.me
+        return "blue" if len(self.pads.pads) < 2 else None
+
     def on_mouse_button(self, button):
-        """Левая кнопка — выстрел, правая — ближний удар (у того, кто целится мышью)."""
-        side = self.mouse_side()
-        if self.state != "play" or side is None or (self.net and self.net_waiting):
+        """Левая кнопка — выстрел, правая — ближний удар, средняя — прицел прямо."""
+        side = self.mouse_button_side()
+        if self.state != "play" or side is None or (self.net and self.net_waiting and not self.warmup):
             return
         c = self.controls[side]
         if button == 1:

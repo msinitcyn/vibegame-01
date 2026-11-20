@@ -429,3 +429,15 @@ def test_red_uses_1234_and_sees_1234(game):
     finally:
         game.leave_net()
         srv.stop()
+
+
+def test_mouse_buttons_in_warmup(game):
+    game.settings["aim_mode"] = "move"
+    own_server_rooms(game)
+    game.on_key(pygame.KSCAN_RETURN)              # создать комнату
+    frames(game, lambda: game.net_seats and game.net_waiting)
+    game.on_key(pygame.KSCAN_T)                   # разминка
+    game.on_mouse_button(1)                       # левая — выстрел
+    warm_frames(game, lambda: any(b.owner is game.match.blue for b in game.match.bullets))
+    game.on_mouse_button(3)                       # правая — ближний удар
+    warm_frames(game, lambda: game.match.blue.melee_cd > 0)

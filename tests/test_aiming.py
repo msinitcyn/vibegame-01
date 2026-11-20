@@ -321,3 +321,18 @@ def test_aim_mode_setting_toggles(sens):
     game.draw_settings()
     game.on_key(pygame.KSCAN_D)
     assert game.settings["aim_mode"] == "stick"
+
+
+def test_mouse_buttons_work_in_move_mode(sens):
+    """Прицел «по движению»: мышью не целятся, но левая кнопка — выстрел, правая — удар."""
+    game = sens
+    game.settings["aim_mode"] = "move"
+    game.pads.pads = []
+    b = game.match.blue
+    game.on_mouse_button(1)
+    game.update(DT)
+    assert [x.owner for x in game.match.bullets] == [b]
+    game.on_mouse_button(3)
+    game.update(DT)
+    assert b.melee_cd > 0
+    assert game.mouse_side() is None and not game.want_mouse_capture()     # курсор не захватываем
