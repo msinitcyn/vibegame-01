@@ -360,8 +360,15 @@ class InputMixin:
         """Курсор захвачен (партия) — перекрестие сдвигается на rel·скорость в пределах поля;
         иначе — стоит там, где курсор. В меню — наведение выбирает пункт, как стрелки."""
         if not self.mouse_captured:
+            # наведение срабатывает, только когда мышь правда сдвинулась (а не дрогнула на месте):
+            # иначе на выборе героев дрожание мыши перебивало бы выбор с клавиатуры
+            last = getattr(self, "hover_from", None)
+            moved = last is None or abs(pos[0] - last[0]) + abs(pos[1] - last[1]) >= 4
+            if moved:
+                self.hover_from = pos
+                self.mouse_quiet = False
             self.ui_mouse = pos
-            if self.in_ui():
+            if self.in_ui() and not getattr(self, "mouse_quiet", False):
                 hit = self.ui_hit(pos)
                 if hit and hit[2]:
                     hit[2]()

@@ -32,6 +32,7 @@ from .config import (
     WIDTH,
 )
 from .i18n import get_lang, LANGS, t as tr
+from . import keys
 from .icons import draw_icon
 from .items import HELP_SECTIONS, item_help, item_name, ITEMS, section_title
 from .sprites import draw_unit
@@ -128,7 +129,9 @@ class MenuScreensMixin:
         for row, pid in enumerate(("blue", "red")):
             me, other = self.pick[pid], self.pick["red" if pid == "blue" else "blue"]
             top = 120 + row * 260
-            label = tr("pick.left" if pid == "blue" else "pick.right")
+            left, right, ok = self.pick_keys(pid)
+            label = tr("pick.left" if pid == "blue" else "pick.right", left=keys.label(left[0]),
+                       right=keys.label(right[0]), ok=" / ".join(keys.label(k) for k in ok[:1] + ok[-1:]))
             pad = self.pad_of(pid)
             pad_name = self.pads.pads[pad][1].name[:24] if pad is not None else ""
             label += "   " + (tr("pick.pad", n=pad + 1, name=pad_name) if pad is not None else

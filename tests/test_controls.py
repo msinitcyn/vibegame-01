@@ -184,3 +184,31 @@ def test_help_pages(game):
         game.draw_help()
     game.on_key(pygame.KSCAN_ESCAPE)
     assert game.state == "menu"
+
+
+def test_pick_uses_players_own_keys_and_ignores_mouse_jitter(game):
+    """Выбор героев — назначенными клавишами игроков; дрожание мыши над карточкой выбор не сбивает."""
+    game.settings["keys"] = {"blue": {"left": pygame.KSCAN_J, "right": pygame.KSCAN_L, "fire": pygame.KSCAN_K}}
+    game.apply_keys()
+    game.settings["aim_mode"] = "move"              # без геймпада подтвердить можно только так
+    try:
+        game.open_pick(10)
+        first = game.pick["blue"]["hero"]
+        game.on_key(pygame.KSCAN_L)                 # свои «вправо»
+        assert game.pick["blue"]["hero"] != first
+        chosen = game.pick["blue"]["hero"]
+        game.hits = []
+        game.draw_pick()
+        card = next(h for h in game.hits if h[2] is not None and h[0].collidepoint(h[0].center)
+                    and h[0].top < 300)               # карточка левого игрока
+        game.hover_from = card[0].center
+        game.mouse_quiet = True
+        game.on_mouse_move((card[0].centerx + 1, card[0].centery + 1))   # дрогнула на 2 px
+        assert game.pick["blue"]["hero"] == chosen
+        game.on_key(pygame.KSCAN_K)                 # свой «выстрел» — выбрать
+        assert game.pick["blue"]["ok"]
+        game.on_key(game.controls["blue"].melee[0])  # «удар» — тоже: передумал
+        assert not game.pick["blue"]["ok"]
+    finally:
+        game.settings["keys"] = {}
+        game.apply_keys()

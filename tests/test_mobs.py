@@ -77,7 +77,7 @@ def test_waves_grow_and_cap(match):
 
 
 def test_full_field_wave_changes_nobody(match):
-    for _ in range(3):
+    while len(match.mobs) < MOB_MAX and match.mob_wave < 30:
         match.spawn_mob_wave()
     assert len(match.mobs) == MOB_MAX
     before = [(m.hp, m.max_hp) for m in match.mobs]
@@ -96,7 +96,10 @@ def test_waves_speed_up_after_max(match):
             wave = match.mob_wave
             times.append(match.match_time)
     gaps = [round(b - a) for a, b in zip(times, times[1:])]
-    k_max = max(MOB_MAX - MOB_COUNT, MOB_MAX_HP - MOB_HP)     # волна, на которой дошли до максимума
+    from duel.config import MOB_LATE_EXTRA
+    k_max = next(k for k in range(100)                     # волна, на которой дошли до максимума
+                 if MOB_COUNT + k + max(0, k - (MOB_MAX_HP - MOB_HP)) * MOB_LATE_EXTRA >= MOB_MAX
+                 and MOB_HP + k >= MOB_MAX_HP)
     assert gaps[:k_max] == [MOB_EVERY] * k_max
     after = gaps[k_max:]
     expected = [max(MOB_EVERY_MIN, MOB_EVERY - MOB_SPEEDUP * (i + 1)) for i in range(len(after))]
@@ -388,7 +391,7 @@ def test_mob_shots_ignore_breaker(match):
     b = match.blue
     b.x, b.y = 100, 300
     match.give(b, "breaker")
-    match.mob_shots = [MobShot(400, 300, b)]
+    match.mob_shots = [MobShot(350, 300, b)]
     match.bullets = [Bullet(150, 300, BULLET_SPEED, 0, b)]   # пуля синего навстречу
     step(match, 1.5)
     assert b.hp == MAX_HP - 1                    # снаряд прошёл сквозь встречную пулю

@@ -287,19 +287,27 @@ class MenusMixin:
         if all(p["ok"] for p in self.pick.values()):
             self.start(self.pick_hp, {pid: p["hero"] for pid, p in self.pick.items()})
 
+    def pick_keys(self, pid):
+        """Клавиши выбора героя игрока — его же клавиши из настроек: влево/вправо — листать,
+        выстрел или ближний удар — выбрать (ещё раз — передумать)."""
+        c = self.controls[pid]
+        return (c.left,), (c.right,), tuple(c.fire) + tuple(c.melee)
+
     def pick_key(self, sc):
-        """Левый: A/D и Пробел, правый: ←/→ и Enter (повтор — снять выбор); Esc — меню."""
-        K = pygame
-        if sc == K.KSCAN_ESCAPE:
+        """Каждый игрок — своими клавишами (по умолчанию левый A/D и Пробел, правый ←/→ и Enter);
+        Esc — меню."""
+        if sc == pygame.KSCAN_ESCAPE:
             self.state = "menu"
-        elif sc in (K.KSCAN_A, K.KSCAN_D):
-            self.pick_move("blue", -1 if sc == K.KSCAN_A else 1)
-        elif sc in (K.KSCAN_LEFT, K.KSCAN_RIGHT):
-            self.pick_move("red", -1 if sc == K.KSCAN_LEFT else 1)
-        elif sc == K.KSCAN_SPACE:
-            self.pick_confirm("blue", not self.pick["blue"]["ok"])
-        elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER):
-            self.pick_confirm("red", not self.pick["red"]["ok"])
+            return
+        self.mouse_quiet = True               # выбрали клавиатурой — дрожание мыши не перебивает
+        for pid in PLAYER_IDS:
+            left, right, ok = self.pick_keys(pid)
+            if sc in left or sc in right:
+                self.pick_move(pid, -1 if sc in left else 1)
+                return
+            if sc in ok:
+                self.pick_confirm(pid, not self.pick[pid]["ok"])
+                return
 
     def pick_mouse(self, pid, hero, click=False):
         """Выбор героев: наведение — этот герой; щелчок по выбранному — подтвердить (ещё раз — снять)."""

@@ -25,6 +25,7 @@ import random
 
 from .commands import Command
 from .config import (
+    MOB_LATE_EXTRA,
     GUARDIAN_RESPAWN,
     GUARDIAN_SHOT_EVERY,
     GUARDIAN_SPEED,
@@ -821,7 +822,8 @@ class Match:
         k = self.mob_wave
         self.mob_wave += 1
         # уже живые мобы не меняются: сильнее становятся только новые волны
-        want, hp = MOB_COUNT + k, min(MOB_HP + k, MOB_MAX_HP)
+        late = max(0, k - (MOB_MAX_HP - MOB_HP))      # волны после максимума жизней — мобов прибавляется больше
+        want, hp = MOB_COUNT + k + late * MOB_LATE_EXTRA, min(MOB_HP + k, MOB_MAX_HP)
         count = max(0, min(want, MOB_MAX - len(self.mobs)))
         for i in range(count):
             x, y = self.free_mob_spot()
