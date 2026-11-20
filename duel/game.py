@@ -151,6 +151,8 @@ class Game(ScreensMixin):
         self.countdown = 0.0          # отсчёт перед партией за этим компьютером (хотсит, разминка), сек
         self.net_countdown = 0.0      # отсчёт с сервера (сетевая партия)
         self.go_flash = 0.0           # сколько ещё показывать «В бой!»
+        self.hits = []                # [(Rect, по щелчку, при наведении)] — отмечает экран при отрисовке
+        self.ui_mouse = None          # где курсор (в меню)
         self.lobby_notice = None      # надпись в лобби («Соперник пришёл!»)
         self.lobby_id = None          # номер сервера (для запомненного входа)
         self.server_db = None         # база аккаунтов своего сервера (None — рядом с настройками)
@@ -345,6 +347,7 @@ class Game(ScreensMixin):
                 self.win_time = pygame.time.get_ticks()
             self.update_music()
             self.sync_mouse_capture()
+            self.hits = []                # экран при отрисовке заново отмечает, что можно нажать мышью
             self.refresh_menu()
             if self.state == "update":
                 if self.update_frame():
@@ -1207,9 +1210,50 @@ class Game(ScreensMixin):
         """Скорость перекрестия: уровень 1 → 0,2, 5 → 1, 10 → 2."""
         return self.settings.get("aim_mouse", 5) / 5
 
+    def join_mouse(self, pick, click=False):
+        """Экран серверов: наведение выбирает строку, щелчок — как Enter (строку ввода — только выбрать)."""
+        self.join_pick, self.join_touched = pick, True
+        if click and pick is not None:
+            self.join_game()
+
+    def rooms_mouse(self, k, click=False):
+        """Экран комнат: наведение выбирает строку, щелчок — аккаунт / создать / войти (мест нет — смотреть)."""
+        self.rooms_index = k
+        if click:
+            self.rooms_key(pygame.KSCAN_RETURN)
+
+    def pick_mouse(self, pid, hero, click=False):
+        """Выбор героев: наведение — этот герой; щелчок по выбранному — подтвердить (ещё раз — снять)."""
+        p = self.pick[pid]
+        if not p["ok"] and p["hero"] != hero:
+            p["hero"] = hero
+            if not click:
+                return
+        if click:
+            self.pick_confirm(pid, not p["ok"])
+
+    def in_ui(self):
+        """Сейчас на экране меню (мышь — наведение и щелчки), а не партия."""
+        if self.state in ("menu", "help", "settings", "pick", "join", "rooms", "account", "update"):
+            return True
+        return self.state == "play" and (bool(self.snap.get("winner")) or
+                                          bool(self.net and self.net_waiting and not self.warmup))
+
+    def ui_hit(self, pos):
+        """Что под курсором: последнее отмеченное (сверху) из self.hits."""
+        if pos is None:
+            return None
+        return next((h for h in reversed(self.hits) if h[0].collidepoint(pos)), None)
+
     def on_mouse_move(self, pos, rel=None):
         """Курсор захвачен (партия) — перекрестие сдвигается на rel·скорость в пределах поля;
-        иначе — стоит там, где курсор."""
+        иначе — стоит там, где курсор. В меню — наведение выбирает пункт, как стрелки."""
+        if not self.mouse_captured:
+            self.ui_mouse = pos
+            if self.in_ui():
+                hit = self.ui_hit(pos)
+                if hit and hit[2]:
+                    hit[2]()
         if self.mouse_captured and rel is not None and self.mouse_pos is not None:
             k = self.mouse_factor()
             x = max(0.0, min(WIDTH - 1.0, self.mouse_pos[0] + rel[0] * k))
@@ -1224,7 +1268,7 @@ class Game(ScreensMixin):
 
     def want_mouse_capture(self):
         return (self.state == "play" and self.focused and self.mouse_side() is not None
-                and not self.snap.get("winner") and not (self.net and self.net_waiting))
+                and not self.snap.get("winner") and not (self.net and self.net_waiting and not self.warmup))
 
     def sync_mouse_capture(self):
         """В партии курсор прячется и не уходит из окна (мышь двигает своё перекрестие),
@@ -1259,7 +1303,17 @@ class Game(ScreensMixin):
         return "blue" if len(self.pads.pads) < 2 else None
 
     def on_mouse_button(self, button):
-        """Левая кнопка — выстрел, правая — ближний удар, средняя — прицел прямо."""
+        """В меню: левая — нажать то, что под курсором, правая — назад (как Esc).
+        В партии: левая — выстрел, правая — ближний удар, средняя — прицел прямо."""
+        if self.in_ui():
+            if button == 1:
+                hit = self.ui_hit(self.ui_mouse)
+                if hit:
+                    hit[1]()
+            elif button == 3 and self.state != "menu" and not (self.state == "play" and self.net):
+                self.on_key(pygame.KSCAN_ESCAPE)      # назад (в главном меню Esc — выход из игры, а в лобби
+                                                      # комнаты — уход из неё: там только кнопками)
+            return
         side = self.mouse_button_side()
         if self.state != "play" or side is None or (self.net and self.net_waiting and not self.warmup):
             return

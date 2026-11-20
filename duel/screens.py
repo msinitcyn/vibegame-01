@@ -58,6 +58,34 @@ from .sprites import draw_unit, sprite_image
 class ScreensMixin:
     """Методы отрисовки игры; подмешиваются в Game."""
 
+    # ------------------------------------------------------------------ мышь в меню
+
+    def hit(self, rect, click, hover=None):
+        """Отметить место, которое можно нажать мышью (действует до следующей отрисовки)."""
+        self.hits.append((pygame.Rect(rect), click, hover))
+
+    def hovered(self, rect):
+        pos = getattr(self, "ui_mouse", None)
+        return pos is not None and pygame.Rect(rect).collidepoint(pos) and not self.mouse_captured
+
+    def button(self, center, label, click, w=None, sel=False, color=None):
+        """Кнопка: подсвечивается под курсором, щелчок — click."""
+        img = self.font.render(label, True, WHITE)
+        rect = pygame.Rect(0, 0, w or img.get_width() + 36, 40)
+        rect.center = center
+        on = sel or self.hovered(rect)
+        pygame.draw.rect(self.screen, (40, 46, 66) if on else (26, 29, 40), rect, border_radius=10)
+        pygame.draw.rect(self.screen, color or (BLUE if on else GREY), rect, 2, border_radius=10)
+        if not on:
+            img = self.font.render(label, True, GREY)
+        self.screen.blit(img, img.get_rect(center=rect.center))
+        self.hit(rect, click)
+        return rect
+
+    def back_button(self):
+        """«←» в левом верхнем углу — назад (как Esc)."""
+        self.button((44, 30), "←", lambda: self.on_key(pygame.KSCAN_ESCAPE), w=56)
+
     def draw_menu(self):
         s = self.screen
         s.fill(BG)
@@ -71,6 +99,10 @@ class ScreensMixin:
             pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
             txt = self.font.render(f"{i + 1}.  {self.menu_label(i)}", True, WHITE if sel else GREY)
             s.blit(txt, txt.get_rect(center=rect.center))
+            self.hit(rect, lambda i=i: (setattr(self, "menu_index", i), self.menu_select()),
+                     lambda i=i: setattr(self, "menu_index", i))
+        self.button((70, HEIGHT - 30), tr("menu.quit"), lambda: pygame.event.post(pygame.event.Event(pygame.QUIT)),
+                    w=120)
         if self.menu_message:
             img = self.font.render(self.menu_message, True, BAD_TEXT)
             s.blit(img, img.get_rect(center=(WIDTH // 2, 528)))
@@ -119,6 +151,11 @@ class ScreensMixin:
         if hint:
             img = self.small.render(tr(hint), True, GREY)
             s.blit(img, img.get_rect(center=(WIDTH // 2, 430)))
+        if state == "error":
+            self.button((WIDTH // 2 - 110, 490), tr("update.retry"), lambda: self.on_key(pygame.KSCAN_RETURN), w=200)
+            self.button((WIDTH // 2 + 110, 490), tr("update.menu"), lambda: self.on_key(pygame.KSCAN_ESCAPE), w=200)
+        elif state == "downloading":
+            self.button((WIDTH // 2, 490), tr("update.cancel"), lambda: self.on_key(pygame.KSCAN_ESCAPE), w=200)
         img = self.small.render(tr("update.from", a=u.version, b=u.latest or ""), True, GREY)
         s.blit(img, img.get_rect(center=(WIDTH // 2, 220)))
         pygame.display.flip()
@@ -139,14 +176,16 @@ class ScreensMixin:
             s.blit(img, img.get_rect(midleft=(WIDTH // 2 - 230, 190 + i * 90)))
             box = pygame.Rect(0, 0, 460, 44)
             box.center = (WIDTH // 2, 225 + i * 90)
+            self.hit(box, lambda i=i: setattr(self, "acc_row", i))
             pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), box, border_radius=10)
             pygame.draw.rect(s, BLUE if sel else GREY, box, 2, border_radius=10)
             img = self.font.render(value + (blink if sel else ""), True, WHITE if sel else GREY)
             s.blit(img, img.get_rect(midleft=(box.left + 14, box.centery)))
         for i, key in enumerate(("acc.login", "acc.register")):
-            sel = self.acc_row == 2 + i
+            sel = self.acc_row == 2 + i or self.hovered((WIDTH // 2 - 118 + i * 236 - 112, 378, 225, 44))
             rect = pygame.Rect(0, 0, 225, 44)
             rect.center = (WIDTH // 2 - 118 + i * 236, 400)
+            self.hit(rect, lambda kind=("login", "register")[i]: self.send_auth(kind))
             pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=10)
             pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
             img = self.font.render(tr(key), True, WHITE if sel else GREY)
@@ -159,6 +198,7 @@ class ScreensMixin:
             s.blit(img, img.get_rect(center=(WIDTH // 2, 530 + i * 22)))
         img = self.small.render(tr("acc.hint"), True, GREY)
         s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 30)))
+        self.back_button()
         pygame.display.flip()
 
     JOIN_ROWS = 5                     # сколько серверов помещается на экране
@@ -169,11 +209,14 @@ class ScreensMixin:
             self._addresses = local_addresses()
         return self._addresses
 
-    def list_row(self, y, sel, left, right="", right_color=GREY, sub=None, w=640):
-        """Строка списка (серверы, комнаты): рамка, слева имя (и мелкий текст), справа состояние."""
+    def list_row(self, y, sel, left, right="", right_color=GREY, sub=None, w=640, click=None, hover=None):
+        """Строка списка (серверы, комнаты): рамка, слева имя (и мелкий текст), справа состояние.
+        click / hover — что делать мышью (щелчок, наведение)."""
         s = self.screen
         rect = pygame.Rect(0, 0, w, 40)
         rect.center = (WIDTH // 2, y)
+        if click:
+            self.hit(rect, click, hover)
         pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=10)
         pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
         name = self.font.render(f"{left}  ", True, WHITE if sel else GREY)
@@ -198,7 +241,8 @@ class ScreensMixin:
             srv = self.host_server
             addrs = "  ".join(f"{a}" for a in self.own_addresses()) or "127.0.0.1"
             self.list_row(y, self.join_pick == "own", tr("net.own_server", name=srv.name), addrs,
-                          (120, 220, 140), sub=None)
+                          (120, 220, 140), sub=None, click=lambda: self.join_mouse("own", True),
+                          hover=lambda: self.join_mouse("own"))
             y += 50
         img = self.small.render(tr("net.found") if games else tr("net.searching"), True, GREY)
         s.blit(img, img.get_rect(midleft=(WIDTH // 2 - 320, y)))
@@ -213,7 +257,9 @@ class ScreensMixin:
             else:
                 status, color = tr("net.st_server", rooms=g["rooms"], players=g["players"]), AMMO_COLOR
             self.list_row(y + 20 + i * 46, g["address"] == self.join_pick, g["name"], status, color,
-                          sub=g["address"].rsplit(":", 1)[0])
+                          sub=g["address"].rsplit(":", 1)[0],
+                          click=lambda a=g["address"]: self.join_mouse(a, True),
+                          hover=lambda a=g["address"]: self.join_mouse(a))
         y = 470
         manual_sel = self.join_pick is None
         img = self.small.render(tr("net.manual"), True, GREY)
@@ -225,8 +271,11 @@ class ScreensMixin:
         cursor = "_" if manual_sel and pygame.time.get_ticks() // 500 % 2 else " "
         img = self.font.render(self.address + cursor, True, WHITE if manual_sel else GREY)
         s.blit(img, img.get_rect(midleft=(box.left + 16, box.centery)))
+        self.hit(box, lambda: self.join_mouse(None))           # щелчок — строка ввода (набирать с клавиатуры)
         last = "stop" if self.host_server else "create"
-        self.list_row(y + 90, self.join_pick == last, tr("net." + last + "_server"))
+        self.list_row(y + 90, self.join_pick == last, tr("net." + last + "_server"),
+                      click=lambda: self.join_mouse(last, True), hover=lambda: self.join_mouse(last))
+        self.back_button()
         if self.join_error:
             img = self.font.render(self.join_error, True, BAD_TEXT)
             s.blit(img, img.get_rect(center=(WIDTH // 2, 625)))
@@ -267,11 +316,14 @@ class ScreensMixin:
         s.blit(img, img.get_rect(center=(WIDTH // 2, 112)))
         if self.account_user:
             self.list_row(150, self.rooms_index == 0, tr("acc.signed", name=self.account_user),
-                          tr("acc.logout"), GREY, w=760)
+                          tr("acc.logout"), GREY, w=760, click=lambda: self.rooms_mouse(0, True),
+                          hover=lambda: self.rooms_mouse(0))
         else:
             self.list_row(150, self.rooms_index == 0, tr("acc.guest", name=self.player_name() or "?"),
-                          tr("acc.login_hint"), AMMO_COLOR, w=760)
-        self.list_row(200, self.rooms_index == 1, "+  " + tr("net.create_room"), w=760)
+                          tr("acc.login_hint"), AMMO_COLOR, w=760, click=lambda: self.rooms_mouse(0, True),
+                          hover=lambda: self.rooms_mouse(0))
+        self.list_row(200, self.rooms_index == 1, "+  " + tr("net.create_room"), w=760,
+                      click=lambda: self.rooms_mouse(1, True), hover=lambda: self.rooms_mouse(1))
         if not self.rooms_list:
             img = self.small.render(tr("net.no_rooms"), True, GREY)
             s.blit(img, img.get_rect(center=(WIDTH // 2, 262)))
@@ -281,7 +333,9 @@ class ScreensMixin:
             k = first + i + 2
             players, status, color = self.room_status(r)
             title = tr("net.room_name", name=r.get("name") or "?", id=r.get("id", "?"))
-            self.list_row(260 + i * 46, self.rooms_index == k, title, status, color, sub=players, w=760)
+            self.list_row(260 + i * 46, self.rooms_index == k, title, status, color, sub=players, w=760,
+                          click=lambda k=k: self.rooms_mouse(k, True), hover=lambda k=k: self.rooms_mouse(k))
+        self.back_button()
         if self.rooms_error:
             img = self.font.render(self.rooms_error, True, BAD_TEXT)
             s.blit(img, img.get_rect(center=(WIDTH // 2, 625)))
@@ -325,12 +379,25 @@ class ScreensMixin:
             if pid == self.me:
                 img = self.small.render(tr("net.you"), True, WHITE)
                 s.blit(img, img.get_rect(center=(card.centerx + 40, card.bottom - 22)))
+                if who == "human":           # щелчок по своей карточке: левая половина — герой назад, правая — вперёд
+                    half = card.w // 2
+                    self.hit((card.left, card.top, half, card.h), lambda: self.next_hero(-1))
+                    self.hit((card.left + half, card.top, card.w - half, card.h), lambda: self.next_hero(1))
         where = tr("net.room_on", server=self.lobby_server or self.net_addr or "", room=self.net_room or "")
         img = self.small.render(where, True, GREY)
         s.blit(img, img.get_rect(center=(WIDTH // 2, 380)))
         if self.lobby_notice:
             img = self.font.render(self.lobby_notice, True, AMMO_COLOR)
-            s.blit(img, img.get_rect(center=(WIDTH // 2, 450)))
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 430)))
+        if self.watching:
+            self.button((WIDTH // 2, 490), tr("net.btn_leave"), lambda: self.on_key(pygame.KSCAN_ESCAPE), w=200)
+        else:
+            buttons = [(tr("net.btn_unready") if self.my_ready() else tr("net.btn_ready"),
+                        lambda: self.send_ready(not self.my_ready())),
+                       (tr("net.btn_bot"), self.take_bot), (tr("net.btn_warm"), self.start_warmup),
+                       (tr("net.btn_leave"), lambda: self.on_key(pygame.KSCAN_ESCAPE))]
+            for i, (label, act) in enumerate(buttons):
+                self.button((WIDTH // 2 + (i - 1.5) * 215, 490), label, act, w=200)
         if self.watching:
             hints = [tr("net.watch_hint")]
         else:
@@ -425,6 +492,8 @@ class ScreensMixin:
             s.blit(img, (x0, top))
             for i, hero in enumerate(HEROES):
                 card = pygame.Rect(x0 + i * (w + gap), top + 26, w, 190)
+                self.hit(card, lambda pid=pid, hero=hero: self.pick_mouse(pid, hero, True),
+                         lambda pid=pid, hero=hero: self.pick_mouse(pid, hero))
                 cur = me["hero"] == hero
                 taken = other["ok"] and other["hero"] == hero
                 pygame.draw.rect(s, (40, 46, 66) if cur else (26, 29, 40), card, border_radius=12)
@@ -443,6 +512,7 @@ class ScreensMixin:
             s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 72)))
         img = self.small.render(tr("pick.hint"), True, GREY)
         s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 40)))
+        self.back_button()
         pygame.display.flip()
 
     def draw_settings(self):
@@ -470,14 +540,31 @@ class ScreensMixin:
             pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
             txt = self.font.render(labels[line], True, WHITE if sel else GREY)
             s.blit(txt, txt.get_rect(center=rect.center))
+            self.hit(rect, lambda i=i, rect=rect: self.settings_click(i, rect),
+                     lambda i=i: setattr(self, "settings_index", i))
+        self.back_button()
         img = self.small.render(tr("settings.name_hint" if row == "name" else "settings.hint"), True, GREY)
         s.blit(img, img.get_rect(center=(WIDTH // 2, 190 + len(self.settings_rows) * 50)))
         pygame.display.flip()
+
+    def settings_click(self, i, rect):
+        """Щелчок по строке настроек: строки со стрелками — левая половина «◀», правая «▶»;
+        «Назад» — в меню; «Имя» — выбрать строку (дальше набирать с клавиатуры)."""
+        self.settings_index = i
+        row = self.settings_rows[i]
+        if row == "back":
+            self.on_key(pygame.KSCAN_RETURN)
+        elif row != "name":
+            left = self.ui_mouse is not None and self.ui_mouse[0] < rect.centerx
+            self.on_key(pygame.KSCAN_LEFT if left else pygame.KSCAN_RIGHT)
 
     def draw_help(self):
         """Справка: общие артефакты, артефакты героев (две страницы), правила."""
         s = self.screen
         s.fill(BG)
+        # щелчок по левой половине — назад по страницам, по правой — вперёд
+        self.hit((0, 0, WIDTH // 2, HEIGHT), lambda: self.on_key(pygame.KSCAN_LEFT))
+        self.hit((WIDTH // 2, 0, WIDTH - WIDTH // 2, HEIGHT), lambda: self.on_key(pygame.KSCAN_RIGHT))
         page = self.help_page
         heroes = page - 1 if 1 <= page <= len(HELP_HERO_PAGES) else None
         title = (tr("help.title") if page == 0 else tr("sec.hero") if heroes is not None else tr("help.rules"))
@@ -492,6 +579,7 @@ class ScreensMixin:
         hint = self.small.render(f"{tr('help.pages', page=page + 1, pages=HELP_PAGES)}    "
                                  f"{tr('help.back')}", True, GREY)
         s.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 16)))
+        self.back_button()
         pygame.display.flip()
 
     def draw_help_items(self):
@@ -803,6 +891,9 @@ class ScreensMixin:
                     hint = tr("net.rematch_other", name=self.player_label(other))
             t = self.font.render(hint, True, WHITE)
             s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 40)))
+            # щелчок по экрану победы — «ещё раз» (через секунду, чтобы случайный щелчок не перезапустил)
+            self.hit((0, 0, WIDTH, HEIGHT), lambda: self.win_time and pygame.time.get_ticks() - self.win_time > 1000
+                     and self.on_key(pygame.KSCAN_R))
         if self.net:
             self.draw_net_notice()
             self.draw_watch_banner()
