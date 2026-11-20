@@ -178,39 +178,41 @@ def type_text(game, text):
 
 
 def test_register_in_game_and_auto_login_next_time(game):
-    from tests.test_net_menu import frames
-    srv = own_rooms(game)
-    assert game.account_user is None and game.lobby_index == 0     # гость; выбрана строка аккаунта
-    game.on_key(pygame.KSCAN_RETURN)              # строка аккаунта — экран входа
-    assert game.state == "account"
-    game.acc_name = ""
-    game.acc_row = 0
+    from tests.test_net_menu import frames, open_net
+    open_net(game)
+    game.join_touched, game.join_pick = True, "create"
+    game.on_key(pygame.KSCAN_RETURN)              # свой сервер — «Как войти?»
+    srv = game.host_server
+    assert game.state == "entry"
+    game.entry_pick(3)                            # «Создать аккаунт»
+    assert game.state == "account" and game.acc_register
+    game.acc_name, game.acc_row = "", 0
     type_text(game, "Папа")
     game.on_key(pygame.KSCAN_RETURN)              # к паролю
     type_text(game, "1234")
     game.draw_account()
-    game.on_key(pygame.KSCAN_DOWN)
-    game.on_key(pygame.KSCAN_DOWN)                # «Создать аккаунт»
-    game.on_key(pygame.KSCAN_RETURN)
+    game.on_key(pygame.KSCAN_RETURN)              # Enter в пароле — создать (пришли из «Создать»)
     frames(game, lambda: game.state == "lobby" and game.account_user == "Папа")
     assert game.settings["accounts"][srv.id]["user"] == "Папа"
     game.draw_lobby_screen()
     game.on_key(pygame.KSCAN_ESCAPE)              # к серверам — и снова на свой сервер
-    game.join_touched = True
-    game.join_pick = "own"
+    game.join_touched, game.join_pick = True, "own"
     game.on_key(pygame.KSCAN_RETURN)
-    frames(game, lambda: game.account_user == "Папа")          # вошёл сам, без пароля
+    assert game.state == "entering"               # входим по ключу — без пароля и без «Как войти?»
+    game.draw_entering()
+    frames(game, lambda: game.state == "lobby" and game.account_user == "Папа")
     game.on_key(pygame.KSCAN_B)                   # партия с ботом
     frames(game, lambda: game.net and game.net_seats)
     assert game.player_label("blue") == "Папа"
 
 
 def test_wrong_password_shown_and_logout(game):
-    from tests.test_net_menu import frames
-    srv = own_rooms(game)
+    from tests.test_net_menu import frames, own_server_lobby
+    srv = own_server_lobby(game)                  # гостем
     srv.accounts.register("Маша", "1234")
     game.lobby_index = 0
-    game.on_key(pygame.KSCAN_RETURN)
+    game.on_key(pygame.KSCAN_RETURN)              # «Гость · войти» — «Как войти?»
+    game.entry_pick(2)                            # «Войти в аккаунт»
     game.acc_name, game.acc_row = "Маша", 1
     type_text(game, "0000")
     game.on_key(pygame.KSCAN_RETURN)
@@ -219,10 +221,25 @@ def test_wrong_password_shown_and_logout(game):
     game.acc_password = ""
     type_text(game, "1234")
     game.on_key(pygame.KSCAN_RETURN)
-    frames(game, lambda: game.account_user == "Маша")
+    frames(game, lambda: game.account_user == "Маша" and game.state == "lobby")
     game.lobby_index = 0
-    game.on_key(pygame.KSCAN_RETURN)              # «выйти из аккаунта»
-    assert game.account_user is None and srv.id not in game.settings["accounts"]
+    game.on_key(pygame.KSCAN_RETURN)              # «выйти из аккаунта» — снова «Как войти?»
+    assert game.account_user is None and srv.id not in game.settings["accounts"] and game.state == "entry"
+
+
+def test_expired_key_asks_again(game):
+    from tests.test_net_menu import frames, open_net
+    open_net(game)
+    game.join_touched, game.join_pick = True, "create"
+    game.on_key(pygame.KSCAN_RETURN)
+    srv = game.host_server
+    game.settings["accounts"] = {srv.id: {"user": "Папа", "token": "x" * 64}}   # ключ, которого нет
+    game.on_key(pygame.KSCAN_ESCAPE)
+    game.join_touched, game.join_pick = True, "own"
+    game.on_key(pygame.KSCAN_RETURN)
+    assert game.state == "entering"
+    frames(game, lambda: game.state == "entry")
+    assert srv.id not in game.settings["accounts"]
 
 
 def test_users_command(tmp_path, capsys):

@@ -92,7 +92,12 @@ def test_own_server_lobby_buttons_and_pick(game):
     redraw(game, game.draw_join)
     create = next(h[0] for h in game.hits if h[0].w == 640 and h[0].y > 500)
     click(game, create.center)                        # «Создать свой сервер»
-    assert game.host_server and game.state == "lobby"
+    assert game.host_server and game.state == "entry"
+    game.entry_name = "Тест"
+    redraw(game, game.draw_entry)
+    guest = next(h for h in game.hits if h[0].w == 460 and h[0].h == 40)
+    click(game, guest[0].center)                      # «Играть как гость»
+    assert game.state == "lobby"
     frames(game, lambda: game.lobby_you)
     redraw(game, game.draw_lobby_screen)
     buttons = [h for h in game.hits if h[0].h == 40 and h[0].w == 220]   # Ищу, С ботом, Разминка

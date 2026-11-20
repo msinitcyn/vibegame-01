@@ -162,6 +162,8 @@ class Game(ScreensMixin):
         self.server_db = None         # база аккаунтов своего сервера (None — рядом с настройками)
         self.account_user = None      # вошли в аккаунт на этом сервере — имя, иначе гость
         self.acc_name, self.acc_password, self.acc_row, self.acc_error = "", "", 0, None
+        self.acc_register = False
+        self.entry_name, self.entry_row = "", 1
         self.menu_index = 0
         self.settings_rows = ["lang", "name", "aim_mode", "aim_stick", "aim_mouse", "updates", "back"]
         self.updater = Updater()          # новая версия: проверка — в run(), по настройке
@@ -376,10 +378,14 @@ class Game(ScreensMixin):
                 self.join_autopick()
                 self.draw_join()
                 continue
-            if self.state in ("lobby", "account"):
+            if self.state in ("lobby", "account", "entry", "entering"):
                 self.lobby_frame()
                 if self.state == "lobby":
                     self.draw_lobby_screen()
+                elif self.state == "entry":
+                    self.draw_entry()
+                elif self.state == "entering":
+                    self.draw_entering()
                 elif self.state == "account":
                     self.draw_account()
                 continue
@@ -837,12 +843,65 @@ class Game(ScreensMixin):
         self.lobby_notice = notice
         self.notice_until = time.monotonic() + 4 if notice else 0
         saved = self.saved_account()
-        if resume:
+        if not resume:                    # вернулись из партии — уже вошли
+            self.enter_lobby()
+        elif saved.get("token"):          # входили в аккаунт — входим сами по ключу, без пароля
             self.account_user = None
-            if saved.get("token"):
-                conn.send({"type": "resume", "token": saved["token"]})
-        conn.send({"type": "lobby", "name": self.player_name()})
+            conn.send({"type": "resume", "token": saved["token"]})
+            self.state = "entering"
+        elif saved.get("guest"):          # выбирали «гостем» — сразу в лобби
+            self.account_user = None
+            self.enter_lobby()
+        else:                             # первый раз на этом сервере — «Как войти?»
+            self.account_user = None
+            self.open_entry()
+
+    def enter_lobby(self):
+        """В лобби сервера (после выбора, как войти): серверу — имя для списка игроков."""
+        self.lobby_conn.send({"type": "lobby", "name": self.player_name()})
         self.state = "lobby"
+
+    # ------------------------------------------------------------------ «Как войти?»
+
+    def open_entry(self):
+        """Экран входа на сервер: играть гостем (имя), войти в аккаунт, создать аккаунт."""
+        self.entry_name = self.player_name()
+        self.entry_row = 1 if self.entry_name else 0
+        self.state = "entry"
+
+    def play_guest(self):
+        """«Играть как гость»: имя — в настройки, выбор запоминается для этого сервера."""
+        name = self.entry_name.strip()[:settings.NAME_MAX] or t("acc.guest_default")
+        self.set_name(name)
+        accounts = dict(self.settings.get("accounts") or {})
+        accounts[self.lobby_id] = {"guest": True}
+        self.settings["accounts"] = accounts
+        settings.save(self.settings)
+        self.enter_lobby()
+
+    def entry_key(self, sc):
+        """«Как войти?»: ↑/↓ — строка, буквы — имя гостя, Enter — выбрать, Esc — к серверам."""
+        K = pygame
+        if sc in (K.KSCAN_ESCAPE,):
+            self.leave_net()
+        elif sc == K.KSCAN_UP:
+            self.entry_row = max(0, self.entry_row - 1)
+        elif sc in (K.KSCAN_DOWN, K.KSCAN_TAB):
+            self.entry_row = min(3, self.entry_row + 1)
+        elif sc == K.KSCAN_BACKSPACE:
+            if self.entry_row == 0:
+                self.entry_name = self.entry_name[:-1]
+        elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER):
+            self.entry_pick(self.entry_row)
+
+    def entry_pick(self, row):
+        self.entry_row = row
+        if row == 0:
+            self.entry_row = 1            # имя набрано — дальше «Играть как гость»
+        elif row == 1:
+            self.play_guest()
+        else:
+            self.open_account(register=row == 3)
 
     def lobby_rows(self):
         """Строки лобби по порядку: аккаунт, другие игроки, партии — [(вид, данные)]."""
@@ -942,7 +1001,7 @@ class Game(ScreensMixin):
         self.lobby_index = i
         kind, data = rows[i]
         if kind == "account":
-            self.open_account()
+            self.account_click()
         elif kind == "player":
             self.challenge(data)
         elif kind == "game":
@@ -982,35 +1041,50 @@ class Game(ScreensMixin):
         settings.save(self.settings)
 
     def on_auth(self, msg):
-        """Ответ сервера о входе: вошли — запомнить; не вышло — причина на экране входа."""
+        """Ответ сервера о входе: вошли — запомнить ключ (дальше вход без пароля) и в лобби;
+        сохранённый ключ устарел — «Как войти?»; иначе — причина на экране аккаунта."""
         if msg.get("ok"):
+            if msg.get("user") is None:        # вышли из аккаунта
+                return
             self.account_user = msg.get("user")
             self.save_account(self.account_user, msg.get("token"))
-            if self.state == "account":
-                self.state = "lobby"
+            if self.state in ("account", "entering", "entry"):
+                self.enter_lobby()
             return
-        if msg.get("why") == "expired":          # сохранённый вход больше не действует — гость
+        if msg.get("why") == "expired":
             self.save_account(None, None)
             self.account_user = None
+            if self.state == "entering":
+                self.open_entry()
             return
         self.acc_error = t("acc.err." + str(msg.get("why")))
 
-    def open_account(self):
-        """Строка аккаунта на экране комнат: гость — экран входа; вошедший — выйти."""
+    def account_click(self):
+        """Надпись аккаунта в лобби: вошедший — выйти, гость — «Как войти?»."""
         if self.account_user:
             self.lobby_conn.send({"type": "logout", "token": self.saved_account().get("token")})
             self.save_account(None, None)
             self.account_user = None
-            return
+        else:
+            accounts = dict(self.settings.get("accounts") or {})
+            accounts.pop(self.lobby_id, None)          # больше не «всегда гостем»
+            self.settings["accounts"] = accounts
+            settings.save(self.settings)
+        self.open_entry()
+
+    def open_account(self, register=False):
+        """Экран аккаунта: имя, пароль, «Войти» / «Создать аккаунт»."""
         self.acc_name = self.acc_name or self.player_name()
-        self.acc_password, self.acc_row, self.acc_error = "", 0 if not self.acc_name else 1, None
+        self.acc_password, self.acc_error = "", None
+        self.acc_row = 0 if not self.acc_name else 1
+        self.acc_register = register
         self.state = "account"
 
     def account_key(self, sc):
         """Экран входа: ↑/↓ — строка, буквы — в поле, Enter — дальше / войти / создать, Esc — к комнатам."""
         K = pygame
         if sc == K.KSCAN_ESCAPE:
-            self.state = "lobby"
+            self.open_entry() if not self.account_user else self.enter_lobby()
         elif sc == K.KSCAN_UP:
             self.acc_row = max(0, self.acc_row - 1)
         elif sc in (K.KSCAN_DOWN, K.KSCAN_TAB):
@@ -1023,7 +1097,9 @@ class Game(ScreensMixin):
         elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER):
             if self.acc_row == 0:
                 self.acc_row = 1
-            elif self.acc_row in (1, 2):
+            elif self.acc_row == 1:
+                self.send_auth("register" if self.acc_register else "login")
+            elif self.acc_row == 2:
                 self.send_auth("login")
             else:
                 self.send_auth("register")
@@ -1124,6 +1200,13 @@ class Game(ScreensMixin):
         if self.state == "lobby":
             self.lobby_key(sc)
             return
+        if self.state == "entry":
+            self.entry_key(sc)
+            return
+        if self.state == "entering":
+            if sc == pygame.KSCAN_ESCAPE:
+                self.leave_net()
+            return
         if self.state == "account":
             self.account_key(sc)
             return
@@ -1218,6 +1301,16 @@ class Game(ScreensMixin):
                     B.CONTROLLER_BUTTON_X: B.KSCAN_ESCAPE, B.CONTROLLER_BUTTON_START: B.KSCAN_ESCAPE}
             if btn in keys:
                 self.on_key(keys[btn])
+            return
+        if self.state in ("entry", "entering"):
+            if btn in (B.CONTROLLER_BUTTON_DPAD_UP, PAD_UP):
+                self.on_key(B.KSCAN_UP)
+            elif btn in (B.CONTROLLER_BUTTON_DPAD_DOWN, PAD_DOWN):
+                self.on_key(B.KSCAN_DOWN)
+            elif btn == B.CONTROLLER_BUTTON_A:
+                self.on_key(B.KSCAN_RETURN)
+            elif btn in (*back, B.CONTROLLER_BUTTON_START):
+                self.on_key(B.KSCAN_ESCAPE)
             return
         if self.state == "account":                # имя и пароль — с клавиатуры; □/○ — назад
             if btn in (*back, B.CONTROLLER_BUTTON_START):
@@ -1325,7 +1418,8 @@ class Game(ScreensMixin):
 
     def in_ui(self):
         """Сейчас на экране меню (мышь — наведение и щелчки), а не партия."""
-        if self.state in ("menu", "help", "settings", "pick", "join", "lobby", "account", "update"):
+        if self.state in ("menu", "help", "settings", "pick", "join", "lobby", "account", "entry", "entering",
+                          "update"):
             return True
         return self.state == "play" and (bool(self.snap.get("winner")) or
                                           bool(self.net and self.net_waiting and not self.warmup))
@@ -1534,6 +1628,10 @@ class Game(ScreensMixin):
         if self.state == "account":
             self.account_text(text)
             return
+        if self.state == "entry" and self.entry_row == 0:
+            chars = "".join(ch for ch in text if ch.isprintable())
+            self.entry_name = (self.entry_name + chars)[:settings.NAME_MAX]
+            return
         if self.state == "settings" and self.settings_rows[self.settings_index] == "name":
             chars = "".join(ch for ch in text if ch.isprintable())
             self.set_name((self.settings["name"] + chars)[:settings.NAME_MAX])
@@ -1580,7 +1678,8 @@ class Game(ScreensMixin):
         pygame.display.set_caption(t("title"))
 
     def update_music(self):
-        in_menu = self.state in ("menu", "help", "settings", "join", "lobby", "account", "pick") or self.net_waiting
+        in_menu = self.state in ("menu", "help", "settings", "join", "lobby", "account", "entry", "entering",
+                                 "pick") or self.net_waiting
         self.audio.music("menu" if in_menu else "game")
 
     def menu_key(self, sc):

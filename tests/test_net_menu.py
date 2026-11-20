@@ -22,7 +22,7 @@ def frames(game, until, timeout=3.0, keep=()):
             game.lobby_frame()
             if game.warmup:
                 game.warm_frame(1 / 60)
-        elif game.state in ("lobby", "account") and game.lobby_conn:
+        elif game.state in ("lobby", "account", "entry", "entering") and game.lobby_conn:
             game.lobby_frame()
         elif game.net and not game.net_frame(1 / 60):
             game.leave_net(i18n.t(game.net_end), voluntary=False)
@@ -63,14 +63,26 @@ def open_net(game):
     assert game.state == "join"
 
 
+def enter_guest(game, name="Тест"):
+    """«Как войти?» → имя → «Играть как гость» (клавишами) → лобби."""
+    assert game.state == "entry", game.state
+    game.entry_name, game.entry_row = "", 0
+    game.on_text(name)
+    game.on_key(pygame.KSCAN_RETURN)              # имя — дальше «Играть как гость»
+    game.on_key(pygame.KSCAN_RETURN)
+    assert game.state == "lobby"
+    frames(game, lambda: game.lobby_you)
+
+
 def own_server_lobby(game):
-    """«Играть по сети» → «Создать свой сервер» → лобби своего сервера."""
+    """«Играть по сети» → «Создать свой сервер» → «Как войти?» → гостем → лобби своего сервера."""
     open_net(game)
     game.join_touched = True
     game.join_pick = "create"
     game.on_key(pygame.KSCAN_RETURN)
-    assert game.host_server and game.state == "lobby", game.join_error
-    frames(game, lambda: game.lobby_you)
+    assert game.host_server and game.state == "entry", game.join_error
+    game.draw_entry()
+    enter_guest(game)
     return game.host_server
 
 
@@ -276,8 +288,7 @@ def test_server_closed_back_to_servers(game):
     game.join_touched = True
     game.address = f"127.0.0.1:{srv.port}"
     game.on_key(pygame.KSCAN_RETURN)
-    assert game.state == "lobby"
-    frames(game, lambda: game.lobby_you)
+    enter_guest(game)
     game.on_key(pygame.KSCAN_B)                   # партия с ботом
     frames(game, lambda: game.state == "play" and game.net_seats)
     game.on_key(pygame.KSCAN_RETURN)
@@ -328,8 +339,8 @@ def test_join_typed_address_and_remember(game):
         assert game.address == f"127.0.0.1:{srv.port}"
         game.draw_join()
         game.on_key(pygame.KSCAN_RETURN)
-        assert game.state == "lobby" and game.join_error is None
-        frames(game, lambda: game.lobby_server == "Дом")
+        assert game.state == "entry" and game.join_error is None
+        assert game.lobby_server == "Дом"
         assert settings.load()["last_address"] == f"127.0.0.1:{srv.port}"
     finally:
         game.leave_net()
@@ -385,7 +396,7 @@ def test_join_picks_found_server(game):
         assert game.join_games()[0]["name"] == "Дом"
         game.draw_join()                              # экран со списком рисуется
         game.on_key(pygame.KSCAN_RETURN)              # найденный сервер выбран сам — сразу Enter
-        assert game.state == "lobby" and game.finder is None
+        assert game.state == "entry" and game.finder is None
     finally:
         game.leave_net()
         srv.stop()
@@ -438,7 +449,7 @@ def test_recent_servers_remembered_and_asked_directly(game):
         game.join_pick, game.join_touched = None, True
         game.address = f"localhost:{srv.port}"           # свой компьютер в «последние» не попадает
         game.on_key(pygame.KSCAN_RETURN)
-        assert game.state == "lobby" and settings.load()["recent_servers"] == ["10.0.0.9:5555"]
+        assert game.state == "entry" and settings.load()["recent_servers"] == ["10.0.0.9:5555"]
         game.leave_net()
     finally:
         srv.stop()
@@ -456,6 +467,7 @@ def test_red_uses_1234_and_sees_1234(game):
     try:
         masha = Bob(srv.port, "Маша")
         game.open_lobby(f"127.0.0.1:{srv.port}")
+        enter_guest(game)
         frames(game, lambda: len(game.lobby_players) == 2, keep=(masha,))
         masha.conn.send({"type": "challenge", "to": game.lobby_you})
         frames(game, lambda: game.incoming, keep=(masha,))
@@ -475,3 +487,16 @@ def test_red_uses_1234_and_sees_1234(game):
     finally:
         game.leave_net()
         srv.stop()
+
+
+
+def test_guest_choice_remembered_per_server(game):
+    srv = own_server_lobby(game)
+    assert game.settings["accounts"][srv.id] == {"guest": True} and game.player_name() == "Тест"
+    game.on_key(pygame.KSCAN_ESCAPE)              # к серверам — и снова на свой
+    game.join_touched, game.join_pick = True, "own"
+    game.on_key(pygame.KSCAN_RETURN)
+    assert game.state == "lobby"                  # без «Как войти?»
+    game.lobby_index = 0
+    game.on_key(pygame.KSCAN_RETURN)              # надпись «Гость · войти» — снова «Как войти?»
+    assert game.state == "entry" and srv.id not in game.settings["accounts"]

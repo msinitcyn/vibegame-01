@@ -160,6 +160,52 @@ class ScreensMixin:
         s.blit(img, img.get_rect(center=(WIDTH // 2, 220)))
         pygame.display.flip()
 
+    def draw_entry(self):
+        """«Как войти?»: гостем (с именем), войти в аккаунт, создать аккаунт."""
+        s = self.screen
+        s.fill(BG)
+        img = self.big.render(tr("entry.title"), True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 80)))
+        img = self.small.render(tr("net.rooms_title", name=self.lobby_server or ""), True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 130)))
+        # гостем: имя и кнопка
+        img = self.small.render(tr("entry.guest_name"), True, GREY)
+        s.blit(img, img.get_rect(midleft=(WIDTH // 2 - 230, 185)))
+        box = pygame.Rect(0, 0, 460, 44)
+        box.center = (WIDTH // 2, 220)
+        sel = self.entry_row == 0
+        self.hit(box, lambda: setattr(self, "entry_row", 0))
+        pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), box, border_radius=10)
+        pygame.draw.rect(s, BLUE if sel else GREY, box, 2, border_radius=10)
+        blink = "_" if sel and pygame.time.get_ticks() // 500 % 2 else ""
+        img = self.font.render(self.entry_name + blink, True, WHITE if sel else GREY)
+        s.blit(img, img.get_rect(midleft=(box.left + 14, box.centery)))
+        self.button((WIDTH // 2, 285), tr("entry.guest"), lambda: self.entry_pick(1), w=460,
+                    sel=self.entry_row == 1, color=(120, 220, 140) if self.entry_row == 1 else None)
+        img = self.small.render(tr("entry.or"), True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 345)))
+        self.button((WIDTH // 2 - 118, 400), tr("entry.login"), lambda: self.entry_pick(2), w=225,
+                    sel=self.entry_row == 2)
+        self.button((WIDTH // 2 + 118, 400), tr("entry.register"), lambda: self.entry_pick(3), w=225,
+                    sel=self.entry_row == 3)
+        for i, line in enumerate(self.wrap(tr("entry.note"), 640, self.small)):
+            img = self.small.render(line, True, GREY)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 480 + i * 22)))
+        img = self.small.render(tr("entry.hint"), True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 30)))
+        self.back_button()
+        pygame.display.flip()
+
+    def draw_entering(self):
+        """Вход по сохранённому ключу — пара мгновений, без пароля."""
+        s = self.screen
+        s.fill(BG)
+        user = self.saved_account().get("user") or ""
+        img = self.font.render(tr("entry.entering", name=user), True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT // 2)))
+        self.back_button()
+        pygame.display.flip()
+
     def draw_account(self):
         """Экран входа: имя, пароль звёздочками, «Войти», «Создать аккаунт», причина ошибки."""
         s = self.screen
