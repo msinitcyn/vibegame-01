@@ -24,6 +24,7 @@ import socket
 PROTO = 4                          # 4: зрители (роль в join); 3: лобби, готовность, возврат на место
 PORT = 5555
 MAX_OUT = 1024 * 1024              # клиент не читает (~7 с снимков) — отключаем, а не копим
+MAX_LINE = 64 * 1024               # сообщение длиннее — нарушение протокола (снимок ~6 КБ)
 
 
 class Conn:
@@ -39,6 +40,7 @@ class Conn:
         self.inbuf = b""
         self.outbuf = bytearray()      # дописывается без копирования всего буфера
         self.closed = False
+        self.violation = None          # почему закрыли: кривое или слишком длинное сообщение
 
     def fileno(self):
         return self.sock.fileno()
@@ -77,11 +79,31 @@ class Conn:
                 self.close()
                 break
             self.inbuf += data
-        while b"\n" in self.inbuf:
+        while b"\n" in self.inbuf and not self.violation:
             line, self.inbuf = self.inbuf.split(b"\n", 1)
-            if line.strip():
-                out.append(json.loads(line))
+            if not line.strip():
+                continue
+            if len(line) > MAX_LINE:
+                self.reject("слишком длинное сообщение")
+                break
+            try:
+                msg = json.loads(line)
+            except (ValueError, UnicodeDecodeError):
+                self.reject("не JSON")
+                break
+            if not isinstance(msg, dict):
+                self.reject("не объект JSON")
+                break
+            out.append(msg)
+        if len(self.inbuf) > MAX_LINE:
+            self.reject("слишком длинное сообщение")
         return out
+
+    def reject(self, why):
+        """Нарушение протокола: запомнить причину и закрыть соединение."""
+        self.violation = why
+        self.inbuf = b""
+        self.close()
 
     def close(self):
         self.closed = True

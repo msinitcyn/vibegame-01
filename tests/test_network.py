@@ -650,3 +650,98 @@ def test_too_many_spectators(server):
     assert any(m["type"] == "full" for m in msgs)
     for c in conns:
         c.close()
+
+
+# ------------------------------------------------------------------ защита сервера
+
+BAD_LINES = [b"hello\n", b"[1,2]\n", b'{"type":"cmd","move":"ab"}\n', b'{"type":"cmd","move":[1,2,3]}\n',
+             b'{"type":"cmd","move":["x","y"]}\n', b'{"type":"cmd","move":[1e999,0]}\n',
+             b'{"type":"cmd","slot":true,"aim":"x"}\n', b'{"type":"hero","hero":["fire"]}\n',
+             b'{"type":"name","name":{"a":1}}\n', b'"text"\n', b'\xff\xfe\n']
+
+
+@pytest.mark.parametrize("line", BAD_LINES)
+def test_bad_line_from_player_does_not_kill_server(server, line):
+    a, b = Client(server), Client(server)
+    playing(server, a, b)
+    a.conn.sock.setblocking(True)
+    a.conn.sock.sendall(line)
+    a.conn.sock.setblocking(False)
+    for _ in range(10):
+        b.cmd(move=(0, 1))
+        server.step()
+    seen = len(b.states())
+    wait(server, lambda: len(b.states()) > seen + 2, clients=(b,))   # сервер жив и шлёт снимки
+    assert server.seats["red"].conn and not server.seats["red"].conn.closed
+    blue = server.seats["blue"]
+    # кривое сообщение — как обрыв связи (место держится), неверные значения — просто пропускаются
+    assert blue.conn is None and blue.away_until is not None or blue.conn and not blue.conn.closed
+
+
+def test_bad_values_do_nothing(server):
+    a, b = Client(server), Client(server)
+    playing(server, a, b)
+    blue = server.match.blue
+    x, y = blue.x, blue.y
+    for _ in range(20):
+        a.conn.send({"type": "cmd", "move": [1, 2, 3], "slot": True})
+        b.cmd()
+        server.step()
+    assert (blue.x, blue.y) == (x, y)
+
+
+def test_garbage_before_join_closes_only_it(server):
+    a = Client(server)
+    s = socket.create_connection(("127.0.0.1", server.port))
+    s.sendall(b"GET / HTTP/1.1\r\n\r\n")
+    for _ in range(10):
+        a.cmd()
+        server.step()
+        time.sleep(0.002)
+    assert not server.newcomers and server.seats["blue"].conn
+    s.close()
+
+
+def test_endless_line_is_cut():
+    from duel.net import MAX_LINE
+    a_sock, b_sock = socket.socketpair()
+    conn = Conn(b_sock)
+    a_sock.setblocking(False)
+    sent = 0
+    try:
+        while sent < MAX_LINE * 3:
+            sent += a_sock.send(b"x" * 8192)
+            conn.recv()
+    except OSError:                      # приёмник закрылся — так и надо
+        pass
+    conn.recv()
+    assert conn.closed and conn.violation and len(conn.inbuf) == 0
+    a_sock.close()
+
+
+def test_good_messages_before_bad_still_delivered():
+    a_sock, b_sock = socket.socketpair()
+    conn = Conn(b_sock)
+    a_sock.sendall(b'{"type":"a"}\n{"type":"b"}\nnot json\n{"type":"c"}\n')
+    time.sleep(0.01)
+    msgs = conn.recv()
+    assert [m["type"] for m in msgs] == ["a", "b"] and conn.closed
+    a_sock.close()
+
+
+def test_connection_flood_is_limited(server):
+    from duel.server import MAX_PENDING
+    a = Client(server)
+    socks = [socket.create_connection(("127.0.0.1", server.port)) for _ in range(40)]
+    for _ in range(20):
+        a.cmd()
+        server.step()
+        time.sleep(0.002)
+    assert len(server.newcomers) <= MAX_PENDING and server.seats["blue"].conn
+    b = None
+    for s in socks:
+        s.close()
+    for _ in range(10):
+        server.step()
+    b = Client(server)                         # после наплыва нормальный игрок входит
+    assert b.you == "red"
