@@ -1,7 +1,13 @@
 """Сеть: сообщения JSON по TCP, по одному в строке.
 
-Протокол 6 — сервер с лобби, комнатами и аккаунтами:
-    сервер -> {"type": "hello", "proto": 6, "role": "lobby", "server": "Дом", "id": "номер сервера"}
+Протокол 7 — сервер с лобби (игроки, партии, вызовы), комнатами и аккаунтами:
+    сервер -> {"type": "hello", "proto": 7, "role": "lobby", "server": "Дом", "id": "номер сервера"}
+Лобби игроков (подробно — duel/server.py и openspec/changes/archive/*lobby-duels/design.md):
+    {"type": "lobby", "name"} -> {"type": "lobby", "you", "players": [...], "games": [...]} раз в 0,5 с
+    {"type": "challenge", "to"} / {"type": "cancel"} / {"type": "answer", "from", "accept"}
+        -> {"type": "challenged", "from", "name", "left"} / {"type": "challenge_over"} / {"type": "declined", "why"}
+    {"type": "seek"} / {"type": "unseek"} / {"type": "bot_game"} -> {"type": "seat", ...} — партия создана
+    в партии: {"type": "room_closed", "why"} — соперник ушёл, снова в лобби
 В лобби клиент -> сервер (аккаунт — по желанию, без него играют гостем):
     {"type": "register" | "login", "name", "password"}   {"type": "resume", "token"}   {"type": "logout"}
     сервер -> {"type": "auth", "ok": true, "user": "Папа", "token": "…"} | {"type": "auth", "ok": false, "why"}
@@ -26,7 +32,7 @@
 import json
 import socket
 
-PROTO = 6                          # 6: аккаунты; 5: лобби с комнатами; 4: зрители; 3: лобби, готовность
+PROTO = 7                          # 7: лобби игроков (вызов, поиск, бот); 6: аккаунты; 5: лобби с комнатами; 4: зрители; 3: лобби, готовность
 PORT = 5555
 MAX_OUT = 1024 * 1024              # клиент не читает (~7 с снимков) — отключаем, а не копим
 MAX_LINE = 64 * 1024               # сообщение длиннее — нарушение протокола (снимок ~6 КБ)

@@ -180,8 +180,7 @@ def type_text(game, text):
 def test_register_in_game_and_auto_login_next_time(game):
     from tests.test_net_menu import frames
     srv = own_rooms(game)
-    assert game.account_user is None and game.rooms_index == 1     # гость; выбрано «Создать комнату»
-    game.on_key(pygame.KSCAN_UP)
+    assert game.account_user is None and game.lobby_index == 0     # гость; выбрана строка аккаунта
     game.on_key(pygame.KSCAN_RETURN)              # строка аккаунта — экран входа
     assert game.state == "account"
     game.acc_name = ""
@@ -193,16 +192,16 @@ def test_register_in_game_and_auto_login_next_time(game):
     game.on_key(pygame.KSCAN_DOWN)
     game.on_key(pygame.KSCAN_DOWN)                # «Создать аккаунт»
     game.on_key(pygame.KSCAN_RETURN)
-    frames(game, lambda: game.state == "rooms" and game.account_user == "Папа")
+    frames(game, lambda: game.state == "lobby" and game.account_user == "Папа")
     assert game.settings["accounts"][srv.id]["user"] == "Папа"
-    game.draw_rooms()
+    game.draw_lobby_screen()
     game.on_key(pygame.KSCAN_ESCAPE)              # к серверам — и снова на свой сервер
     game.join_touched = True
     game.join_pick = "own"
     game.on_key(pygame.KSCAN_RETURN)
     frames(game, lambda: game.account_user == "Папа")          # вошёл сам, без пароля
-    game.on_key(pygame.KSCAN_RETURN)              # создать комнату
-    frames(game, lambda: game.net_seats)
+    game.on_key(pygame.KSCAN_B)                   # партия с ботом
+    frames(game, lambda: game.net and game.net_seats)
     assert game.player_label("blue") == "Папа"
 
 
@@ -210,7 +209,7 @@ def test_wrong_password_shown_and_logout(game):
     from tests.test_net_menu import frames
     srv = own_rooms(game)
     srv.accounts.register("Маша", "1234")
-    game.rooms_index = 0
+    game.lobby_index = 0
     game.on_key(pygame.KSCAN_RETURN)
     game.acc_name, game.acc_row = "Маша", 1
     type_text(game, "0000")
@@ -221,7 +220,7 @@ def test_wrong_password_shown_and_logout(game):
     type_text(game, "1234")
     game.on_key(pygame.KSCAN_RETURN)
     frames(game, lambda: game.account_user == "Маша")
-    game.rooms_index = 0
+    game.lobby_index = 0
     game.on_key(pygame.KSCAN_RETURN)              # «выйти из аккаунта»
     assert game.account_user is None and srv.id not in game.settings["accounts"]
 

@@ -283,133 +283,195 @@ class ScreensMixin:
         s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 30)))
         pygame.display.flip()
 
-    def room_status(self, r):
-        """Состояние комнаты для списка: кто сидит, идёт ли партия."""
-        seats = r.get("seats") or {}
-        names = []
-        for pid in ("blue", "red"):
-            seat = seats.get(pid) or {}
-            who = seat.get("who")
-            names.append(tr("name.bot") if who == "bot" else seat.get("name") or (
-                tr("hero." + seat["hero"]) if who and seat.get("hero") else tr("net.free_seat")))
-        phase = r.get("phase")
-        free = any(not (seats.get(pid) or {}).get("who") for pid in ("blue", "red"))
-        if phase in ("play", "countdown"):
-            status, color = tr("net.st_playing"), BLUE
-        elif phase == "over":
-            status, color = tr("net.st_over"), GREY
-        elif free:
-            status, color = tr("net.st_wait"), AMMO_COLOR
-        else:
-            status, color = tr("net.st_lobby"), GREY
-        if r.get("spectators"):
-            status += "  ·  " + tr("net.spectators", n=r["spectators"])
-        return f"{names[0]} — {names[1]}", status, color
-
-    def draw_rooms(self):
-        """Экран комнат сервера: «Создать комнату» и комнаты (кто сидит, идёт ли партия, зрители)."""
-        s = self.screen
-        s.fill(BG)
-        img = self.big.render(tr("net.rooms_title", name=self.lobby_server or ""), True, WHITE)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 70)))
-        img = self.small.render(self.lobby_addr or "", True, GREY)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 112)))
-        if self.account_user:
-            self.list_row(150, self.rooms_index == 0, tr("acc.signed", name=self.account_user),
-                          tr("acc.logout"), GREY, w=760, click=lambda: self.rooms_mouse(0, True),
-                          hover=lambda: self.rooms_mouse(0))
-        else:
-            self.list_row(150, self.rooms_index == 0, tr("acc.guest", name=self.player_name() or "?"),
-                          tr("acc.login_hint"), AMMO_COLOR, w=760, click=lambda: self.rooms_mouse(0, True),
-                          hover=lambda: self.rooms_mouse(0))
-        self.list_row(200, self.rooms_index == 1, "+  " + tr("net.create_room"), w=760,
-                      click=lambda: self.rooms_mouse(1, True), hover=lambda: self.rooms_mouse(1))
-        if not self.rooms_list:
-            img = self.small.render(tr("net.no_rooms"), True, GREY)
-            s.blit(img, img.get_rect(center=(WIDTH // 2, 262)))
-        rows = 7
-        first = max(0, min(self.rooms_index - 1 - rows, len(self.rooms_list) - rows))
-        for i, r in enumerate(self.rooms_list[first:first + rows]):
-            k = first + i + 2
-            players, status, color = self.room_status(r)
-            title = tr("net.room_name", name=r.get("name") or "?", id=r.get("id", "?"))
-            self.list_row(260 + i * 46, self.rooms_index == k, title, status, color, sub=players, w=760,
-                          click=lambda k=k: self.rooms_mouse(k, True), hover=lambda k=k: self.rooms_mouse(k))
-        self.back_button()
-        if self.rooms_error:
-            img = self.font.render(self.rooms_error, True, BAD_TEXT)
-            s.blit(img, img.get_rect(center=(WIDTH // 2, 625)))
-        img = self.small.render(tr("net.rooms_hint"), True, GREY)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 30)))
-        pygame.display.flip()
-
     def draw_lobby(self):
-        """Лобби комнаты: два места (кто сел, готов ли), сервер и комната."""
+        """Выбор героя по сети: ряд синего и ряд красного, как за одним компьютером. Свой ряд —
+        выбирать (←/→, щелчок) и подтверждать (Enter, щелчок по выбранному); ряд соперника — смотреть."""
         s = self.screen
         s.fill(BG)
-        img = self.big.render(tr("net.lobby_title"), True, WHITE)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 100)))
-        for i, pid in enumerate(("blue", "red")):
+        img = self.big.render(tr("pick.title"), True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 50)))
+        n, gap = len(HEROES), 16
+        w = min(170, (WIDTH - 40 - gap * (n - 1)) // n)
+        x0 = (WIDTH - n * w - (n - 1) * gap) // 2
+        for row, pid in enumerate(("blue", "red")):
             seat = self.net_seats.get(pid) or {}
-            who = seat.get("who")
-            card = pygame.Rect(0, 0, 380, 150)
-            card.center = (WIDTH // 2 + (-210 if i == 0 else 210), 260)
-            pygame.draw.rect(s, (26, 29, 40), card, border_radius=14)
-            pygame.draw.rect(s, self.side_color(pid), card, 3 if pid == self.me else 1, border_radius=14)
-            if who is None:
-                name, status, color = tr("net.free_seat"), "", GREY
-            elif who == "away":
-                name, status, color = self.player_label(pid), tr("net.away"), BAD_TEXT
-            else:
-                ready = seat.get("ready")
-                name = self.player_label(pid)
-                status, color = (tr("net.ready"), AMMO_COLOR) if ready else (tr("net.not_ready"), GREY)
-            hero = seat.get("hero")
-            if hero:                          # маг героя слева в карточке
-                draw_unit(s, HERO_SPRITE[hero], (card.left + 62, card.centery), 34, 1 if pid == "blue" else -1)
-            img = self.font.render(name, True, self.side_color(pid) if who else GREY)
-            s.blit(img, img.get_rect(center=(card.centerx + 40, card.top + 32)))
-            if hero:
-                arrows = "◀  {}  ▶" if pid == self.me and who == "human" else "{}"
-                img = self.small.render(arrows.format(tr("hero." + hero)), True, HERO_COLOR[hero])
-                s.blit(img, img.get_rect(center=(card.centerx + 40, card.top + 60)))
-            if status:
-                img = self.font.render(status, True, color)
-                s.blit(img, img.get_rect(center=(card.centerx + 40, card.top + 92)))
-            if pid == self.me:
-                img = self.small.render(tr("net.you"), True, WHITE)
-                s.blit(img, img.get_rect(center=(card.centerx + 40, card.bottom - 22)))
-                if who == "human":           # щелчок по своей карточке: левая половина — герой назад, правая — вперёд
-                    half = card.w // 2
-                    self.hit((card.left, card.top, half, card.h), lambda: self.next_hero(-1))
-                    self.hit((card.left + half, card.top, card.w - half, card.h), lambda: self.next_hero(1))
-        where = tr("net.room_on", server=self.lobby_server or self.net_addr or "", room=self.net_room or "")
-        img = self.small.render(where, True, GREY)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 380)))
-        if self.lobby_notice:
-            img = self.font.render(self.lobby_notice, True, AMMO_COLOR)
-            s.blit(img, img.get_rect(center=(WIDTH // 2, 430)))
+            other = self.net_seats.get("red" if pid == "blue" else "blue") or {}
+            who, hero, ready = seat.get("who"), seat.get("hero"), seat.get("ready")
+            mine = pid == self.me and who == "human"
+            top = 105 + row * 225
+            label = self.player_label(pid) if who else tr("net.free_seat")
+            if who == "away":
+                label += "  —  " + tr("net.away")
+            elif who:
+                label += "  —  " + (tr("pick.chosen") if ready else tr("pick.choosing"))
+            if mine:
+                label += "   (" + tr("net.you") + ")"
+            img = self.font.render(label, True, self.side_color(pid) if who else GREY)
+            s.blit(img, (x0, top))
+            for i, h in enumerate(HEROES):
+                card = pygame.Rect(x0 + i * (w + gap), top + 32, w, 170)
+                cur = hero == h
+                taken = other.get("who") and other.get("hero") == h
+                if mine:
+                    self.hit(card, lambda h=h: self.choose_hero(h))
+                on = cur or (mine and not taken and self.hovered(card))
+                pygame.draw.rect(s, (40, 46, 66) if on else (26, 29, 40), card, border_radius=12)
+                pygame.draw.rect(s, HERO_COLOR[h] if cur else (60, 64, 80), card,
+                                 4 if cur and ready else (2 if on else 1), border_radius=12)
+                draw_unit(s, HERO_SPRITE[h], (card.centerx, card.top + 62), 36, 1 if pid == "blue" else -1,
+                          alpha=90 if taken else 255)
+                img = self.font.render(tr("hero." + h), True, HERO_COLOR[h] if not taken else GREY)
+                s.blit(img, img.get_rect(center=(card.centerx, card.top + 122)))
+                note = tr("pick.chosen") if cur and ready else (tr("pick.taken") if taken else "")
+                if note:
+                    img = self.small.render(note, True, AMMO_COLOR if cur else GREY)
+                    s.blit(img, img.get_rect(center=(card.centerx, card.top + 150)))
         if self.watching:
-            self.button((WIDTH // 2, 490), tr("net.btn_leave"), lambda: self.on_key(pygame.KSCAN_ESCAPE), w=200)
+            self.button((WIDTH // 2, 585), tr("net.btn_leave"), lambda: self.on_key(pygame.KSCAN_ESCAPE), w=200)
+            hint = tr("net.watch_hint")
         else:
-            buttons = [(tr("net.btn_unready") if self.my_ready() else tr("net.btn_ready"),
-                        lambda: self.send_ready(not self.my_ready())),
-                       (tr("net.btn_bot"), self.take_bot), (tr("net.btn_warm"), self.start_warmup),
-                       (tr("net.btn_leave"), lambda: self.on_key(pygame.KSCAN_ESCAPE))]
-            for i, (label, act) in enumerate(buttons):
-                self.button((WIDTH // 2 + (i - 1.5) * 215, 490), label, act, w=200)
-        if self.watching:
-            hints = [tr("net.watch_hint")]
-        else:
-            hints = [tr("net.lobby_hint"), tr("net.lobby_hint_host"), tr("net.warm_hint")]
+            self.button((WIDTH // 2 - 110, 585), tr("net.btn_unready") if self.my_ready() else tr("net.btn_ready"),
+                        lambda: self.send_ready(not self.my_ready()), w=200)
+            self.button((WIDTH // 2 + 110, 585), tr("net.btn_leave"), lambda: self.on_key(pygame.KSCAN_ESCAPE),
+                        w=200)
+            hint = tr("net.pick_hint")
+        img = self.small.render(hint, True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 640)))
         if self.net_spectators:
-            hints.append(tr("net.spectators", n=self.net_spectators))
-        for i, text in enumerate(hints):
-            img = self.small.render(text, True, GREY)
-            s.blit(img, img.get_rect(center=(WIDTH // 2, 560 + i * 24)))
+            img = self.small.render(tr("net.spectators", n=self.net_spectators), True, GREY)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 665)))
         self.draw_watch_banner()
         self.draw_net_notice()
         pygame.display.flip()
+
+    # ------------------------------------------------------------------ лобби сервера
+
+    def game_line(self, g):
+        """Партия в списке: «Папа (Огонь) — Маша (Тьма)» и «идёт 2:14 · зрителей 1»."""
+        def side(pid):
+            x = g.get(pid) or {}
+            name = tr("name.bot") if x.get("who") == "bot" else (x.get("name") or "?")
+            return f"{name} ({tr('hero.' + x['hero'])})" if x.get("hero") else name
+        phase = g.get("phase")
+        if phase == "lobby":
+            status, color = tr("lobby.g.pick"), AMMO_COLOR
+        elif phase == "over":
+            status, color = tr("lobby.g.over"), GREY
+        else:
+            sec = int(g.get("time") or 0)
+            status, color = tr("lobby.g.play", t=f"{sec // 60}:{sec % 60:02d}"), BLUE
+        if g.get("spectators"):
+            status += "  ·  " + tr("net.spectators", n=g["spectators"])
+        return f"{side('blue')} — {side('red')}", status, color
+
+    def side_row(self, rect, sel, left, right="", right_color=GREY, click=None, hover=None):
+        """Строка колонки лобби: имя слева, состояние справа; мышь — наведение и щелчок."""
+        s = self.screen
+        rect = pygame.Rect(rect)
+        if click:
+            self.hit(rect, click, hover)
+        on = sel or (click is not None and self.hovered(rect))
+        pygame.draw.rect(s, (40, 46, 66) if on else (26, 29, 40), rect, border_radius=8)
+        pygame.draw.rect(s, BLUE if on else (60, 64, 80), rect, 2 if on else 1, border_radius=8)
+        img = self.small.render(left, True, WHITE if on else (200, 205, 220))
+        s.blit(img, img.get_rect(midleft=(rect.left + 12, rect.centery)))
+        if right:
+            img = self.small.render(right, True, right_color)
+            s.blit(img, img.get_rect(midright=(rect.right - 12, rect.centery)))
+
+    def draw_lobby_screen(self):
+        """Лобби сервера: слева — игроки в сети (щелчок — вызвать), справа — идущие партии (щелчок —
+        смотреть); сверху — аккаунт; внизу — «Ищу соперника», «Играть с ботом», «Разминка»."""
+        s = self.screen
+        s.fill(BG)
+        img = self.font.render(tr("net.rooms_title", name=self.lobby_server or ""), True, WHITE)
+        s.blit(img, img.get_rect(midleft=(110, 30)))
+        img = self.small.render(self.lobby_addr or "", True, GREY)
+        s.blit(img, img.get_rect(midleft=(110 + img.get_width() * 0 + 0, 56)))
+        rows = self.lobby_rows()
+        acc = (tr("acc.signed", name=self.account_user) + "  ·  " + tr("acc.logout") if self.account_user
+               else tr("acc.guest", name=self.player_name() or "?") + "  ·  " + tr("acc.login_hint"))
+        self.side_row((WIDTH - 470, 14, 450, 34), self.lobby_index == 0, acc,
+                      click=lambda: self.lobby_mouse(0, True), hover=lambda: self.lobby_mouse(0))
+        col_w, top = 455, 100
+        others = [(i, d) for i, (k, d) in enumerate(rows) if k == "player"]
+        games = [(i, d) for i, (k, d) in enumerate(rows) if k == "game"]
+        me = next((p for p in self.lobby_players if p.get("id") == self.lobby_you), None)
+        for col, (title, items) in enumerate(((tr("lobby.players", n=len(self.lobby_players)), others),
+                                              (tr("lobby.games", n=len(games)), games))):
+            x = 30 + col * (col_w + 30)
+            img = self.font.render(title, True, (200, 205, 220))
+            s.blit(img, (x, top))
+            pygame.draw.line(s, GREY, (x, top + 30), (x + col_w, top + 30), 1)
+            y = top + 42
+            if col == 0 and me:
+                st = tr("lobby.st." + str(me.get("status")))
+                self.side_row((x, y, col_w, 34), False, tr("lobby.me", name=me.get("name") or "?"), st, GREY)
+                y += 40
+            if not items:
+                img = self.small.render(tr("lobby.no_players" if col == 0 else "lobby.no_games"), True, GREY)
+                s.blit(img, (x + 6, y + 8))
+            for i, d in items[:9]:
+                if col == 0:
+                    status = str(d.get("status"))
+                    free = status in ("lobby", "seeking")
+                    color = AMMO_COLOR if status == "seeking" else ((120, 220, 140) if free else GREY)
+                    right = tr("lobby.st." + status) + (f"  ·  {tr('lobby.challenge')}" if free else "")
+                    name = ("★ " if d.get("account") else "") + (d.get("name") or "?")
+                    self.side_row((x, y, col_w, 34), self.lobby_index == i, name, right, color,
+                                  click=lambda i=i: self.lobby_mouse(i, True), hover=lambda i=i: self.lobby_mouse(i))
+                else:
+                    left, status, color = self.game_line(d)
+                    self.side_row((x, y, col_w, 34), self.lobby_index == i, left, status + "  ·  " + tr("lobby.watch"),
+                                  color, click=lambda i=i: self.lobby_mouse(i, True),
+                                  hover=lambda i=i: self.lobby_mouse(i))
+                y += 40
+        by = HEIGHT - 110
+        self.button((WIDTH // 2 - 230, by), tr("lobby.unseek") if self.seeking else tr("lobby.seek"),
+                    self.toggle_seek, w=220, color=AMMO_COLOR if self.seeking else None)
+        self.button((WIDTH // 2, by), tr("lobby.bot"), lambda: self.lobby_conn.send({"type": "bot_game"}), w=220)
+        self.button((WIDTH // 2 + 230, by), tr("lobby.warm"), self.start_warmup, w=220)
+        if self.lobby_notice:
+            img = self.font.render(self.lobby_notice, True, AMMO_COLOR)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, by - 45)))
+        img = self.small.render(tr("lobby.hint"), True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 40)))
+        self.back_button()
+        self.draw_challenge_popup()
+        pygame.display.flip()
+
+    def draw_challenge_popup(self):
+        """Окно поверх лобби: входящий вызов (принять / отказаться, сколько осталось) или свой вызов
+        (ждём ответа / отменить). Пока окно открыто, остальное лобби не нажимается."""
+        import time
+        if not (self.incoming or self.outgoing):
+            return
+        s = self.screen
+        shade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, 150))
+        s.blit(shade, (0, 0))
+        self.hit((0, 0, WIDTH, HEIGHT), lambda: None)    # мимо окна — ничего
+        box = pygame.Rect(0, 0, 560, 200)
+        box.center = (WIDTH // 2, HEIGHT // 2)
+        pygame.draw.rect(s, (30, 34, 48), box, border_radius=16)
+        pygame.draw.rect(s, AMMO_COLOR, box, 2, border_radius=16)
+        if self.incoming:
+            left = max(0, int(self.incoming["until"] - time.monotonic()) + 1)
+            text = tr("lobby.challenged", name=self.incoming["name"])
+            sub = tr("lobby.left", s=left)
+            self.button((box.centerx - 120, box.bottom - 45), tr("lobby.accept"),
+                        lambda: self.answer_challenge(True), w=200, color=(120, 220, 140))
+            self.button((box.centerx + 120, box.bottom - 45), tr("lobby.decline"),
+                        lambda: self.answer_challenge(False), w=200)
+        else:
+            text = tr("lobby.waiting", name=self.outgoing["name"])
+            sub = tr("lobby.waiting_hint")
+            self.button((box.centerx, box.bottom - 45), tr("lobby.cancel"),
+                        lambda: self.lobby_key(pygame.KSCAN_ESCAPE), w=200)
+        img = self.font.render(text, True, WHITE)
+        s.blit(img, img.get_rect(center=(box.centerx, box.top + 50)))
+        img = self.small.render(sub, True, GREY)
+        s.blit(img, img.get_rect(center=(box.centerx, box.top + 85)))
 
     def slot_key(self, pid, i):
         """Подпись клавиши под ячейкой. В сети и в разминке своим магом управляют обе раскладки —
@@ -891,9 +953,15 @@ class ScreensMixin:
                     hint = tr("net.rematch_other", name=self.player_label(other))
             t = self.font.render(hint, True, WHITE)
             s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 40)))
-            # щелчок по экрану победы — «ещё раз» (через секунду, чтобы случайный щелчок не перезапустил)
-            self.hit((0, 0, WIDTH, HEIGHT), lambda: self.win_time and pygame.time.get_ticks() - self.win_time > 1000
-                     and self.on_key(pygame.KSCAN_R))
+            if self.net and not self.watching:      # по сети — «Реванш» и «В лобби»
+                self.button((WIDTH // 2 - 120, HEIGHT // 2 + 100), tr("net.rematch"),
+                            lambda: self.on_key(pygame.KSCAN_R), w=210, sel=self.my_ready())
+                self.button((WIDTH // 2 + 120, HEIGHT // 2 + 100), tr("net.to_lobby"),
+                            lambda: self.on_key(pygame.KSCAN_ESCAPE), w=210)
+            else:
+                # щелчок по экрану победы — «ещё раз» (через секунду, чтобы случайный щелчок не перезапустил)
+                self.hit((0, 0, WIDTH, HEIGHT), lambda: self.win_time and
+                         pygame.time.get_ticks() - self.win_time > 1000 and self.on_key(pygame.KSCAN_R))
         if self.net:
             self.draw_net_notice()
             self.draw_watch_banner()

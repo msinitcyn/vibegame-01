@@ -247,8 +247,11 @@ def test_rematch_needs_both(server):
         server.step()
     assert server.room.match is old and server.room.phase == "over"
     assert b.last()["seats"]["blue"]["ready"]            # второй видит, что первый готов
+    b.ready()                                            # оба за реванш — снова выбор героя
+    wait(server, lambda: server.room.match is not old and server.room.phase == "lobby", clients=(a, b))
+    a.ready()
     b.ready()
-    wait(server, lambda: server.room.match is not old and server.room.phase == "play", clients=(a, b))
+    wait(server, lambda: server.room.phase == "play", clients=(a, b))
 
 
 def test_bot_takes_empty_place_and_yields():
@@ -646,7 +649,7 @@ def test_spectator_leaves_back_to_lobby(server):
     wait(server, lambda: msgs.extend(conn.recv()) or any(m["type"] == "state" for m in msgs), clients=(a,))
     conn.send({"type": "leave"})
     wait(server, lambda: not server.room.spectators and len(server.lobby) == 1, clients=(a,))
-    wait(server, lambda: msgs.extend(conn.recv()) or any(m["type"] == "rooms" for m in msgs), clients=(a,))
+    wait(server, lambda: msgs.extend(conn.recv()) or any(m["type"] == "lobby" for m in msgs), clients=(a,))
 
 
 def test_no_rooms_spectator_gets_full(server):

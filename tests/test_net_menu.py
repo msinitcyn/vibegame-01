@@ -1,14 +1,12 @@
-"""Сетевая игра из меню: «Играть по сети» → серверы → комнаты → комната.
-
-Свой сервер, найденные в сети, адрес вручную; создать комнату, войти, смотреть; Esc — шаг назад;
-сервер закрылся — к серверам с причиной."""
+"""Сетевая игра из меню: «Играть по сети» → серверы → лобби сервера (игроки, партии) → вызов,
+поиск соперника или бот → выбор героя → партия; смотреть; разминка; после партии — реванш или в лобби."""
 import socket
 import time
 
 import pygame
 
 from duel import i18n, settings
-from duel.net import connect
+from duel.net import Conn
 from duel.server import start_in_thread
 
 
@@ -19,23 +17,44 @@ def frames(game, until, timeout=3.0, keep=()):
     while not until():
         assert time.monotonic() < deadline, "не дождались"
         for c in keep:
-            if not c.closed:
-                c.send({"type": "cmd", "move": [0, 0]})
-                c.recv()
-        if game.state in ("rooms", "account") and game.lobby_conn:
-            game.rooms_frame()
+            c.tick()
+        if game.warmup and game.lobby_conn:
+            game.lobby_frame()
+            if game.warmup:
+                game.warm_frame(1 / 60)
+        elif game.state in ("lobby", "account") and game.lobby_conn:
+            game.lobby_frame()
         elif game.net and not game.net_frame(1 / 60):
             game.leave_net(i18n.t(game.net_end), voluntary=False)
         time.sleep(1 / 240)
 
 
-def guest_conn(port, ready=True, room=None):
-    """Игрок-заглушка: настоящее рукопожатие, вход в комнату (по умолчанию — первую со свободным
-    местом) и сразу «готов»."""
-    conn, seat = connect(f"127.0.0.1:{port}", timeout=3, name="Маша", room=room)
-    if ready:
-        conn.send({"type": "ready", "ready": True})
-    return conn, seat
+class Bob:
+    """Игрок-заглушка в лобби сервера: имя, принимает вызовы (если accept), на выборе героя «готов»."""
+
+    def __init__(self, port, name="Маша", accept=True, ready=True):
+        self.conn = Conn(socket.create_connection(("127.0.0.1", port)))
+        self.name, self.accept, self.auto_ready = name, accept, ready
+        self.msgs = []
+        self.conn.send({"type": "lobby", "name": name})
+        self.closed = False
+
+    def tick(self):
+        if self.conn.closed:
+            return
+        for m in self.conn.recv():
+            self.msgs.append(m)
+            if m["type"] == "challenged":
+                self.conn.send({"type": "answer", "from": m["from"], "accept": self.accept})
+            elif m["type"] == "seat" and self.auto_ready:
+                self.conn.send({"type": "ready", "ready": True})
+        self.conn.send({"type": "cmd", "move": [0, 0]})
+
+    def got(self, kind):
+        return next((m for m in self.msgs if m["type"] == kind), None)
+
+    def close(self):
+        self.conn.close()
 
 
 def open_net(game):
@@ -44,56 +63,204 @@ def open_net(game):
     assert game.state == "join"
 
 
-def own_server_rooms(game):
-    """«Играть по сети» → «Создать свой сервер» → экран комнат своего сервера."""
+def own_server_lobby(game):
+    """«Играть по сети» → «Создать свой сервер» → лобби своего сервера."""
     open_net(game)
     game.join_touched = True
     game.join_pick = "create"
     game.on_key(pygame.KSCAN_RETURN)
-    assert game.host_server and game.state == "rooms", game.join_error
-    frames(game, lambda: game.lobby_server)
+    assert game.host_server and game.state == "lobby", game.join_error
+    frames(game, lambda: game.lobby_you)
     return game.host_server
 
 
-def test_own_server_create_room_guest_joins(game):
-    srv = own_server_rooms(game)
-    game.draw_rooms()                              # пустой список рисуется
-    game.on_key(pygame.KSCAN_RETURN)              # «Создать комнату»
-    assert game.net and game.me == "blue" and game.state == "play" and game.net_room == 1
-    frames(game, lambda: game.net_seats and game.net_waiting)
-    game.draw_lobby()
-    guest, seat = guest_conn(srv.port)
-    assert seat["room"] == 1 and seat["you"] == "red"
-    frames(game, lambda: game.net_seats.get("red", {}).get("ready"), keep=(guest,))
-    game.on_key(pygame.KSCAN_RETURN)              # создатель готов
-    frames(game, lambda: not game.net_waiting, keep=(guest,))
+own_server_rooms = own_server_lobby                 # старое имя (тесты аккаунтов)
+
+
+def row_of(game, kind, pred=lambda d: True):
+    return next(i for i, (k, d) in enumerate(game.lobby_rows()) if k == kind and pred(d))
+
+
+# ------------------------------------------------------------------ лобби, вызов, выбор героя
+
+def test_lobby_lists_and_challenge_accepted(game):
+    srv = own_server_lobby(game)
+    masha = Bob(srv.port, "Маша")
+    frames(game, lambda: any(p["name"] == "Маша" for p in game.lobby_players), keep=(masha,))
+    game.draw_lobby_screen()
+    game.lobby_index = row_of(game, "player", lambda d: d["name"] == "Маша")
+    game.on_key(pygame.KSCAN_RETURN)              # вызвать Машу
+    assert game.outgoing and game.outgoing["name"] == "Маша"
+    game.draw_lobby_screen()                       # окно «Ждём ответа»
+    frames(game, lambda: game.state == "play" and game.net, keep=(masha,))
+    assert game.me == "blue" and game.net_waiting and game.outgoing is None
+    frames(game, lambda: game.net_seats.get("red", {}).get("who") == "human", keep=(masha,))
+    game.draw_lobby()                              # выбор героя по сети
+    game.on_key(pygame.KSCAN_RIGHT)               # другой герой
+    game.on_key(pygame.KSCAN_RETURN)              # готов
+    frames(game, lambda: not game.net_waiting, keep=(masha,))
     assert srv.room.started and game.player_label("red") == "Маша"
     game.draw()
-    guest.close()
+    masha.close()
 
 
-def test_bot_in_room(game):
-    own_server_rooms(game)
-    game.on_key(pygame.KSCAN_RETURN)              # создать комнату
-    frames(game, lambda: game.net_waiting and game.net_seats)
-    game.on_key(pygame.KSCAN_B)                   # бот на свободное место — и сам готов
+def test_incoming_challenge_accept_and_decline(game):
+    srv = own_server_lobby(game)
+    masha = Bob(srv.port, "Маша")
+    frames(game, lambda: len(game.lobby_players) == 2, keep=(masha,))
+    masha.conn.send({"type": "challenge", "to": game.lobby_you})
+    frames(game, lambda: game.incoming, keep=(masha,))
+    assert game.incoming["name"] == "Маша"
+    game.draw_lobby_screen()                       # окно вызова
+    game.on_key(pygame.KSCAN_ESCAPE)              # отказаться
+    frames(game, lambda: masha.got("declined"), keep=(masha,))
+    assert masha.got("declined")["why"] == "no" and game.state == "lobby"
+    masha.conn.send({"type": "challenge", "to": game.lobby_you})
+    frames(game, lambda: game.incoming, keep=(masha,))
+    game.on_key(pygame.KSCAN_RETURN)              # принять
+    frames(game, lambda: game.state == "play" and game.net, keep=(masha,))
+    assert game.me == "red"                        # вызвала Маша — она синяя
+    masha.close()
+
+
+def test_declined_challenge_shows_notice(game):
+    srv = own_server_lobby(game)
+    masha = Bob(srv.port, "Маша", accept=False)
+    frames(game, lambda: len(game.lobby_players) == 2, keep=(masha,))
+    game.challenge(next(p for p in game.lobby_players if p["name"] == "Маша"))
+    frames(game, lambda: game.lobby_notice, keep=(masha,))
+    assert game.lobby_notice == i18n.t("lobby.declined.no", name="Маша") and game.outgoing is None
+    masha.close()
+
+
+def test_seek_pairs_with_other(game):
+    srv = own_server_lobby(game)
+    game.on_key(pygame.KSCAN_F)                   # ищу соперника
+    frames(game, lambda: srv.seeking)
+    assert game.seeking
+    masha = Bob(srv.port, "Маша")
+    masha.conn.send({"type": "seek"})
+    frames(game, lambda: game.state == "play" and game.net, keep=(masha,))
+    assert game.me == "blue"                       # искал раньше — синий
+    masha.close()
+
+
+def test_bot_game_from_lobby(game):
+    srv = own_server_lobby(game)
+    game.on_key(pygame.KSCAN_B)                   # играть с ботом
+    frames(game, lambda: game.state == "play" and game.net and game.net_seats)
+    assert game.net_waiting and game.net_seats["red"]["who"] == "bot"
+    game.on_key(pygame.KSCAN_RETURN)              # готов
     frames(game, lambda: not game.net_waiting)
-    assert game.host_server.room.started
+    assert srv.room.started
 
+
+def test_watch_game_and_back_to_lobby(game):
+    srv = own_server_lobby(game)
+    papa, masha = Bob(srv.port, "Папа"), Bob(srv.port, "Маша")
+    frames(game, lambda: len(game.lobby_players) == 3, keep=(papa, masha))
+    masha_id = next(p["id"] for p in game.lobby_players if p["name"] == "Маша")
+    papa.conn.send({"type": "challenge", "to": masha_id})
+    frames(game, lambda: game.lobby_games, keep=(papa, masha))
+    game.lobby_index = row_of(game, "game")
+    game.on_key(pygame.KSCAN_RETURN)              # смотреть
+    frames(game, lambda: game.state == "play" and game.net, keep=(papa, masha))
+    assert game.watching
+    frames(game, lambda: game.net_seats, keep=(papa, masha))
+    game.draw_lobby()                              # выбор героя глазами зрителя
+    game.on_key(pygame.KSCAN_ESCAPE)              # в лобби
+    assert game.state == "lobby"
+    frames(game, lambda: srv.room and not srv.room.spectators, keep=(papa, masha))
+    papa.close()
+    masha.close()
+
+
+def test_opponent_leaves_back_to_lobby_with_notice(game):
+    srv = own_server_lobby(game)
+    masha = Bob(srv.port, "Маша")
+    frames(game, lambda: len(game.lobby_players) == 2, keep=(masha,))
+    game.challenge(next(p for p in game.lobby_players if p["name"] == "Маша"))
+    frames(game, lambda: game.state == "play" and game.net, keep=(masha,))
+    masha.conn.send({"type": "leave"})
+    frames(game, lambda: game.state == "lobby", keep=(masha,))
+    assert game.lobby_notice == i18n.t("lobby.closed.left") and game.net is None
+    masha.close()
+
+
+def test_rematch_and_to_lobby_buttons(game):
+    srv = own_server_lobby(game)
+    masha = Bob(srv.port, "Маша")
+    frames(game, lambda: len(game.lobby_players) == 2, keep=(masha,))
+    game.challenge(next(p for p in game.lobby_players if p["name"] == "Маша"))
+    frames(game, lambda: game.state == "play" and game.net and game.net_seats, keep=(masha,))
+    game.on_key(pygame.KSCAN_RETURN)              # готов
+    frames(game, lambda: not game.net_waiting, keep=(masha,))
+    srv.room.match.red.hp = 0
+    frames(game, lambda: game.snap["winner"], keep=(masha,))
+    game.hits = []
+    game.draw()                                    # кнопки «Реванш» и «В лобби»
+    labels = len([h for h in game.hits if h[0].h == 40])
+    assert labels == 2
+    game.on_key(pygame.KSCAN_R)                   # реванш (Маша тоже — она «готова» на выборе героя)
+    masha.conn.send({"type": "ready", "ready": True})
+    frames(game, lambda: game.net_waiting and not game.snap["winner"], keep=(masha,))   # снова выбор героя
+    game.on_key(pygame.KSCAN_ESCAPE)              # в лобби — партия закрыта для обоих
+    assert game.state == "lobby"
+    frames(game, lambda: masha.got("room_closed"), keep=(masha,))
+    masha.close()
+
+
+# ------------------------------------------------------------------ разминка из лобби
+
+def test_warmup_interrupted_by_challenge(game):
+    srv = own_server_lobby(game)
+    masha = Bob(srv.port, "Маша")
+    frames(game, lambda: len(game.lobby_players) == 2, keep=(masha,))
+    game.on_key(pygame.KSCAN_T)                   # разминка
+    assert game.warmup and game.state == "play"
+    game.on_key(pygame.KSCAN_SPACE)
+    frames(game, lambda: game.match.bullets, keep=(masha,))
+    game.draw()
+    masha.conn.send({"type": "challenge", "to": game.lobby_you})
+    frames(game, lambda: game.incoming, keep=(masha,))
+    assert not game.warmup and game.state == "lobby"   # вызов прервал разминку
+    masha.close()
+
+
+def test_warmup_esc_and_win_again(game):
+    own_server_lobby(game)
+    game.on_key(pygame.KSCAN_T)
+    assert game.warmup
+    game.match.red.hp = 0
+    game.warm_frame(1 / 30)
+    assert game.snap["winner"] == "blue"
+    game.on_key(pygame.KSCAN_R)                   # ещё разминка
+    assert game.warmup and not game.snap["winner"]
+    game.on_key(pygame.KSCAN_ESCAPE)              # назад в лобби
+    assert not game.warmup and game.state == "lobby"
+
+
+def test_mouse_buttons_in_warmup(game):
+    game.settings["aim_mode"] = "move"
+    own_server_lobby(game)
+    game.on_key(pygame.KSCAN_T)
+    game.countdown = 0
+    game.on_mouse_button(1)                       # левая — выстрел
+    frames(game, lambda: any(b.owner is game.match.blue for b in game.match.bullets))
+    game.on_mouse_button(3)                       # правая — ближний удар
+    frames(game, lambda: game.match.blue.melee_cd > 0)
+
+
+# ------------------------------------------------------------------ серверы: свой, найденные, адрес
 
 def test_esc_steps_back_and_own_server_keeps_running(game):
-    srv = own_server_rooms(game)
-    game.on_key(pygame.KSCAN_RETURN)              # создать комнату
-    frames(game, lambda: game.net_seats)
-    game.on_key(pygame.KSCAN_ESCAPE)              # из комнаты — к комнатам сервера
-    assert game.state == "rooms" and game.net is None and game.lobby_conn
-    frames(game, lambda: not srv.rooms)           # пустая комната убрана
-    game.on_key(pygame.KSCAN_ESCAPE)              # из комнат — к серверам
+    srv = own_server_lobby(game)
+    game.on_key(pygame.KSCAN_ESCAPE)              # из лобби — к серверам
     assert game.state == "join" and game.lobby_conn is None
     game.join_autopick()
-    assert game.join_pick == "own"                # свой сервер — первая строка
+    assert game.join_pick == "own"
     game.draw_join()
-    game.on_key(pygame.KSCAN_ESCAPE)              # из серверов — в меню
+    game.on_key(pygame.KSCAN_ESCAPE)              # в меню
     assert game.state == "menu" and srv.thread.is_alive()
     open_net(game)
     game.join_touched = True
@@ -102,32 +269,18 @@ def test_esc_steps_back_and_own_server_keeps_running(game):
     assert game.host_server is None and not srv.thread.is_alive()
 
 
-def test_two_rooms_at_once(game):
-    srv = own_server_rooms(game)
-    a, _ = connect(f"127.0.0.1:{srv.port}", timeout=3, name="Папа", create=True)
-    b, _ = connect(f"127.0.0.1:{srv.port}", timeout=3, name="Петя", create=True)
-    frames(game, lambda: len(game.rooms_list) == 2, keep=(a, b))
-    assert [r["name"] for r in game.rooms_list] == ["Папа", "Петя"]
-    game.on_key(pygame.KSCAN_DOWN)
-    game.on_key(pygame.KSCAN_DOWN)
-    game.draw_rooms()
-    game.on_key(pygame.KSCAN_RETURN)              # во вторую комнату — красным
-    assert game.me == "red" and game.net_room == 2
-    a.close()
-    b.close()
-
-
 def test_server_closed_back_to_servers(game):
-    srv = start_in_thread(port=0, bot=True, log=lambda text: None, discovery_port=None)
+    srv = start_in_thread(port=0, log=lambda text: None, discovery_port=None)
     open_net(game)
     game.join_pick = None
     game.join_touched = True
     game.address = f"127.0.0.1:{srv.port}"
     game.on_key(pygame.KSCAN_RETURN)
-    assert game.state == "rooms"
-    frames(game, lambda: game.lobby_server)
-    game.on_key(pygame.KSCAN_RETURN)              # создать комнату (бот уже сидит)
-    game.on_key(pygame.KSCAN_RETURN)              # готов
+    assert game.state == "lobby"
+    frames(game, lambda: game.lobby_you)
+    game.on_key(pygame.KSCAN_B)                   # партия с ботом
+    frames(game, lambda: game.state == "play" and game.net_seats)
+    game.on_key(pygame.KSCAN_RETURN)
     frames(game, lambda: not game.net_waiting)
     srv.stop()                                    # сервер закрылся
     frames(game, lambda: game.state == "join")
@@ -175,7 +328,7 @@ def test_join_typed_address_and_remember(game):
         assert game.address == f"127.0.0.1:{srv.port}"
         game.draw_join()
         game.on_key(pygame.KSCAN_RETURN)
-        assert game.state == "rooms" and game.join_error is None
+        assert game.state == "lobby" and game.join_error is None
         frames(game, lambda: game.lobby_server == "Дом")
         assert settings.load()["last_address"] == f"127.0.0.1:{srv.port}"
     finally:
@@ -232,7 +385,7 @@ def test_join_picks_found_server(game):
         assert game.join_games()[0]["name"] == "Дом"
         game.draw_join()                              # экран со списком рисуется
         game.on_key(pygame.KSCAN_RETURN)              # найденный сервер выбран сам — сразу Enter
-        assert game.state == "rooms" and game.finder is None
+        assert game.state == "lobby" and game.finder is None
     finally:
         game.leave_net()
         srv.stop()
@@ -277,117 +430,6 @@ def test_join_screen_with_many_servers(game):
     assert game.finder is None and game.state == "menu"
 
 
-# ------------------------------------------------------------------ зрители
-
-def test_full_room_makes_spectator(game):
-    srv = own_server_rooms(game)
-    blue, _ = connect(f"127.0.0.1:{srv.port}", timeout=3, name="Аня", create=True)
-    red, _ = guest_conn(srv.port, room=1)
-    blue.send({"type": "ready", "ready": True})
-    frames(game, lambda: game.rooms_list, keep=(blue, red))
-    game.on_key(pygame.KSCAN_DOWN)                 # комната Ани
-    game.on_key(pygame.KSCAN_RETURN)              # мест нет — смотрим
-    assert game.net and game.me is None and game.watching and not game.rooms_error
-    frames(game, lambda: game.net_seats and not game.net_waiting, keep=(blue, red))
-    assert game.net_spectators == 1
-    game.draw()
-    game.on_key(pygame.KSCAN_SPACE)               # зритель не стреляет
-    frames(game, lambda: True, keep=(blue, red))
-    assert not srv.room.match.bullets
-    game.on_key(pygame.KSCAN_ESCAPE)              # к списку комнат
-    assert game.state == "rooms" and not game.net
-    frames(game, lambda: not srv.room.spectators, keep=(blue, red))
-    blue.close()
-    red.close()
-
-
-def test_watch_key_and_spectator_lobby(game):
-    srv = own_server_rooms(game)
-    a, _ = connect(f"127.0.0.1:{srv.port}", timeout=3, name="Аня", create=True)
-    frames(game, lambda: game.rooms_list, keep=(a,))
-    game.on_key(pygame.KSCAN_DOWN)
-    game.on_key(pygame.KSCAN_V)                   # V — смотреть, хотя место есть
-    assert game.watching
-    frames(game, lambda: game.net_seats, keep=(a,))
-    game.draw_lobby()
-    game.on_key(pygame.KSCAN_RETURN)              # «готов» зрителя никуда не уходит
-    a.close()
-
-
-# ------------------------------------------------------------------ разминка в лобби
-
-def warm_frames(game, until, timeout=3.0, keep=()):
-    """Кадры, как в run: сеть, разминка."""
-    deadline = time.monotonic() + timeout
-    while not until():
-        assert time.monotonic() < deadline, "не дождались"
-        for c in keep:
-            if not c.closed:
-                c.send({"type": "cmd", "move": [0, 0]})
-                c.recv()
-        assert game.net_frame(1 / 60)
-        if game.warmup:
-            game.warm_frame(1 / 60)
-        time.sleep(1 / 240)
-
-
-def test_warmup_until_opponent_arrives(game):
-    from duel.room import SILENCE
-    srv = own_server_rooms(game)
-    game.on_key(pygame.KSCAN_RETURN)              # создать комнату
-    frames(game, lambda: game.net_seats and game.net_waiting)
-    game.on_key(pygame.KSCAN_T)                   # размяться
-    assert game.warmup and game.match.winner is None
-    bot = game.match.red
-    start = (bot.x, bot.y)
-    game.on_key(pygame.KSCAN_SPACE)               # выстрел — в разминку, не на сервер
-    warm_frames(game, lambda: (bot.x, bot.y) != start and game.match.bullets)
-    assert any(b.owner is game.match.blue for b in game.match.bullets)
-    assert game.player_label("red") == i18n.t("name.bot")
-    game.draw()                                   # поле разминки с надписью
-    t0 = time.monotonic()
-    warm_frames(game, lambda: time.monotonic() - t0 > SILENCE + 0.5, timeout=6)   # дольше «тишины» — держит
-    assert srv.room.seats["blue"].conn and srv.room.phase == "lobby"
-    guest, _ = guest_conn(srv.port, ready=False)  # пришла Маша
-    warm_frames(game, lambda: not game.warmup, keep=(guest,))
-    assert game.lobby_notice and game.net_waiting
-    game.draw_lobby()
-    guest.close()
-
-
-def test_warmup_esc_back_to_lobby_and_not_for_spectators(game):
-    srv = own_server_rooms(game)
-    game.on_key(pygame.KSCAN_RETURN)
-    frames(game, lambda: game.net_seats and game.net_waiting)
-    game.on_key(pygame.KSCAN_T)
-    assert game.warmup
-    game.on_key(pygame.KSCAN_ESCAPE)              # конец разминки — снова лобби, комната та же
-    assert not game.warmup and game.net and game.state == "play" and srv.rooms
-    game.on_key(pygame.KSCAN_ESCAPE)              # теперь — из комнаты
-    assert game.state == "rooms"
-    a, _ = connect(f"127.0.0.1:{srv.port}", timeout=3, name="Аня", create=True)
-    frames(game, lambda: game.rooms_list, keep=(a,))
-    game.rooms_index = 2
-    game.on_key(pygame.KSCAN_V)                   # зритель
-    frames(game, lambda: game.net_seats, keep=(a,))
-    game.on_key(pygame.KSCAN_T)
-    assert not game.warmup                        # зрителю разминки нет
-    a.close()
-
-
-def test_warmup_win_and_again(game):
-    own_server_rooms(game)
-    game.on_key(pygame.KSCAN_RETURN)
-    frames(game, lambda: game.net_seats and game.net_waiting)
-    game.on_key(pygame.KSCAN_T)
-    game.match.red.hp = 0
-    game.warm_frame(1 / 30)
-    assert game.snap["winner"] == "blue"
-    game.draw()
-    game.on_key(pygame.KSCAN_R)                   # ещё разминка
-    assert game.warmup and not game.snap["winner"] and game.match.red.hp > 0
-
-
 def test_recent_servers_remembered_and_asked_directly(game):
     srv = start_in_thread(port=0, log=lambda text: None, discovery_port=None)
     try:
@@ -396,7 +438,7 @@ def test_recent_servers_remembered_and_asked_directly(game):
         game.join_pick, game.join_touched = None, True
         game.address = f"localhost:{srv.port}"           # свой компьютер в «последние» не попадает
         game.on_key(pygame.KSCAN_RETURN)
-        assert game.state == "rooms" and settings.load()["recent_servers"] == ["10.0.0.9:5555"]
+        assert game.state == "lobby" and settings.load()["recent_servers"] == ["10.0.0.9:5555"]
         game.leave_net()
     finally:
         srv.stop()
@@ -410,34 +452,26 @@ def test_recent_servers_remembered_and_asked_directly(game):
 
 
 def test_red_uses_1234_and_sees_1234(game):
-    srv = start_in_thread(port=0, bot=True, log=lambda text: None, discovery_port=None)
+    srv = start_in_thread(port=0, log=lambda text: None, discovery_port=None)
     try:
-        blue, _ = connect(f"127.0.0.1:{srv.port}", timeout=3, name="Аня", create=True)
-        game.enter_net(*connect(f"127.0.0.1:{srv.port}", timeout=3, room=1), f"127.0.0.1:{srv.port}")
+        masha = Bob(srv.port, "Маша")
+        game.open_lobby(f"127.0.0.1:{srv.port}")
+        frames(game, lambda: len(game.lobby_players) == 2, keep=(masha,))
+        masha.conn.send({"type": "challenge", "to": game.lobby_you})
+        frames(game, lambda: game.incoming, keep=(masha,))
+        game.answer_challenge(True)
+        frames(game, lambda: game.state == "play" and game.net and game.net_seats, keep=(masha,))
         assert game.me == "red"
-        blue.send({"type": "ready", "ready": True})
         game.on_key(pygame.KSCAN_RETURN)
-        frames(game, lambda: not game.net_waiting, keep=(blue,))
+        frames(game, lambda: not game.net_waiting, keep=(masha,))
         assert [game.slot_key("red", i) for i in range(4)] == list("1234")
         assert [game.slot_key("blue", i) for i in range(4)] == [""] * 4
         red = srv.room.match.red
         red.items = ["speed", None, None, None]
         game.on_key(pygame.KSCAN_1)                   # клавиша рядом с WASD — по сети, за красного
-        frames(game, lambda: "speed" in red.effects, keep=(blue,))
+        frames(game, lambda: "speed" in red.effects, keep=(masha,))
         game.draw()
-        blue.close()
+        masha.close()
     finally:
         game.leave_net()
         srv.stop()
-
-
-def test_mouse_buttons_in_warmup(game):
-    game.settings["aim_mode"] = "move"
-    own_server_rooms(game)
-    game.on_key(pygame.KSCAN_RETURN)              # создать комнату
-    frames(game, lambda: game.net_seats and game.net_waiting)
-    game.on_key(pygame.KSCAN_T)                   # разминка
-    game.on_mouse_button(1)                       # левая — выстрел
-    warm_frames(game, lambda: any(b.owner is game.match.blue for b in game.match.bullets))
-    game.on_mouse_button(3)                       # правая — ближний удар
-    warm_frames(game, lambda: game.match.blue.melee_cd > 0)

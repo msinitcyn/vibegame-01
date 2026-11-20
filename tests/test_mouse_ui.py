@@ -83,8 +83,8 @@ def test_pick_heroes_with_mouse(game):
     assert game.state == "play" and game.match.red.hero == "light"
 
 
-def test_own_server_room_and_lobby_buttons(game):
-    from tests.test_net_menu import frames, warm_frames
+def test_own_server_lobby_buttons_and_pick(game):
+    from tests.test_net_menu import frames
     game.state = "menu"
     redraw(game, game.draw_menu)
     click(game, game.hits[game.menu.index("net")][0].center)
@@ -92,27 +92,29 @@ def test_own_server_room_and_lobby_buttons(game):
     redraw(game, game.draw_join)
     create = next(h[0] for h in game.hits if h[0].w == 640 and h[0].y > 500)
     click(game, create.center)                        # «Создать свой сервер»
-    assert game.host_server and game.state == "rooms"
-    frames(game, lambda: game.lobby_server)
-    redraw(game, game.draw_rooms)
-    click(game, game.hits[1][0].center)               # «Создать комнату»
-    assert game.net and game.state == "play"
-    frames(game, lambda: game.net_seats and game.net_waiting)
-    redraw(game, game.draw_lobby)
-    buttons = [h for h in game.hits if h[0].h == 40]  # Готов, Бот, Разминка, Выйти
-    assert len(buttons) == 4
-    click(game, buttons[0][0].center)                 # Готов
-    frames(game, lambda: game.my_ready())
-    redraw(game, game.draw_lobby)
-    buttons = [h for h in game.hits if h[0].h == 40]
+    assert game.host_server and game.state == "lobby"
+    frames(game, lambda: game.lobby_you)
+    redraw(game, game.draw_lobby_screen)
+    buttons = [h for h in game.hits if h[0].h == 40 and h[0].w == 220]   # Ищу, С ботом, Разминка
+    assert len(buttons) == 3
     click(game, buttons[2][0].center)                 # Разминка
     assert game.warmup
-    warm_frames(game, lambda: True)
     game.on_key(pygame.KSCAN_ESCAPE)
+    assert game.state == "lobby"
+    redraw(game, game.draw_lobby_screen)
+    buttons = [h for h in game.hits if h[0].h == 40 and h[0].w == 220]
+    click(game, buttons[1][0].center)                 # Играть с ботом
+    frames(game, lambda: game.net and game.net_seats.get("blue", {}).get("hero"))
     redraw(game, game.draw_lobby)
-    buttons = [h for h in game.hits if h[0].h == 40]
-    click(game, buttons[3][0].center)                 # Выйти — к комнатам
-    assert game.state == "rooms"
+    cards = [h for h in game.hits if h[0].h == 170]   # свой ряд — 5 карточек
+    assert len(cards) == 5
+    click(game, cards[4][0].center)                   # Свет
+    frames(game, lambda: game.net_seats["blue"]["hero"] == "light")
+    redraw(game, game.draw_lobby)
+    ready = next(h for h in game.hits if h[0].h == 40 and h[0].w == 200)
+    click(game, ready[0].center)                      # Готов
+    frames(game, lambda: not game.net_waiting)
+    assert game.host_server.room.started
 
 
 def test_win_screen_click_restarts(game):

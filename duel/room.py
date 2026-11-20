@@ -75,6 +75,8 @@ class Room:
         self.events = []              # события с прошлого снимка
         self.games = 0                # номер партии: клиент не сглаживает между партиями
         self.countdown = 0.0          # фаза countdown: секунд до начала партии
+        self.duel = False             # партия из лобби (вызов, подбор, бот): ушёл один — закрыть для всех
+        self.closing = None           # причина закрыть партию: "left" / "lost" (сервер вернёт всех в лобби)
         self.new_match()
 
     # ------------------------------------------------------------------ места
@@ -153,6 +155,8 @@ class Room:
             conn.close()
         self.seats[pid] = Seat()
         self.log(f"{pid} {why}")
+        if self.duel and (self.conns or self.spectators or any(x.away_until for x in self.seats.values())):
+            self.closing = "left" if not close or why == "вышел" else "lost"
         if self.phase != "lobby":
             self.to_lobby("соперник вышел")
         return None if close else conn
@@ -311,6 +315,14 @@ class Room:
                         "away_left": max(0, round(s.away_until - now)) if who == "away" else 0}
         return out
 
+    def game_info(self):
+        """Строка списка партий в лобби: кто против кого, какими героями, сколько идёт, зрители."""
+        seats, heroes = self.seats_info(), self.seat_heroes()
+        side = {pid: {"name": (seats[pid]["name"] or ("bot" if seats[pid]["who"] == "bot" else "")),
+                      "hero": heroes.get(pid), "who": seats[pid]["who"]} for pid in PIDS}
+        return {"room": self.id, "phase": self.phase, "time": round(self.match.match_time),
+                "spectators": len(self.spectators), **side}
+
     def info(self):
         """Строка списка комнат."""
         return {"id": self.id, "name": self.name, "phase": self.phase, "seats": self.seats_info(),
@@ -324,9 +336,9 @@ class Room:
                 s.ready = False
             self.log("все готовы — отсчёт")
         elif self.phase == "over" and self.all_ready():
-            self.new_match()
-            self.start_countdown()
-            self.log("реванш — отсчёт")
+            self.new_match()                  # реванш — снова выбор героя, потом отсчёт
+            self.phase = "lobby"
+            self.log("реванш — выбор героя")
         paused = any(s.away_until is not None for s in self.seats.values())
         if self.phase == "countdown" and not paused:
             self.countdown -= STEP

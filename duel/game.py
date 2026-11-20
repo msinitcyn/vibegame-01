@@ -38,7 +38,7 @@ from . import settings
 from .interp import Playback
 from .match import STEP, Match
 from .discovery import DISCOVERY_PORT, Finder
-from .net import PORT, NetError, connect, enter_room, error_key, open_server
+from .net import PORT, connect, error_key, open_server
 from .snapshot import player as snap_player, snapshot
 from .gamepad import (Gamepads, PAD_AIM_RESET, PAD_DOWN, PAD_FIRE, PAD_ITEM_BUTTONS, PAD_LEFT, PAD_MELEE,
                       PAD_RIGHT, PAD_UP)
@@ -145,7 +145,11 @@ class Game(ScreensMixin):
         self.finder = None            # поиск серверов в сети, пока открыт экран серверов
         self.lobby_conn = None        # соединение с сервером на экране комнат
         self.lobby_addr = self.lobby_server = None
-        self.rooms_list, self.rooms_index, self.rooms_error = [], 1, None
+        self.lobby_players, self.lobby_games, self.lobby_you = [], [], None
+        self.lobby_index, self.lobby_error = 0, None
+        self.incoming = self.outgoing = None  # окна вызова: входящий {"from", "name", "until"}, исходящий
+        self.seeking = False          # ищу соперника
+        self.notice_until = 0.0
         self.net_room = None
         self.warmup = False           # разминка против бота, пока ждём соперника в лобби комнаты
         self.countdown = 0.0          # отсчёт перед партией за этим компьютером (хотсит, разминка), сек
@@ -372,22 +376,25 @@ class Game(ScreensMixin):
                 self.join_autopick()
                 self.draw_join()
                 continue
-            if self.state in ("rooms", "account"):
-                self.rooms_frame()
-                if self.state == "rooms":
-                    self.draw_rooms()
+            if self.state in ("lobby", "account"):
+                self.lobby_frame()
+                if self.state == "lobby":
+                    self.draw_lobby_screen()
                 elif self.state == "account":
                     self.draw_account()
+                continue
+            if self.warmup and self.lobby_conn:   # разминка из лобби: лобби слушаем, играем у себя
+                self.lobby_frame()
+                if self.state == "play" and self.warmup:
+                    self.warm_frame(dt)
+                    self.draw()
                 continue
             if self.net:
                 if not self.net_frame(dt):
                     self.leave_net(t(self.net_end), voluntary=False)
                     continue
-                if self.warmup:
-                    self.warm_frame(dt)
-                    if self.warmup:
-                        self.draw()
-                        continue
+                if self.state != "play":      # соперник ушёл — мы снова в лобби сервера
+                    continue
                 if self.net_waiting:
                     self.draw_lobby()
                     continue
@@ -456,6 +463,15 @@ class Game(ScreensMixin):
             elif msg.get("type") == "bye":
                 self.net_end = "net.host_left"
                 return False
+            elif msg.get("type") == "room_closed":       # соперник ушёл — все в лобби сервера
+                conn = self.net
+                self.net, self.me = None, None
+                self.net_waiting = False
+                self.restart()
+                pygame.display.set_caption(t("title"))
+                self.show_lobby(conn, self.net_addr, self.lobby_server, resume=False,
+                                notice=t("lobby.closed." + str(msg.get("why"))))
+                return True
         self.show_playback(dt)
         if self.net.closed or now - self.net_heard > SILENCE:
             self.net.close()
@@ -476,11 +492,13 @@ class Game(ScreensMixin):
     # ------------------------------------------------------------------ разминка в лобби
 
     def start_warmup(self):
-        """Лобби комнаты: партия своим героем против бота на этом компьютере, пока ждём соперника."""
-        if not (self.net and self.net_waiting) or self.watching or self.reconnect_until is not None:
+        """Лобби сервера: партия против бота на этом компьютере; связь с сервером держится,
+        вызов или найденный соперник её прерывают."""
+        if not self.lobby_conn or (self.state != "lobby" and not self.warmup):
             return
-        me, other = self.me, ("red" if self.me == "blue" else "blue")
-        mine = self.side_hero(me)
+        self.me, other = "blue", "red"
+        me = self.me
+        mine = (getattr(self, "heroes", None) or DEFAULT_HERO).get("blue", DEFAULT_HERO["blue"])
         self.match = Match()
         self.match.set_heroes({me: mine, other: next(h for h in HEROES if h != mine)})
         self.warm_bot = Bot(7, forward=0.0 if other == "blue" else math.pi)
@@ -491,20 +509,24 @@ class Game(ScreensMixin):
         self.popups = []
         self.win_time = 0
         self.countdown = float(config.COUNTDOWN)
+        self.state = "play"
+        self.held.clear()
         self.snap = snapshot(self.match)
 
     def stop_warmup(self, notice=None):
+        """Конец разминки — снова лобби сервера."""
         self.warmup = False
-        self.lobby_notice = notice
+        self.me = None
         self.popups = []
-        self.restart()                    # свой матч — в исходное; экран снова по снимкам сервера
+        self.restart()
+        if self.lobby_conn:
+            self.state = "lobby"
+            if notice:
+                self.notify(notice)
 
     def warm_frame(self, dt):
-        """Кадр разминки: свои нажатия и бот, такт 60 Гц. Пришёл соперник или партия началась — стоп."""
+        """Кадр разминки: свои нажатия и бот, такт 60 Гц (вызов и найденный соперник ловит lobby_frame)."""
         other = "red" if self.me == "blue" else "blue"
-        if not self.net_waiting or (self.net_seats.get(other) or {}).get("who") in ("human", "away"):
-            self.stop_warmup(t("net.warm_over"))
-            return
         if self.snap["winner"] or self.count_down(dt):
             return
         self.warm_acc += dt
@@ -578,6 +600,21 @@ class Game(ScreensMixin):
                     self.net_seats.setdefault(self.me, {})["hero"] = hero    # сразу видно у себя
                 return
 
+    def choose_hero(self, hero):
+        """Выбор героя по сети мышью: щелчок по другому — выбрать (занятого соперником — нельзя),
+        по своему — подтвердить или снять подтверждение."""
+        if self.watching or not self.net_waiting:
+            return
+        mine = self.net_seats.get(self.me) or {}
+        if mine.get("hero") == hero:
+            self.send_ready(not self.my_ready())
+            return
+        taken = {s.get("hero") for pid, s in self.net_seats.items() if pid != self.me and s.get("who")}
+        if hero in taken or self.reconnect_until is not None:
+            return
+        self.net.send({"type": "hero", "hero": hero})
+        self.net_seats.setdefault(self.me, {})["hero"] = hero      # сразу видно у себя
+
     def my_ready(self):
         return bool(self.net_seats.get(self.me, {}).get("ready"))
 
@@ -616,7 +653,7 @@ class Game(ScreensMixin):
         self.net_waiting = False
         self.restart()
         pygame.display.set_caption(t("title"))
-        self.show_rooms(conn, self.net_addr, self.lobby_server, resume=False)
+        self.show_lobby(conn, self.net_addr, self.lobby_server, resume=False)
 
     def leave_net(self, message=None, voluntary=True):
         """Уйти с сервера (или связь кончилась): закрыть соединение — экран серверов с причиной.
@@ -629,6 +666,8 @@ class Game(ScreensMixin):
                 conn.close()
         self.net, self.lobby_conn, self.me = None, None, None
         self.warmup, self.lobby_notice = False, None
+        self.incoming = self.outgoing = None
+        self.seeking = False
         self.reconnect_until = None
         self.net_waiting = False
         pygame.display.set_caption(t("title"))
@@ -649,7 +688,7 @@ class Game(ScreensMixin):
                 self.join_error = t("net.port_busy", port=self.net_port)
                 return
             self.__dict__.pop("_addresses", None)       # адрес в сети мог смениться — найти заново
-        self.open_rooms(self.own_address())
+        self.open_lobby(self.own_address())
 
     def own_address(self):
         return f"127.0.0.1:{self.host_server.port}"
@@ -720,14 +759,14 @@ class Game(ScreensMixin):
             self.stop_own_server()
             self.join_pick = "create"
         elif pick == "own" and self.host_server:
-            self.open_rooms(self.own_address())
+            self.open_lobby(self.own_address())
         elif pick in [g["address"] for g in self.join_games()]:
-            self.open_rooms(pick)
+            self.open_lobby(pick)
         else:
-            self.open_rooms(self.address.strip() or "localhost", remember=True)
+            self.open_lobby(self.address.strip() or "localhost", remember=True)
 
-    def open_rooms(self, address, remember=False):
-        """Подключиться к серверу и показать его комнаты."""
+    def open_lobby(self, address, remember=False):
+        """Подключиться к серверу и показать его лобби."""
         try:
             conn, hello = open_server(address, timeout=CONNECT_TIMEOUT)
         except (ConnectionError, OSError, ValueError) as e:
@@ -739,7 +778,7 @@ class Game(ScreensMixin):
         self.remember_server(address)
         settings.save(self.settings)
         self.close_finder()
-        self.show_rooms(conn, address, hello.get("server") or address, hello.get("id"))
+        self.show_lobby(conn, address, hello.get("server") or address, hello.get("id"))
 
     def remember_server(self, address):
         """Адрес в «последние серверы» (до 5, новый — первым): поиск спрашивает их напрямую.
@@ -782,23 +821,149 @@ class Game(ScreensMixin):
             self.address += ch
             self.join_error = None
 
-    # ------------------------------------------------------------------ экран комнат
+    # ------------------------------------------------------------------ лобби сервера
 
-    def show_rooms(self, conn, address, server_name, server_id=None, resume=True):
-        """Экран комнат сервера: соединение в лобби сервера, список приходит раз в секунду.
-        Если на этом сервере уже входили — входим сами по сохранённому ключу."""
+    def show_lobby(self, conn, address, server_name, server_id=None, resume=True, notice=None):
+        """Лобби сервера: игроки в сети и идущие партии (список приходит сам). Если на этом сервере
+        уже входили в аккаунт — входим сами по сохранённому ключу."""
         self.lobby_conn, self.lobby_addr, self.lobby_server = conn, address, server_name
         self.net_addr = address
         if server_id is not None:
             self.lobby_id = server_id
-        self.rooms_list, self.rooms_index, self.rooms_error = [], 1, None
+        self.lobby_players, self.lobby_games, self.lobby_you = [], [], None
+        self.lobby_index, self.lobby_error = 0, None
+        self.incoming = self.outgoing = None
+        self.seeking = False
+        self.lobby_notice = notice
+        self.notice_until = time.monotonic() + 4 if notice else 0
         saved = self.saved_account()
         if resume:
             self.account_user = None
             if saved.get("token"):
                 conn.send({"type": "resume", "token": saved["token"]})
-        conn.send({"type": "rooms"})
-        self.state = "rooms"
+        conn.send({"type": "lobby", "name": self.player_name()})
+        self.state = "lobby"
+
+    def lobby_rows(self):
+        """Строки лобби по порядку: аккаунт, другие игроки, партии — [(вид, данные)]."""
+        rows = [("account", None)]
+        rows += [("player", p) for p in self.lobby_players if p.get("id") != self.lobby_you]
+        rows += [("game", g) for g in self.lobby_games]
+        return rows
+
+    def lobby_frame(self):
+        """Кадр лобби (и разминки из лобби): список, вызовы, ответы; партия началась — в неё."""
+        conn = self.lobby_conn
+        for msg in conn.recv():
+            kind = msg.get("type")
+            if kind == "lobby":
+                self.lobby_players = [p for p in msg.get("players") or [] if isinstance(p, dict)]
+                self.lobby_games = [g for g in msg.get("games") or [] if isinstance(g, dict)]
+                self.lobby_you = msg.get("you")
+                self.lobby_server = msg.get("server") or self.lobby_server
+                me = next((p for p in self.lobby_players if p.get("id") == self.lobby_you), {})
+                self.seeking = me.get("status") == "seeking"
+            elif kind == "challenged":
+                if self.warmup:
+                    self.stop_warmup()
+                    self.state = "lobby"
+                self.incoming = {"from": msg.get("from"), "name": msg.get("name") or "?",
+                                 "until": time.monotonic() + float(msg.get("left") or 20)}
+            elif kind == "challenge_over":
+                if self.incoming and self.incoming.get("from") == msg.get("from"):
+                    self.incoming = None
+            elif kind == "declined":
+                self.outgoing = None
+                self.notify(t("lobby.declined." + str(msg.get("why")), name=msg.get("name") or "?"))
+            elif kind in ("seat", "watch"):
+                self.lobby_conn = None
+                self.incoming = self.outgoing = None
+                self.seeking = False
+                if self.warmup:
+                    self.stop_warmup()
+                seat = msg if kind == "seat" else {"room": msg.get("room"), "you": None, "token": None}
+                self.enter_net(conn, seat, self.lobby_addr)
+                return
+            elif kind == "full":
+                self.notify(t("lobby.full"))
+            elif kind == "auth":
+                self.on_auth(msg)
+            elif kind == "bye":
+                self.leave_net(t("net.host_left"), voluntary=False)
+                return
+        if conn.closed:
+            self.leave_net(t("net.lost"), voluntary=False)
+            return
+        if self.incoming and time.monotonic() > self.incoming["until"]:
+            self.incoming = None
+        if self.lobby_notice and time.monotonic() > self.notice_until:
+            self.lobby_notice = None
+        self.lobby_index = max(0, min(len(self.lobby_rows()) - 1, self.lobby_index))
+
+    def notify(self, text, seconds=4):
+        self.lobby_notice, self.notice_until = text, time.monotonic() + seconds
+
+    def lobby_key(self, sc):
+        """Лобби: ↑/↓ — строка; Enter — вызвать игрока / смотреть партию / аккаунт; F — ищу соперника,
+        B — с ботом, T — разминка; Esc — к серверам. Окно вызова: Enter — принять, Esc — отказаться."""
+        K = pygame
+        if self.incoming:
+            if sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_Y):
+                self.answer_challenge(True)
+            elif sc in (K.KSCAN_ESCAPE, K.KSCAN_N, K.KSCAN_BACKSPACE):
+                self.answer_challenge(False)
+            return
+        if self.outgoing:
+            if sc in (K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE):
+                self.lobby_conn.send({"type": "cancel"})
+                self.outgoing = None
+            return
+        rows = self.lobby_rows()
+        if sc in (K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE):
+            self.leave_net()
+        elif sc in (K.KSCAN_UP, K.KSCAN_W):
+            self.lobby_index = max(0, self.lobby_index - 1)
+        elif sc in (K.KSCAN_DOWN, K.KSCAN_S):
+            self.lobby_index = min(len(rows) - 1, self.lobby_index + 1)
+        elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
+            self.lobby_pick(self.lobby_index)
+        elif sc == K.KSCAN_F:
+            self.toggle_seek()
+        elif sc == K.KSCAN_B:
+            self.lobby_conn.send({"type": "bot_game"})
+        elif sc == K.KSCAN_T:
+            self.start_warmup()
+
+    def lobby_pick(self, i):
+        """Строка лобби: аккаунт — войти/выйти; игрок — вызвать; партия — смотреть."""
+        rows = self.lobby_rows()
+        if not 0 <= i < len(rows):
+            return
+        self.lobby_index = i
+        kind, data = rows[i]
+        if kind == "account":
+            self.open_account()
+        elif kind == "player":
+            self.challenge(data)
+        elif kind == "game":
+            self.lobby_conn.send({"type": "join", "room": data.get("room"), "role": "spectator",
+                                  "name": self.player_name()})
+
+    def challenge(self, player):
+        if player.get("status") not in ("lobby", "seeking"):
+            self.notify(t("lobby.declined.busy", name=player.get("name") or "?"))
+            return
+        self.lobby_conn.send({"type": "challenge", "to": player.get("id")})
+        self.outgoing = {"to": player.get("id"), "name": player.get("name") or "?"}
+
+    def answer_challenge(self, accept):
+        if self.incoming:
+            self.lobby_conn.send({"type": "answer", "from": self.incoming["from"], "accept": accept})
+            self.incoming = None
+
+    def toggle_seek(self):
+        self.seeking = not self.seeking
+        self.lobby_conn.send({"type": "seek" if self.seeking else "unseek"})
 
     # ------------------------------------------------------------------ аккаунт
 
@@ -822,7 +987,7 @@ class Game(ScreensMixin):
             self.account_user = msg.get("user")
             self.save_account(self.account_user, msg.get("token"))
             if self.state == "account":
-                self.state = "rooms"
+                self.state = "lobby"
             return
         if msg.get("why") == "expired":          # сохранённый вход больше не действует — гость
             self.save_account(None, None)
@@ -845,7 +1010,7 @@ class Game(ScreensMixin):
         """Экран входа: ↑/↓ — строка, буквы — в поле, Enter — дальше / войти / создать, Esc — к комнатам."""
         K = pygame
         if sc == K.KSCAN_ESCAPE:
-            self.state = "rooms"
+            self.state = "lobby"
         elif sc == K.KSCAN_UP:
             self.acc_row = max(0, self.acc_row - 1)
         elif sc in (K.KSCAN_DOWN, K.KSCAN_TAB):
@@ -877,73 +1042,6 @@ class Game(ScreensMixin):
         elif self.acc_row == 1:
             self.acc_password = (self.acc_password + chars)[:64]
         self.acc_error = None
-
-    def rooms_frame(self):
-        """Кадр экрана комнат: свежий список; сервер закрылся или пропал — к серверам."""
-        conn = self.lobby_conn
-        for msg in conn.recv():
-            if msg.get("type") == "rooms":
-                self.rooms_list = [r for r in msg.get("rooms") or [] if isinstance(r, dict)]
-                self.lobby_server = msg.get("server") or self.lobby_server
-            elif msg.get("type") == "auth":
-                self.on_auth(msg)
-            elif msg.get("type") == "bye":
-                self.leave_net(t("net.host_left"), voluntary=False)
-                return
-        if conn.closed:
-            self.leave_net(t("net.lost"), voluntary=False)
-            return
-        self.rooms_index = max(0, min(len(self.rooms_list) + 1, self.rooms_index))
-
-    def rooms_key(self, sc):
-        """Экран комнат: ↑/↓ (W/S) — выбор, Enter — создать/войти (мест нет — смотреть),
-        V — смотреть, Esc — к серверам."""
-        K = pygame
-        if sc in (K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE):
-            self.leave_net()
-        elif sc in (K.KSCAN_UP, K.KSCAN_W):
-            self.rooms_index = max(0, self.rooms_index - 1)
-        elif sc in (K.KSCAN_DOWN, K.KSCAN_S):
-            self.rooms_index = min(len(self.rooms_list) + 1, self.rooms_index + 1)
-        elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
-            if self.rooms_index == 0:
-                self.open_account()
-            else:
-                self.rooms_enter(watch=False)
-        elif sc == K.KSCAN_V:
-            self.rooms_enter(watch=True)
-
-    def rooms_enter(self, watch):
-        """Создать комнату (первая строка) или войти в выбранную: игроком, а если мест нет — зрителем."""
-        conn, name = self.lobby_conn, self.player_name()
-        try:
-            if self.rooms_index <= 1:
-                if watch or self.rooms_index == 0:
-                    return
-                seat = enter_room(conn, CONNECT_TIMEOUT, name, create=True)
-            else:
-                room = self.rooms_list[self.rooms_index - 2].get("id")
-                try:
-                    seat = enter_room(conn, CONNECT_TIMEOUT, name, role="spectator" if watch else "player",
-                                      room=room)
-                except NetError as e:
-                    if e.key != "full" or watch:
-                        raise
-                    seat = enter_room(conn, CONNECT_TIMEOUT, name, role="spectator", room=room)
-        except (ConnectionError, OSError) as e:
-            if conn.closed:
-                self.leave_net(self.net_error(e), voluntary=False)
-            else:
-                self.rooms_error = self.net_error(e)
-                conn.send({"type": "rooms"})
-            return
-        self.lobby_conn = None
-        self.enter_net(conn, seat, self.lobby_addr)
-
-    def take_bot(self):
-        """Лобби комнаты: свободное место — боту (и сам «готов»)."""
-        if self.net and self.net_waiting and not self.watching and self.reconnect_until is None:
-            self.net.send({"type": "bot"})
 
     # ------------------------------------------------------------------ события матча
 
@@ -1023,8 +1121,8 @@ class Game(ScreensMixin):
         if self.state == "join":
             self.join_key(sc)
             return
-        if self.state == "rooms":
-            self.rooms_key(sc)
+        if self.state == "lobby":
+            self.lobby_key(sc)
             return
         if self.state == "account":
             self.account_key(sc)
@@ -1039,12 +1137,8 @@ class Game(ScreensMixin):
             return
         if self.watching:                 # зритель: только Esc (выше)
             return
-        if self.net and self.net_waiting and not self.warmup:
-            if sc == pygame.KSCAN_T:
-                self.start_warmup()
-            elif sc == pygame.KSCAN_B:
-                self.take_bot()
-            elif sc in (pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER, pygame.KSCAN_SPACE):
+        if self.net and self.net_waiting:          # выбор героя по сети
+            if sc in (pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER, pygame.KSCAN_SPACE):
                 self.send_ready(not self.my_ready())
             elif sc in (pygame.KSCAN_LEFT, pygame.KSCAN_A, pygame.KSCAN_RIGHT, pygame.KSCAN_D):
                 self.next_hero(-1 if sc in (pygame.KSCAN_LEFT, pygame.KSCAN_A) else 1)
@@ -1129,15 +1223,17 @@ class Game(ScreensMixin):
             if btn in (*back, B.CONTROLLER_BUTTON_START):
                 self.on_key(B.KSCAN_ESCAPE)
             return
-        if self.state in ("join", "rooms"):
+        if self.state in ("join", "lobby"):
             if btn in (B.CONTROLLER_BUTTON_DPAD_UP, PAD_UP):
                 self.on_key(B.KSCAN_UP)
             elif btn in (B.CONTROLLER_BUTTON_DPAD_DOWN, PAD_DOWN):
                 self.on_key(B.KSCAN_DOWN)
             elif btn == B.CONTROLLER_BUTTON_A:
                 self.on_key(B.KSCAN_RETURN)
-            elif btn == B.CONTROLLER_BUTTON_Y and self.state == "rooms":
-                self.on_key(B.KSCAN_V)        # △ — смотреть
+            elif btn == B.CONTROLLER_BUTTON_Y and self.state == "lobby":
+                self.on_key(B.KSCAN_F)        # △ — ищу соперника
+            elif btn == B.CONTROLLER_BUTTON_BACK and self.state == "lobby":
+                self.on_key(B.KSCAN_T)        # Share — разминка
             elif btn in (*back, B.CONTROLLER_BUTTON_START):
                 self.on_key(B.KSCAN_ESCAPE)
             return
@@ -1145,13 +1241,8 @@ class Game(ScreensMixin):
             if btn in (*back, B.CONTROLLER_BUTTON_START):
                 self.on_key(B.KSCAN_ESCAPE)
             return
-        if self.net and self.net_waiting and not self.warmup:
-            if btn == B.CONTROLLER_BUTTON_BACK:
-                self.start_warmup()
-                return
-            if btn == B.CONTROLLER_BUTTON_Y:
-                self.take_bot()
-            elif btn == B.CONTROLLER_BUTTON_A:
+        if self.net and self.net_waiting:          # выбор героя по сети
+            if btn == B.CONTROLLER_BUTTON_A:
                 self.on_key(B.KSCAN_RETURN)
             elif btn in (B.CONTROLLER_BUTTON_DPAD_LEFT, B.CONTROLLER_BUTTON_DPAD_RIGHT, PAD_LEFT, PAD_RIGHT):
                 self.next_hero(-1 if btn in (B.CONTROLLER_BUTTON_DPAD_LEFT, PAD_LEFT) else 1)
@@ -1216,11 +1307,11 @@ class Game(ScreensMixin):
         if click and pick is not None:
             self.join_game()
 
-    def rooms_mouse(self, k, click=False):
-        """Экран комнат: наведение выбирает строку, щелчок — аккаунт / создать / войти (мест нет — смотреть)."""
-        self.rooms_index = k
+    def lobby_mouse(self, i, click=False):
+        """Лобби: наведение выбирает строку, щелчок — аккаунт / вызвать / смотреть."""
+        self.lobby_index = i
         if click:
-            self.rooms_key(pygame.KSCAN_RETURN)
+            self.lobby_pick(i)
 
     def pick_mouse(self, pid, hero, click=False):
         """Выбор героев: наведение — этот герой; щелчок по выбранному — подтвердить (ещё раз — снять)."""
@@ -1234,7 +1325,7 @@ class Game(ScreensMixin):
 
     def in_ui(self):
         """Сейчас на экране меню (мышь — наведение и щелчки), а не партия."""
-        if self.state in ("menu", "help", "settings", "pick", "join", "rooms", "account", "update"):
+        if self.state in ("menu", "help", "settings", "pick", "join", "lobby", "account", "update"):
             return True
         return self.state == "play" and (bool(self.snap.get("winner")) or
                                           bool(self.net and self.net_waiting and not self.warmup))
@@ -1489,7 +1580,7 @@ class Game(ScreensMixin):
         pygame.display.set_caption(t("title"))
 
     def update_music(self):
-        in_menu = self.state in ("menu", "help", "settings", "join", "rooms", "account", "pick") or self.net_waiting
+        in_menu = self.state in ("menu", "help", "settings", "join", "lobby", "account", "pick") or self.net_waiting
         self.audio.music("menu" if in_menu else "game")
 
     def menu_key(self, sc):

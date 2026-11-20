@@ -29,7 +29,8 @@ JOIN_WAIT = 5.0                   # новичок без запроса сто�
 MAX_PENDING = 16                  # подключений, ещё ничего не попросивших
 MAX_CONNS = 32                    # соединений всего (в лобби, в комнатах, новички)
 MAX_ROOMS = 16                    # комнат на сервере
-LIST_EVERY = 60                   # список комнат тем, кто в лобби, — раз в секунду (тактов)
+LIST_EVERY = 30                   # список игроков и партий тем, кто в лобби, — два раза в секунду (тактов)
+CHALLENGE_TIME = 20.0             # секунд на ответ на вызов
 MAX_FAILS = 10                    # неудачных входов с одного адреса …
 FAIL_WINDOW = 300.0               # … за столько секунд — дальше вход с адреса отклоняется
 
@@ -58,6 +59,9 @@ class Server:
         self.next_room = 1
         self.bot = bot                # новые комнаты — сразу с ботом
         self.proto = proto            # версия протокола в приветствии (тесты проверяют несовпадение)
+        self.next_member = 1          # номера участников лобби
+        self.challenges = {}          # номер вызвавшего -> {"to": номер вызванного, "until": момент}
+        self.seeking = []             # соединения тех, кто ищет соперника (по порядку)
         self.tick_no = 0
         self.running = True
 
@@ -75,7 +79,7 @@ class Server:
         out = list(self.lobby) + [c for c, _ in self.newcomers]
         for r in self.rooms.values():
             out += r.all_conns()
-        return out
+        return list(dict.fromkeys(out))       # без повторов (новичок мог уже попасть в лобби)
 
     def rooms_info(self):
         return [r.info() for r in sorted(self.rooms.values(), key=lambda r: r.id)]
@@ -84,6 +88,149 @@ class Server:
         msg = {"type": "rooms", "server": self.name, "rooms": self.rooms_info()}
         for conn in (self.lobby if conns is None else conns):
             conn.send(msg)
+
+    # ------------------------------------------------------------------ лобби: участники и список
+
+    def ensure_member(self, conn, name=None):
+        """Соединение — участник лобби (номер, имя для списка игроков)."""
+        if getattr(conn, "member", None) is None:
+            conn.member = self.next_member
+            self.next_member += 1
+        if name is not None:
+            conn.wanted_name = name
+        return conn.member
+
+    def member_conns(self):
+        return [c for c in self.all_conns() if getattr(c, "member", None) is not None and not c.closed]
+
+    def find_member(self, mid):
+        return next((c for c in self.member_conns() if c.member == mid), None)
+
+    def room_of(self, conn):
+        """(комната, роль) соединения: игрок или зритель; вне комнат — (None, None)."""
+        for r in self.rooms.values():
+            if conn in r.conns.values():
+                return r, "player"
+            if conn in r.spectators:
+                return r, "spectator"
+        return None, None
+
+    def status(self, conn):
+        room, role = self.room_of(conn)
+        if room is None:
+            return "seeking" if conn in self.seeking else "lobby"
+        if role == "spectator":
+            return "watching"
+        return "picking" if room.phase == "lobby" else "playing"
+
+    def lobby_info(self, conn):
+        players = [{"id": c.member, "name": self.player_name(c, getattr(c, "wanted_name", "")) or "?",
+                    "status": self.status(c), "account": bool(c.user)} for c in self.member_conns()]
+        games = [r.game_info() for r in sorted(self.rooms.values(), key=lambda r: r.id) if r.conns]
+        return {"type": "lobby", "server": self.name, "you": getattr(conn, "member", None),
+                "players": players, "games": games}
+
+    def push_lobby(self, conns=None):
+        for conn in (self.lobby if conns is None else conns):
+            if getattr(conn, "member", None) is not None and not conn.closed:
+                conn.send(self.lobby_info(conn))
+
+    # ------------------------------------------------------------------ вызовы, поиск, бот
+
+    def drop_challenges(self, mid, why="cancel"):
+        """Участник ушёл из лобби — его вызовы (и вызовы ему) снимаются."""
+        for frm, ch in list(self.challenges.items()):
+            if frm == mid or ch["to"] == mid:
+                del self.challenges[frm]
+                a, b = self.find_member(frm), self.find_member(ch["to"])
+                if b and b.member != mid:
+                    b.send({"type": "challenge_over", "from": frm})
+                if a and a.member != mid:
+                    a.send({"type": "declined", "name": self.member_name(b), "why": "busy"})
+
+    def member_name(self, conn):
+        return self.player_name(conn, getattr(conn, "wanted_name", "")) if conn else "?"
+
+    def challenge(self, conn, to):
+        target = self.find_member(to) if isinstance(to, int) and not isinstance(to, bool) else None
+        mid = self.ensure_member(conn)
+        busy = (target is None or target is conn or target not in self.lobby
+                or any(ch["to"] == to for ch in self.challenges.values())
+                or to in self.challenges)
+        if busy:
+            conn.send({"type": "declined", "name": self.member_name(target), "why": "busy"})
+            return
+        self.cancel_challenge(conn)
+        self.challenges[mid] = {"to": to, "until": self.clock() + CHALLENGE_TIME}
+        target.send({"type": "challenged", "from": mid, "name": self.member_name(conn), "left": CHALLENGE_TIME})
+        self.log(f"«{self.member_name(conn)}» вызывает «{self.member_name(target)}»")
+
+    def cancel_challenge(self, conn):
+        ch = self.challenges.pop(getattr(conn, "member", None), None)
+        if ch:
+            target = self.find_member(ch["to"])
+            if target:
+                target.send({"type": "challenge_over", "from": conn.member})
+
+    def answer(self, conn, frm, accept, now):
+        ch = self.challenges.get(frm)
+        if not ch or ch["to"] != getattr(conn, "member", None):
+            return
+        del self.challenges[frm]
+        challenger = self.find_member(frm)
+        if challenger is None or challenger not in self.lobby:
+            return
+        if not accept:
+            challenger.send({"type": "declined", "name": self.member_name(conn), "why": "no"})
+            return
+        self.start_duel(challenger, conn, now)
+
+    def seek(self, conn, now, on=True):
+        if conn in self.seeking:
+            self.seeking.remove(conn)
+        if not on:
+            return
+        other = next((c for c in self.seeking if not c.closed and c in self.lobby), None)
+        if other:
+            self.seeking.remove(other)
+            self.start_duel(other, conn, now)       # кто раньше начал искать — синий
+        else:
+            self.seeking.append(conn)
+
+    def start_duel(self, a, b, now):
+        """Партия двоих из лобби: комната, a — синий, b — красный, фаза выбора героя."""
+        room = self.create_room(self.member_name(a))
+        if room is None:
+            for c in (a, b):
+                c.send({"type": "full", "why": "rooms"})
+            return
+        room.duel = True
+        for c in (a, b):
+            self.leave_lobby(c)
+            room.seat(c, {"role": "player", "name": self.member_name(c)}, now)
+        self.log(f"партия: «{self.member_name(a)}» против «{self.member_name(b)}» (комната {room.id})")
+        self.push_lobby()
+
+    def bot_game(self, conn, now):
+        room = self.create_room(self.member_name(conn))
+        if room is None:
+            conn.send({"type": "full", "why": "rooms"})
+            return
+        room.duel, room.bot = True, True
+        self.leave_lobby(conn)
+        room.seat(conn, {"role": "player", "name": self.member_name(conn)}, now)
+        self.push_lobby()
+
+    def leave_lobby(self, conn):
+        """Соединение уходит из лобби в комнату: снять поиск и вызовы."""
+        if conn in self.seeking:
+            self.seeking.remove(conn)
+        mid = getattr(conn, "member", None)
+        if mid is not None:
+            self.drop_challenges(mid)
+        if conn in self.lobby:
+            self.lobby.remove(conn)
+        conn.in_room = True
 
     def create_room(self, name=""):
         if len(self.rooms) >= MAX_ROOMS:
@@ -133,7 +280,7 @@ class Server:
                 self.log(f"{conn.addr[0]}: ошибка — {e!r}")
                 conn.close()
                 continue
-            if where == "lobby":
+            if where == "lobby" and not getattr(conn, "in_room", False) and conn not in self.lobby:
                 self.lobby.append(conn)
             elif where is None and not conn.closed and now - since <= JOIN_WAIT:
                 keep_new.append((conn, since))
@@ -143,7 +290,7 @@ class Server:
                 conn.close()
         self.newcomers = keep_new
         keep = []
-        for conn in self.lobby:
+        for conn in list(self.lobby):        # копия: вызов может увести из лобби и другого
             try:
                 where = self.handle(conn, now)
             except Exception as e:
@@ -152,7 +299,7 @@ class Server:
                 continue
             if where in ("lobby", None) and not conn.closed:
                 keep.append(conn)
-        self.lobby = keep
+        self.lobby = [c for c in keep if not getattr(c, "in_room", False)]
 
     def handle(self, conn, now):
         """Запросы соединения вне комнат. Возвращает: "room" — ушло в комнату, "lobby" — в лобби
@@ -163,10 +310,42 @@ class Server:
             if kind == "rooms":
                 where = "lobby"
                 self.send_rooms([conn])
+            elif kind == "lobby":
+                where = "lobby"
+                name = msg.get("name")
+                self.ensure_member(conn, name if isinstance(name, str) else "")
+                if conn not in self.lobby:        # сразу участник лобби: следом могут прийти seek, challenge
+                    self.lobby.append(conn)
+                self.push_lobby([conn])
+            elif kind == "challenge" and getattr(conn, "member", None) is not None:
+                where = where or "lobby"
+                if conn in self.lobby:
+                    self.challenge(conn, msg.get("to"))
+            elif kind == "cancel":
+                where = where or "lobby"
+                self.cancel_challenge(conn)
+            elif kind == "answer":
+                where = where or "lobby"
+                if conn in self.lobby:
+                    self.answer(conn, msg.get("from"), bool(msg.get("accept")), now)
+                    if getattr(conn, "in_room", False):
+                        return "room"
+            elif kind in ("seek", "unseek") and getattr(conn, "member", None) is not None:
+                where = where or "lobby"
+                if conn in self.lobby:
+                    self.seek(conn, now, kind == "seek")
+                    if getattr(conn, "in_room", False):
+                        return "room"
+            elif kind == "bot_game" and getattr(conn, "member", None) is not None:
+                where = where or "lobby"
+                if conn in self.lobby:
+                    self.bot_game(conn, now)
+                    return "room"
             elif kind in ("register", "login", "resume", "logout"):
                 where = where or "lobby"
                 self.auth(conn, kind, msg)
             elif kind == "create":
+                self.ensure_member(conn, msg.get("name") if isinstance(msg.get("name"), str) and msg.get("name") else None)
                 msg["name"] = self.player_name(conn, msg.get("name"))
                 room = self.create_room(msg["name"])
                 if room is None:
@@ -174,9 +353,11 @@ class Server:
                     where = "lobby"
                     continue
                 room.seat(conn, {"role": "player", "name": msg.get("name")}, now)
+                self.leave_lobby(conn)
                 return "room"
             elif kind == "join":
-                msg["name"] = self.player_name(conn, msg.get("name"))
+                self.ensure_member(conn, msg.get("name") if isinstance(msg.get("name"), str) and msg.get("name") else None)
+                msg["name"] = self.player_name(conn, msg.get("name") or getattr(conn, "wanted_name", ""))
                 role = "spectator" if msg.get("role") == "spectator" else "player"
                 rid = msg.get("room")
                 token = msg.get("token")
@@ -193,6 +374,7 @@ class Server:
                     where = "lobby"
                     continue
                 if room.seat(conn, msg, now):
+                    self.leave_lobby(conn)
                     return "room"
                 where = "lobby"       # мест нет — остаётся в лобби, может войти зрителем
             elif kind == "leave":
@@ -277,11 +459,25 @@ class Server:
     def tick(self):
         self.tick_no += 1
         now = self.clock()
+        for frm, ch in list(self.challenges.items()):   # вызов без ответа — снять
+            if now > ch["until"]:
+                del self.challenges[frm]
+                a, b = self.find_member(frm), self.find_member(ch["to"])
+                if b:
+                    b.send({"type": "challenge_over", "from": frm})
+                if a:
+                    a.send({"type": "declined", "name": self.member_name(b), "why": "timeout"})
+        self.seeking = [c for c in self.seeking if not c.closed and c in self.lobby]
         for room in list(self.rooms.values()):
             try:
                 for conn in room.read(now):          # вышли из комнаты — снова в лобби
-                    self.lobby.append(conn)
-                    self.send_rooms([conn])
+                    self.back_to_lobby(conn)
+                if room.closing:                     # партия двоих: один ушёл — все в лобби
+                    for conn in room.all_conns():
+                        conn.send({"type": "room_closed", "why": room.closing})
+                        self.back_to_lobby(conn)
+                    room.seats = {pid: Seat() for pid in PIDS}
+                    room.spectators = []
                 if not room.empty:
                     room.tick()
             except Exception:             # ошибка одной комнаты не роняет остальные
@@ -293,8 +489,22 @@ class Server:
             if room.empty:
                 del self.rooms[room.id]
                 self.log(f"комната {room.id} пуста — убрана")
+        for mid in [frm for frm, ch in self.challenges.items()
+                    if not self.find_member(frm) or not self.find_member(ch["to"])]:
+            self.drop_challenges(mid)                # вызвавший или вызванный пропал
         if self.tick_no % LIST_EVERY == 0 and self.lobby:
-            self.send_rooms()
+            self.send_rooms([c for c in self.lobby if getattr(c, "member", None) is None])
+            self.push_lobby()
+
+    def back_to_lobby(self, conn):
+        """Соединение снова в лобби сервера (ушло из комнаты или комнату закрыли)."""
+        conn.in_room = False
+        if conn not in self.lobby:
+            self.lobby.append(conn)
+        if getattr(conn, "member", None) is not None:
+            self.push_lobby([conn])
+        else:
+            self.send_rooms([conn])
 
     def stop(self):
         """Остановить сервер (можно из другого потока): цикл run() завершится, порт освободится."""
