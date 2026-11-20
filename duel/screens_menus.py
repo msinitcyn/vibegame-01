@@ -330,7 +330,7 @@ class MenuScreensMixin:
                        mmax=MOB_MAX, mhp=MOB_MAX_HP, ranged=MOB_RANGED_EVERY, range=MOB_RANGE,
                        melee=MELEE_DAMAGE, melee_cd=f"{MELEE_COOLDOWN:g}".replace(".", tr("decimal")))
         x0, y, width = 80, 70, WIDTH - 160
-        for i in range(1, 10):
+        for i in range(1, 11):
             lines = self.wrap(tr(f"note.{i}", **numbers), width, self.small)
             for j, line in enumerate(lines):
                 prefix = "•  " if j == 0 else "    "

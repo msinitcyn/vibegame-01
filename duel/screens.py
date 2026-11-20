@@ -7,6 +7,7 @@ import math
 import pygame
 
 from .config import (
+    NEUTRAL_HALF,
     AMMO_COLOR,
     ARENA,
     ARENA_R,
@@ -249,6 +250,18 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
                 if drawn_for != side:
                     img = pygame.transform.flip(img, True, False)
                 bg.blit(img, (x, 0))
+            # нейтральная полоса над и под ареной: серый камень, по краям — тонкие швы
+            nx0 = int(ARENA[0] - NEUTRAL_HALF)
+            strip = pygame.Surface((int(2 * NEUTRAL_HALF), h))
+            strip.fill((58, 58, 66))
+            for yy in range(0, h, 24):                  # кладка: ряды плит со сдвигом
+                off = 0 if (yy // 24) % 2 == 0 else 24
+                pygame.draw.line(strip, (46, 46, 54), (0, yy), (strip.get_width(), yy), 2)
+                for xx in range(-off, strip.get_width(), 48):
+                    pygame.draw.line(strip, (46, 46, 54), (xx, yy), (xx, yy + 24), 2)
+            bg.blit(strip, (nx0, 0))
+            for x in (nx0, nx0 + strip.get_width()):
+                pygame.draw.line(bg, (90, 90, 100), (x, 0), (x, h), 2)
             # арена: круг текстуры по маске, потом кромка — левая дуга цветом левого героя, правая — правого
             r = ARENA_R
             cx, cy = int(ARENA[0]), int(ARENA[1] - TOP)

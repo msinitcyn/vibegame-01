@@ -25,6 +25,10 @@ import random
 
 from .commands import Command
 from .config import (
+    GUARDIAN_RESPAWN,
+    GUARDIAN_SHOT_EVERY,
+    GUARDIAN_SPEED,
+    MOB_RANGE,
     AMMO_PACK,
     AMMO_SPAWN,
     HERO_ONLY_ITEMS,
@@ -87,8 +91,8 @@ from .config import (
     TOP,
     WIDTH,
 )
-from .entities import (AmmoPack, Artifact, Beam, Clone, FireRing, IceTrail, Mob, Player, Sentry,
-                       TreeWall, Wall, push_out_of_arena)
+from .entities import (AmmoPack, Artifact, Beam, Clone, FireRing, Guardian, IceTrail, Mob, MobShot, Player, Sentry,
+                       TreeWall, Wall, in_arena, zone_at)
 from .items import BAD_EFFECTS, INSTANT_ITEMS, ITEMS, item_level
 
 NO_AMMO_EVERY = 1.0               # «нет патронов» — не чаще раза в столько секунд партии
@@ -121,6 +125,7 @@ class Match:
         self.trees = []               # «Стена деревьев»
         self.rings = []               # «Огненный круг»
         self.sentries = []            # «Лесные стражи»
+        self.guardians = [Guardian(side, kind) for side in ("blue", "red") for kind in ("ranged", "melee")]
         self.trail_last = {}          # маг под «Ледяной тропой» -> где положен последний кусок следа
         self.match_time = 0.0         # секунд с начала партии
         self.mob_wave = 0             # сколько волн мобов уже пришло
@@ -153,7 +158,7 @@ class Match:
     def objects(self):
         """Все объекты поля, кроме магов."""
         return (self.bullets + self.mobs + self.mob_shots + self.artifacts + self.ammo_packs
-                + self.walls + self.clones + self.beams + self.ice + self.trees + self.rings + self.sentries)
+                + self.walls + self.clones + self.beams + self.ice + self.trees + self.rings + self.sentries + self.guardians)
 
     def number_new(self):
         """Выдать номера объектам, появившимся за шаг (в порядке появления в списках)."""
@@ -223,6 +228,10 @@ class Match:
         for st in self.sentries:
             if st.owner is foe and math.hypot(st.x - p.x, st.y - p.y) <= p.radius + st.radius + reach:
                 st.hurt(damage)
+        for g in self.guardians:
+            if g.alive and self.can_hurt_guardian(g, p) and \
+                    math.hypot(g.x - p.x, g.y - p.y) <= p.radius + g.radius + reach:
+                self.hurt_guardian(g, damage)
 
     def use_item(self, p, slot):
         kind = p.items[slot]
@@ -363,7 +372,6 @@ class Match:
         for t in self.trees:
             if t.owner is not p and t.hits(p.x, p.y, r):      # сквозь свои ёлки хозяин проходит
                 p.x, p.y = t.push_out(p.x, p.y, r)
-        p.x, p.y = push_out_of_arena(p.x, p.y, r, p.dir)
         for ring in self.rings:               # огненную стену не пересечь
             ring.keep(p)
 
@@ -482,6 +490,13 @@ class Match:
                         math.hypot(b.x - st.x, b.y - st.y) < st.radius + BULLET_R:
                     b.alive = False
                     st.hurt()
+            for g in self.guardians:          # стражи арены: ранит только изнутри, иначе — рикошет
+                if b.alive and g.alive and math.hypot(b.x - g.x, b.y - g.y) < g.radius + BULLET_R:
+                    if self.can_hurt_guardian(g, b.owner):
+                        b.alive = False
+                        self.hurt_guardian(g, 1)
+                    else:
+                        g.reflect(b)
             if not b.alive:
                 continue
             target = self.other(b.owner)      # владелец мог смениться после зеркала
@@ -526,22 +541,23 @@ class Match:
         a.taken = True
 
     def drop_artifact(self, mob):
-        """Убитый моб роняет случайный артефакт в месте гибели — только если погиб
-        на земле того, кто его добил. На полосе мобов и на чужой земле — ничего."""
+        """Погибший моб роняет артефакт в месте гибели; какой — зависит только от места:
+        на земле игрока — общий или артефакт героя этого игрока, на нейтральной полосе — общий,
+        в арене — артефакт мобов (пока тот же набор, что общий). Уровень — по запасу жизней моба."""
         self.emit("mob_dead", mob.x, mob.y)
-        killer = mob.target
-        if killer is None or not killer.in_land(mob.x, mob.y):     # в арене и на чужой земле — нет
-            return
-        # на месте гибели; чуть внутрь земли, чтобы артефакт целиком был досягаем
         m = ARTIFACT_R + 4
-        x = max(killer.land[0] + m, min(killer.land[1] - m, mob.x))
+        x = max(m, min(WIDTH - m, mob.x))
         y = max(TOP + m, min(BOTTOM - m, mob.y))
-        x, y = push_out_of_arena(x, y, m, killer.dir)             # целиком на земле, не в арене
-        # артефакты героя выпадают только ему; уровень — по запасу жизней моба, высокие — реже
-        kinds = [k for k in ITEMS if HERO_ONLY_ITEMS.get(k, killer.hero) == killer.hero
-                 and mob.max_hp >= LEVEL_MIN_MOB_HP[item_level(k)]]
+        self.artifacts.append(Artifact(x, self.artifact_kind(zone_at(mob.x, mob.y), mob.max_hp), y))
+
+    def artifact_kind(self, zone, max_hp):
+        """Случайный артефакт зоны (земля игрока, полоса, арена) с уровнем по жизням моба."""
+        owner = self.player(zone) if zone in ("blue", "red") else None
+        hero = owner.hero if owner else None
+        kinds = [k for k in ITEMS if HERO_ONLY_ITEMS.get(k, hero) == hero
+                 and max_hp >= LEVEL_MIN_MOB_HP[item_level(k)]]
         weights = [LEVEL_WEIGHT[item_level(k)] for k in kinds]
-        self.artifacts.append(Artifact(x, self.rng.choices(kinds, weights)[0], y))
+        return self.rng.choices(kinds, weights)[0]
 
     def bullet_speed(self, owner):
         """Множитель скорости пуль owner: «быстрые пули» у него; «пули соперника замирают» у цели — стоят."""
@@ -593,6 +609,7 @@ class Match:
             shot = m.shoot(dt) if m.zombie_of is None else None
             if shot:
                 self.mob_shots.append(shot)
+        self.update_guardians(dt)
         for st in self.sentries:              # лесные стражи стреляют по сопернику хозяина
             shot = st.update(dt, self.other(st.owner))
             if shot:
@@ -600,6 +617,77 @@ class Match:
         self.sentries = [st for st in self.sentries if st.alive]
         self.update_mob_shots(dt)
         self.update_beams(dt)
+
+    # ------------------------------------------------------------------ стражи арены
+
+    def can_hurt_guardian(self, g, attacker):
+        """Стража ранят, только когда он проснулся и бьющий (маг) сам в арене."""
+        return g.awake and isinstance(attacker, Player) and in_arena(attacker.x, attacker.y)
+
+    def hurt_guardian(self, g, n):
+        g.hurt(n)
+        if not g.alive:                       # убит: вернётся позже, роняет артефакт мобов
+            g.respawn_at = self.match_time + GUARDIAN_RESPAWN
+            self.emit("mob_dead", g.x, g.y)
+            self.artifacts.append(Artifact(g.x, self.artifact_kind("arena", g.max_hp), g.y))
+
+    def update_guardians(self, dt):
+        """Стражи: спят статуями, пока «их» игрок вне арены; проснулись — ближний идёт и бьёт,
+        дальнобойный стреляет с поста. Убитые возвращаются через GUARDIAN_RESPAWN."""
+        for g in self.guardians:
+            if not g.alive:
+                if self.match_time >= g.respawn_at:
+                    g.revive()
+                continue
+            g.flash = max(0.0, g.flash - dt)
+            g.hit_cd = max(0.0, g.hit_cd - dt)
+            g.swing = max(0.0, g.swing - dt)
+            target = self.player(g.side)
+            g.awake = in_arena(target.x, target.y)
+            if not g.awake:                   # статуя: на пост
+                g.windup = 0.0
+                g.shot_timer = GUARDIAN_SHOT_EVERY
+                self.guardian_walk(g, *g.post, dt)
+                continue
+            g.facing = 1 if target.x >= g.x else -1
+            dist = math.hypot(target.x - g.x, target.y - g.y)
+            if g.kind == "ranged":
+                g.shot_timer -= dt
+                if g.shot_timer <= 0 and dist <= MOB_RANGE:
+                    g.shot_timer = GUARDIAN_SHOT_EVERY
+                    self.mob_shots.append(MobShot(g.x, g.y, target))
+                continue
+            reach = g.radius + target.radius
+            if g.windup > 0:                  # замах — потом удар, если игрок ещё рядом
+                g.windup = max(0.0, g.windup - dt)
+                if g.windup == 0:
+                    g.hit_cd, g.swing = MOB_HIT_COOLDOWN, MOB_SWING_TIME
+                    g.swing_dir = math.atan2(target.y - g.y, target.x - g.x)
+                    g.swing_hit = dist <= reach + MOB_REACH_EXTRA
+                    self.emit("mob_swing", g.x, g.y, g.swing_hit)
+                    if g.swing_hit and not target.shield_absorb():
+                        self.hurt_player(target, MOB_DAMAGE)
+                continue
+            if dist > reach:
+                self.guardian_walk(g, target.x, target.y, dt, stop=reach)
+            elif g.hit_cd == 0:
+                g.windup = MOB_WINDUP
+
+    def guardian_walk(self, g, x, y, dt, stop=0.0):
+        """Шаг стража к точке, не выходя из арены (и не сквозь деревья)."""
+        dx, dy = x - g.x, y - g.y
+        d = math.hypot(dx, dy)
+        if d <= stop + 0.5:
+            return
+        step = min(GUARDIAN_SPEED * dt, d - stop)
+        nx, ny = g.x + dx / d * step, g.y + dy / d * step
+        cx, cy = nx - ARENA[0], ny - ARENA[1]
+        cd = math.hypot(cx, cy)
+        lim = ARENA_R - g.radius
+        if cd > lim:
+            nx, ny = ARENA[0] + cx / cd * lim, ARENA[1] + cy / cd * lim
+        if not self.blocked(nx, ny, g.radius):
+            g.x, g.y = nx, ny
 
     def raise_zombies(self, p):
         """«Восставшие мертвецы»: до ZOMBIE_MAX ближайших мобов в радиусе — зомби мага p."""
@@ -684,6 +772,9 @@ class Match:
                     continue                  # свои зомби
                 if m.alive and beam.tick(m, beam.touches(m.x, m.y, m.radius), dt):
                     m.hurt(owner)         # злится на Свет (если нет «Мира с мобами»)
+            for g in self.guardians:
+                if g.alive and self.can_hurt_guardian(g, owner) and beam.tick(g, beam.touches(g.x, g.y, g.radius), dt):
+                    self.hurt_guardian(g, 1)
         self.beams = [b for b in self.beams if b.alive]
 
     def update_mob_shots(self, dt):

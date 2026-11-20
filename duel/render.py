@@ -354,6 +354,31 @@ def draw_pull(surf, victim, puller, color):
     pygame.draw.lines(surf, (255, 230, 120), False, pts, 1)          # огненная сердцевина
 
 
+def draw_guardian(surf, g, font, heroes):
+    """Страж арены: спит — серая каменная статуя на постаменте; проснулся — живой, с кольцом цвета
+    игрока, на которого охотится, и полоской жизней."""
+    pos = _pos(g)
+    r = g["r"]
+    pygame.draw.ellipse(surf, (16, 12, 20), (pos[0] - r - 4, pos[1] + r * 0.55, 2 * r + 8, r * 0.7))
+    pygame.draw.ellipse(surf, (110, 110, 120), (pos[0] - r - 2, pos[1] + r * 0.6, 2 * r + 4, r * 0.55))
+    if g["awake"]:
+        draw_mob_attack(surf, g, font)
+        pygame.draw.circle(surf, side_color(heroes, g["side"]), pos, int(r) + 5, 3)
+    draw_unit(surf, "mob_ranged" if g["kind"] == "ranged" else "mob", pos, r, g["facing"],
+              white=g["flash"] > 0)
+    if not g["awake"]:                            # статуя: серый камень поверх
+        stone = pygame.Surface((int(2 * r + 4),) * 2, pygame.SRCALPHA)
+        pygame.draw.circle(stone, (150, 150, 160, 170), (int(r + 2),) * 2, int(r + 1))
+        surf.blit(stone, stone.get_rect(center=pos))
+        return
+    bar = pygame.Rect(0, 0, 36, 5)
+    bar.midbottom = (pos[0], pos[1] - r - 4)
+    pygame.draw.rect(surf, (16, 12, 20), bar.inflate(2, 2))
+    fill = bar.copy()
+    fill.w = max(1, round(bar.w * g["hp"] / g["max_hp"]))
+    pygame.draw.rect(surf, side_color(heroes, g["side"]), fill)
+
+
 def draw_field(surf, snap, font):
     """Все объекты поля в порядке слоёв: стены, артефакты, пачки, двойники, мобы,
     снаряды, пули, маги. Цвета и маги — по героям сторон."""
@@ -368,6 +393,8 @@ def draw_field(surf, snap, font):
         draw_ammo_pack(surf, a, font)
     for c in snap["clones"]:
         draw_clone(surf, c, heroes)
+    for g in snap.get("guardians", []):
+        draw_guardian(surf, g, font, heroes)
     for m in snap["mobs"]:
         draw_mob(surf, m, font, heroes)
     for s in snap["mob_shots"]:

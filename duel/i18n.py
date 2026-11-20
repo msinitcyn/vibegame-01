@@ -272,9 +272,7 @@ TEXTS = {
         "sec.debuff": "Дебаффы на соперника",
         "note.1": "Рамка: зелёная — защита, синяя — атака, оранжевая — по сопернику.",
         "note.2": "Статус под именем игрока — всё, что действует сейчас, с таймерами.",
-        "note.3": "Артефакт выпадает, только если моб добит на твоей земле, — на месте гибели, "
-                  "и лежит, пока не подберёшь. Ячейки заняты — в очередь; рядом с ячейками "
-                  "видно {queue} следующих.",
+        "note.3": "Артефакт выпадает там, где погиб моб, и зависит от места: на земле игрока — общий или артефакт его героя, на нейтральной полосе и в арене — общий. Лежит, пока не подберёшь; ячейки заняты — в очередь (видно {queue} следующих).",
         "note.4": "Оружие: на {weapon} с, разных не больше {wmax} — новое вытесняет старое.",
         "note.5": "Повтор любого эффекта добавляет время (щиту — и удары). Двойникам передаются щит, "
                   "оружие, размер, скорость, «не стреляет».",
@@ -287,6 +285,7 @@ TEXTS = {
         "note.8": "Дебаффы снимает только время или очищение.",
         "note.9": "Ближний удар (E / правый Shift / L1, L2) — только по мобам рядом: {melee} урона, "
                   "без патронов, раз в {melee_cd} с.",
+        "note.10": "Поле: на чужой земле жжёт и идёшь медленнее; нейтральная полоса над и под ареной не жжёт; в арену можно зайти (медленнее), но там проснутся твои стражи — бьют и стреляют, ранить их можно только изнутри арены, убитый вернётся через минуту.",
 
         "wave.title": "волна {n}",
         "wave.in": "через {s} с",
@@ -350,7 +349,7 @@ TEXTS = {
         "help.sentries": "На земле соперника на {sentry_time} с вырастают {sentries} дерева-стрелка: стреляют в него, если он ближе {sentry_range} px. У дерева {sentry_hp} жизни.",
         "popup.immune": "иммунитет",
         "sec.hero": "Артефакты героев",
-        "help.hero_note": "Выпадают только из мобов, добитых своим героем, — но подобрать и применить может любой.",
+        "help.hero_note": "Выпадают из мобов, погибших на земле своего героя (кто бы ни добил), — подобрать и применить может любой.",
         "help.levels": "Точки под значком — уровень артефакта (1–4). Чем выше, тем реже: 3-й — из мобов с 5+ жизнями, 4-й — только из самых толстых (6).",
         "hero.owner": "выпадает только: {hero}",
         "help.clearfoe": "Все пули соперника, что сейчас на экране, исчезают.",
@@ -624,9 +623,7 @@ TEXTS = {
         "sec.debuff": "Debuffs on the opponent",
         "note.1": "Frame: green — defense, blue — attack, orange — against the opponent.",
         "note.2": "The status under a player's name shows everything active right now, with timers.",
-        "note.3": "An artifact drops only if the mob dies on your land — right where it fell — "
-                  "and stays until you pick it up. Slots full — into the queue; the next {queue} "
-                  "are shown next to the slots.",
+        "note.3": "An artifact drops where the mob died and depends on the place: on a player's land — a common one or that player's hero artifact, on the neutral strip and in the arena — a common one. It stays until picked up; slots full — into the queue (the next {queue} are shown).",
         "note.4": "Weapons: {weapon} s, at most {wmax} different at once — a new one replaces the oldest.",
         "note.5": "Repeating any effect adds time (and hits for the shield). Clones get the shield, "
                   "weapons, size, speed and \"can't shoot\".",
@@ -638,6 +635,7 @@ TEXTS = {
         "note.8": "Debuffs are removed only by time or cleanse.",
         "note.9": "Melee (E / right Shift / L1, L2) hits only nearby mobs: {melee} damage, "
                   "no ammo, once every {melee_cd} s.",
+        "note.10": "Field: the enemy land burns and slows you; the neutral strip above and below the arena is safe; you can enter the arena (slower), but your guardians wake up there — they hit and shoot, can be hurt only from inside the arena, and a killed one returns in a minute.",
 
         "wave.title": "wave {n}",
         "wave.in": "in {s} s",
@@ -701,7 +699,7 @@ TEXTS = {
         "help.sentries": "{sentries} shooting trees grow on the opponent's land for {sentry_time} s: they shoot at them within {sentry_range} px. Each tree has {sentry_hp} lives.",
         "popup.immune": "immune",
         "sec.hero": "Hero artifacts",
-        "help.hero_note": "They drop only from mobs finished off by their hero — but anyone can pick them up and use them.",
+        "help.hero_note": "They drop from mobs that die on their hero's land (whoever finishes them) — anyone can pick them up and use them.",
         "help.levels": "Dots under an icon show the artifact level (1–4). Higher is rarer: level 3 drops from mobs with 5+ lives, level 4 only from the fattest (6).",
         "hero.owner": "drops only for: {hero}",
         "help.clearfoe": "All opponent bullets currently on screen disappear.",
@@ -975,9 +973,7 @@ TEXTS = {
         "sec.debuff": "Heikennykset vastustajalle",
         "note.1": "Kehys: vihreä — puolustus, sininen — hyökkäys, oranssi — vastustajaa vastaan.",
         "note.2": "Pelaajan nimen alla näkyy kaikki voimassa oleva ajastimineen.",
-        "note.3": "Artefakti putoaa vain, jos hirviö kaatuu omalla alueellasi — kaatumispaikkaan — "
-                  "ja odottaa, kunnes poimit sen. Paikat täynnä — jonoon; seuraavat {queue} "
-                  "näkyvät paikkojen vieressä.",
+        "note.3": "Artefakti putoaa hirviön kaatumispaikkaan ja riippuu paikasta: pelaajan alueella — yleinen tai hänen sankarinsa artefakti, neutraalilla kaistalla ja areenalla — yleinen. Se odottaa poimimista; paikat täynnä — jonoon ({queue} seuraavaa näkyy).",
         "note.4": "Aseet: {weapon} s, enintään {wmax} erilaista kerralla — uusi korvaa vanhimman.",
         "note.5": "Saman vaikutuksen toisto lisää aikaa (kilvelle myös osumia). Kloonit saavat kilven, "
                   "aseet, koon, nopeuden ja \"ei voi ampua\".",
@@ -990,6 +986,7 @@ TEXTS = {
         "note.8": "Heikennykset poistuvat vain ajan kanssa tai puhdistuksella.",
         "note.9": "Lähilyönti (E / oikea Shift / L1, L2) osuu vain lähellä oleviin hirviöihin: "
                   "{melee} vahinkoa, ilman ammuksia, kerran {melee_cd} s välein.",
+        "note.10": "Kenttä: vihollisen alue polttaa ja hidastaa; neutraali kaista areenan ylä- ja alapuolella on turvallinen; areenalle voi mennä (hitaammin), mutta siellä vartijasi heräävät — ne lyövät ja ampuvat, niitä voi vahingoittaa vain areenalta, kaatunut palaa minuutissa.",
 
         "wave.title": "aalto {n}",
         "wave.in": "{s} s päästä",
@@ -1053,7 +1050,7 @@ TEXTS = {
         "help.sentries": "Vastustajan maalle kasvaa {sentry_time} s ajaksi {sentries} ampuvaa puuta: ne ampuvat häntä {sentry_range} px etäisyydeltä. Puulla on {sentry_hp} elämää.",
         "popup.immune": "immuuni",
         "sec.hero": "Sankarien artefaktit",
-        "help.hero_note": "Putoavat vain oman sankarin kaatamista hirviöistä — mutta kuka tahansa voi poimia ja käyttää.",
+        "help.hero_note": "Putoavat hirviöistä, jotka kaatuvat oman sankarinsa alueella (kuka tahansa kaataakin) — kuka tahansa voi poimia ja käyttää.",
         "help.levels": "Pisteet kuvakkeen alla ovat artefaktin taso (1–4). Mitä korkeampi, sitä harvinaisempi: taso 3 putoaa hirviöistä, joilla on 5+ elämää, taso 4 vain lihavimmista (6).",
         "hero.owner": "putoaa vain: {hero}",
         "help.clearfoe": "Kaikki ruudulla olevat vastustajan luodit katoavat.",

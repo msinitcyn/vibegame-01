@@ -194,26 +194,6 @@ def test_drop_on_own_land_at_death_spot(match):
     assert (art.x, art.y) == (x, y)
 
 
-def test_no_drop_on_neutral_strip(match):
-    kill_mob_at(match, match.red, WIDTH / 2, 300)
-    assert match.artifacts == []
-
-
-def test_no_drop_on_foe_land(match):
-    b = match.blue
-    kill_mob_at(match, match.red, b.land[1] - 100, 300)   # красный добивает моба на льду синего
-    assert match.artifacts == []
-
-
-def test_drop_near_land_edge_pulled_inside(match):
-    """Моб погиб у самой границы своей земли — артефакт подтянут внутрь, чтобы его можно было достать."""
-    from duel.config import ARTIFACT_R
-    r = match.red
-    kill_mob_at(match, r, r.land[0] + 2, TOP + 40)          # у центральной линии, над ареной
-    art = match.artifacts[0]
-    assert art.x - ARTIFACT_R >= r.land[0]
-
-
 def test_artifact_stays_until_picked(match):
     from duel.entities import Artifact
     r = match.red
@@ -488,20 +468,6 @@ def test_mob_attack_draws(game):
 
 # --- круглая арена
 
-def test_no_drop_inside_arena(match):
-    from duel.config import ARENA
-    kill_mob_at(match, match.red, ARENA[0] + 40, ARENA[1])    # на «красной» половине, но в арене
-    assert match.artifacts == []
-
-
-def test_drop_next_to_arena_pushed_out(match):
-    from duel.config import ARENA, ARENA_R, ARTIFACT_R
-    r = match.red
-    kill_mob_at(match, r, ARENA[0] + ARENA_R + 3, ARENA[1])   # у самой кромки арены, на земле красного
-    art = match.artifacts[0]
-    assert math.hypot(art.x - ARENA[0], art.y - ARENA[1]) >= ARENA_R + ARTIFACT_R
-
-
 def test_ammo_and_clones_outside_arena(match):
     from duel.config import ARENA, ARENA_R
     from duel.entities import Clone
@@ -515,3 +481,45 @@ def test_ammo_and_clones_outside_arena(match):
                 c.update(DT, match.other(p))
                 assert math.hypot(c.x - ARENA[0], c.y - ARENA[1]) >= ARENA_R + c.radius - 0.01
                 assert p.land[0] <= c.x <= p.land[1]
+
+
+# ------------------------------------------------------------------ артефакт — по месту гибели моба
+
+def kinds_dropped_at(x, y, killer_pid="red", n=400, mob_hp=6):
+    """Какие артефакты выпадают из моба, погибшего в точке (x, y): синий — Холод, красный — Огонь."""
+    from duel.entities import Mob
+    from duel.match import Match
+    seen = set()
+    for seed in range(n):
+        m = Match(seed=seed)
+        m.set_heroes({"blue": "frost", "red": "fire"})
+        mob = Mob(x, y, mob_hp)
+        mob.target = m.player(killer_pid)
+        m.drop_artifact(mob)
+        assert len(m.artifacts) == 1
+        seen.add(m.artifacts[0].kind)
+    return seen
+
+
+def test_drop_depends_on_place_not_killer():
+    from duel.config import HERO_ONLY_ITEMS
+    frost = {k for k, h in HERO_ONLY_ITEMS.items() if h == "frost"}
+    fire = {k for k, h in HERO_ONLY_ITEMS.items() if h == "fire"}
+    on_ice = kinds_dropped_at(150, 300, killer_pid="red")   # красный добил моба на льду синего
+    assert on_ice & frost and not on_ice & fire               # артефакт земли синего (Холода)
+    on_lava = kinds_dropped_at(850, 300, killer_pid="red")
+    assert on_lava & fire and not on_lava & frost
+
+
+def test_neutral_and_arena_drop_common_only():
+    from duel.config import ARENA, HERO_ONLY_ITEMS
+    hero_items = set(HERO_ONLY_ITEMS)
+    assert not kinds_dropped_at(WIDTH / 2, TOP + 40) & hero_items        # нейтральная полоса
+    assert not kinds_dropped_at(ARENA[0] + 40, ARENA[1]) & hero_items    # арена мобов
+
+
+def test_drop_lies_where_mob_died(match):
+    from duel.config import ARENA
+    kill_mob_at(match, match.red, ARENA[0] + 40, ARENA[1])   # в арене — артефакт тоже в арене
+    art = match.artifacts[0]
+    assert (art.x, art.y) == (ARENA[0] + 40, ARENA[1])

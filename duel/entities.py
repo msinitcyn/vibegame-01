@@ -5,6 +5,13 @@
 import math
 
 from .config import (
+    GUARDIAN_HP,
+    GUARDIAN_POST,
+    GUARDIAN_RADIUS,
+    GUARDIAN_SHOT_EVERY,
+    ARENA_SLOW,
+    FOE_LAND_SLOW,
+    NEUTRAL_HALF,
     SENTRY_EVERY,
     SENTRY_HP,
     SENTRY_R,
@@ -91,6 +98,15 @@ def make_bullets(owner, x, y, angle, radius, offsets, wavy=False):
             b.wave_phase = rng.uniform(0, 2 * math.pi)
         bullets.append(b)
     return bullets
+
+
+def zone_at(x, y):
+    """Зона поля в точке: "arena" (круг мобов), "neutral" (полоса над и под ним), "blue" / "red" (земли)."""
+    if in_arena(x, y):
+        return "arena"
+    if abs(x - ARENA[0]) < NEUTRAL_HALF:
+        return "neutral"
+    return "blue" if x < ARENA[0] else "red"
 
 
 def in_arena(x, y, r=0.0):
@@ -222,7 +238,14 @@ class Player(Unit):
 
     @property
     def speed(self):
-        return BASE_SPEED * self.speed_mult
+        """Скорость с эффектами; на чужой земле и в арене — медленнее."""
+        zone = zone_at(self.x, self.y)
+        slow = FOE_LAND_SLOW if zone == self.foe_zone else ARENA_SLOW if zone == "arena" else 1.0
+        return BASE_SPEED * self.speed_mult * slow
+
+    @property
+    def foe_zone(self):
+        return "red" if self.dir > 0 else "blue"
 
     def add_item(self, kind):
         """Подобранный артефакт: в первую свободную ячейку, иначе в конец очереди."""
@@ -255,9 +278,8 @@ class Player(Unit):
             self.x += dx * k
             self.y += dy * k
         r = self.radius
-        self.x = max(r, min(WIDTH - r, self.x))         # можно и на чужую землю (там отнимаются жизни)
+        self.x = max(r, min(WIDTH - r, self.x))         # по всему полю: чужая земля, полоса, арена
         self.y = max(TOP + r, min(BOTTOM - r, self.y))
-        self.x, self.y = push_out_of_arena(self.x, self.y, r, self.dir)      # в арену мобов не заходит
 
     def random_spot(self, margin):
         """Случайная точка на своей земле вне арены (для пачек патронов)."""
@@ -269,12 +291,12 @@ class Player(Unit):
         return push_out_of_arena(x, y, margin)
 
     def on_foe_land(self):
-        """Центр мага на половине соперника."""
-        return (self.x - ARENA[0]) * self.dir > 0
+        """Центр мага на земле соперника (не на нейтральной полосе и не в арене)."""
+        return zone_at(self.x, self.y) == self.foe_zone
 
     def in_land(self, x, y):
-        """Точка на своей земле: в своей половине и не в арене."""
-        return self.land[0] <= x <= self.land[1] and not in_arena(x, y)
+        """Точка на своей земле (не на полосе и не в арене)."""
+        return zone_at(x, y) == ("blue" if self.dir > 0 else "red")
 
     def shoot(self):
         # заморозка мешает только двигаться — стрелять можно
@@ -318,6 +340,53 @@ class Sentry:
     @property
     def alive(self):
         return self.hp > 0 and self.life > 0
+
+
+class Guardian:
+    """Страж арены: охраняет её от игрока side. Пока тот вне арены — статуя на посту (неуязвима,
+    пули отскакивают); игрок в арене — просыпается: ближний (melee) идёт к нему и бьёт, дальнобойный
+    (ranged) стреляет с поста. Ранить можно, только когда проснулся и бьющий сам в арене."""
+
+    def __init__(self, side, kind):
+        self.id = None
+        self.side, self.kind = side, kind
+        d = ARENA_R * GUARDIAN_POST / math.sqrt(2)
+        sx = -1 if side == "blue" else 1               # стражи левого игрока — в левой половине арены
+        sy = -1 if kind == "ranged" else 1             # дальнобойный — сверху, ближний — снизу
+        self.post = (ARENA[0] + sx * d, ARENA[1] + sy * d)
+        self.x, self.y = self.post
+        self.radius = GUARDIAN_RADIUS
+        self.hp = self.max_hp = GUARDIAN_HP
+        self.alive = True
+        self.respawn_at = 0.0
+        self.awake = False
+        self.facing = -sx
+        self.hit_cd = self.windup = self.swing = 0.0
+        self.swing_dir, self.swing_hit = 0.0, False
+        self.shot_timer = GUARDIAN_SHOT_EVERY
+        self.flash = 0.0
+
+    def revive(self):
+        self.x, self.y = self.post
+        self.hp = self.max_hp
+        self.alive, self.awake = True, False
+        self.windup = self.swing = self.hit_cd = 0.0
+
+    def hurt(self, n=1):
+        self.hp -= n
+        self.flash = 0.12
+        if self.hp <= 0:
+            self.alive = False
+
+    def reflect(self, b):
+        """Отразить пулю от стража (по нормали к его поверхности) и вытолкнуть её наружу."""
+        nx, ny = b.x - self.x, b.y - self.y
+        d = math.hypot(nx, ny) or 1.0
+        nx, ny = nx / d, ny / d
+        dot = b.vx * nx + b.vy * ny
+        if dot < 0:
+            b.vx, b.vy = b.vx - 2 * dot * nx, b.vy - 2 * dot * ny
+        b.x, b.y = self.x + nx * (self.radius + BULLET_R + 1), self.y + ny * (self.radius + BULLET_R + 1)
 
 
 class FireRing:

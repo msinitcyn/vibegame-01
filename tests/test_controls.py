@@ -34,24 +34,20 @@ def test_diagonal_not_faster(game):
     assert dist == pytest.approx(b.speed * 0.1, rel=0.05)
 
 
-def test_mages_cross_only_around_arena(game):
-    """На высоте арены маги упираются в её край; над и под ней проходят на чужую землю до края поля."""
+def test_mages_walk_everywhere_slower_on_foe_land_and_arena(game):
+    """Маги заходят в арену и на чужую землю — там медленнее; на нейтральной полосе — как дома."""
     import math
-    from duel.config import ARENA, ARENA_R, TOP, WIDTH
-    b, r = game.match.blue, game.match.red
-    b.hp = r.hp = 1000                          # чужая земля отнимает жизни — не важно для теста
-    game.held = {pygame.KSCAN_D, pygame.KSCAN_LEFT}
-    step(game, 5)
-    for p in (b, r):
-        assert math.hypot(p.x - ARENA[0], p.y - ARENA[1]) >= ARENA_R + p.radius - 0.01
-    assert b.x < ARENA[0] < r.x
-    b.y = r.y = TOP + 40
-    step(game, 5)
-    assert b.x + b.radius == pytest.approx(WIDTH) and r.x - r.radius == pytest.approx(0)
-    game.held = {pygame.KSCAN_A, pygame.KSCAN_RIGHT}
-    step(game, 8)
-    assert b.x - b.radius >= -0.01 and r.x + r.radius <= WIDTH + 0.01
-
+    from duel.config import ARENA, ARENA_SLOW, BASE_SPEED, FOE_LAND_SLOW, TOP
+    b = game.match.blue
+    b.hp = 1000
+    for (x, y), k in (((100, 300), 1.0), ((ARENA[0], TOP + 40), 1.0), ((ARENA[0], ARENA[1]), ARENA_SLOW),
+                      ((900, 300), FOE_LAND_SLOW)):
+        b.x, b.y = x, y
+        assert b.speed == pytest.approx(BASE_SPEED * k), (x, y)
+    b.x, b.y = ARENA[0] - 200, ARENA[1]
+    game.held = {pygame.KSCAN_D}
+    step(game, 1.0)
+    assert math.hypot(b.x - ARENA[0], b.y - ARENA[1]) < 150      # вошёл в арену
 
 def test_invert_swaps_both_axes(game):
     b = game.match.blue

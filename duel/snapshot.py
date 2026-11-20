@@ -62,6 +62,11 @@ def snapshot(match):
                 for t in m.ice],
         "trees": [{"id": t.id, "owner": t.owner.id, "x": _xy(t.x), "y": _xy(t.y), "angle": _t(t.angle),
                    "start": _xy(t.start), "len": _xy(t.length)} for t in m.trees],
+        "guardians": [{"id": g.id, "side": g.side, "kind": g.kind, "x": _xy(g.x), "y": _xy(g.y),
+                       "r": _xy(g.radius), "hp": g.hp, "max_hp": g.max_hp, "awake": g.awake,
+                       "facing": g.facing, "flash": _t(g.flash), "windup": _t(g.windup), "swing": _t(g.swing),
+                       "swing_dir": _t(g.swing_dir), "swing_hit": g.swing_hit}
+                      for g in m.guardians if g.alive],
         "rings": [{"id": r.id, "owner": r.owner.id, "x": _xy(r.x), "y": _xy(r.y), "life": _t(r.life)}
                   for r in m.rings],
         "clones": [{"id": c.id, "owner": c.owner.id, "x": _xy(c.x), "y": _xy(c.y), "aim": _t(c.aim),
