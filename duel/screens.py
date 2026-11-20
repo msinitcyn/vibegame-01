@@ -336,7 +336,9 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
     def draw(self):
         s = self.screen
         s.blit(self.field_background(), (0, TOP))
-        viewer = getattr(self, "me", None) if (self.net or getattr(self, "warmup", False)) and not self.watching else None
+        # кто смотрит: None — за одним компьютером (видно всё), "" — зритель по сети
+        viewer = (getattr(self, "me", None) or "") if (self.net or getattr(self, "warmup", False)) and not self.watching \
+            else ("" if self.watching else None)
         draw_field(s, self.snap, self.tiny, viewer)
         if self.mouse_captured and self.mouse_pos:     # перекрестие мыши
             x, y = int(self.mouse_pos[0]), int(self.mouse_pos[1])

@@ -117,9 +117,11 @@ def draw_bear(surf, pos, r, facing, white, color):
 
 
 def draw_player(surf, p, heroes, viewer=None):
-    """Маг. Невидимый — едва заметное мерцание (себе по сети — полупрозрачный)."""
+    """Маг. Невидимый: за одним компьютером (viewer None) и себе по сети — полупрозрачный,
+    сопернику и зрителям по сети — не виден совсем."""
     if "invisible" in p.get("effects", {}):
-        draw_invisible(surf, p, heroes, mine=viewer == p["id"])
+        if viewer is None or viewer == p["id"]:
+            draw_invisible(surf, p, heroes)
         return
     pos = _pos(p)
     pid = p["id"]
@@ -144,8 +146,8 @@ def draw_player(surf, p, heroes, viewer=None):
     draw_effects(surf, p)
 
 
-def draw_invisible(surf, p, heroes, mine=False):
-    """Невидимка: мерцающий призрак без метки прицела и подписей эффектов."""
+def draw_invisible(surf, p, heroes):
+    """Невидимка, каким его видит он сам: полупрозрачный, без метки прицела и подписей эффектов."""
     pos = _pos(p)
     r = p["r"]
     size = int(4 * r + 8)
@@ -153,11 +155,9 @@ def draw_invisible(surf, p, heroes, mine=False):
     aim = p.get("aim")
     facing = DIR[p["id"]] if aim is None else (1 if math.cos(aim) >= 0 else -1)
     draw_unit(ghost, HERO_SPRITE[heroes[p["id"]]], (size // 2, size // 2), r, facing)
-    shimmer = 0.5 + 0.5 * math.sin(pygame.time.get_ticks() / 90)
-    ghost.set_alpha(int(110 + 30 * shimmer) if mine else int(22 + 26 * shimmer))
+    ghost.set_alpha(110)
     surf.blit(ghost, ghost.get_rect(center=pos))
-    if mine:
-        pygame.draw.circle(surf, side_color(heroes, p["id"]), pos, int(r) + 4, 1)
+    pygame.draw.circle(surf, side_color(heroes, p["id"]), pos, int(r) + 4, 1)
 
 
 def draw_clone(surf, c, heroes):

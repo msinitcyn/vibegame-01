@@ -34,10 +34,23 @@ def test_guardians_stay_statues_for_invisible():
     assert b.hp == hp
 
 
-def test_draw_invisible(game):
-    game.match.blue.apply("invisible")
-    game.refresh_snap()
-    game.draw()
-    game.me = "blue"
-    game.draw()
-    game.me = None
+def test_draw_invisible():
+    """За одним компьютером и себе — полупрозрачный, сопернику и зрителю по сети — ничего."""
+    import pygame
+    from duel.render import draw_player
+    from duel.snapshot import snapshot
+    m = new_match()
+    m.blue.apply("invisible")
+    p = next(x for x in snapshot(m)["players"] if x["id"] == "blue")
+    heroes = {"blue": m.blue.hero, "red": m.red.hero}
+
+    def painted(viewer):
+        surf = pygame.Surface((1000, 720))
+        surf.fill((0, 0, 0))
+        draw_player(surf, p, heroes, viewer)
+        blank = pygame.Surface((1000, 720))
+        blank.fill((0, 0, 0))
+        return pygame.image.tobytes(surf, "RGB") != pygame.image.tobytes(blank, "RGB")
+
+    assert painted(None) and painted("blue")
+    assert not painted("red") and not painted("")
