@@ -11,9 +11,13 @@
         {"t": 0.8, "who": "blue", "item": "lasso"},          // применить артефакт
         {"t": [0.8, 3.8], "who": "red", "move": [1, 0]},     // идти (от и до)
         {"t": 0.5, "who": "blue", "aim_at": "red"},          // прицел на соперника (или [x, y])
-        {"t": 1.0, "who": "blue", "fire": true}              // выстрел (или "melee": true)
+        {"t": 1.0, "who": "blue", "fire": true},             // выстрел (или "melee": true)
+        {"t": [1, 3], "every": 0.5, "who": "blue", "fire": true}   // повторять с шагом every
       ]
     }
+
+В "setup" можно поставить и мобов: "mobs": [{"x": 500, "y": 200, "hp": 6, "ranged": false}] —
+они спокойные: их можно бить, но они не нападают (чтобы сценка была чистой); "angry": true — злятся, как в игре.
 
 Мобов, волн, пачек патронов и стражей арены в сценке нет — только то, что в сценарии.
 """
@@ -22,6 +26,7 @@ import math
 
 from .commands import Command
 from .config import ASSETS, MAX_HP
+from .entities import Mob
 from .match import STEP, Match
 
 DEMO_DIR = ASSETS / "demos"
@@ -71,6 +76,12 @@ class Demo:
             p.x = float(spot.get("x", p.x))
             p.y = float(spot.get("y", p.y))
             p.hp = p.max_hp = int(spot.get("hp", MAX_HP * 10))       # в сценке никто не погибает
+        self.calm = []
+        for mob in (d.get("setup") or {}).get("mobs") or []:
+            unit = Mob(float(mob["x"]), float(mob["y"]), int(mob.get("hp", 3)), ranged=bool(mob.get("ranged", False)))
+            m.mobs.append(unit)
+            if not mob.get("angry"):
+                self.calm.append(unit)
         self.match = m
         self.t = 0.0
         self.acc = 0.0
@@ -89,7 +100,9 @@ class Demo:
             if "move" in a and start <= self.t <= end:
                 dx, dy = a["move"]
                 out[who].move = (int(dx), int(dy))
-            if self.t < start or i in self.done:
+            every = float(a.get("every", 0) or 0)
+            n = int((self.t - start) / every) if every and self.t >= start else 0
+            if self.t < start or (every and self.t > end) or (i, n) in self.done:
                 continue
             once = False
             if "aim_at" in a:
@@ -108,7 +121,7 @@ class Demo:
                 out[who].melee = True
                 once = True
             if once:
-                self.done.add(i)
+                self.done.add((i, n))
         return out
 
     def update(self, dt):
@@ -120,3 +133,5 @@ class Demo:
         while self.acc >= STEP:
             self.acc -= STEP
             self.match.step(STEP, self.commands())
+            for unit in self.calm:                    # спокойные мобы не идут и не бьют
+                unit.target = None

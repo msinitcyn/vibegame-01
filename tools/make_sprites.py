@@ -7,8 +7,8 @@
     .venv/bin/python tools/make_sprites.py --force    # перерисовать всё заново (правки пропадут!)
     .venv/bin/python tools/make_sprites.py --preview out.png   # крупный предпросмотр текущих PNG
 
-mage.png — маг с автоматом 32×32 в ледяных цветах, смотрит вправо; красного игра
-получает заменой цветов (MAGE_RED_PALETTE в duel/config.py).
+Маг теперь — текстовый assets/sprites/mage.sprite с кадрами (ходьба, выстрел, удар), здесь его нет;
+draw_mage остался как первоначальный рисунок (его превратили в mage.sprite).
 bg_ice.png / bg_lava.png — фоны земель магов 125×160, игра увеличивает их в 4 раза.
 bg_mob.png — полоса мобов посередине 50×160, тоже ×4.
 mob.png / mob_ranged.png — обычный и дальнобойный моб 16×16, смотрят вправо.
@@ -342,7 +342,6 @@ def main(argv):
     OUT.mkdir(parents=True, exist_ok=True)
     force = "--force" in argv
     files = {
-        "mage.png": lambda: draw_mage("blue"),
         "bg_ice.png": lambda: draw_background("ice"),
         "bg_lava.png": lambda: draw_background("lava"),
         "bg_grass.png": lambda: draw_background("grass"),

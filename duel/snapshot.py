@@ -37,6 +37,7 @@ def snapshot(match):
             "hp": p.hp, "ammo": p.ammo, "effects": _effects(p), "shield_hits": p.shield_hits,
             "items": list(p.items), "queue": list(p.queue),
             "hit_flash": _t(p.hit_flash), "melee_flash": _t(p.melee_flash),
+            "moving": bool(p.moving or p.moving_x), "shot": _t(p.shot_flash),
         } for p in m.players],
         "bullets": [{"id": b.id, "x": _xy(b.x), "y": _xy(b.y), "owner": b.owner.id}
                     for b in m.bullets],

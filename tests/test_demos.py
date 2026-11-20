@@ -2,7 +2,7 @@
 import json
 
 from duel import demos
-from duel.config import HERO_ONLY_ITEMS
+from duel.config import HELP_BASICS, HERO_ONLY_ITEMS
 from duel.items import ITEMS
 
 
@@ -11,7 +11,7 @@ def test_all_scenarios_valid():
     assert files
     for f in files:
         data = json.loads(f.read_text(encoding="utf-8"))
-        assert f.stem in ITEMS, f.name                     # имя файла — артефакт
+        assert f.stem in ITEMS or f.stem in HELP_BASICS, f.name     # имя файла — артефакт или умение мага
         assert len(data["view"]) == 4 and data["length"] > 0
         d = demos.Demo(data)
         for _ in range(int(data["length"] * 60) + 5):     # круг целиком и начало следующего

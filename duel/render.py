@@ -8,6 +8,8 @@ import math
 import pygame
 
 from .config import (
+    SHOT_FLASH,
+    WALK_FPS,
     AMMO_COLOR,
     BEAM_WIDTH,
     ICE_R,
@@ -117,7 +119,20 @@ def draw_bear(surf, pos, r, facing, white, color):
         pygame.draw.circle(surf, ink, (int(x + facing * (ex + 0.2) * r), int(y - r * 0.28)), max(2, int(r * 0.08)))
 
 
-def draw_player(surf, p, heroes, viewer=None):
+def mage_frame(p, time):
+    """Кадр мага по снимку: удар мечом, отдача выстрела, шаг или стоит. Возвращает (кадр, подъём в пикселях спрайта)."""
+    if p.get("melee_flash", 0) > 0:
+        k = 1 - p["melee_flash"] / MELEE_FLASH
+        return ("melee_wind" if k < 0.3 else "melee_hit"), 0
+    if p.get("shot", 0) > 0:
+        return "shoot", 0
+    if p.get("moving"):
+        n = int(time * WALK_FPS) % 4 + 1
+        return f"walk{n}", (1 if n in (1, 3) else 0)
+    return "idle", 0
+
+
+def draw_player(surf, p, heroes, viewer=None, time=0.0):
     """Маг. Невидимый: за одним компьютером (viewer None) и себе по сети — полупрозрачный,
     сопернику и зрителям по сети — не виден совсем."""
     if "invisible" in p.get("effects", {}):
@@ -129,21 +144,28 @@ def draw_player(surf, p, heroes, viewer=None):
     aim = p.get("aim")
     facing = DIR[pid] if aim is None else (1 if math.cos(aim) >= 0 else -1)   # лицом к прицелу
     bear = "bear" in p.get("effects", {})
-    if bear:
-        draw_bear(surf, pos, p["r"], facing, p["hit_flash"] > 0, side_color(heroes, pid))
-    else:
-        draw_unit(surf, HERO_SPRITE[heroes[pid]], pos, p["r"], facing, white=p["hit_flash"] > 0)
-    if aim is not None:
-        draw_aim(surf, p, side_color(heroes, pid))
-    if p["melee_flash"] > 0:
+    if p["melee_flash"] > 0:                       # докуда достаёт удар — бледное кольцо
         k = min(1.0, p["melee_flash"] / MELEE_FLASH)
         radius = int(p["r"])
         reach = MELEE_RANGE + (BEAR_REACH if bear else 0)
         ring = pygame.Surface((2 * (radius + reach) + 4,) * 2, pygame.SRCALPHA)
         c = ring.get_width() // 2
-        pygame.draw.circle(ring, (*side_color(heroes, pid), int(220 * k)), (c, c), radius + reach, 4)
-        pygame.draw.circle(ring, (255, 255, 255, int(160 * k)), (c, c), radius + reach - 6, 2)
+        a = float(vfx.params("sword").get("reach_ring_alpha", 90)) if not bear else 220
+        pygame.draw.circle(ring, (*side_color(heroes, pid), int(a * k)), (c, c), radius + reach, 3)
         surf.blit(ring, ring.get_rect(center=pos))
+    if bear:
+        draw_bear(surf, pos, p["r"], facing, p["hit_flash"] > 0, side_color(heroes, pid))
+    else:
+        frame, bob = mage_frame(p, time)
+        px = p["r"] * 2 * 1.15 / 32
+        draw_unit(surf, HERO_SPRITE[heroes[pid]], (pos[0], pos[1] - bob * px), p["r"], facing,
+                  white=p["hit_flash"] > 0, frame=frame)
+        if p["melee_flash"] > 0:                   # меч
+            vfx.draw_sword(surf, pos, p["r"], facing, aim, 1 - p["melee_flash"] / MELEE_FLASH)
+        elif p.get("shot", 0) > 0:                 # вспышка из ствола
+            vfx.draw_muzzle(surf, pos, p["r"], facing, p["shot"] / SHOT_FLASH)
+    if aim is not None:
+        draw_aim(surf, p, side_color(heroes, pid))
     draw_effects(surf, p)
 
 
@@ -428,6 +450,6 @@ def draw_field(surf, snap, font, viewer=None):
     for b in snap.get("beams", []):
         draw_beam(surf, b, heroes)
     for p in snap["players"]:
-        draw_player(surf, p, heroes, viewer)
+        draw_player(surf, p, heroes, viewer, snap.get("time", 0))
     for m in snap["mobs"]:                # замахи и удары мобов — поверх магов, чтобы были видны
         draw_mob_attack(surf, m, font)

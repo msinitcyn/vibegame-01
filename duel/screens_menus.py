@@ -4,6 +4,8 @@
 import pygame
 
 from .config import (
+    SHOT_COOLDOWN,
+    HELP_BASICS,
     TOP,
     AMMO_COLOR,
     AMMO_PACK,
@@ -274,8 +276,8 @@ class MenuScreensMixin:
         else:
             self.draw_help_list()
             self.draw_help_focus(kind)
-            note = tr("help.levels") if tab == "common" else tr("help.hero_note")
-            for j, line in enumerate(self.wrap(note, WIDTH - 80, self.small)):
+            note = tr("help.levels") if tab == "common" else "" if tab == "mages" else tr("help.hero_note")
+            for j, line in enumerate(self.wrap(note, WIDTH - 80, self.small) if note else []):
                 img = self.small.render(line, True, GREY)
                 s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 58 + j * 19)))
         hint = self.small.render(tr("help.keys"), True, GREY)
@@ -283,7 +285,30 @@ class MenuScreensMixin:
         self.back_button()
         pygame.display.flip()
 
+    # что в справке: артефакт или умение мага (вкладка «Маги»)
+    BASIC_FRAME = {"walk": "walk1", "shoot": "shoot", "melee": "melee_hit"}
+
+    def help_name(self, kind):
+        return tr(f"basic.{kind}") if kind in HELP_BASICS else item_name(kind)
+
+    def help_text(self, kind):
+        if kind in HELP_BASICS:
+            return tr(f"basic.{kind}_help", cd=f"{SHOT_COOLDOWN:g}".replace(".", tr("decimal")),
+                      melee=MELEE_DAMAGE, melee_cd=f"{MELEE_COOLDOWN:g}".replace(".", tr("decimal")))
+        return item_help(kind)
+
+    def help_color(self, kind):
+        return (225, 230, 245) if kind in HELP_BASICS else ITEMS[kind][1]
+
+    def help_icon(self, kind, center, r):
+        if kind in HELP_BASICS:                    # умение — сам маг в нужном кадре
+            draw_unit(self.screen, HERO_SPRITE["frost"], center, r * 0.9, 1, frame=self.BASIC_FRAME[kind])
+        else:
+            draw_icon(self.screen, kind, center, r)
+
     def help_tab_label(self, tab):
+        if tab == "mages":
+            return tr("help.tab_mages"), (225, 230, 245)
         if tab == "common":
             return tr("help.tab_common"), (200, 205, 220)
         if tab == "rules":
@@ -315,11 +340,11 @@ class MenuScreensMixin:
             sel = i == min(self.help_index, len(self.help_kinds()) - 1)
             pygame.draw.rect(s, (40, 46, 66) if sel else (22, 25, 34), rect, border_radius=8)
             if sel:
-                pygame.draw.rect(s, ITEMS[kind][1], rect, 2, border_radius=8)
-            draw_icon(s, kind, (rect.x + 22, rect.centery), 15)
-            name = item_name(kind)
+                pygame.draw.rect(s, self.help_color(kind), rect, 2, border_radius=8)
+            self.help_icon(kind, (rect.x + 22, rect.centery), 15)
+            name = self.help_name(kind)
             font = self.font if self.font.size(name)[0] <= w - 52 else self.small
-            img = font.render(name, True, ITEMS[kind][1] if sel else (200, 205, 220))
+            img = font.render(name, True, self.help_color(kind) if sel else (200, 205, 220))
             s.blit(img, img.get_rect(midleft=(rect.x + 46, rect.centery)))
             self.hit(rect, lambda i=i: (setattr(self, "help_index", i), setattr(self, "help_full", True)),
                      lambda i=i: setattr(self, "help_index", i))
@@ -343,15 +368,15 @@ class MenuScreensMixin:
         else:
             pygame.draw.rect(s, (22, 25, 34), box, border_radius=8)
             pygame.draw.rect(s, (60, 64, 80), box, 1, border_radius=8)
-            draw_icon(s, kind, (box.centerx, box.centery - 14), 54)
+            self.help_icon(kind, (box.centerx, box.centery - 14), 54)
             img = self.small.render(tr("help.no_demo"), True, GREY)
             s.blit(img, img.get_rect(center=(box.centerx, box.bottom - 26)))
         self.hit(box, lambda: setattr(self, "help_full", True))
         y = box.bottom + 14
-        img = self.font.render(item_name(kind), True, ITEMS[kind][1])
+        img = self.font.render(self.help_name(kind), True, self.help_color(kind))
         s.blit(img, (box.x, y))
         y += 32
-        for line in self.wrap(item_help(kind), box.w, self.small):
+        for line in self.wrap(self.help_text(kind), box.w, self.small):
             s.blit(self.small.render(line, True, WHITE), (box.x, y))
             y += 20
         self.button((box.right - 90, y + 26), tr("help.more"), lambda: setattr(self, "help_full", True), w=180)
@@ -359,7 +384,7 @@ class MenuScreensMixin:
     def draw_help_full(self, kind):
         """«Подробнее»: сценка во весь экран (или крупный значок), под ней название и описание."""
         s = self.screen
-        lines = self.wrap(item_help(kind), WIDTH - 80, self.small)
+        lines = self.wrap(self.help_text(kind), WIDTH - 80, self.small)
         bottom = HEIGHT - 60 - 32 - 20 * len(lines)
         w = min(WIDTH - 40, (bottom - 20) * 2)
         box = pygame.Rect(0, 0, w, w // 2)
@@ -367,9 +392,9 @@ class MenuScreensMixin:
         if has_demo(kind):
             self.draw_demo(kind, box)
         else:
-            draw_icon(s, kind, box.center, 120)
+            self.help_icon(kind, box.center, 120)
         y = box.bottom + 14
-        img = self.font.render(item_name(kind), True, ITEMS[kind][1])
+        img = self.font.render(self.help_name(kind), True, self.help_color(kind))
         s.blit(img, img.get_rect(midtop=(WIDTH // 2, y)))
         y += 32
         for line in lines:

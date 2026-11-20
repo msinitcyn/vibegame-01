@@ -5,3 +5,4 @@ __pycache__/
 build/
 dist/
 duel/_version.py
+sprite_png/

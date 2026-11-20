@@ -7,7 +7,7 @@ import pygame
 
 from . import keys
 from . import settings
-from .config import DEFAULT_HERO, HELP_PAGES, HELP_TABS, HERO_ONLY_ITEMS, HEROES, MAX_HP, TEST_HP
+from .config import DEFAULT_HERO, HELP_BASICS, HELP_PAGES, HELP_TABS, HERO_ONLY_ITEMS, HEROES, MAX_HP, TEST_HP
 from .items import HELP_SECTIONS
 from .i18n import get_lang, LANGS, set_lang, t
 from .update import restart as restart_updated
@@ -146,6 +146,8 @@ class MenusMixin:
         tab = HELP_TABS[self.help_page if page is None else page]
         if tab == "rules":
             return []
+        if tab == "mages":
+            return list(HELP_BASICS)
         if tab == "common":
             return [k for sec, ks in HELP_SECTIONS if sec != "hero" for k in ks]
         return [k for k in dict(HELP_SECTIONS)["hero"] if HERO_ONLY_ITEMS[k] == tab]

@@ -1,0 +1,18 @@
+{
+  "_about": "Удар мечом (ближний удар мага). Углы — градусы от направления прицела (минус — вверх-назад), длины — в радиусах мага.",
+  "start_angle": -115,
+  "end_angle": 75,
+  "windup": 0.3,
+  "windup_back": 20,
+  "blade_length": 1.9,
+  "blade_width": 4,
+  "blade_color": "#e8eef8",
+  "edge_color": "#8c92a0",
+  "outline_color": "#181420",
+  "guard_color": "#ffd646",
+  "grip_color": "#784c28",
+  "trail_color": "#ffffff",
+  "trail_alpha": 150,
+  "trail_span": 80,
+  "reach_ring_alpha": 90
+}

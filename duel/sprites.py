@@ -1,12 +1,14 @@
-"""Пиксельные спрайты из assets/sprites/: загрузка, перекраска команды, масштаб без размытия.
+"""Пиксельные спрайты из assets/sprites/: загрузка, кадры, перекраска команды, масштаб без размытия.
 
-Источник — PNG-файлы, их можно править в любом пиксель-редакторе.
-Маг нарисован один раз (mage.png, ледяные цвета — герой Холод); остальные герои
+Источник — текстовый <имя>.sprite (палитра букв и кадры, см. duel/spritefile.py), а если его нет — <имя>.png
+(один кадр idle). Маг нарисован один раз (mage.sprite, ледяные цвета — герой Холод); остальные герои
 получаются заменой цветов (MAGE_RED/GREEN/BLACK/YELLOW_PALETTE в config.py). В игре F5 перечитывает картинки с диска.
 """
 from functools import lru_cache
 
 import pygame
+
+from . import spritefile
 
 from .config import MAGE_BLACK_PALETTE, MAGE_GREEN_PALETTE, MAGE_RED_PALETTE, MAGE_YELLOW_PALETTE, SPRITES_DIR
 
@@ -44,15 +46,32 @@ def recolor(img, palette):
 
 
 @lru_cache(maxsize=None)
-def _base(name):
+def _frames(file):
+    """Кадры файла: {имя: Surface}. Текстовый .sprite важнее .png."""
+    text = SPRITES_DIR / f"{file}.sprite"
+    if text.exists():
+        return spritefile.load(text)
+    return {"idle": pygame.image.load(SPRITES_DIR / f"{file}.png")}
+
+
+def frame_names(name):
+    file, _ = VARIANTS.get(name, (name, {}))
+    return list(_frames(file))
+
+
+@lru_cache(maxsize=None)
+def _base(name, frame="idle"):
+    """Кадр спрайта в цветах героя; нет такого кадра — idle (или первый)."""
     file, palette = VARIANTS.get(name, (name, {}))
-    return recolor(pygame.image.load(SPRITES_DIR / f"{file}.png"), palette)
+    frames = _frames(file)
+    img = frames.get(frame) or frames.get("idle") or next(iter(frames.values()))
+    return recolor(img, palette)
 
 
-@lru_cache(maxsize=256)
-def sprite(name, size, flip=False, white=False, alpha=255):
+@lru_cache(maxsize=512)
+def sprite(name, size, flip=False, white=False, alpha=255, frame="idle"):
     """Спрайт нужного размера: по пикселям (без размытия), зеркально, белый силуэт, прозрачность."""
-    img = pygame.transform.scale(_base(name), (size, size))
+    img = pygame.transform.scale(_base(name, frame), (size, size))
     if flip:
         img = pygame.transform.flip(img, True, False)
     if white:
@@ -78,12 +97,12 @@ def recolored_image(name, palette, size):
 
 def reload_all():
     """Сбросить кэш — следующая отрисовка перечитает PNG с диска."""
-    for f in (_base, sprite, sprite_image, recolored_image):
+    for f in (_frames, _base, sprite, sprite_image, recolored_image):
         f.cache_clear()
 
 
-def draw_unit(surf, name, center, radius, facing, white=False, alpha=255):
-    """Рисует спрайт по центру круга попадания radius; facing=-1 — смотрит влево."""
+def draw_unit(surf, name, center, radius, facing, white=False, alpha=255, frame="idle"):
+    """Рисует спрайт (кадр frame) по центру круга попадания radius; facing=-1 — смотрит влево."""
     size = max(8, round(radius * 2 * SPRITE_TO_HITBOX))
-    img = sprite(name, size, facing < 0, white, alpha)
+    img = sprite(name, size, facing < 0, white, alpha, frame)
     surf.blit(img, img.get_rect(center=center))

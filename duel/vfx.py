@@ -155,3 +155,94 @@ def draw_lasso(surf, victim, puller, color, time):
         k = 1 - since / catch_flash
         pygame.draw.circle(layer, (*core, int(200 * k)), (int(lx), int(ly)), int(rr + 4 + 16 * (1 - k)), 3)
     surf.blit(layer, box)
+
+
+# ------------------------------------------------------------------ меч и выстрел мага
+
+def hand(pos, r, facing):
+    """Передняя рука мага (где держит оружие) — в пикселях поля."""
+    return pos[0] + facing * r * 0.45, pos[1] + r * 0.2
+
+
+def draw_sword(surf, pos, r, facing, aim, k):
+    """Удар мечом: замах назад-вверх, быстрый взмах вниз-вперёд со светлым следом.
+    k — доля взмаха 0..1; aim — прицел (радианы) или None."""
+    P = params("sword")
+    base = aim if aim is not None else (0.0 if facing > 0 else math.pi)
+    start, end = math.radians(float(P.get("start_angle", -115))), math.radians(float(P.get("end_angle", 75)))
+    wind = float(P.get("windup", 0.3))
+    back = math.radians(float(P.get("windup_back", 20)))
+    if k < wind:                                     # замах: чуть дальше назад
+        rel = start - back * (k / wind)
+    else:
+        e = _ease_out((k - wind) / max(1e-6, 1 - wind))
+        rel = start - back + (end - start + back) * e
+    ang = base + facing * rel
+    hx, hy = hand(pos, r, facing)
+    length = r * float(P.get("blade_length", 1.9))
+    dx, dy = math.cos(ang), math.sin(ang)
+    px, py = -dy, dx
+    w = float(P.get("blade_width", 4)) / 2
+
+    pad = int(length + r + 10)
+    layer = pygame.Surface((2 * pad, 2 * pad), pygame.SRCALPHA)
+    ox, oy = hx - pad, hy - pad
+
+    def L(x, y):
+        return x - ox, y - oy
+
+    if k >= wind:                                    # след взмаха — веером позади клинка
+        span = math.radians(float(P.get("trail_span", 80)))
+        swept = facing * rel - facing * (start - back)
+        tail = max(0.0, min(span, abs(swept)))
+        steps = 10
+        trail = rgb(P.get("trail_color"), (255, 255, 255))
+        alpha = int(float(P.get("trail_alpha", 150)) * (1 - k) * 1.4)
+        for i in range(steps):
+            a0 = ang - facing * tail * i / steps
+            a1 = ang - facing * tail * (i + 1) / steps
+            fade = 1 - i / steps
+            pts = [L(hx + math.cos(a0) * length * 0.35, hy + math.sin(a0) * length * 0.35),
+                   L(hx + math.cos(a0) * length, hy + math.sin(a0) * length),
+                   L(hx + math.cos(a1) * length, hy + math.sin(a1) * length),
+                   L(hx + math.cos(a1) * length * 0.35, hy + math.sin(a1) * length * 0.35)]
+            pygame.draw.polygon(layer, (*trail, max(0, min(255, int(alpha * fade)))), pts)
+
+    outline = rgb(P.get("outline_color"), (24, 20, 32))
+    blade = rgb(P.get("blade_color"), (232, 238, 248))
+    edge = rgb(P.get("edge_color"), (140, 146, 160))
+    gx, gy = hx + dx * r * 0.3, hy + dy * r * 0.3        # гарда
+    tip = (hx + dx * length, hy + dy * length)
+    shape = [L(gx + px * w, gy + py * w), L(tip[0] - dx * w * 2 + px * w, tip[1] - dy * w * 2 + py * w),
+             L(*tip), L(tip[0] - dx * w * 2 - px * w, tip[1] - dy * w * 2 - py * w), L(gx - px * w, gy - py * w)]
+    pygame.draw.polygon(layer, (*outline, 255), shape, 0)
+    inner = [L(gx + px * (w - 1), gy + py * (w - 1)), L(tip[0] - dx * w * 2, tip[1] - dy * w * 2),
+             L(gx - px * (w - 1), gy - py * (w - 1))]
+    pygame.draw.polygon(layer, (*blade, 255), inner)
+    pygame.draw.line(layer, (*edge, 255), L(gx, gy), L(tip[0] - dx * w * 2, tip[1] - dy * w * 2), 1)
+    guard = rgb(P.get("guard_color"), (255, 214, 70))
+    pygame.draw.line(layer, (*outline, 255), L(gx + px * r * 0.4, gy + py * r * 0.4),
+                     L(gx - px * r * 0.4, gy - py * r * 0.4), 5)
+    pygame.draw.line(layer, (*guard, 255), L(gx + px * r * 0.35, gy + py * r * 0.35),
+                     L(gx - px * r * 0.35, gy - py * r * 0.35), 3)
+    grip = rgb(P.get("grip_color"), (120, 76, 40))
+    pygame.draw.line(layer, (*grip, 255), L(hx - dx * r * 0.1, hy - dy * r * 0.1), L(gx, gy), 3)
+    surf.blit(layer, (int(ox), int(oy)))
+
+
+def draw_muzzle(surf, pos, r, facing, k):
+    """Вспышка из ствола автомата (у кончика ствола на спрайте); k — 1 в момент выстрела, гаснет к 0."""
+    P = params("shot")
+    size = r * float(P.get("size", 0.9)) * (0.5 + 0.5 * k)
+    px = r * 2 * 1.15 / 32                           # пиксель спрайта
+    tx, ty = pos[0] + facing * 16 * px, pos[1] + 4 * px
+    rays = int(P.get("rays", 5))
+    outer = rgb(P.get("outer_color"), (255, 154, 48))
+    flash = rgb(P.get("flash_color"), (255, 242, 160))
+    core = rgb(P.get("core_color"), (255, 255, 255))
+    for i in range(rays):
+        a = (i - (rays - 1) / 2) * 0.45 + (0 if facing > 0 else math.pi)
+        ln = size * (1.0 if i == (rays - 1) // 2 else 0.6)
+        pygame.draw.line(surf, outer, (tx, ty), (tx + math.cos(a) * ln, ty + math.sin(a) * ln), 3)
+    pygame.draw.circle(surf, flash, (int(tx), int(ty)), max(2, int(size * 0.45)))
+    pygame.draw.circle(surf, core, (int(tx), int(ty)), max(1, int(size * 0.22)))

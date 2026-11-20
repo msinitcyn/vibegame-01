@@ -5,6 +5,7 @@
 import math
 
 from .config import (
+    SHOT_FLASH,
     GUARDIAN_HP,
     GUARDIAN_POST,
     GUARDIAN_RADIUS,
@@ -226,6 +227,7 @@ class Player(Unit):
         self.cooldown = 0.0
         self.melee_cd = 0.0           # перезарядка ближнего удара
         self.melee_flash = 0.0        # сколько ещё виден взмах
+        self.shot_flash = 0.0         # сколько ещё видны отдача и вспышка выстрела
         self.bear_saved = None        # «Медведь»: жизни мага до превращения
         self.ring_t = 0.0             # сколько стоит у огненной стены с последнего урона
         self.reset_effects()
@@ -267,6 +269,7 @@ class Player(Unit):
         self.hit_flash = max(0.0, self.hit_flash - dt)
         self.melee_cd = max(0.0, self.melee_cd - dt)
         self.melee_flash = max(0.0, self.melee_flash - dt)
+        self.shot_flash = max(0.0, self.shot_flash - dt)
 
         self.moving = self.moving_x = 0
         if not self.frozen:
@@ -304,6 +307,7 @@ class Player(Unit):
             return []
         self.ammo -= 1                # веер тоже тратит один патрон
         self.cooldown = SHOT_COOLDOWN * (RAPID_FACTOR if "rapid" in self.effects else 1)
+        self.shot_flash = SHOT_FLASH
         # пуля летит по прицелу; движение на направление не влияет
         return make_bullets(self, self.x, self.y, self.aim, self.radius,
                             self.shot_offsets(), "wavy" in self.effects)

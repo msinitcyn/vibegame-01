@@ -1,0 +1,8 @@
+{
+  "_about": "Выстрел мага: вспышка из ствола. Размер — в радиусах мага.",
+  "size": 0.9,
+  "rays": 5,
+  "core_color": "#ffffff",
+  "flash_color": "#fff2a0",
+  "outer_color": "#ff9a30"
+}

@@ -81,7 +81,8 @@ ITEM_LEVEL = {
 LEVEL_WEIGHT = {1: 1.0, 2: 0.7, 3: 0.4, 4: 0.2}      # относительная частота выпадения
 LEVEL_MIN_MOB_HP = {1: 0, 2: 0, 3: 5, 4: 6}         # из моба с меньшим запасом жизней — не выпадает
 # справка: страницы артефактов героев (герои по порядку) и всего страниц
-HELP_TABS = ("common", "fire", "frost", "nature", "dark", "light", "rules")   # вкладки справки
+HELP_TABS = ("mages", "common", "fire", "frost", "nature", "dark", "light", "rules")   # вкладки справки
+HELP_BASICS = ("walk", "shoot", "melee")    # вкладка «Маги»: что умеет любой маг (сценки — assets/demos/)
 HELP_PAGES = len(HELP_TABS)
 # артефакт -> герой: выпадает только ему (подобрать может любой)
 HERO_ONLY_ITEMS = {"beam": "light", "clearfoe": "light", "breaker": "light", "mobpeace": "light", "invisible": "light",
@@ -106,7 +107,7 @@ MUSIC_DIR = ASSETS / "music"
 SOUNDS_DIR = ASSETS / "sounds"
 UPDATE_REPO = "msinitcyn/vibegame-01"     # откуда брать новые версии (GitHub Releases)
 SPRITES_DIR = ASSETS / "sprites"
-# Маг нарисован один раз — assets/sprites/mage.png в ледяных (синих) цветах.
+# Маг нарисован один раз — assets/sprites/mage.sprite (текст: палитра и кадры) в ледяных (синих) цветах.
 # Красный получается заменой цветов команды: «цвет на рисунке» -> «цвет у красного».
 # Остальные цвета (лицо, борода, автомат, сапоги) у обоих одинаковые.
 MAGE_RED_PALETTE = {
@@ -232,7 +233,9 @@ MOB_SHOT_COLOR = (190, 255, 90)  # ядовито-зелёный — не спу
 MELEE_DAMAGE = 2
 MELEE_RANGE = 30                 # пикс от края мага до края моба
 MELEE_COOLDOWN = 0.6             # сек между ударами
-MELEE_FLASH = 0.15               # сколько виден взмах
+MELEE_FLASH = 0.25               # сколько виден взмах (анимация меча)
+SHOT_FLASH = 0.1                 # сколько видны отдача и вспышка выстрела
+WALK_FPS = 8                     # кадров шага в секунду
 
 WALL_OFFSET = 110                # расстояние от игрока до стены
 WALL_H = 180                     # высота стены
