@@ -1,0 +1,331 @@
+"""Экраны меню: главное меню, обновление, выбор героев, настройки, клавиши, справка.
+
+Подмешивается в ScreensMixin (duel/screens.py)."""
+import pygame
+
+from .config import (
+    AMMO_COLOR,
+    AMMO_PACK,
+    BAD_TEXT,
+    BG,
+    BLUE,
+    GREY,
+    HEIGHT,
+    HELP_HERO_PAGES,
+    HELP_PAGES,
+    HERO_COLOR,
+    HERO_ONLY_ITEMS,
+    HERO_SPRITE,
+    HEROES,
+    MELEE_COOLDOWN,
+    MELEE_DAMAGE,
+    MOB_EVERY,
+    MOB_MAX,
+    MOB_MAX_HP,
+    MOB_RANGE,
+    MOB_RANGED_EVERY,
+    QUEUE_SHOWN,
+    START_AMMO,
+    WEAPON_MAX,
+    WEAPON_TIME,
+    WHITE,
+    WIDTH,
+)
+from .i18n import get_lang, LANGS, t as tr
+from .icons import draw_icon
+from .items import HELP_SECTIONS, item_help, item_name, ITEMS, section_title
+from .sprites import draw_unit
+
+
+class MenuScreensMixin:
+    def draw_menu(self):
+        s = self.screen
+        s.fill(BG)
+        img = self.big.render(tr("title"), True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 100)))
+        for i in range(len(self.menu)):
+            sel = i == self.menu_index
+            rect = pygame.Rect(0, 0, 460, 40)
+            rect.center = (WIDTH // 2, 190 + i * 47)
+            pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=10)
+            pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
+            txt = self.font.render(f"{i + 1}.  {self.menu_label(i)}", True, WHITE if sel else GREY)
+            s.blit(txt, txt.get_rect(center=rect.center))
+            self.hit(rect, lambda i=i: (setattr(self, "menu_index", i), self.menu_select()),
+                     lambda i=i: setattr(self, "menu_index", i))
+        self.button((70, HEIGHT - 30), tr("menu.quit"), lambda: pygame.event.post(pygame.event.Event(pygame.QUIT)),
+                    w=120)
+        if self.menu_message:
+            img = self.font.render(self.menu_message, True, BAD_TEXT)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 528)))
+        u = self.updater
+        if u.available and not u.can_install:       # из исходников: только сообщить
+            img = self.small.render(tr("update.source", v=u.latest), True, (120, 220, 140))
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 40)))
+        img = self.tiny_text.render(f"v{u.version}", True, GREY)
+        s.blit(img, img.get_rect(bottomright=(WIDTH - 8, HEIGHT - 6)))
+        hints = [(tr("menu.hint", n=len(self.menu)), GREY)]
+        n = len(self.pads.pads)
+        if n:
+            roles = [tr("pads.blue"), tr("pads.red")]
+            names = ",  ".join(f"{c.name} — {roles[i] if i < 2 else tr('pads.spare')}"
+                               for i, (_, c) in enumerate(self.pads.pads))
+            hints += [(tr("pads.list", list=names), WHITE), (tr("pads.hint"), GREY)]
+        else:
+            hints.append((tr("pads.none"), GREY))
+        for i, (text, color) in enumerate(hints):
+            img = self.small.render(text, True, color)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 560 + i * 25)))
+        pygame.display.flip()
+
+    def draw_update(self):
+        """Экран обновления: скачивание с долей, проверка, установка или ошибка."""
+        s = self.screen
+        s.fill(BG)
+        u = self.updater
+        img = self.big.render(tr("update.title", v=u.latest or ""), True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 160)))
+        state = u.state
+        text = tr("update." + state) if state != "error" else tr("update.err." + (u.error or "download"))
+        img = self.font.render(text, True, BAD_TEXT if state == "error" else WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 300)))
+        if state == "downloading":
+            bar = pygame.Rect(0, 0, 500, 22)
+            bar.center = (WIDTH // 2, 350)
+            pygame.draw.rect(s, (26, 29, 40), bar, border_radius=6)
+            fill = bar.copy()
+            fill.w = max(6, int(bar.w * u.progress))
+            pygame.draw.rect(s, BLUE, fill, border_radius=6)
+            pygame.draw.rect(s, GREY, bar, 2, border_radius=6)
+            pct = self.small.render(f"{int(u.progress * 100)} %", True, WHITE)
+            s.blit(pct, pct.get_rect(center=bar.center))
+        hint = {"error": "update.hint_error", "downloading": "update.hint_back"}.get(state)
+        if hint:
+            img = self.small.render(tr(hint), True, GREY)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 430)))
+        if state == "error":
+            self.button((WIDTH // 2 - 110, 490), tr("update.retry"), lambda: self.on_key(pygame.KSCAN_RETURN), w=200)
+            self.button((WIDTH // 2 + 110, 490), tr("update.menu"), lambda: self.on_key(pygame.KSCAN_ESCAPE), w=200)
+        elif state == "downloading":
+            self.button((WIDTH // 2, 490), tr("update.cancel"), lambda: self.on_key(pygame.KSCAN_ESCAPE), w=200)
+        img = self.small.render(tr("update.from", a=u.version, b=u.latest or ""), True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 220)))
+        pygame.display.flip()
+
+    def draw_pick(self):
+        """Выбор героев за одним компьютером: строка левого игрока сверху, правого — снизу."""
+        s = self.screen
+        s.fill(BG)
+        img = self.big.render(tr("pick.title"), True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 60)))
+        n, gap = len(HEROES), 16
+        w = min(210, (WIDTH - 40 - gap * (n - 1)) // n)        # карточки по числу героев
+        x0 = (WIDTH - n * w - (n - 1) * gap) // 2
+        for row, pid in enumerate(("blue", "red")):
+            me, other = self.pick[pid], self.pick["red" if pid == "blue" else "blue"]
+            top = 120 + row * 260
+            label = tr("pick.left" if pid == "blue" else "pick.right")
+            pad = self.pad_of(pid)
+            pad_name = self.pads.pads[pad][1].name[:24] if pad is not None else ""
+            label += "   " + (tr("pick.pad", n=pad + 1, name=pad_name) if pad is not None else
+                              tr("pick.mouse") if pid == "blue" else tr("pick.no_pad"))
+            img = self.small.render(label, True, GREY)
+            s.blit(img, (x0, top))
+            for i, hero in enumerate(HEROES):
+                card = pygame.Rect(x0 + i * (w + gap), top + 26, w, 190)
+                self.hit(card, lambda pid=pid, hero=hero: self.pick_mouse(pid, hero, True),
+                         lambda pid=pid, hero=hero: self.pick_mouse(pid, hero))
+                cur = me["hero"] == hero
+                taken = other["ok"] and other["hero"] == hero
+                pygame.draw.rect(s, (40, 46, 66) if cur else (26, 29, 40), card, border_radius=12)
+                pygame.draw.rect(s, HERO_COLOR[hero] if cur else (60, 64, 80), card,
+                                 4 if cur and me["ok"] else (2 if cur else 1), border_radius=12)
+                draw_unit(s, HERO_SPRITE[hero], (card.centerx, card.top + 72), 40, 1 if pid == "blue" else -1,
+                          alpha=90 if taken else 255)
+                img = self.font.render(tr("hero." + hero), True, HERO_COLOR[hero] if not taken else GREY)
+                s.blit(img, img.get_rect(center=(card.centerx, card.top + 140)))
+                note = tr("pick.chosen") if cur and me["ok"] else (tr("pick.taken") if taken else "")
+                if note:
+                    img = self.small.render(note, True, AMMO_COLOR if cur else GREY)
+                    s.blit(img, img.get_rect(center=(card.centerx, card.top + 170)))
+        if not self.pads.pads and not self.aim_by_move():    # прицел нужен правым стиком хотя бы одному
+            img = self.font.render(tr("pick.need_pad"), True, BAD_TEXT)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 72)))
+        img = self.small.render(tr("pick.hint"), True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 40)))
+        self.back_button()
+        pygame.display.flip()
+
+    def draw_settings(self):
+        s = self.screen
+        s.fill(BG)
+        img = self.big.render(tr("settings.title"), True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 92)))
+        row = self.settings_rows[self.settings_index]
+        name = self.settings.get("name", "")
+        if row == "name":
+            name += "_" if pygame.time.get_ticks() // 500 % 2 else " "
+        labels = {"lang": f"◀  {tr('settings.lang', lang=LANGS[get_lang()])}  ▶",
+                  "name": tr("settings.name", name=name) if name.strip() or row == "name"
+                  else tr("settings.name", name=tr("settings.name_empty")),
+                  "aim_mode": f"◀  {tr('settings.aim_mode', mode=tr('aim_mode.' + self.settings.get('aim_mode', 'move')))}  ▶",
+                  "aim_stick": f"◀  {tr('settings.aim_stick', n=self.settings.get('aim_stick', 6))}  ▶",
+                  "aim_mouse": f"◀  {tr('settings.aim_mouse', n=self.settings.get('aim_mouse', 5))}  ▶",
+                  "music": f"◀  {tr('settings.music', n=self.settings.get('music_volume', 5))}  ▶",
+                  "sfx": f"◀  {tr('settings.sfx', n=self.settings.get('sfx_volume', 5))}  ▶",
+                  "keys": tr("settings.keys"),
+                  "updates": f"◀  {tr('settings.updates', v=tr('yes' if self.settings.get('check_updates', True) else 'no'))}  ▶",
+                  "back": tr("settings.back")}
+        for i, line in enumerate(self.settings_rows):
+            sel = i == self.settings_index
+            rect = pygame.Rect(0, 0, 460, 40)
+            rect.center = (WIDTH // 2, 170 + i * 46)
+            pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=10)
+            pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
+            txt = self.font.render(labels[line], True, WHITE if sel else GREY)
+            s.blit(txt, txt.get_rect(center=rect.center))
+            self.hit(rect, lambda i=i, rect=rect: self.settings_click(i, rect),
+                     lambda i=i: setattr(self, "settings_index", i))
+        self.back_button()
+        img = self.small.render(tr("settings.name_hint" if row == "name" else "settings.hint"), True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 170 + len(self.settings_rows) * 46)))
+        pygame.display.flip()
+
+    def settings_click(self, i, rect):
+        """Щелчок по строке настроек: строки со стрелками — левая половина «◀», правая «▶»;
+        «Назад» — в меню; «Имя» — выбрать строку (дальше набирать с клавиатуры)."""
+        self.settings_index = i
+        row = self.settings_rows[i]
+        if row in ("back", "keys"):
+            self.on_key(pygame.KSCAN_RETURN)
+        elif row != "name":
+            left = self.ui_mouse is not None and self.ui_mouse[0] < rect.centerx
+            self.on_key(pygame.KSCAN_LEFT if left else pygame.KSCAN_RIGHT)
+
+    def draw_keys(self):
+        """Экран клавиш: левый и правый игрок, действия и их клавиши; «Сбросить по умолчанию»."""
+        from . import keys as K
+        s = self.screen
+        s.fill(BG)
+        img = self.big.render(tr("keys.title"), True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 50)))
+        current = K.current(self.settings.get("keys"))
+        col_w, row_h, top = 400, 40, 120
+        for col, pid in enumerate(("blue", "red")):
+            x = WIDTH // 2 - col_w - 20 + col * (col_w + 40)
+            img = self.font.render(tr("keys.left" if pid == "blue" else "keys.right"), True, (200, 205, 220))
+            s.blit(img, (x, top - 36))
+            for row, action in enumerate(K.ACTIONS):
+                rect = pygame.Rect(x, top + row * (row_h + 6), col_w, row_h)
+                sel = (col, row) == (self.keys_col, self.keys_row)
+                waiting = self.keys_wait == (pid, action)
+                self.hit(rect, lambda col=col, row=row: self.keys_pick(col, row),
+                         lambda col=col, row=row: (setattr(self, "keys_col", col), setattr(self, "keys_row", row)))
+                on = sel or self.hovered(rect)
+                pygame.draw.rect(s, (40, 46, 66) if on else (26, 29, 40), rect, border_radius=8)
+                pygame.draw.rect(s, AMMO_COLOR if waiting else (BLUE if on else (60, 64, 80)), rect,
+                                 2, border_radius=8)
+                name = "keys." + action + ("_" if action in ("left", "right") else "")   # «влево» ≠ «левый игрок»
+                img = self.small.render(tr(name), True, WHITE if on else (200, 205, 220))
+                s.blit(img, img.get_rect(midleft=(rect.left + 12, rect.centery)))
+                key = tr("keys.press") if waiting else K.label(current[pid][action])
+                img = self.font.render(key, True, AMMO_COLOR if waiting else WHITE)
+                s.blit(img, img.get_rect(midright=(rect.right - 12, rect.centery)))
+        reset_y = top + len(K.ACTIONS) * (row_h + 6) + 30
+        self.button((WIDTH // 2, reset_y), tr("keys.reset"), lambda: self.keys_pick(self.keys_col, len(K.ACTIONS)),
+                    w=320, sel=self.keys_row >= len(K.ACTIONS))
+        if self.keys_msg:
+            img = self.small.render(self.keys_msg, True, AMMO_COLOR)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, reset_y + 40)))
+        img = self.small.render(tr("keys.hint_wait" if self.keys_wait else "keys.hint"), True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 24)))
+        self.back_button()
+        pygame.display.flip()
+
+    def draw_help(self):
+        """Справка: общие артефакты, артефакты героев (две страницы), правила."""
+        s = self.screen
+        s.fill(BG)
+        # щелчок по левой половине — назад по страницам, по правой — вперёд
+        self.hit((0, 0, WIDTH // 2, HEIGHT), lambda: self.on_key(pygame.KSCAN_LEFT))
+        self.hit((WIDTH // 2, 0, WIDTH - WIDTH // 2, HEIGHT), lambda: self.on_key(pygame.KSCAN_RIGHT))
+        page = self.help_page
+        heroes = page - 1 if 1 <= page <= len(HELP_HERO_PAGES) else None
+        title = (tr("help.title") if page == 0 else tr("sec.hero") if heroes is not None else tr("help.rules"))
+        img = self.font.render(title, True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 24)))
+        if page == 0:
+            self.draw_help_items()
+        elif heroes is not None:
+            self.draw_help_heroes(HELP_HERO_PAGES[heroes])
+        else:
+            self.draw_help_rules()
+        hint = self.small.render(f"{tr('help.pages', page=page + 1, pages=HELP_PAGES)}    "
+                                 f"{tr('help.back')}", True, GREY)
+        s.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 16)))
+        self.back_button()
+        pygame.display.flip()
+
+    def draw_help_items(self):
+        s = self.screen
+        row_h, col_w = 46, 470
+        sections = dict(HELP_SECTIONS)
+        cols = {0: ["defense", "weapon"], 1: ["debuff"]}     # колонки примерно поровну
+        for col, ids in cols.items():
+            x0 = 20 + col * (col_w + 20)
+            y = 50
+            for section in ids:
+                h = self.font.render(section_title(section), True, (200, 205, 220))
+                s.blit(h, (x0, y))
+                pygame.draw.line(s, GREY, (x0, y + 24), (x0 + col_w, y + 24), 1)
+                y += 32
+                for kind in sections[section]:
+                    draw_icon(s, kind, (x0 + 20, y + 20), 18)
+                    name = self.font.render(item_name(kind), True, ITEMS[kind][1])
+                    s.blit(name, (x0 + 48, y))
+                    for j, line in enumerate(self.wrap(item_help(kind), col_w - 50)):
+                        s.blit(self.tiny_text.render(line, True, WHITE), (x0 + 48, y + 21 + j * 14))
+                    y += row_h
+                y += 6
+        for j, line in enumerate(self.wrap(tr("help.levels"), WIDTH - 80, self.small)):
+            img = self.small.render(line, True, GREY)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 70 + j * 19)))
+
+    def draw_help_heroes(self, heroes):
+        """Артефакты героев: слева маг героя, справа его артефакты (значок, название, описание)."""
+        s = self.screen
+        y = 56
+        kinds = dict(HELP_SECTIONS)["hero"]
+        for hero in heroes:
+            mine = [k for k in kinds if HERO_ONLY_ITEMS[k] == hero]
+            top = y
+            for kind in mine:
+                draw_icon(s, kind, (150, y + 26), 22)
+                name = self.font.render(item_name(kind), True, ITEMS[kind][1])
+                s.blit(name, (186, y))
+                lines = self.wrap(item_help(kind), WIDTH - 220, self.small)
+                for j, line in enumerate(lines):
+                    s.blit(self.small.render(line, True, WHITE), (186, y + 28 + j * 19))
+                y += 34 + 19 * len(lines) + 8
+            pygame.draw.line(s, HERO_COLOR[hero], (24, top), (24, y - 10), 3)
+            draw_unit(s, HERO_SPRITE[hero], (70, (top + y) // 2 - 10), 28, 1)
+            label = self.small.render(tr("hero." + hero), True, HERO_COLOR[hero])
+            s.blit(label, label.get_rect(center=(70, (top + y) // 2 + 30)))
+            y += 6
+        note = self.small.render(tr("help.hero_note"), True, GREY)
+        s.blit(note, note.get_rect(center=(WIDTH // 2, HEIGHT - 44)))
+
+    def draw_help_rules(self):
+        s = self.screen
+        numbers = dict(queue=QUEUE_SHOWN, weapon=f"{WEAPON_TIME:.0f}", wmax=WEAPON_MAX,
+                       ammo=START_AMMO, pack=AMMO_PACK, every=f"{MOB_EVERY:.0f}",
+                       mmax=MOB_MAX, mhp=MOB_MAX_HP, ranged=MOB_RANGED_EVERY, range=MOB_RANGE,
+                       melee=MELEE_DAMAGE, melee_cd=f"{MELEE_COOLDOWN:g}".replace(".", tr("decimal")))
+        x0, y, width = 80, 70, WIDTH - 160
+        for i in range(1, 10):
+            lines = self.wrap(tr(f"note.{i}", **numbers), width, self.small)
+            for j, line in enumerate(lines):
+                prefix = "•  " if j == 0 else "    "
+                s.blit(self.small.render(prefix + line, True, WHITE), (x0, y))
+                y += 22
+            y += 14

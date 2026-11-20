@@ -1,0 +1,266 @@
+"""Меню без сети: главное меню, настройки, клавиши, обновление, выбор героев за одним компьютером.
+
+Подмешивается в Game (duel/game.py); состояние — поля Game."""
+import os
+
+import pygame
+
+from . import keys
+from . import settings
+from .config import DEFAULT_HERO, HEROES, MAX_HP, TEST_HP
+from .i18n import get_lang, LANGS, set_lang, t
+from .update import restart as restart_updated
+from .client_common import Controls, PLAYER_IDS
+
+
+class MenusMixin:
+    def start_update_check(self):
+        """Спросить GitHub о новой версии (в фоне), если не выключено в настройках и не в тестах."""
+        if self.settings.get("check_updates", True) and not os.environ.get("DUEL_NO_UPDATE_CHECK"):
+            self.updater.check()
+
+    def refresh_menu(self):
+        """Пункт «Обновить» появляется, когда нашлась новая версия и её можно поставить."""
+        can = self.updater.available and self.updater.can_install
+        if can and "update" not in self.menu:
+            self.menu.append("update")
+        elif not can and "update" in self.menu and self.state != "update":
+            self.menu.remove("update")
+            self.menu_index = min(self.menu_index, len(self.menu) - 1)
+
+    def update_frame(self):
+        """Экран обновления: скачали и проверили — ставим. True — игре пора выйти."""
+        u = self.updater
+        if u.state != "ready":
+            return False
+        u.state = "installing"
+        self.draw_update()
+        target = u.install()
+        if target is False:
+            return False                  # ошибка — видна на экране, Esc — в меню
+        pygame.quit()
+        if target is not None:            # Linux: файл заменён — запускаемся заново
+            restart_updated(target)
+        return True                       # Windows: установщик запущен — выходим
+
+    def update_key(self, sc):
+        if sc in (pygame.KSCAN_ESCAPE, pygame.KSCAN_BACKSPACE) and self.updater.state not in (
+                "verifying", "installing", "ready"):
+            self.state = "menu"
+            if self.updater.state == "error":
+                self.updater.state = "available"
+        elif sc in (pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER, pygame.KSCAN_SPACE) and \
+                self.updater.state == "error":
+            self.updater.start()          # ещё раз
+
+    def menu_key(self, sc):
+        up = (pygame.KSCAN_W, pygame.KSCAN_UP)
+        down = (pygame.KSCAN_S, pygame.KSCAN_DOWN)
+        ok = (pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER, pygame.KSCAN_SPACE)
+        digits = (pygame.KSCAN_1, pygame.KSCAN_2, pygame.KSCAN_3, pygame.KSCAN_4, pygame.KSCAN_5,
+                  pygame.KSCAN_6, pygame.KSCAN_7)
+        if sc in up:
+            self.menu_index = (self.menu_index - 1) % len(self.menu)
+        elif sc in down:
+            self.menu_index = (self.menu_index + 1) % len(self.menu)
+        elif sc in digits and digits.index(sc) < len(self.menu):
+            self.menu_index = digits.index(sc)
+            self.menu_select()
+        elif sc in ok:
+            self.menu_select()
+
+    def menu_label(self, i):
+        return {"play": t("menu.two"), "net": t("menu.net"),
+                "test": t("menu.test", hp=TEST_HP), "help": t("menu.help"),
+                "settings": t("menu.settings"),
+                "update": t("menu.update", v=self.updater.latest or "")}[self.menu[i]]
+
+    def menu_select(self):
+        action = self.menu[self.menu_index]
+        self.menu_message = None
+        if action == "help":
+            self.state = "help"
+            self.help_page = 0
+        elif action == "settings":
+            self.state = "settings"
+            self.settings_index = 0
+        elif action == "test":
+            self.open_pick(TEST_HP)
+        elif action == "net":
+            self.open_join()
+        elif action == "update":
+            self.state = "update"
+            self.updater.start()
+        else:
+            self.open_pick(MAX_HP)
+
+    def settings_key(self, sc):
+        """Экран настроек: W/S — строка, A/D или Enter — изменить, Esc — назад.
+        На строке «Имя» буквы набирают имя (on_text), строки листаются только стрелками."""
+        K = pygame
+        row = self.settings_rows[self.settings_index]
+        if row == "name":
+            if sc == K.KSCAN_ESCAPE:
+                self.state = "menu"
+            elif sc == K.KSCAN_BACKSPACE:
+                self.set_name(self.settings["name"][:-1])
+            elif sc == K.KSCAN_UP:
+                self.settings_index -= 1
+            elif sc in (K.KSCAN_DOWN, K.KSCAN_RETURN, K.KSCAN_KP_ENTER):
+                self.settings_index += 1
+            return
+        if sc in (K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE):
+            self.state = "menu"
+        elif sc in (K.KSCAN_W, K.KSCAN_UP):
+            self.settings_index = (self.settings_index - 1) % len(self.settings_rows)
+        elif sc in (K.KSCAN_S, K.KSCAN_DOWN):
+            self.settings_index = (self.settings_index + 1) % len(self.settings_rows)
+        elif row == "back" and sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
+            self.state = "menu"
+        elif row == "aim_mode":
+            if sc in (K.KSCAN_A, K.KSCAN_LEFT, K.KSCAN_D, K.KSCAN_RIGHT, K.KSCAN_RETURN, K.KSCAN_KP_ENTER,
+                      K.KSCAN_SPACE):
+                modes = settings.AIM_MODES
+                self.settings["aim_mode"] = modes[(modes.index(self.settings.get("aim_mode", "move")) + 1)
+                                                  % len(modes)]
+                settings.save(self.settings)
+        elif row in ("aim_stick", "aim_mouse"):
+            step = {K.KSCAN_A: -1, K.KSCAN_LEFT: -1, K.KSCAN_D: 1, K.KSCAN_RIGHT: 1}.get(sc)
+            if step:
+                lo, hi = settings.AIM_LEVELS
+                self.settings[row] = max(lo, min(hi, self.settings.get(row, settings.DEFAULTS[row]) + step))
+                settings.save(self.settings)
+        elif row in ("music", "sfx"):
+            step = {K.KSCAN_A: -1, K.KSCAN_LEFT: -1, K.KSCAN_D: 1, K.KSCAN_RIGHT: 1}.get(sc)
+            if step:
+                key = row + "_volume"
+                lo, hi = settings.VOLUME_LEVELS
+                self.settings[key] = max(lo, min(hi, self.settings.get(key, 5) + step))
+                settings.save(self.settings)
+                self.audio.set_volumes(self.settings.get("music_volume", 5), self.settings.get("sfx_volume", 5))
+                if row == "sfx":
+                    self.audio.melee()              # пробный звук
+        elif row == "keys":
+            if sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE, K.KSCAN_D, K.KSCAN_RIGHT):
+                self.open_keys()
+        elif row == "updates":
+            if sc in (K.KSCAN_A, K.KSCAN_LEFT, K.KSCAN_D, K.KSCAN_RIGHT, K.KSCAN_RETURN, K.KSCAN_KP_ENTER,
+                      K.KSCAN_SPACE):
+                self.settings["check_updates"] = not self.settings.get("check_updates", True)
+                settings.save(self.settings)
+                if self.settings["check_updates"]:
+                    self.start_update_check()
+        elif row == "lang":
+            step = {K.KSCAN_A: -1, K.KSCAN_LEFT: -1, K.KSCAN_D: 1, K.KSCAN_RIGHT: 1,
+                    K.KSCAN_RETURN: 1, K.KSCAN_KP_ENTER: 1, K.KSCAN_SPACE: 1}.get(sc)
+            if step:
+                codes = list(LANGS)
+                self.set_language(codes[(codes.index(get_lang()) + step) % len(codes)])
+
+    def set_language(self, code):
+        """Сменить язык сразу и запомнить его между запусками."""
+        set_lang(code)
+        self.settings["lang"] = get_lang()
+        settings.save(self.settings)
+        pygame.display.set_caption(t("title"))
+
+    def set_name(self, name):
+        self.settings["name"] = name
+        settings.save(self.settings)
+
+    def apply_keys(self):
+        """Управление и подписи ячеек — по назначенным клавишам (настройки), остальное — по умолчанию."""
+        custom = self.settings.get("keys") or {}
+        self.controls = keys.build(custom, Controls)
+        self.key_names = {pid: [keys.label(sc) for sc in self.controls[pid].items] for pid in PLAYER_IDS}
+
+    def open_keys(self):
+        self.keys_col, self.keys_row, self.keys_wait, self.keys_msg = 0, 0, None, None
+        self.state = "keys"
+
+    def keys_key(self, sc):
+        """Экран клавиш: ↑/↓ — действие, ←/→ — игрок, Enter — назначить (дальше — нажать клавишу),
+        строка «Сбросить» — вернуть всё; Esc — к настройкам (при ожидании клавиши — отмена)."""
+        K = pygame
+        if self.keys_wait:
+            if sc == K.KSCAN_ESCAPE:
+                self.keys_wait = None
+            elif sc in keys.RESERVED:
+                self.keys_msg = t("keys.reserved", name=keys.label(sc))
+            else:
+                pid, action = self.keys_wait
+                self.settings["keys"] = keys.assign(self.settings.get("keys"), pid, action, sc)
+                settings.save(self.settings)
+                self.apply_keys()
+                self.keys_wait, self.keys_msg = None, None
+            return
+        if sc in (K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE):
+            self.state = "settings"
+        elif sc in (K.KSCAN_UP, K.KSCAN_W):
+            self.keys_row = max(0, self.keys_row - 1)
+        elif sc in (K.KSCAN_DOWN, K.KSCAN_S):
+            self.keys_row = min(len(keys.ACTIONS), self.keys_row + 1)
+        elif sc in (K.KSCAN_LEFT, K.KSCAN_A, K.KSCAN_RIGHT, K.KSCAN_D):
+            self.keys_col = 0 if sc in (K.KSCAN_LEFT, K.KSCAN_A) else 1
+        elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
+            self.keys_pick(self.keys_col, self.keys_row)
+
+    def keys_pick(self, col, row):
+        """Выбрать действие (ждём клавишу) или «Сбросить по умолчанию» (последняя строка)."""
+        self.keys_col, self.keys_row = col, row
+        if row >= len(keys.ACTIONS):
+            self.settings["keys"] = {}
+            settings.save(self.settings)
+            self.apply_keys()
+            self.keys_msg = t("keys.reset_done")
+            return
+        self.keys_wait = (PLAYER_IDS[col], keys.ACTIONS[row])
+        self.keys_msg = None
+
+    def open_pick(self, hp):
+        """Экран выбора героев перед партией за одним компьютером; последний выбор запоминается."""
+        last = getattr(self, "heroes", None) or DEFAULT_HERO
+        self.pick_hp = hp
+        self.pick = {pid: {"hero": last[pid], "ok": False} for pid in PLAYER_IDS}
+        self.state = "pick"
+
+    def pick_move(self, pid, step):
+        p = self.pick[pid]
+        if not p["ok"]:
+            p["hero"] = HEROES[(HEROES.index(p["hero"]) + step) % len(HEROES)]
+
+    def pick_confirm(self, pid, ok):
+        """Подтвердить (или снять) выбор; героя, подтверждённого соперником, взять нельзя.
+        Без геймпада играть нельзя: одному из двоих нужен правый стик для прицела."""
+        if ok and not self.pads.pads and not self.aim_by_move():
+            return
+        other = self.pick["red" if pid == "blue" else "blue"]
+        if ok and other["ok"] and other["hero"] == self.pick[pid]["hero"]:
+            return
+        self.pick[pid]["ok"] = ok
+        if all(p["ok"] for p in self.pick.values()):
+            self.start(self.pick_hp, {pid: p["hero"] for pid, p in self.pick.items()})
+
+    def pick_key(self, sc):
+        """Левый: A/D и Пробел, правый: ←/→ и Enter (повтор — снять выбор); Esc — меню."""
+        K = pygame
+        if sc == K.KSCAN_ESCAPE:
+            self.state = "menu"
+        elif sc in (K.KSCAN_A, K.KSCAN_D):
+            self.pick_move("blue", -1 if sc == K.KSCAN_A else 1)
+        elif sc in (K.KSCAN_LEFT, K.KSCAN_RIGHT):
+            self.pick_move("red", -1 if sc == K.KSCAN_LEFT else 1)
+        elif sc == K.KSCAN_SPACE:
+            self.pick_confirm("blue", not self.pick["blue"]["ok"])
+        elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER):
+            self.pick_confirm("red", not self.pick["red"]["ok"])
+
+    def pick_mouse(self, pid, hero, click=False):
+        """Выбор героев: наведение — этот герой; щелчок по выбранному — подтвердить (ещё раз — снять)."""
+        p = self.pick[pid]
+        if not p["ok"] and p["hero"] != hero:
+            p["hero"] = hero
+            if not click:
+                return
+        if click:
+            self.pick_confirm(pid, not p["ok"])
