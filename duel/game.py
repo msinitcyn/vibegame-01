@@ -631,8 +631,9 @@ class Game(ScreensMixin):
         self.join_touched = False
         self.close_finder()
         if self.discovery_port:
+            known = [a.rsplit(":", 1)[0] for a in self.settings.get("recent_servers") or [] if isinstance(a, str)]
             try:
-                self.finder = Finder(port=self.discovery_port)
+                self.finder = Finder(port=self.discovery_port, known=known)
             except OSError:
                 self.finder = None    # без сети поиска — остаётся ручной ввод
 
@@ -696,9 +697,18 @@ class Game(ScreensMixin):
         self.join_error = None
         if remember:
             self.settings["last_address"] = address
-            settings.save(self.settings)
+        self.remember_server(address)
+        settings.save(self.settings)
         self.close_finder()
         self.show_rooms(conn, address, hello.get("server") or address, hello.get("id"))
+
+    def remember_server(self, address):
+        """Адрес в «последние серверы» (до 5, новый — первым): поиск спрашивает их напрямую.
+        Свой компьютер искать незачем."""
+        if address.startswith(("127.", "localhost")):
+            return
+        recent = [a for a in self.settings.get("recent_servers") or [] if a != address]
+        self.settings["recent_servers"] = [address] + recent[:4]
 
     def net_error(self, e):
         key = error_key(e)

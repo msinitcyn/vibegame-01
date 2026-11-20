@@ -386,3 +386,24 @@ def test_warmup_win_and_again(game):
     game.draw()
     game.on_key(pygame.KSCAN_R)                   # ещё разминка
     assert game.warmup and not game.snap["winner"] and game.match.red.hp > 0
+
+
+def test_recent_servers_remembered_and_asked_directly(game):
+    srv = start_in_thread(port=0, log=lambda text: None, discovery_port=None)
+    try:
+        game.settings["recent_servers"] = ["10.0.0.9:5555"]
+        open_net(game)
+        game.join_pick, game.join_touched = None, True
+        game.address = f"localhost:{srv.port}"           # свой компьютер в «последние» не попадает
+        game.on_key(pygame.KSCAN_RETURN)
+        assert game.state == "rooms" and settings.load()["recent_servers"] == ["10.0.0.9:5555"]
+        game.leave_net()
+    finally:
+        srv.stop()
+    for addr in ("10.92.212.171", "10.0.0.9:5555", "1.1.1.1", "2.2.2.2", "3.3.3.3", "4.4.4.4"):
+        game.remember_server(addr)
+    assert game.settings["recent_servers"] == ["4.4.4.4", "3.3.3.3", "2.2.2.2", "1.1.1.1", "10.0.0.9:5555"]
+    game.discovery_port = 59999
+    game.open_join()
+    assert game.finder.known == ["4.4.4.4", "3.3.3.3", "2.2.2.2", "1.1.1.1", "10.0.0.9"]
+    game.close_finder()

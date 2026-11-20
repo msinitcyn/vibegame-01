@@ -12,8 +12,8 @@ import time
 from .net import PROTO, local_addresses
 
 DISCOVERY_PORT = 5556
-ASK_EVERY = 1.0                   # секунд между вопросами
-FRESH = 3.0                       # игра, молчащая дольше, пропадает из списка
+ASK_EVERY = 0.5                   # секунд между вопросами
+FRESH = 10.0                      # сервер, молчащий дольше, пропадает из списка (Wi-Fi теряет пакеты)
 MAX_PACKET = 1024
 GAME = "duel"
 
@@ -51,6 +51,12 @@ def answer(port, name=None, rooms=0, players=0):
                    "name": name or socket.gethostname(), "rooms": rooms, "players": players})
 
 
+def is_ipv4(text):
+    """Адрес-число вида 10.92.212.171 (имена не берём — их разрешение может подвесить кадр)."""
+    parts = str(text).split(".")
+    return len(parts) == 4 and all(p.isdigit() and 0 <= int(p) <= 255 for p in parts)
+
+
 def broadcast_targets():
     """Куда спрашивать: вся своя сеть и, на всякий случай, широковещательные адреса /24 своих сетей."""
     out = ["255.255.255.255"]
@@ -78,9 +84,11 @@ def listen_socket(port=DISCOVERY_PORT):
 class Finder:
     """Клиент поиска на экране «Подключиться»: poll() раз в кадр, games() — свежий список."""
 
-    def __init__(self, port=DISCOVERY_PORT, targets=None):
+    def __init__(self, port=DISCOVERY_PORT, targets=None, known=()):
         self.port = port
         self.targets = targets
+        # знакомые серверы спрашиваем напрямую: такие пакеты доходят надёжнее широковещательных
+        self.known = [a for a in dict.fromkeys(known) if is_ipv4(a)]
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         self.sock.setblocking(False)
@@ -91,7 +99,7 @@ class Finder:
         now = time.monotonic() if now is None else now
         if now - self.last_ask >= ASK_EVERY:
             self.last_ask = now
-            for target in self.targets or broadcast_targets():
+            for target in (self.targets if self.targets is not None else broadcast_targets()) + self.known:
                 try:
                     self.sock.sendto(question(), (target, self.port))
                 except OSError:

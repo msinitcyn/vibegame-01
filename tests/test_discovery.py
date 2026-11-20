@@ -107,3 +107,25 @@ def test_server_works_when_discovery_port_busy():
         srv.close()
     finally:
         busy.close()
+
+
+def test_known_server_found_without_broadcast():
+    """Роутер теряет широковещательные пакеты — знакомый сервер спрашиваем напрямую."""
+    port = free_udp_port()
+    srv = Server(port=0, host="127.0.0.1", log=lambda text: None, discovery_port=port, name="Дом")
+    finder = Finder(port=port, targets=[], known=["127.0.0.1", "127.0.0.1", "pc.local"])
+    try:
+        assert finder.known == ["127.0.0.1"]           # повтор и имя (без DNS) отброшены
+        games = find(srv, finder, lambda g: g)
+        assert games[0]["name"] == "Дом"
+    finally:
+        finder.close()
+        srv.close()
+
+
+def test_server_stays_listed_through_lost_answers():
+    finder = Finder(port=free_udp_port(), targets=[])
+    finder.found[("10.92.212.171", 5555)] = ({"name": "x", "rooms": 0, "players": 0, "proto": PROTO, "port": 5555},
+                                             100.0)
+    assert len(finder.games(100.0 + 9.0)) == 1         # 9 секунд без ответа — ещё в списке
+    finder.close()
