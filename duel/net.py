@@ -1,8 +1,10 @@
 """Сеть: сообщения JSON по TCP, по одному в строке.
 
-Протокол 5 — сервер с лобби и комнатами:
-    сервер -> {"type": "hello", "proto": 5, "role": "lobby", "server": "Дом"}
-В лобби клиент -> сервер:
+Протокол 6 — сервер с лобби, комнатами и аккаунтами:
+    сервер -> {"type": "hello", "proto": 6, "role": "lobby", "server": "Дом", "id": "номер сервера"}
+В лобби клиент -> сервер (аккаунт — по желанию, без него играют гостем):
+    {"type": "register" | "login", "name", "password"}   {"type": "resume", "token"}   {"type": "logout"}
+    сервер -> {"type": "auth", "ok": true, "user": "Папа", "token": "…"} | {"type": "auth", "ok": false, "why"}
     {"type": "rooms"}                                    список комнат (сейчас и раз в секунду)
     {"type": "create", "name": "Маша"}                   новая комната, сам — синий
     {"type": "join", "room": 3 | null, "role": "player" | "spectator", "name", "token"}
@@ -24,7 +26,7 @@
 import json
 import socket
 
-PROTO = 5                          # 5: лобби с комнатами; 4: зрители; 3: лобби, готовность, возврат
+PROTO = 6                          # 6: аккаунты; 5: лобби с комнатами; 4: зрители; 3: лобби, готовность
 PORT = 5555
 MAX_OUT = 1024 * 1024              # клиент не читает (~7 с снимков) — отключаем, а не копим
 MAX_LINE = 64 * 1024               # сообщение длиннее — нарушение протокола (снимок ~6 КБ)
@@ -195,11 +197,15 @@ def enter_room(conn, timeout=5.0, name="", token=None, role="player", room=None,
     raise NetError("full", "мест нет" if msg.get("why") != "rooms" else "на сервере нет мест для комнат")
 
 
-def connect(address, timeout=5.0, name="", token=None, role="player", room=None, create=False):
+def connect(address, timeout=5.0, name="", token=None, role="player", room=None, create=False, session=None):
     """Подключиться к серверу и сразу в комнату (переподключение, тесты, --connect).
-    room=None — первая подходящая комната (или новая). Возвращает (Conn, seat)."""
+    room=None — первая подходящая комната (или новая); session — ключ входа в аккаунт.
+    Возвращает (Conn, seat)."""
     conn, _ = open_server(address, timeout)
     try:
+        if session:
+            conn.send({"type": "resume", "token": session})
+            wait_for(conn, ("auth",), timeout)
         return conn, enter_room(conn, timeout, name, token, role, room, create)
     except NetError:
         conn.close()

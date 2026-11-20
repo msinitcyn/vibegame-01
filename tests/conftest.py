@@ -53,6 +53,7 @@ def game(_game):
     random.seed(0)
     _game.leave_net()                       # прошлый тест мог оставить сетевую партию
     _game.stop_own_server()                 # и свой сервер
+    _game.server_db = ":memory:"            # аккаунты своего сервера — только на время теста
     _game.menu_message = None
     _game.net_port = 0                      # свой сервер — на любом свободном порту
     _game.discovery_port = None             # и не отвечает на поиск в настоящей сети

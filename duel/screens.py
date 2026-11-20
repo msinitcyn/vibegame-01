@@ -123,6 +123,44 @@ class ScreensMixin:
         s.blit(img, img.get_rect(center=(WIDTH // 2, 220)))
         pygame.display.flip()
 
+    def draw_account(self):
+        """Экран входа: имя, пароль звёздочками, «Войти», «Создать аккаунт», причина ошибки."""
+        s = self.screen
+        s.fill(BG)
+        img = self.big.render(tr("acc.title"), True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 80)))
+        img = self.small.render(tr("net.rooms_title", name=self.lobby_server or ""), True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 130)))
+        blink = "_" if pygame.time.get_ticks() // 500 % 2 else " "
+        fields = [(tr("acc.name"), self.acc_name), (tr("acc.password"), "•" * len(self.acc_password))]
+        for i, (label, value) in enumerate(fields):
+            sel = self.acc_row == i
+            img = self.small.render(label, True, GREY)
+            s.blit(img, img.get_rect(midleft=(WIDTH // 2 - 230, 190 + i * 90)))
+            box = pygame.Rect(0, 0, 460, 44)
+            box.center = (WIDTH // 2, 225 + i * 90)
+            pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), box, border_radius=10)
+            pygame.draw.rect(s, BLUE if sel else GREY, box, 2, border_radius=10)
+            img = self.font.render(value + (blink if sel else ""), True, WHITE if sel else GREY)
+            s.blit(img, img.get_rect(midleft=(box.left + 14, box.centery)))
+        for i, key in enumerate(("acc.login", "acc.register")):
+            sel = self.acc_row == 2 + i
+            rect = pygame.Rect(0, 0, 225, 44)
+            rect.center = (WIDTH // 2 - 118 + i * 236, 400)
+            pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=10)
+            pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
+            img = self.font.render(tr(key), True, WHITE if sel else GREY)
+            s.blit(img, img.get_rect(center=rect.center))
+        if self.acc_error:
+            img = self.font.render(self.acc_error, True, BAD_TEXT)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 470)))
+        for i, line in enumerate(self.wrap(tr("acc.note"), 640, self.small)):
+            img = self.small.render(line, True, GREY)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 530 + i * 22)))
+        img = self.small.render(tr("acc.hint"), True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 30)))
+        pygame.display.flip()
+
     JOIN_ROWS = 5                     # сколько серверов помещается на экране
 
     def own_addresses(self):
@@ -226,18 +264,24 @@ class ScreensMixin:
         img = self.big.render(tr("net.rooms_title", name=self.lobby_server or ""), True, WHITE)
         s.blit(img, img.get_rect(center=(WIDTH // 2, 70)))
         img = self.small.render(self.lobby_addr or "", True, GREY)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 115)))
-        self.list_row(160, self.rooms_index == 0, "+  " + tr("net.create_room"), w=760)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 112)))
+        if self.account_user:
+            self.list_row(150, self.rooms_index == 0, tr("acc.signed", name=self.account_user),
+                          tr("acc.logout"), GREY, w=760)
+        else:
+            self.list_row(150, self.rooms_index == 0, tr("acc.guest", name=self.player_name() or "?"),
+                          tr("acc.login_hint"), AMMO_COLOR, w=760)
+        self.list_row(200, self.rooms_index == 1, "+  " + tr("net.create_room"), w=760)
         if not self.rooms_list:
             img = self.small.render(tr("net.no_rooms"), True, GREY)
-            s.blit(img, img.get_rect(center=(WIDTH // 2, 230)))
-        rows = 8
-        first = max(0, min(self.rooms_index - rows, len(self.rooms_list) - rows))
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 262)))
+        rows = 7
+        first = max(0, min(self.rooms_index - 1 - rows, len(self.rooms_list) - rows))
         for i, r in enumerate(self.rooms_list[first:first + rows]):
-            k = first + i + 1
+            k = first + i + 2
             players, status, color = self.room_status(r)
             title = tr("net.room_name", name=r.get("name") or "?", id=r.get("id", "?"))
-            self.list_row(220 + i * 46, self.rooms_index == k, title, status, color, sub=players, w=760)
+            self.list_row(260 + i * 46, self.rooms_index == k, title, status, color, sub=players, w=760)
         if self.rooms_error:
             img = self.font.render(self.rooms_error, True, BAD_TEXT)
             s.blit(img, img.get_rect(center=(WIDTH // 2, 625)))

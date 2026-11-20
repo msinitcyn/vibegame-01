@@ -22,7 +22,7 @@ def frames(game, until, timeout=3.0, keep=()):
             if not c.closed:
                 c.send({"type": "cmd", "move": [0, 0]})
                 c.recv()
-        if game.state == "rooms" and game.lobby_conn:
+        if game.state in ("rooms", "account") and game.lobby_conn:
             game.rooms_frame()
         elif game.net and not game.net_frame(1 / 60):
             game.leave_net(i18n.t(game.net_end), voluntary=False)

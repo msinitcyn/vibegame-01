@@ -266,7 +266,8 @@ class Room:
                 if isinstance(aim, (int, float)) and not isinstance(aim, bool) and math.isfinite(aim):
                     c.aim = float(aim)
             elif kind == "name":
-                s.name = clean_name(msg.get("name"))
+                if not getattr(s.conn, "user", None):     # у вошедшего — всегда имя аккаунта
+                    s.name = clean_name(msg.get("name"))
             elif kind == "ready":
                 s.ready = bool(msg.get("ready", True))
             elif kind == "hero":

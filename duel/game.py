@@ -142,8 +142,12 @@ class Game(ScreensMixin):
         self.finder = None            # поиск серверов в сети, пока открыт экран серверов
         self.lobby_conn = None        # соединение с сервером на экране комнат
         self.lobby_addr = self.lobby_server = None
-        self.rooms_list, self.rooms_index, self.rooms_error = [], 0, None
+        self.rooms_list, self.rooms_index, self.rooms_error = [], 1, None
         self.net_room = None
+        self.lobby_id = None          # номер сервера (для запомненного входа)
+        self.server_db = None         # база аккаунтов своего сервера (None — рядом с настройками)
+        self.account_user = None      # вошли в аккаунт на этом сервере — имя, иначе гость
+        self.acc_name, self.acc_password, self.acc_row, self.acc_error = "", "", 0, None
         self.menu_index = 0
         self.settings_rows = ["lang", "name", "aim_mode", "aim_stick", "aim_mouse", "updates", "back"]
         self.updater = Updater()          # новая версия: проверка — в run(), по настройке
@@ -335,10 +339,12 @@ class Game(ScreensMixin):
                 self.join_autopick()
                 self.draw_join()
                 continue
-            if self.state == "rooms":
+            if self.state in ("rooms", "account"):
                 self.rooms_frame()
                 if self.state == "rooms":
                     self.draw_rooms()
+                elif self.state == "account":
+                    self.draw_account()
                 continue
             if self.net:
                 if not self.net_frame(dt):
@@ -428,7 +434,8 @@ class Game(ScreensMixin):
             try:
                 conn, seat = connect(self.net_addr, timeout=RECONNECT_EVERY, name=self.player_name(),
                                      token=self.net_token, role="spectator" if self.watching else "player",
-                                     room=self.net_room)
+                                     room=self.net_room,
+                                     session=self.saved_account().get("token") if self.account_user else None)
             except (ConnectionError, OSError) as e:
                 if error_key(e) in ("full", "proto", "noroom"):    # место или комнату уже отдали
                     self.net_end = "net.lost"
@@ -496,7 +503,7 @@ class Game(ScreensMixin):
         self.net_waiting = False
         self.restart()
         pygame.display.set_caption(t("title"))
-        self.show_rooms(conn, self.net_addr, self.lobby_server)
+        self.show_rooms(conn, self.net_addr, self.lobby_server, resume=False)
 
     def leave_net(self, message=None, voluntary=True):
         """Уйти с сервера (или связь кончилась): закрыть соединение — экран серверов с причиной.
@@ -522,7 +529,8 @@ class Game(ScreensMixin):
             from .server import start_in_thread
             try:
                 self.host_server = start_in_thread(self.net_port, discovery_port=self.discovery_port,
-                                                   name=self.player_name() or None)
+                                                   name=self.player_name() or None,
+                                                   db=self.server_db or str(settings.path().parent / "server.db"))
             except OSError:
                 self.join_error = t("net.port_busy", port=self.net_port)
                 return
@@ -615,7 +623,7 @@ class Game(ScreensMixin):
             self.settings["last_address"] = address
             settings.save(self.settings)
         self.close_finder()
-        self.show_rooms(conn, address, hello.get("server") or address)
+        self.show_rooms(conn, address, hello.get("server") or address, hello.get("id"))
 
     def net_error(self, e):
         key = error_key(e)
@@ -652,13 +660,99 @@ class Game(ScreensMixin):
 
     # ------------------------------------------------------------------ экран комнат
 
-    def show_rooms(self, conn, address, server_name):
-        """Экран комнат сервера: соединение в лобби сервера, список приходит раз в секунду."""
+    def show_rooms(self, conn, address, server_name, server_id=None, resume=True):
+        """Экран комнат сервера: соединение в лобби сервера, список приходит раз в секунду.
+        Если на этом сервере уже входили — входим сами по сохранённому ключу."""
         self.lobby_conn, self.lobby_addr, self.lobby_server = conn, address, server_name
         self.net_addr = address
-        self.rooms_list, self.rooms_index, self.rooms_error = [], 0, None
+        if server_id is not None:
+            self.lobby_id = server_id
+        self.rooms_list, self.rooms_index, self.rooms_error = [], 1, None
+        saved = self.saved_account()
+        if resume:
+            self.account_user = None
+            if saved.get("token"):
+                conn.send({"type": "resume", "token": saved["token"]})
         conn.send({"type": "rooms"})
         self.state = "rooms"
+
+    # ------------------------------------------------------------------ аккаунт
+
+    def saved_account(self):
+        """Сохранённый вход на текущем сервере: {"user", "token"} или {}."""
+        accounts = self.settings.get("accounts") or {}
+        return accounts.get(self.lobby_id or "", {}) if isinstance(accounts, dict) else {}
+
+    def save_account(self, user, token):
+        accounts = dict(self.settings.get("accounts") or {})
+        if user and token:
+            accounts[self.lobby_id] = {"user": user, "token": token}
+        else:
+            accounts.pop(self.lobby_id, None)
+        self.settings["accounts"] = accounts
+        settings.save(self.settings)
+
+    def on_auth(self, msg):
+        """Ответ сервера о входе: вошли — запомнить; не вышло — причина на экране входа."""
+        if msg.get("ok"):
+            self.account_user = msg.get("user")
+            self.save_account(self.account_user, msg.get("token"))
+            if self.state == "account":
+                self.state = "rooms"
+            return
+        if msg.get("why") == "expired":          # сохранённый вход больше не действует — гость
+            self.save_account(None, None)
+            self.account_user = None
+            return
+        self.acc_error = t("acc.err." + str(msg.get("why")))
+
+    def open_account(self):
+        """Строка аккаунта на экране комнат: гость — экран входа; вошедший — выйти."""
+        if self.account_user:
+            self.lobby_conn.send({"type": "logout", "token": self.saved_account().get("token")})
+            self.save_account(None, None)
+            self.account_user = None
+            return
+        self.acc_name = self.acc_name or self.player_name()
+        self.acc_password, self.acc_row, self.acc_error = "", 0 if not self.acc_name else 1, None
+        self.state = "account"
+
+    def account_key(self, sc):
+        """Экран входа: ↑/↓ — строка, буквы — в поле, Enter — дальше / войти / создать, Esc — к комнатам."""
+        K = pygame
+        if sc == K.KSCAN_ESCAPE:
+            self.state = "rooms"
+        elif sc == K.KSCAN_UP:
+            self.acc_row = max(0, self.acc_row - 1)
+        elif sc in (K.KSCAN_DOWN, K.KSCAN_TAB):
+            self.acc_row = min(3, self.acc_row + 1)
+        elif sc == K.KSCAN_BACKSPACE:
+            if self.acc_row == 0:
+                self.acc_name = self.acc_name[:-1]
+            elif self.acc_row == 1:
+                self.acc_password = self.acc_password[:-1]
+        elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER):
+            if self.acc_row == 0:
+                self.acc_row = 1
+            elif self.acc_row in (1, 2):
+                self.send_auth("login")
+            else:
+                self.send_auth("register")
+
+    def send_auth(self, kind):
+        self.acc_error = None
+        if len(self.acc_name.strip()) < 2:
+            self.acc_error = t("acc.err.name")
+            return
+        self.lobby_conn.send({"type": kind, "name": self.acc_name.strip(), "password": self.acc_password})
+
+    def account_text(self, text):
+        chars = "".join(ch for ch in text if ch.isprintable())
+        if self.acc_row == 0:
+            self.acc_name = (self.acc_name + chars)[:16]
+        elif self.acc_row == 1:
+            self.acc_password = (self.acc_password + chars)[:64]
+        self.acc_error = None
 
     def rooms_frame(self):
         """Кадр экрана комнат: свежий список; сервер закрылся или пропал — к серверам."""
@@ -667,13 +761,15 @@ class Game(ScreensMixin):
             if msg.get("type") == "rooms":
                 self.rooms_list = [r for r in msg.get("rooms") or [] if isinstance(r, dict)]
                 self.lobby_server = msg.get("server") or self.lobby_server
+            elif msg.get("type") == "auth":
+                self.on_auth(msg)
             elif msg.get("type") == "bye":
                 self.leave_net(t("net.host_left"), voluntary=False)
                 return
         if conn.closed:
             self.leave_net(t("net.lost"), voluntary=False)
             return
-        self.rooms_index = max(0, min(len(self.rooms_list), self.rooms_index))
+        self.rooms_index = max(0, min(len(self.rooms_list) + 1, self.rooms_index))
 
     def rooms_key(self, sc):
         """Экран комнат: ↑/↓ (W/S) — выбор, Enter — создать/войти (мест нет — смотреть),
@@ -684,9 +780,12 @@ class Game(ScreensMixin):
         elif sc in (K.KSCAN_UP, K.KSCAN_W):
             self.rooms_index = max(0, self.rooms_index - 1)
         elif sc in (K.KSCAN_DOWN, K.KSCAN_S):
-            self.rooms_index = min(len(self.rooms_list), self.rooms_index + 1)
+            self.rooms_index = min(len(self.rooms_list) + 1, self.rooms_index + 1)
         elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
-            self.rooms_enter(watch=False)
+            if self.rooms_index == 0:
+                self.open_account()
+            else:
+                self.rooms_enter(watch=False)
         elif sc == K.KSCAN_V:
             self.rooms_enter(watch=True)
 
@@ -694,12 +793,12 @@ class Game(ScreensMixin):
         """Создать комнату (первая строка) или войти в выбранную: игроком, а если мест нет — зрителем."""
         conn, name = self.lobby_conn, self.player_name()
         try:
-            if self.rooms_index == 0:
-                if watch:
+            if self.rooms_index <= 1:
+                if watch or self.rooms_index == 0:
                     return
                 seat = enter_room(conn, CONNECT_TIMEOUT, name, create=True)
             else:
-                room = self.rooms_list[self.rooms_index - 1].get("id")
+                room = self.rooms_list[self.rooms_index - 2].get("id")
                 try:
                     seat = enter_room(conn, CONNECT_TIMEOUT, name, role="spectator" if watch else "player",
                                       room=room)
@@ -803,6 +902,9 @@ class Game(ScreensMixin):
         if self.state == "rooms":
             self.rooms_key(sc)
             return
+        if self.state == "account":
+            self.account_key(sc)
+            return
         if sc == pygame.KSCAN_ESCAPE:
             if self.net:
                 self.leave_room()         # из комнаты — к списку комнат сервера
@@ -891,6 +993,10 @@ class Game(ScreensMixin):
                     B.CONTROLLER_BUTTON_X: B.KSCAN_ESCAPE, B.CONTROLLER_BUTTON_START: B.KSCAN_ESCAPE}
             if btn in keys:
                 self.on_key(keys[btn])
+            return
+        if self.state == "account":                # имя и пароль — с клавиатуры; □/○ — назад
+            if btn in (*back, B.CONTROLLER_BUTTON_START):
+                self.on_key(B.KSCAN_ESCAPE)
             return
         if self.state in ("join", "rooms"):
             if btn in (B.CONTROLLER_BUTTON_DPAD_UP, PAD_UP):
@@ -1140,7 +1246,11 @@ class Game(ScreensMixin):
                 self.set_language(codes[(codes.index(get_lang()) + step) % len(codes)])
 
     def on_text(self, text):
-        """Набранный текст (по раскладке, любой язык) — в имя игрока, если выбрана строка «Имя»."""
+        """Набранный текст (по раскладке, любой язык) — в имя игрока, если выбрана строка «Имя»;
+        на экране входа — в имя или пароль."""
+        if self.state == "account":
+            self.account_text(text)
+            return
         if self.state == "settings" and self.settings_rows[self.settings_index] == "name":
             chars = "".join(ch for ch in text if ch.isprintable())
             self.set_name((self.settings["name"] + chars)[:settings.NAME_MAX])
@@ -1185,7 +1295,7 @@ class Game(ScreensMixin):
         pygame.display.set_caption(t("title"))
 
     def update_music(self):
-        in_menu = self.state in ("menu", "help", "settings", "join", "rooms", "pick") or self.net_waiting
+        in_menu = self.state in ("menu", "help", "settings", "join", "rooms", "account", "pick") or self.net_waiting
         self.audio.music("menu" if in_menu else "game")
 
     def menu_key(self, sc):

@@ -20,6 +20,7 @@ import time
 import traceback
 
 from . import discovery
+from .accounts import AuthError, Accounts, default_path
 from .net import PORT, PROTO, Conn
 from .room import PIDS, Room, Seat, clean_name
 from .match import STEP
@@ -29,17 +30,22 @@ MAX_PENDING = 16                  # подключений, ещё ничего 
 MAX_CONNS = 32                    # соединений всего (в лобби, в комнатах, новички)
 MAX_ROOMS = 16                    # комнат на сервере
 LIST_EVERY = 60                   # список комнат тем, кто в лобби, — раз в секунду (тактов)
+MAX_FAILS = 10                    # неудачных входов с одного адреса …
+FAIL_WINDOW = 300.0               # … за столько секунд — дальше вход с адреса отклоняется
 
 
 class Server:
     def __init__(self, port=PORT, bot=False, host="0.0.0.0", proto=PROTO, log=print,
-                 discovery_port=discovery.DISCOVERY_PORT, clock=time.monotonic, name=None):
+                 discovery_port=discovery.DISCOVERY_PORT, clock=time.monotonic, name=None, db=":memory:"):
         self.log = log
         self.clock = clock            # часы (тесты подменяют, чтобы не ждать секунды)
         self.listener = socket.create_server((host, port))
         self.listener.setblocking(False)
         self.port = self.listener.getsockname()[1]
         self.name = clean_name(name) or socket.gethostname()[:16]
+        self.accounts = Accounts(db)  # аккаунты этого сервера (файл SQLite; тесты — в памяти)
+        self.id = self.accounts.server_id
+        self.fails = {}               # адрес -> [моменты неудачных входов]
         self.finder_sock = None       # отвечает на поиск игр в сети (None — поиск выключен)
         if discovery_port is not None:
             try:
@@ -112,7 +118,8 @@ class Server:
                 continue
             conn = Conn(sock)
             conn.addr = addr
-            conn.send({"type": "hello", "proto": self.proto, "role": "lobby", "server": self.name})
+            conn.user = None              # вошёл в аккаунт — имя аккаунта, иначе гость
+            conn.send({"type": "hello", "proto": self.proto, "role": "lobby", "server": self.name, "id": self.id})
             self.newcomers.append((conn, self.clock()))
 
     def read_lobby(self):
@@ -156,8 +163,12 @@ class Server:
             if kind == "rooms":
                 where = "lobby"
                 self.send_rooms([conn])
+            elif kind in ("register", "login", "resume", "logout"):
+                where = where or "lobby"
+                self.auth(conn, kind, msg)
             elif kind == "create":
-                room = self.create_room(msg.get("name"))
+                msg["name"] = self.player_name(conn, msg.get("name"))
+                room = self.create_room(msg["name"])
                 if room is None:
                     conn.send({"type": "full", "why": "rooms"})
                     where = "lobby"
@@ -165,6 +176,7 @@ class Server:
                 room.seat(conn, {"role": "player", "name": msg.get("name")}, now)
                 return "room"
             elif kind == "join":
+                msg["name"] = self.player_name(conn, msg.get("name"))
                 role = "spectator" if msg.get("role") == "spectator" else "player"
                 rid = msg.get("room")
                 token = msg.get("token")
@@ -187,6 +199,54 @@ class Server:
                 conn.close()
                 return None
         return where
+
+    # ------------------------------------------------------------------ аккаунты
+
+    def player_name(self, conn, name):
+        """Имя в комнате: у вошедшего — имя аккаунта; у гостя — своё, а если оно занято аккаунтом —
+        с пометкой «(гость)»."""
+        if conn.user:
+            return conn.user
+        name = clean_name(name)
+        if name and self.accounts.taken(name):
+            return (name[:8] + " (гость)").strip()
+        return name
+
+    def auth(self, conn, kind, msg):
+        """Вход, регистрация, вход по ключу, выход. Ответ — {"type": "auth", …}."""
+        if kind == "logout":
+            if isinstance(msg.get("token"), str):
+                self.accounts.logout(msg["token"])
+            conn.user = None
+            conn.send({"type": "auth", "ok": True, "user": None})
+            return
+        ip = conn.addr[0]
+        now = self.clock()
+        fails = [t for t in self.fails.get(ip, []) if now - t < FAIL_WINDOW]
+        self.fails[ip] = fails
+        if kind != "resume" and len(fails) >= MAX_FAILS:
+            conn.send({"type": "auth", "ok": False, "why": "wait"})
+            return
+        try:
+            if kind == "resume":
+                user = self.accounts.resume(msg.get("token"))
+                if user is None:
+                    raise AuthError("expired")
+                token = msg["token"]
+            else:
+                name, password = msg.get("name"), msg.get("password")
+                if not isinstance(name, str) or not isinstance(password, str) or len(password) > 200:
+                    raise AuthError("bad")
+                token = (self.accounts.register if kind == "register" else self.accounts.login)(name, password)
+                user = self.accounts.resume(token)
+        except AuthError as e:
+            if kind == "login" and e.why == "bad":
+                fails.append(now)
+            conn.send({"type": "auth", "ok": False, "why": e.why})
+            return
+        conn.user = user
+        conn.send({"type": "auth", "ok": True, "user": user, "token": token})
+        self.log(f"{ip}: вошёл «{user}»" + (" (новый аккаунт)" if kind == "register" else ""))
 
     def answer_finders(self):
         """Ответить всем, кто ищет серверы в сети: порт, имя, комнат и игроков."""
@@ -262,6 +322,7 @@ class Server:
         for conn in conns:
             conn.close()
         self.newcomers, self.lobby, self.rooms = [], [], {}
+        self.accounts.close()
         for s in (self.listener, self.finder_sock):
             try:
                 if s:
@@ -302,24 +363,65 @@ class Server:
                 conn.flush()
 
 
-def start_in_thread(port=PORT, bot=False, log=None, discovery_port=discovery.DISCOVERY_PORT, name=None):
+def start_in_thread(port=PORT, bot=False, log=None, discovery_port=discovery.DISCOVERY_PORT, name=None,
+                    db=":memory:"):
     """Сервер в фоновом потоке («Создать свой сервер»). Порт занят — OSError сразу.
     Остановить: server.stop(); server.thread.join()."""
     srv = Server(port, bot, log=log or (lambda text: print("[сервер]", text, flush=True)),
-                 discovery_port=discovery_port, name=name)
+                 discovery_port=discovery_port, name=name, db=db)
     srv.thread = threading.Thread(target=srv.run, name="duel-server", daemon=True)
     srv.thread.start()
     return srv
 
 
+def users_command(argv):
+    """python -m duel.server users [--db ПУТЬ] list | reset ИМЯ | ban ИМЯ | unban ИМЯ | delete ИМЯ"""
+    ap = argparse.ArgumentParser(prog="python -m duel.server users", description="Аккаунты сервера")
+    ap.add_argument("--db", default=str(default_path()), help="файл базы сервера")
+    ap.add_argument("action", choices=["list", "reset", "ban", "unban", "delete"])
+    ap.add_argument("name", nargs="?")
+    args = ap.parse_args(argv)
+    acc = Accounts(args.db)
+    try:
+        if args.action == "list":
+            rows = acc.users()
+            for name, created, banned, sessions in rows:
+                when = time.strftime("%Y-%m-%d", time.localtime(created))
+                print(f"{name:16}  с {when}  входов: {sessions}" + ("  ЗАБЛОКИРОВАН" if banned else ""))
+            print(f"всего: {len(rows)}")
+            return 0
+        if not args.name:
+            ap.error("нужно имя аккаунта")
+        if args.action == "reset":
+            print(f"новый пароль для «{args.name}»: {acc.reset_password(args.name)}")
+        elif args.action in ("ban", "unban"):
+            acc.set_banned(args.name, args.action == "ban")
+            print(f"«{args.name}» {'заблокирован' if args.action == 'ban' else 'разблокирован'}")
+        else:
+            acc.delete(args.name)
+            print(f"«{args.name}» удалён")
+        return 0
+    except AuthError:
+        print(f"нет аккаунта «{args.name}»")
+        return 1
+    finally:
+        acc.close()
+
+
 def main(argv=None):
+    import sys
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["users"]:
+        raise SystemExit(users_command(argv[1:]))
     ap = argparse.ArgumentParser(prog="python -m duel.server", description="Сервер Spellgunners")
     ap.add_argument("--port", type=int, default=PORT)
     ap.add_argument("--name", default=None, help="имя сервера в списке (иначе — имя компьютера)")
     ap.add_argument("--bot", action="store_true", help="в новых комнатах пустое место занимает бот")
+    ap.add_argument("--db", default=str(default_path()), help="файл базы аккаунтов")
     args = ap.parse_args(argv)
     try:
-        srv = Server(args.port, args.bot, log=lambda text: print(text, flush=True), name=args.name)
+        srv = Server(args.port, args.bot, log=lambda text: print(text, flush=True), name=args.name,
+                     db=args.db)
     except OSError as e:
         raise SystemExit(f"не удалось запустить сервер на порту {args.port}: {e.strerror or e}.\n"
                          f"Порт занят — уже работает другой сервер или игра со своим сервером; "
