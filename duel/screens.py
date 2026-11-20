@@ -312,10 +312,32 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
             x += 2 * r + 3 + txt.get_width() + gap
         return surf
 
+    def draw_pause(self):
+        """Пауза поверх поля: «Продолжить», «Настройки», «Выйти»."""
+        s = self.screen
+        shade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, 160))
+        s.blit(shade, (0, 0))
+        t = self.big.render(tr("pause.title"), True, WHITE)
+        s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 120)))
+        quit_label = ("pause.quit_warm" if getattr(self, "warmup", False) else
+                      "pause.quit_net" if self.net else "pause.quit")
+        labels = {"resume": tr("pause.resume"), "settings": tr("pause.settings"), "quit": tr(quit_label)}
+        for i, row in enumerate(self.PAUSE_ROWS):
+            self.button((WIDTH // 2, HEIGHT // 2 - 30 + i * 54), labels[row],
+                        lambda row=row: self.pause_select(row), w=300, sel=i == self.pause_index)
+        notes = [tr("pause.hint")]
+        if self.net and not getattr(self, "warmup", False):
+            notes.insert(0, tr("pause.net_note"))
+        for i, note in enumerate(notes):
+            img = self.small.render(note, True, GREY)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 150 + i * 22)))
+
     def draw(self):
         s = self.screen
         s.blit(self.field_background(), (0, TOP))
-        draw_field(s, self.snap, self.tiny)
+        viewer = getattr(self, "me", None) if (self.net or getattr(self, "warmup", False)) and not self.watching else None
+        draw_field(s, self.snap, self.tiny, viewer)
         if self.mouse_captured and self.mouse_pos:     # перекрестие мыши
             x, y = int(self.mouse_pos[0]), int(self.mouse_pos[1])
             for color, w in (((16, 12, 20), 4), ((255, 255, 255), 2)):
@@ -362,6 +384,8 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
                 # щелчок по экрану победы — «ещё раз» (через секунду, чтобы случайный щелчок не перезапустил)
                 self.hit((0, 0, WIDTH, HEIGHT), lambda: self.win_time and
                          pygame.time.get_ticks() - self.win_time > 1000 and self.on_key(pygame.KSCAN_R))
+        if self.paused and not self.snap["winner"]:
+            self.draw_pause()
         if self.net:
             self.draw_net_notice()
             self.draw_watch_banner()

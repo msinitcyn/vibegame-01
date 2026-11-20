@@ -116,6 +116,13 @@ def _draw_icon(surf, kind, center, r):
         pygame.draw.line(surf, color, P(-0.55, 0.55), P(0.55, -0.55), w + 1)
     elif kind == "cleanse":                       # галочка
         pygame.draw.lines(surf, color, False, [P(-0.45, 0.0), P(-0.12, 0.35), P(0.5, -0.4)], w + 1)
+    elif kind == "invisible":                     # контур мага пунктиром
+        for k in range(12):
+            a = k * math.pi / 6
+            if k % 2 == 0:
+                pygame.draw.circle(surf, color, P(0.42 * math.cos(a), -0.05 + 0.42 * math.sin(a)), max(1, r * 0.07))
+        pygame.draw.circle(surf, color, P(-0.14, -0.1), max(1, r * 0.08))
+        pygame.draw.circle(surf, color, P(0.14, -0.1), max(1, r * 0.08))
     elif kind == "mobpeace":                      # белый флаг
         pygame.draw.line(surf, color, P(-0.35, -0.55), P(-0.35, 0.6), w)
         pygame.draw.polygon(surf, color, [P(-0.3, -0.55), P(0.5, -0.4), P(0.3, -0.18), P(0.5, 0.05),

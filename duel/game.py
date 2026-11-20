@@ -77,6 +77,9 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin):
         self.pads = Gamepads()
         # пункты меню; подписи — menu_label()
         self.menu = ["play", "net", "test", "help", "settings"]
+        self.paused = False           # пауза в партии (Esc): за одним компьютером матч стоит
+        self.pause_index = 0
+        self.settings_back = "menu"   # куда вернуться из настроек: в меню или в партию (с паузы)
         self.menu_message = None      # ошибка или «связь потеряна» — показывается в меню
         self.address = self.settings.get("last_address", "localhost")
         self.join_error = None
@@ -198,6 +201,13 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin):
         self.handle_events(events)
         self.tick_popups(dt)
 
+    def background_play(self, dt):
+        """Пока открыты настройки с паузы: сетевую партию и лобби слушаем дальше (маг стоит)."""
+        if self.warmup and self.lobby_conn:
+            self.lobby_frame()
+        elif self.net and not self.net_frame(dt):
+            self.leave_net(t(self.net_end), voluntary=False)
+
     def run(self):
         """Главный цикл; на выходе — закрыть сетевую игру и остановить свой сервер."""
         try:
@@ -227,8 +237,6 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin):
                     self.held.discard(e.scancode)
                 if e.type == pygame.KEYDOWN:
                     self.held.add(e.scancode)
-                    if e.scancode == pygame.KSCAN_ESCAPE and self.state == "menu":
-                        return
                     self.on_key(e.scancode)
                 if e.type == pygame.MOUSEMOTION:
                     self.on_mouse_move(e.pos, e.rel)
@@ -254,6 +262,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin):
                 self.win_time = pygame.time.get_ticks()
             self.update_music()
             self.sync_mouse_capture()
+            if self.state not in ("play", "settings", "keys"):
+                self.paused = False           # вышли из партии — паузы нет
             self.hits = []                # экран при отрисовке заново отмечает, что можно нажать мышью
             self.refresh_menu()
             if self.state == "update":
@@ -267,11 +277,13 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin):
             if self.state == "help":
                 self.draw_help()
                 continue
-            if self.state == "keys":
-                self.draw_keys()
-                continue
-            if self.state == "settings":
-                self.draw_settings()
+            if self.state in ("keys", "settings"):
+                if self.settings_back == "play":
+                    self.background_play(dt)      # настройки с паузы: сеть и лобби живут дальше
+                if self.state == "keys":
+                    self.draw_keys()
+                elif self.state == "settings":
+                    self.draw_settings()
                 continue
             if self.state == "pick":
                 self.draw_pick()
@@ -295,7 +307,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin):
                 continue
             if self.warmup and self.lobby_conn:   # разминка из лобби: лобби слушаем, играем у себя
                 self.lobby_frame()
-                if self.state == "play" and self.warmup:
+                if self.state == "play" and self.warmup and not self.paused:
                     self.warm_frame(dt)
                     self.draw()
                 continue
@@ -308,6 +320,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin):
                 if self.net_waiting:
                     self.draw_lobby()
                     continue
+            elif self.paused:
+                pass                          # пауза — матч стоит
             elif self.count_down(dt):
                 pass                          # отсчёт перед партией — матч стоит
             elif not self.snap["winner"]:

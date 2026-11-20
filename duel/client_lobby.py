@@ -207,6 +207,7 @@ class LobbyMixin:
         self.entry_name = self.player_name()
         self.entry_row = 1 if self.entry_name else 0
         self.state = "entry"
+        self.lobby_conn.send({"type": "wait"})   # серверу: человек выбирает, как войти, — не закрывать
 
     def play_guest(self):
         """«Играть как гость»: имя — в настройки, выбор запоминается для этого сервера."""

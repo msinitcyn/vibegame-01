@@ -273,6 +273,11 @@ class Match:
                 c.life += CLONE_TIME
             for _ in range(max(0, min(CLONE_COUNT, MAX_CLONES - len(mine)))):
                 self.clones.append(Clone(p))
+        elif kind == "invisible":             # мобы, что шли на тебя, теряют тебя из виду
+            self.give(p, "invisible")
+            for m in self.mobs:
+                if m.target is p:
+                    m.target = None
         elif kind == "mobpeace":
             self.give(p, "mobpeace")          # мобы, что шли на тебя, успокаиваются
             for m in self.mobs:
@@ -593,6 +598,8 @@ class Match:
                     self.leash(m)
                 p = None
             else:
+                if m.target is not None and self.hidden(m.target):
+                    m.target = None           # невидимку не видно — моб теряет цель
                 p = m.update(dt, self.chaser_speed(m.target) if m.target else 1.0, self.walls)
             if self.blocked(m.x, m.y, m.radius):      # сквозь деревья не пройти: шаг по одной оси или стоять
                 nx, ny = m.x, m.y
@@ -610,15 +617,21 @@ class Match:
             if shot:
                 self.mob_shots.append(shot)
         self.update_guardians(dt)
-        for st in self.sentries:              # лесные стражи стреляют по сопернику хозяина
-            shot = st.update(dt, self.other(st.owner))
-            if shot:
+        for st in self.sentries:              # лесные стражи стреляют по сопернику хозяина (невидимку не видят)
+            foe = self.other(st.owner)
+            shot = st.update(dt, foe)
+            if shot and not self.hidden(foe):
                 self.mob_shots.append(shot)
         self.sentries = [st for st in self.sentries if st.alive]
         self.update_mob_shots(dt)
         self.update_beams(dt)
 
     # ------------------------------------------------------------------ стражи арены
+
+    @staticmethod
+    def hidden(p):
+        """Маг невидим: мобы, зомби и стражи его не замечают."""
+        return "invisible" in getattr(p, "effects", {})
 
     def can_hurt_guardian(self, g, attacker):
         """Стража ранят, только когда он проснулся и бьющий (маг) сам в арене."""
@@ -643,7 +656,7 @@ class Match:
             g.hit_cd = max(0.0, g.hit_cd - dt)
             g.swing = max(0.0, g.swing - dt)
             target = self.player(g.side)
-            g.awake = in_arena(target.x, target.y)
+            g.awake = in_arena(target.x, target.y) and not self.hidden(target)
             if not g.awake:                   # статуя: на пост
                 g.windup = 0.0
                 g.shot_timer = GUARDIAN_SHOT_EVERY
@@ -729,7 +742,7 @@ class Match:
         attackers = [x for x in self.mobs if x.alive and x.zombie_of is None and x.target is owner and near(x)]
         foe = self.other(owner)
         target = (min(attackers, key=lambda x: math.hypot(x.x - m.x, x.y - m.y)) if attackers
-                  else foe if near(foe) else None)
+                  else foe if near(foe) and not self.hidden(foe) else None)
         if target is None:                    # целей рядом нет — к хозяину
             m.windup = 0.0
             self.zombie_follow(m, owner, dt)

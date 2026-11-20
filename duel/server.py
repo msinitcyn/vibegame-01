@@ -341,6 +341,8 @@ class Server:
                 if conn in self.lobby:
                     self.bot_game(conn, now)
                     return "room"
+            elif kind == "wait":              # «Как войти?»: человек выбирает — не закрывать по JOIN_WAIT
+                where = where or "lobby"
             elif kind in ("register", "login", "resume", "logout"):
                 where = where or "lobby"
                 self.auth(conn, kind, msg)

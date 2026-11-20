@@ -248,8 +248,10 @@ def test_warmup_esc_and_win_again(game):
     assert game.snap["winner"] == "blue"
     game.on_key(pygame.KSCAN_R)                   # ещё разминка
     assert game.warmup and not game.snap["winner"]
-    game.on_key(pygame.KSCAN_ESCAPE)              # назад в лобби
-    assert not game.warmup and game.state == "lobby"
+    game.on_key(pygame.KSCAN_ESCAPE)              # пауза — разминка стоит
+    assert game.warmup and game.paused
+    game.pause_select("quit")                     # «Закончить разминку» — назад в лобби
+    assert not game.warmup and game.state == "lobby" and not game.paused
 
 
 def test_mouse_buttons_in_warmup(game):
@@ -500,3 +502,39 @@ def test_guest_choice_remembered_per_server(game):
     game.lobby_index = 0
     game.on_key(pygame.KSCAN_RETURN)              # надпись «Гость · войти» — снова «Как войти?»
     assert game.state == "entry" and srv.id not in game.settings["accounts"]
+
+
+# ------------------------------------------------------------------ пауза
+
+def test_pause_stops_local_match_and_settings_return(game):
+    """Esc в партии за одним компьютером — пауза: матч стоит; настройки с паузы возвращают в партию."""
+    game.countdown = 0
+    game.on_key(pygame.KSCAN_ESCAPE)
+    assert game.paused and game.in_ui() and not game.want_mouse_capture()
+    game.on_key(game.controls["blue"].items[0])    # на паузе нажатия в партию не идут
+    assert game.pending["blue"].use_slot is None
+    game.hits = []
+    game.draw()                                    # пауза рисуется
+    assert len([h for h in game.hits if h[0].w == 300]) == 3
+    game.pause_select("settings")
+    assert game.state == "settings"
+    game.on_key(pygame.KSCAN_ESCAPE)               # из настроек — обратно в партию, на паузу
+    assert game.state == "play" and game.paused
+    game.on_key(pygame.KSCAN_ESCAPE)
+    assert not game.paused and game.state == "play"
+
+
+def test_entry_screen_keeps_connection(game, monkeypatch):
+    """«Как войти?» дольше JOIN_WAIT — сервер не рвёт связь (клиент сказал «жду»)."""
+    import duel.server as server
+    monkeypatch.setattr(server, "JOIN_WAIT", 0.3)
+    game.open_join()
+    game.join_touched = True
+    game.join_pick = "create"
+    game.join_game()
+    assert game.state == "entry"
+    t = time.monotonic()
+    while time.monotonic() - t < 1.0:
+        game.lobby_frame()
+        time.sleep(0.02)
+    assert game.state == "entry" and game.lobby_conn and not game.lobby_conn.closed

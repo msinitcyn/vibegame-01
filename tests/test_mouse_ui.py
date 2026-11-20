@@ -104,7 +104,10 @@ def test_own_server_lobby_buttons_and_pick(game):
     assert len(buttons) == 3
     click(game, buttons[2][0].center)                 # Разминка
     assert game.warmup
-    game.on_key(pygame.KSCAN_ESCAPE)
+    game.on_key(pygame.KSCAN_ESCAPE)                  # пауза
+    redraw(game, game.draw)
+    quit_btn = [h for h in game.hits if h[0].w == 300][-1]
+    click(game, quit_btn[0].center)                   # «Закончить разминку»
     assert game.state == "lobby"
     redraw(game, game.draw_lobby_screen)
     buttons = [h for h in game.hits if h[0].h == 40 and h[0].w == 220]

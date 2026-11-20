@@ -53,6 +53,7 @@ ITEMS = {
     "clearfoe": ("self", (150, 255, 200)),
     "cleanse": ("self", (210, 255, 230)),
     "mobpeace": ("self", (235, 245, 255)),
+    "invisible": ("self", (255, 250, 215)),
     "mobswap": ("self", (255, 120, 210)),
     "beam": ("self", (255, 236, 140)),        # артефакты героев (выпадают только «своему»)
     "icewalk": ("self", (190, 235, 255)),
@@ -76,7 +77,7 @@ HELP_SECTIONS = [
     ("weapon", ["triple", "wavy"]),
     ("debuff", ["foe_grow", "foe_nofire", "foe_invert", "foe_noitems"]),
     # артефакты героев — свои страницы справки, по героям
-    ("hero", ["beam", "clearfoe", "breaker", "mobpeace", "icewalk", "foe_freeze", "shield", "slowfoe",
+    ("hero", ["beam", "clearfoe", "breaker", "mobpeace", "invisible", "icewalk", "foe_freeze", "shield", "slowfoe",
               "trees", "bear", "immune", "sentries", "lasso", "firering", "fastshots", "rapid",
               "zombies", "mobswap", "clones", "wall"]),
 ]
@@ -105,7 +106,7 @@ def item_help(kind):
         rapid_cd=f"{SHOT_COOLDOWN * RAPID_FACTOR:.1f}", cd=f"{SHOT_COOLDOWN:g}",
         rapid=f"{d['rapid']:.0f}", wavy=f"{d['wavy']:.0f}", clones=CLONE_COUNT,
         clone_time=f"{CLONE_TIME:.0f}", clone_hp=CLONE_HP, breaker=f"{d['breaker']:.0f}", wall_time=f"{WALL_TIME:.0f}",
-        fastshots=f"{d['fastshots']:g}", mobpeace=f"{d['mobpeace']:g}",
+        fastshots=f"{d['fastshots']:g}", mobpeace=f"{d['mobpeace']:g}", invisible=f"{d['invisible']:g}",
         beam_len=BEAM_LENGTH, beam_dps=BEAM_DPS,
         icewalk=f"{d['icewalk']:g}", ice_life=f"{ICE_LIFE:g}", trees=f"{TREE_TIME:g}", tree_len=TREE_LENGTH,
         lasso=f"{d['lassoed']:g}", bear=f"{d['bear']:g}", bear_hp=BEAR_HP, immune=f"{d['immune']:g}",

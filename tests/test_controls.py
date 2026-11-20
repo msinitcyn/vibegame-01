@@ -83,7 +83,15 @@ def test_menu_keys(game):
     game.on_key(pygame.KSCAN_RETURN)
     assert game.state == "play" and game.match.blue.hp == 10
     game.on_key(pygame.KSCAN_ESCAPE)
+    assert game.state == "play" and game.paused  # Esc в партии — пауза, а не выход
+    game.on_key(pygame.KSCAN_ESCAPE)
+    assert not game.paused                      # ещё раз — продолжаем
+    game.on_key(pygame.KSCAN_ESCAPE)
+    game.on_key(pygame.KSCAN_UP)                # «Выйти в меню» — последняя строка
+    game.on_key(pygame.KSCAN_RETURN)
     assert game.state == "menu"
+    game.on_key(pygame.KSCAN_ESCAPE)
+    assert game.state == "menu" and game.menu_message   # Esc в меню игру не закрывает — подсказка
     game.on_key(pygame.KSCAN_4)
     assert game.state == "help"
     game.on_key(pygame.KSCAN_ESCAPE)
@@ -155,6 +163,9 @@ def test_pad_menu_navigation(game):
     game.on_pad(101, pygame.CONTROLLER_BUTTON_A)
     assert game.state == "play" and game.match.blue.hp == 1000
     game.on_pad(100, pygame.CONTROLLER_BUTTON_START)
+    assert game.state == "play" and game.paused             # Start — пауза
+    game.on_pad(100, pygame.CONTROLLER_BUTTON_DPAD_UP)
+    game.on_pad(100, pygame.CONTROLLER_BUTTON_A)
     assert game.state == "menu"
 
 

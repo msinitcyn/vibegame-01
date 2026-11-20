@@ -116,7 +116,11 @@ def draw_bear(surf, pos, r, facing, white, color):
         pygame.draw.circle(surf, ink, (int(x + facing * (ex + 0.2) * r), int(y - r * 0.28)), max(2, int(r * 0.08)))
 
 
-def draw_player(surf, p, heroes):
+def draw_player(surf, p, heroes, viewer=None):
+    """Маг. Невидимый — едва заметное мерцание (себе по сети — полупрозрачный)."""
+    if "invisible" in p.get("effects", {}):
+        draw_invisible(surf, p, heroes, mine=viewer == p["id"])
+        return
     pos = _pos(p)
     pid = p["id"]
     aim = p.get("aim")
@@ -138,6 +142,22 @@ def draw_player(surf, p, heroes):
         pygame.draw.circle(ring, (255, 255, 255, int(160 * k)), (c, c), radius + reach - 6, 2)
         surf.blit(ring, ring.get_rect(center=pos))
     draw_effects(surf, p)
+
+
+def draw_invisible(surf, p, heroes, mine=False):
+    """Невидимка: мерцающий призрак без метки прицела и подписей эффектов."""
+    pos = _pos(p)
+    r = p["r"]
+    size = int(4 * r + 8)
+    ghost = pygame.Surface((size, size), pygame.SRCALPHA)
+    aim = p.get("aim")
+    facing = DIR[p["id"]] if aim is None else (1 if math.cos(aim) >= 0 else -1)
+    draw_unit(ghost, HERO_SPRITE[heroes[p["id"]]], (size // 2, size // 2), r, facing)
+    shimmer = 0.5 + 0.5 * math.sin(pygame.time.get_ticks() / 90)
+    ghost.set_alpha(int(110 + 30 * shimmer) if mine else int(22 + 26 * shimmer))
+    surf.blit(ghost, ghost.get_rect(center=pos))
+    if mine:
+        pygame.draw.circle(surf, side_color(heroes, p["id"]), pos, int(r) + 4, 1)
 
 
 def draw_clone(surf, c, heroes):
@@ -379,7 +399,7 @@ def draw_guardian(surf, g, font, heroes):
     pygame.draw.rect(surf, side_color(heroes, g["side"]), fill)
 
 
-def draw_field(surf, snap, font):
+def draw_field(surf, snap, font, viewer=None):
     """Все объекты поля в порядке слоёв: стены, артефакты, пачки, двойники, мобы,
     снаряды, пули, маги. Цвета и маги — по героям сторон."""
     heroes = heroes_of(snap)
@@ -423,6 +443,6 @@ def draw_field(surf, snap, font):
     for b in snap.get("beams", []):
         draw_beam(surf, b, heroes)
     for p in snap["players"]:
-        draw_player(surf, p, heroes)
+        draw_player(surf, p, heroes, viewer)
     for m in snap["mobs"]:                # замахи и удары мобов — поверх магов, чтобы были видны
         draw_mob_attack(surf, m, font)

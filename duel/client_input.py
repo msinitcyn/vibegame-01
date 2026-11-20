@@ -74,12 +74,15 @@ class InputMixin:
             self.account_key(sc)
             return
         if sc == pygame.KSCAN_ESCAPE:
-            if self.warmup:
-                self.stop_warmup()        # разминка — назад в лобби комнаты
-            elif self.net:
-                self.leave_room()         # из комнаты — к списку комнат сервера
+            if self.snap["winner"] or self.watching or (self.net and self.net_waiting and not self.warmup):
+                self.quit_match()         # партия кончилась, зритель, выбор героя — выходим, как раньше
             else:
-                self.state = "menu"
+                self.paused = not self.paused     # в партии Esc — пауза, а не выход
+                self.pause_index = 0
+                self.held.clear()
+            return
+        if self.paused:
+            self.pause_key(sc)
             return
         if self.watching:                 # зритель: только Esc (выше)
             return
@@ -107,6 +110,39 @@ class InputMixin:
                     cmd.melee = True
                 if sc in c.items:
                     cmd.use_slot = c.items.index(sc)
+
+    def quit_match(self):
+        """Выйти из партии: разминка — в лобби, по сети — из комнаты, за одним компьютером — в меню."""
+        self.paused = False
+        if self.warmup:
+            self.stop_warmup()
+        elif self.net:
+            self.leave_room()
+        else:
+            self.state = "menu"
+
+    PAUSE_ROWS = ("resume", "settings", "quit")
+
+    def pause_key(self, sc):
+        """Пауза: ↑/↓ — строка, Enter — выбрать (Esc — продолжить, см. on_key)."""
+        K = pygame
+        if sc in (K.KSCAN_W, K.KSCAN_UP):
+            self.pause_index = (self.pause_index - 1) % len(self.PAUSE_ROWS)
+        elif sc in (K.KSCAN_S, K.KSCAN_DOWN):
+            self.pause_index = (self.pause_index + 1) % len(self.PAUSE_ROWS)
+        elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
+            self.pause_select(self.PAUSE_ROWS[self.pause_index])
+
+    def pause_select(self, row):
+        if row == "resume":
+            self.paused = False
+            self.held.clear()
+        elif row == "settings":
+            self.settings_back = "play"
+            self.settings_index = 0
+            self.state = "settings"
+        else:
+            self.quit_match()
 
     def on_text(self, text):
         """Набранный текст (по раскладке, любой язык) — в имя игрока, если выбрана строка «Имя»;
@@ -219,6 +255,16 @@ class InputMixin:
             elif btn in (*back, B.CONTROLLER_BUTTON_START):
                 self.on_key(B.KSCAN_ESCAPE)
             return
+        if self.paused:                   # пауза: крестовина, ✕ — выбрать, Start/○ — продолжить
+            if btn in (B.CONTROLLER_BUTTON_DPAD_UP, PAD_UP):
+                self.on_key(B.KSCAN_UP)
+            elif btn in (B.CONTROLLER_BUTTON_DPAD_DOWN, PAD_DOWN):
+                self.on_key(B.KSCAN_DOWN)
+            elif btn == B.CONTROLLER_BUTTON_A:
+                self.on_key(B.KSCAN_RETURN)
+            elif btn in (*back, B.CONTROLLER_BUTTON_START):
+                self.on_key(B.KSCAN_ESCAPE)
+            return
         if pid is None:                   # лишний геймпад — в партии не участвует
             return
         c = self.controls[pid]
@@ -301,7 +347,7 @@ class InputMixin:
         """Сейчас на экране меню (мышь — наведение и щелчки), а не партия."""
         if self.state in MENU_STATES or self.state == "update":
             return True
-        return self.state == "play" and (bool(self.snap.get("winner")) or
+        return self.state == "play" and (self.paused or bool(self.snap.get("winner")) or
                                           bool(self.net and self.net_waiting and not self.warmup))
 
     def ui_hit(self, pos):
@@ -332,7 +378,7 @@ class InputMixin:
             self.stick_aim.pop(side, None)
 
     def want_mouse_capture(self):
-        return (self.state == "play" and self.focused and self.mouse_side() is not None
+        return (self.state == "play" and self.focused and not self.paused and self.mouse_side() is not None
                 and not self.snap.get("winner") and not (self.net and self.net_waiting and not self.warmup))
 
     def sync_mouse_capture(self):
@@ -361,7 +407,7 @@ class InputMixin:
                 hit = self.ui_hit(self.ui_mouse)
                 if hit:
                     hit[1]()
-            elif button == 3 and self.state != "menu" and not (self.state == "play" and self.net):
+            elif button == 3 and self.state != "menu" and not (self.state == "play" and self.net and not self.paused):
                 self.on_key(pygame.KSCAN_ESCAPE)      # назад (в главном меню Esc — выход из игры, а в лобби
                                                       # комнаты — уход из неё: там только кнопками)
             return

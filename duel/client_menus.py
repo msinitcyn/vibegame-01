@@ -98,6 +98,8 @@ class MenusMixin:
             self.menu_index = (self.menu_index - 1) % len(self.menu)
         elif sc in down:
             self.menu_index = (self.menu_index + 1) % len(self.menu)
+        elif sc == pygame.KSCAN_ESCAPE:   # Esc игру не закрывает — для этого кнопка «Выход»
+            self.menu_message = t("menu.quit_hint")
         elif sc in digits and digits.index(sc) < len(self.menu):
             self.menu_index = digits.index(sc)
             self.menu_select()
@@ -118,6 +120,7 @@ class MenusMixin:
             self.help_page = 0
         elif action == "settings":
             self.state = "settings"
+            self.settings_back = "menu"
             self.settings_index = 0
         elif action == "test":
             self.open_pick(TEST_HP)
@@ -129,6 +132,11 @@ class MenusMixin:
         else:
             self.open_pick(MAX_HP)
 
+    def close_settings(self):
+        """Из настроек — туда, откуда пришли: в меню или обратно в партию (на паузу)."""
+        self.state = self.settings_back if self.settings_back == "play" else "menu"
+        self.settings_back = "menu"
+
     def settings_key(self, sc):
         """Экран настроек: W/S — строка, A/D или Enter — изменить, Esc — назад.
         На строке «Имя» буквы набирают имя (on_text), строки листаются только стрелками."""
@@ -136,7 +144,7 @@ class MenusMixin:
         row = self.settings_rows[self.settings_index]
         if row == "name":
             if sc == K.KSCAN_ESCAPE:
-                self.state = "menu"
+                self.close_settings()
             elif sc == K.KSCAN_BACKSPACE:
                 self.set_name(self.settings["name"][:-1])
             elif sc == K.KSCAN_UP:
@@ -145,13 +153,13 @@ class MenusMixin:
                 self.settings_index += 1
             return
         if sc in (K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE):
-            self.state = "menu"
+            self.close_settings()
         elif sc in (K.KSCAN_W, K.KSCAN_UP):
             self.settings_index = (self.settings_index - 1) % len(self.settings_rows)
         elif sc in (K.KSCAN_S, K.KSCAN_DOWN):
             self.settings_index = (self.settings_index + 1) % len(self.settings_rows)
         elif row == "back" and sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
-            self.state = "menu"
+            self.close_settings()
         elif row == "aim_mode":
             if sc in (K.KSCAN_A, K.KSCAN_LEFT, K.KSCAN_D, K.KSCAN_RIGHT, K.KSCAN_RETURN, K.KSCAN_KP_ENTER,
                       K.KSCAN_SPACE):

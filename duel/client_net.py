@@ -31,7 +31,9 @@ class NetClientMixin:
             if self.watching:             # зритель ничего не шлёт
                 self.pending = {pid: Command() for pid in PLAYER_IDS}
                 continue
-            if self.warmup:               # разминка: серверу — пустые команды (связь жива), нажатия — себе
+            if self.warmup or self.paused:   # разминка или пауза: серверу — пустые команды (связь жива)
+                if self.paused:
+                    self.pending = {pid: Command() for pid in PLAYER_IDS}
                 self.net.send({"type": "cmd", "move": [0, 0]})
                 continue
             held = self.held | self.pad_held()

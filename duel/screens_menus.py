@@ -304,17 +304,21 @@ class MenuScreensMixin:
         s = self.screen
         y = 56
         kinds = dict(HELP_SECTIONS)["hero"]
+        texts = {k: self.wrap(item_help(k), WIDTH - 220, self.small) for k in kinds if HERO_ONLY_ITEMS[k] in heroes}
+        # не влезает над подписью внизу — плотнее (строки ближе, отступы меньше)
+        full = sum(42 + 19 * len(v) for v in texts.values()) + 6 * len(heroes)
+        head, line_h, gap = (28, 19, 8) if y + full <= HEIGHT - 64 else (25, 17, 3)
         for hero in heroes:
             mine = [k for k in kinds if HERO_ONLY_ITEMS[k] == hero]
             top = y
             for kind in mine:
-                draw_icon(s, kind, (150, y + 26), 22)
+                draw_icon(s, kind, (150, y + head - 2), 22 if gap > 3 else 19)
                 name = self.font.render(item_name(kind), True, ITEMS[kind][1])
                 s.blit(name, (186, y))
-                lines = self.wrap(item_help(kind), WIDTH - 220, self.small)
+                lines = texts[kind]
                 for j, line in enumerate(lines):
-                    s.blit(self.small.render(line, True, WHITE), (186, y + 28 + j * 19))
-                y += 34 + 19 * len(lines) + 8
+                    s.blit(self.small.render(line, True, WHITE), (186, y + head + j * line_h))
+                y += head + 6 + line_h * len(lines) + gap
             pygame.draw.line(s, HERO_COLOR[hero], (24, top), (24, y - 10), 3)
             draw_unit(s, HERO_SPRITE[hero], (70, (top + y) // 2 - 10), 28, 1)
             label = self.small.render(tr("hero." + hero), True, HERO_COLOR[hero])

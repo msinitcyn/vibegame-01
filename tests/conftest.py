@@ -58,6 +58,8 @@ def game(_game):
     _game.stop_own_server()                 # и свой сервер
     _game.server_db = ":memory:"            # аккаунты своего сервера — только на время теста
     _game.menu_message = None
+    _game.paused = False                    # пауза прошлого теста
+    _game.settings_back = "menu"
     _game.net_port = 0                      # свой сервер — на любом свободном порту
     _game.discovery_port = None             # и не отвечает на поиск в настоящей сети
     _game.pads.pads = []

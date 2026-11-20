@@ -67,7 +67,7 @@ ITEM_LEVEL = {
     "bear": 4, "firering": 4,
     "lasso": 3, "zombies": 3, "icewalk": 3, "sentries": 3, "trees": 3, "immune": 3, "clones": 3,
     "cleanse": 2, "foe_nofire": 2, "foe_noitems": 2, "foe_freeze": 2, "shield": 2, "slowfoe": 2,
-    "rapid": 2, "breaker": 2, "mobswap": 2, "wall": 2, "beam": 2,
+    "rapid": 2, "breaker": 2, "mobswap": 2, "wall": 2, "beam": 2, "invisible": 2,
 }                                # остальные — уровень 1
 LEVEL_WEIGHT = {1: 1.0, 2: 0.7, 3: 0.4, 4: 0.2}      # относительная частота выпадения
 LEVEL_MIN_MOB_HP = {1: 0, 2: 0, 3: 5, 4: 6}         # из моба с меньшим запасом жизней — не выпадает
@@ -75,7 +75,7 @@ LEVEL_MIN_MOB_HP = {1: 0, 2: 0, 3: 5, 4: 6}         # из моба с мень�
 HELP_HERO_PAGES = (("light", "nature"), ("frost", "fire"), ("dark",))
 HELP_PAGES = 2 + len(HELP_HERO_PAGES)
 # артефакт -> герой: выпадает только ему (подобрать может любой)
-HERO_ONLY_ITEMS = {"beam": "light", "clearfoe": "light", "breaker": "light", "mobpeace": "light",
+HERO_ONLY_ITEMS = {"beam": "light", "clearfoe": "light", "breaker": "light", "mobpeace": "light", "invisible": "light",
                    "icewalk": "frost", "foe_freeze": "frost", "shield": "frost", "slowfoe": "frost",
                    "trees": "nature", "bear": "nature", "immune": "nature", "sentries": "nature",
                    "lasso": "fire", "firering": "fire", "fastshots": "fire", "rapid": "fire",
@@ -245,6 +245,7 @@ ICON_BG = (35, 38, 52)
 DURATION = {"grow2": 7, "shrink": 7, "freeze": 2.5, "speed": 7, "nofire": 4, "slowfoe": 5,
             "shield": 7, "invert": 5, "noitems": 5, "fastshots": 7,
             "mobpeace": 8,                # «Мир с мобами»: попадания не злят мобов
+            "invisible": 6,               # «Невидимость»: мага почти не видно, мобы и стражи его не замечают
             "icewalk": 8,                 # «Ледяная тропа»: чужая земля не жжёт, за магом — лёд
             "lassoed": 3,                 # «Огненное лассо»: соперника тянет к Огню
             "raising": 0.6,               # «Восставшие мертвецы»: сколько видно кольцо оживления
