@@ -344,6 +344,13 @@ class ScreensMixin:
         self.draw_net_notice()
         pygame.display.flip()
 
+    def slot_key(self, pid, i):
+        """Подпись клавиши под ячейкой. В сети и в разминке своим магом управляют обе раскладки —
+        подписываем 1–4 (рядом с WASD) у себя, у соперника и у зрителя — ничего."""
+        if self.net:
+            return self.key_names["blue"][i] if pid == self.me else ""
+        return self.key_names[pid][i]
+
     def draw_watch_banner(self):
         """Зрителю — надпись сверху: «Вы зритель» (и число зрителей)."""
         if not self.watching:
@@ -645,8 +652,10 @@ class ScreensMixin:
                         key.set_alpha(140)
                         s.blit(key, key.get_rect(center=rect.center))
                 else:
-                    key = self.tiny.render(self.key_names[pid][i], True, WHITE)
-                    s.blit(key, (rect.right - key.get_width() - 3, rect.bottom - key.get_height() - 1))
+                    label = self.slot_key(pid, i)
+                    if label:
+                        key = self.tiny.render(label, True, WHITE)
+                        s.blit(key, (rect.right - key.get_width() - 3, rect.bottom - key.get_height() - 1))
             q_w = self.draw_queue(p, left, x0, inv_w, has_pad)
 
             # имя и жизни; ниже — патроны и всё, что действует, с таймерами

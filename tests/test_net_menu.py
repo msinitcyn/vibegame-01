@@ -407,3 +407,25 @@ def test_recent_servers_remembered_and_asked_directly(game):
     game.open_join()
     assert game.finder.known == ["4.4.4.4", "3.3.3.3", "2.2.2.2", "1.1.1.1", "10.0.0.9"]
     game.close_finder()
+
+
+def test_red_uses_1234_and_sees_1234(game):
+    srv = start_in_thread(port=0, bot=True, log=lambda text: None, discovery_port=None)
+    try:
+        blue, _ = connect(f"127.0.0.1:{srv.port}", timeout=3, name="Аня", create=True)
+        game.enter_net(*connect(f"127.0.0.1:{srv.port}", timeout=3, room=1), f"127.0.0.1:{srv.port}")
+        assert game.me == "red"
+        blue.send({"type": "ready", "ready": True})
+        game.on_key(pygame.KSCAN_RETURN)
+        frames(game, lambda: not game.net_waiting, keep=(blue,))
+        assert [game.slot_key("red", i) for i in range(4)] == list("1234")
+        assert [game.slot_key("blue", i) for i in range(4)] == [""] * 4
+        red = srv.room.match.red
+        red.items = ["speed", None, None, None]
+        game.on_key(pygame.KSCAN_1)                   # клавиша рядом с WASD — по сети, за красного
+        frames(game, lambda: "speed" in red.effects, keep=(blue,))
+        game.draw()
+        blue.close()
+    finally:
+        game.leave_net()
+        srv.stop()
