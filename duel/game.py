@@ -12,6 +12,7 @@ import pygame
 
 from .bot import Bot
 from . import config
+from . import keys
 from .commands import Command
 from .config import (
     HELP_PAGES,
@@ -79,16 +80,6 @@ class Controls:
         self.melee = melee
 
 
-CONTROLS = {
-    "blue": Controls((pygame.KSCAN_W, pygame.KSCAN_S, pygame.KSCAN_A, pygame.KSCAN_D),
-                     (pygame.KSCAN_SPACE,),
-                     (pygame.KSCAN_1, pygame.KSCAN_2, pygame.KSCAN_3, pygame.KSCAN_4),
-                     (pygame.KSCAN_E,)),
-    "red": Controls((pygame.KSCAN_UP, pygame.KSCAN_DOWN, pygame.KSCAN_LEFT, pygame.KSCAN_RIGHT),
-                    (pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER),
-                    (pygame.KSCAN_9, pygame.KSCAN_0, pygame.KSCAN_MINUS, pygame.KSCAN_EQUALS),
-                    (pygame.KSCAN_RSHIFT,)),
-}
 PLAYER_IDS = ("blue", "red")      # первый геймпад — синий, второй — красный
 
 # набор адреса по физическим клавишам: цифры, латиница, точка, дефис, двоеточие (Shift + ;)
@@ -115,6 +106,7 @@ class Game(ScreensMixin):
         self.settings = settings.load()
         set_lang(self.settings["lang"])
         self.audio = Audio()
+        self.audio.set_volumes(self.settings.get("music_volume", 5), self.settings.get("sfx_volume", 5))
         pygame.display.set_caption(t("title"))
         set_window_icon()             # до создания окна — так значок подхватывают все системы
         # SCALED: поле остаётся WIDTH×HEIGHT, а на экран растягивается с сохранением пропорций
@@ -131,8 +123,7 @@ class Game(ScreensMixin):
         self.tiny_text = load_font(12)
         self.big = load_font(56, bold=True)
 
-        self.controls = CONTROLS
-        self.key_names = {"blue": "1234", "red": "90-="}
+        self.apply_keys()
         self.held = set()             # зажатые физические клавиши
         self.pads = Gamepads()
         # пункты меню; подписи — menu_label()
@@ -165,7 +156,9 @@ class Game(ScreensMixin):
         self.acc_register = False
         self.entry_name, self.entry_row = "", 1
         self.menu_index = 0
-        self.settings_rows = ["lang", "name", "aim_mode", "aim_stick", "aim_mouse", "updates", "back"]
+        self.settings_rows = ["lang", "name", "aim_mode", "aim_stick", "aim_mouse", "music", "sfx", "keys",
+                              "updates", "back"]
+        self.keys_col, self.keys_row, self.keys_wait, self.keys_msg = 0, 0, None, None
         self.updater = Updater()          # новая версия: проверка — в run(), по настройке
         self.help_page = 0
         self.settings_index = 0
@@ -365,6 +358,9 @@ class Game(ScreensMixin):
                 continue
             if self.state == "help":
                 self.draw_help()
+                continue
+            if self.state == "keys":
+                self.draw_keys()
                 continue
             if self.state == "settings":
                 self.draw_settings()
@@ -1180,6 +1176,9 @@ class Game(ScreensMixin):
         if self.state == "update":
             self.update_key(sc)
             return
+        if self.state == "keys":
+            self.keys_key(sc)
+            return
         if self.state == "help":
             if sc in (pygame.KSCAN_ESCAPE, pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER,
                       pygame.KSCAN_SPACE, pygame.KSCAN_BACKSPACE):
@@ -1292,15 +1291,15 @@ class Game(ScreensMixin):
             elif btn == B.CONTROLLER_BUTTON_START:
                 self.state = "menu"
             return
-        if self.state == "settings":
-            keys = {B.CONTROLLER_BUTTON_DPAD_UP: B.KSCAN_UP, PAD_UP: B.KSCAN_UP,
+        if self.state in ("settings", "keys"):
+            keymap = {B.CONTROLLER_BUTTON_DPAD_UP: B.KSCAN_UP, PAD_UP: B.KSCAN_UP,
                     B.CONTROLLER_BUTTON_DPAD_DOWN: B.KSCAN_DOWN, PAD_DOWN: B.KSCAN_DOWN,
                     B.CONTROLLER_BUTTON_DPAD_LEFT: B.KSCAN_LEFT, B.CONTROLLER_BUTTON_DPAD_RIGHT: B.KSCAN_RIGHT,
                     PAD_LEFT: B.KSCAN_LEFT, PAD_RIGHT: B.KSCAN_RIGHT,
                     B.CONTROLLER_BUTTON_A: B.KSCAN_RETURN, B.CONTROLLER_BUTTON_B: B.KSCAN_ESCAPE,
                     B.CONTROLLER_BUTTON_X: B.KSCAN_ESCAPE, B.CONTROLLER_BUTTON_START: B.KSCAN_ESCAPE}
-            if btn in keys:
-                self.on_key(keys[btn])
+            if btn in keymap:
+                self.on_key(keymap[btn])
             return
         if self.state in ("entry", "entering"):
             if btn in (B.CONTROLLER_BUTTON_DPAD_UP, PAD_UP):
@@ -1418,8 +1417,8 @@ class Game(ScreensMixin):
 
     def in_ui(self):
         """Сейчас на экране меню (мышь — наведение и щелчки), а не партия."""
-        if self.state in ("menu", "help", "settings", "pick", "join", "lobby", "account", "entry", "entering",
-                          "update"):
+        if self.state in ("menu", "help", "settings", "keys", "pick", "join", "lobby", "account", "entry",
+                          "entering", "update"):
             return True
         return self.state == "play" and (bool(self.snap.get("winner")) or
                                           bool(self.net and self.net_waiting and not self.warmup))
@@ -1608,6 +1607,19 @@ class Game(ScreensMixin):
                 lo, hi = settings.AIM_LEVELS
                 self.settings[row] = max(lo, min(hi, self.settings.get(row, settings.DEFAULTS[row]) + step))
                 settings.save(self.settings)
+        elif row in ("music", "sfx"):
+            step = {K.KSCAN_A: -1, K.KSCAN_LEFT: -1, K.KSCAN_D: 1, K.KSCAN_RIGHT: 1}.get(sc)
+            if step:
+                key = row + "_volume"
+                lo, hi = settings.VOLUME_LEVELS
+                self.settings[key] = max(lo, min(hi, self.settings.get(key, 5) + step))
+                settings.save(self.settings)
+                self.audio.set_volumes(self.settings.get("music_volume", 5), self.settings.get("sfx_volume", 5))
+                if row == "sfx":
+                    self.audio.melee()              # пробный звук
+        elif row == "keys":
+            if sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE, K.KSCAN_D, K.KSCAN_RIGHT):
+                self.open_keys()
         elif row == "updates":
             if sc in (K.KSCAN_A, K.KSCAN_LEFT, K.KSCAN_D, K.KSCAN_RIGHT, K.KSCAN_RETURN, K.KSCAN_KP_ENTER,
                       K.KSCAN_SPACE):
@@ -1621,6 +1633,57 @@ class Game(ScreensMixin):
             if step:
                 codes = list(LANGS)
                 self.set_language(codes[(codes.index(get_lang()) + step) % len(codes)])
+
+    # ------------------------------------------------------------------ клавиши
+
+    def apply_keys(self):
+        """Управление и подписи ячеек — по назначенным клавишам (настройки), остальное — по умолчанию."""
+        custom = self.settings.get("keys") or {}
+        self.controls = keys.build(custom, Controls)
+        self.key_names = {pid: [keys.label(sc) for sc in self.controls[pid].items] for pid in PLAYER_IDS}
+
+    def open_keys(self):
+        self.keys_col, self.keys_row, self.keys_wait, self.keys_msg = 0, 0, None, None
+        self.state = "keys"
+
+    def keys_key(self, sc):
+        """Экран клавиш: ↑/↓ — действие, ←/→ — игрок, Enter — назначить (дальше — нажать клавишу),
+        строка «Сбросить» — вернуть всё; Esc — к настройкам (при ожидании клавиши — отмена)."""
+        K = pygame
+        if self.keys_wait:
+            if sc == K.KSCAN_ESCAPE:
+                self.keys_wait = None
+            elif sc in keys.RESERVED:
+                self.keys_msg = t("keys.reserved", name=keys.label(sc))
+            else:
+                pid, action = self.keys_wait
+                self.settings["keys"] = keys.assign(self.settings.get("keys"), pid, action, sc)
+                settings.save(self.settings)
+                self.apply_keys()
+                self.keys_wait, self.keys_msg = None, None
+            return
+        if sc in (K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE):
+            self.state = "settings"
+        elif sc in (K.KSCAN_UP, K.KSCAN_W):
+            self.keys_row = max(0, self.keys_row - 1)
+        elif sc in (K.KSCAN_DOWN, K.KSCAN_S):
+            self.keys_row = min(len(keys.ACTIONS), self.keys_row + 1)
+        elif sc in (K.KSCAN_LEFT, K.KSCAN_A, K.KSCAN_RIGHT, K.KSCAN_D):
+            self.keys_col = 0 if sc in (K.KSCAN_LEFT, K.KSCAN_A) else 1
+        elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
+            self.keys_pick(self.keys_col, self.keys_row)
+
+    def keys_pick(self, col, row):
+        """Выбрать действие (ждём клавишу) или «Сбросить по умолчанию» (последняя строка)."""
+        self.keys_col, self.keys_row = col, row
+        if row >= len(keys.ACTIONS):
+            self.settings["keys"] = {}
+            settings.save(self.settings)
+            self.apply_keys()
+            self.keys_msg = t("keys.reset_done")
+            return
+        self.keys_wait = (PLAYER_IDS[col], keys.ACTIONS[row])
+        self.keys_msg = None
 
     def on_text(self, text):
         """Набранный текст (по раскладке, любой язык) — в имя игрока, если выбрана строка «Имя»;
@@ -1678,8 +1741,8 @@ class Game(ScreensMixin):
         pygame.display.set_caption(t("title"))
 
     def update_music(self):
-        in_menu = self.state in ("menu", "help", "settings", "join", "lobby", "account", "entry", "entering",
-                                 "pick") or self.net_waiting
+        in_menu = self.state in ("menu", "help", "settings", "keys", "join", "lobby", "account", "entry",
+                                 "entering", "pick") or self.net_waiting
         self.audio.music("menu" if in_menu else "game")
 
     def menu_key(self, sc):

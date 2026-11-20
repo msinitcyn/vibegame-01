@@ -23,6 +23,8 @@ class Audio:
     def __init__(self):
         self.shots = {}
         self.items = {}               # артефакт -> звук применения
+        self.base = {}                # звук -> громкость при уровне 5
+        self.music_level = self.sfx_level = 5
         self.enabled = False
         self.kind = None              # какая музыка сейчас: menu / game
         self.track = None
@@ -44,6 +46,7 @@ class Audio:
                 snd = pygame.mixer.Sound(SOUNDS_DIR / fname)
                 snd.set_volume(SHOOT_VOLUME)
                 self.shots[who] = snd
+                self.base[snd] = SHOOT_VOLUME
             except pygame.error as e:
                 print(f"Не загрузился {fname}:", e)
         for kind, (fname, volume) in ITEM_SOUNDS.items():
@@ -51,8 +54,21 @@ class Audio:
                 snd = pygame.mixer.Sound(SOUNDS_DIR / fname)
                 snd.set_volume(volume)
                 self.items[kind] = snd
+                self.base[snd] = volume
             except (pygame.error, FileNotFoundError) as e:
                 print(f"Не загрузился {fname}:", e)
+
+    def set_volumes(self, music=None, sfx=None):
+        """Громкость из настроек: 0–10, 5 — как задумано (MUSIC_VOLUME, громкости звуков), 0 — тишина."""
+        if music is not None:
+            self.music_level = max(0, min(10, music))
+        if sfx is not None:
+            self.sfx_level = max(0, min(10, sfx))
+        if not self.enabled:
+            return
+        pygame.mixer.music.set_volume(min(1.0, MUSIC_VOLUME * self.music_level / 5))
+        for snd, base in self.base.items():
+            snd.set_volume(min(1.0, base * self.sfx_level / 5))
 
     def music(self, kind):
         """Включить музыку нужного вида; если она уже играет — ничего не делать."""

@@ -627,7 +627,7 @@ class ScreensMixin:
         s = self.screen
         s.fill(BG)
         img = self.big.render(tr("settings.title"), True, WHITE)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 120)))
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 92)))
         row = self.settings_rows[self.settings_index]
         name = self.settings.get("name", "")
         if row == "name":
@@ -638,12 +638,15 @@ class ScreensMixin:
                   "aim_mode": f"◀  {tr('settings.aim_mode', mode=tr('aim_mode.' + self.settings.get('aim_mode', 'move')))}  ▶",
                   "aim_stick": f"◀  {tr('settings.aim_stick', n=self.settings.get('aim_stick', 6))}  ▶",
                   "aim_mouse": f"◀  {tr('settings.aim_mouse', n=self.settings.get('aim_mouse', 5))}  ▶",
+                  "music": f"◀  {tr('settings.music', n=self.settings.get('music_volume', 5))}  ▶",
+                  "sfx": f"◀  {tr('settings.sfx', n=self.settings.get('sfx_volume', 5))}  ▶",
+                  "keys": tr("settings.keys"),
                   "updates": f"◀  {tr('settings.updates', v=tr('yes' if self.settings.get('check_updates', True) else 'no'))}  ▶",
                   "back": tr("settings.back")}
         for i, line in enumerate(self.settings_rows):
             sel = i == self.settings_index
-            rect = pygame.Rect(0, 0, 460, 44)
-            rect.center = (WIDTH // 2, 190 + i * 50)
+            rect = pygame.Rect(0, 0, 460, 40)
+            rect.center = (WIDTH // 2, 170 + i * 46)
             pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=10)
             pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
             txt = self.font.render(labels[line], True, WHITE if sel else GREY)
@@ -652,7 +655,7 @@ class ScreensMixin:
                      lambda i=i: setattr(self, "settings_index", i))
         self.back_button()
         img = self.small.render(tr("settings.name_hint" if row == "name" else "settings.hint"), True, GREY)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 190 + len(self.settings_rows) * 50)))
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 170 + len(self.settings_rows) * 46)))
         pygame.display.flip()
 
     def settings_click(self, i, rect):
@@ -660,11 +663,51 @@ class ScreensMixin:
         «Назад» — в меню; «Имя» — выбрать строку (дальше набирать с клавиатуры)."""
         self.settings_index = i
         row = self.settings_rows[i]
-        if row == "back":
+        if row in ("back", "keys"):
             self.on_key(pygame.KSCAN_RETURN)
         elif row != "name":
             left = self.ui_mouse is not None and self.ui_mouse[0] < rect.centerx
             self.on_key(pygame.KSCAN_LEFT if left else pygame.KSCAN_RIGHT)
+
+    def draw_keys(self):
+        """Экран клавиш: левый и правый игрок, действия и их клавиши; «Сбросить по умолчанию»."""
+        from . import keys as K
+        s = self.screen
+        s.fill(BG)
+        img = self.big.render(tr("keys.title"), True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 50)))
+        current = K.current(self.settings.get("keys"))
+        col_w, row_h, top = 400, 40, 120
+        for col, pid in enumerate(("blue", "red")):
+            x = WIDTH // 2 - col_w - 20 + col * (col_w + 40)
+            img = self.font.render(tr("keys.left" if pid == "blue" else "keys.right"), True, (200, 205, 220))
+            s.blit(img, (x, top - 36))
+            for row, action in enumerate(K.ACTIONS):
+                rect = pygame.Rect(x, top + row * (row_h + 6), col_w, row_h)
+                sel = (col, row) == (self.keys_col, self.keys_row)
+                waiting = self.keys_wait == (pid, action)
+                self.hit(rect, lambda col=col, row=row: self.keys_pick(col, row),
+                         lambda col=col, row=row: (setattr(self, "keys_col", col), setattr(self, "keys_row", row)))
+                on = sel or self.hovered(rect)
+                pygame.draw.rect(s, (40, 46, 66) if on else (26, 29, 40), rect, border_radius=8)
+                pygame.draw.rect(s, AMMO_COLOR if waiting else (BLUE if on else (60, 64, 80)), rect,
+                                 2, border_radius=8)
+                name = "keys." + action + ("_" if action in ("left", "right") else "")   # «влево» ≠ «левый игрок»
+                img = self.small.render(tr(name), True, WHITE if on else (200, 205, 220))
+                s.blit(img, img.get_rect(midleft=(rect.left + 12, rect.centery)))
+                key = tr("keys.press") if waiting else K.label(current[pid][action])
+                img = self.font.render(key, True, AMMO_COLOR if waiting else WHITE)
+                s.blit(img, img.get_rect(midright=(rect.right - 12, rect.centery)))
+        reset_y = top + len(K.ACTIONS) * (row_h + 6) + 30
+        self.button((WIDTH // 2, reset_y), tr("keys.reset"), lambda: self.keys_pick(self.keys_col, len(K.ACTIONS)),
+                    w=320, sel=self.keys_row >= len(K.ACTIONS))
+        if self.keys_msg:
+            img = self.small.render(self.keys_msg, True, AMMO_COLOR)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, reset_y + 40)))
+        img = self.small.render(tr("keys.hint_wait" if self.keys_wait else "keys.hint"), True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 24)))
+        self.back_button()
+        pygame.display.flip()
 
     def draw_help(self):
         """Справка: общие артефакты, артефакты героев (две страницы), правила."""

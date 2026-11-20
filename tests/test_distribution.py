@@ -42,7 +42,8 @@ def test_settings_defaults_have_address(monkeypatch, tmp_path):
     monkeypatch.setenv("DUEL_SETTINGS", str(tmp_path / "nope" / "s.json"))
     assert settings.load() == {"lang": "ru", "name": "", "last_address": "localhost",
                                "aim_stick": 6, "aim_mouse": 5, "aim_mode": "move", "check_updates": True,
-                               "accounts": {}, "recent_servers": []}
+                               "accounts": {}, "recent_servers": [], "music_volume": 5, "sfx_volume": 5,
+                               "keys": {}}
 
 
 def test_icon():
