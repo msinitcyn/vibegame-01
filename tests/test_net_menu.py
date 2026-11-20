@@ -312,3 +312,77 @@ def test_watch_key_and_spectator_lobby(game):
     game.draw_lobby()
     game.on_key(pygame.KSCAN_RETURN)              # «готов» зрителя никуда не уходит
     a.close()
+
+
+# ------------------------------------------------------------------ разминка в лобби
+
+def warm_frames(game, until, timeout=3.0, keep=()):
+    """Кадры, как в run: сеть, разминка."""
+    deadline = time.monotonic() + timeout
+    while not until():
+        assert time.monotonic() < deadline, "не дождались"
+        for c in keep:
+            if not c.closed:
+                c.send({"type": "cmd", "move": [0, 0]})
+                c.recv()
+        assert game.net_frame(1 / 60)
+        if game.warmup:
+            game.warm_frame(1 / 60)
+        time.sleep(1 / 240)
+
+
+def test_warmup_until_opponent_arrives(game):
+    from duel.room import SILENCE
+    srv = own_server_rooms(game)
+    game.on_key(pygame.KSCAN_RETURN)              # создать комнату
+    frames(game, lambda: game.net_seats and game.net_waiting)
+    game.on_key(pygame.KSCAN_T)                   # размяться
+    assert game.warmup and game.match.winner is None
+    bot = game.match.red
+    start = (bot.x, bot.y)
+    game.on_key(pygame.KSCAN_SPACE)               # выстрел — в разминку, не на сервер
+    warm_frames(game, lambda: (bot.x, bot.y) != start and game.match.bullets)
+    assert any(b.owner is game.match.blue for b in game.match.bullets)
+    assert game.player_label("red") == i18n.t("name.bot")
+    game.draw()                                   # поле разминки с надписью
+    t0 = time.monotonic()
+    warm_frames(game, lambda: time.monotonic() - t0 > SILENCE + 0.5, timeout=6)   # дольше «тишины» — держит
+    assert srv.room.seats["blue"].conn and srv.room.phase == "lobby"
+    guest, _ = guest_conn(srv.port, ready=False)  # пришла Маша
+    warm_frames(game, lambda: not game.warmup, keep=(guest,))
+    assert game.lobby_notice and game.net_waiting
+    game.draw_lobby()
+    guest.close()
+
+
+def test_warmup_esc_back_to_lobby_and_not_for_spectators(game):
+    srv = own_server_rooms(game)
+    game.on_key(pygame.KSCAN_RETURN)
+    frames(game, lambda: game.net_seats and game.net_waiting)
+    game.on_key(pygame.KSCAN_T)
+    assert game.warmup
+    game.on_key(pygame.KSCAN_ESCAPE)              # конец разминки — снова лобби, комната та же
+    assert not game.warmup and game.net and game.state == "play" and srv.rooms
+    game.on_key(pygame.KSCAN_ESCAPE)              # теперь — из комнаты
+    assert game.state == "rooms"
+    a, _ = connect(f"127.0.0.1:{srv.port}", timeout=3, name="Аня", create=True)
+    frames(game, lambda: game.rooms_list, keep=(a,))
+    game.rooms_index = 2
+    game.on_key(pygame.KSCAN_V)                   # зритель
+    frames(game, lambda: game.net_seats, keep=(a,))
+    game.on_key(pygame.KSCAN_T)
+    assert not game.warmup                        # зрителю разминки нет
+    a.close()
+
+
+def test_warmup_win_and_again(game):
+    own_server_rooms(game)
+    game.on_key(pygame.KSCAN_RETURN)
+    frames(game, lambda: game.net_seats and game.net_waiting)
+    game.on_key(pygame.KSCAN_T)
+    game.match.red.hp = 0
+    game.warm_frame(1 / 30)
+    assert game.snap["winner"] == "blue"
+    game.draw()
+    game.on_key(pygame.KSCAN_R)                   # ещё разминка
+    assert game.warmup and not game.snap["winner"] and game.match.red.hp > 0

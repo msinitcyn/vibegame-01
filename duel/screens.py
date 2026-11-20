@@ -328,10 +328,13 @@ class ScreensMixin:
         where = tr("net.room_on", server=self.lobby_server or self.net_addr or "", room=self.net_room or "")
         img = self.small.render(where, True, GREY)
         s.blit(img, img.get_rect(center=(WIDTH // 2, 380)))
+        if self.lobby_notice:
+            img = self.font.render(self.lobby_notice, True, AMMO_COLOR)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 450)))
         if self.watching:
             hints = [tr("net.watch_hint")]
         else:
-            hints = [tr("net.lobby_hint"), tr("net.lobby_hint_host")]
+            hints = [tr("net.lobby_hint"), tr("net.lobby_hint_host"), tr("net.warm_hint")]
         if self.net_spectators:
             hints.append(tr("net.spectators", n=self.net_spectators))
         for i, text in enumerate(hints):
@@ -756,7 +759,9 @@ class ScreensMixin:
             t = self.big.render(tr("win", name=self.player_label(w)), True, self.side_color(w))
             s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 20)))
             hint = tr("win.hint")
-            if self.watching:
+            if getattr(self, "warmup", False):
+                hint = tr("net.warm_again")
+            elif self.watching:
                 hint = tr("net.watch_over")
             elif self.net:
                 other = "red" if self.me == "blue" else "blue"
@@ -769,4 +774,9 @@ class ScreensMixin:
         if self.net:
             self.draw_net_notice()
             self.draw_watch_banner()
+        if getattr(self, "warmup", False):         # разминка против бота — надпись внизу
+            img = self.small.render(tr("net.warm_banner"), True, (255, 230, 140))
+            box = img.get_rect(midbottom=(WIDTH // 2, HEIGHT - 8)).inflate(20, 8)
+            pygame.draw.rect(s, (16, 12, 20), box, border_radius=8)
+            s.blit(img, img.get_rect(center=box.center))
         pygame.display.flip()

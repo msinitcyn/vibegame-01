@@ -10,6 +10,7 @@ import time
 
 import pygame
 
+from .bot import Bot
 from .commands import Command
 from .config import (
     HELP_PAGES,
@@ -144,6 +145,8 @@ class Game(ScreensMixin):
         self.lobby_addr = self.lobby_server = None
         self.rooms_list, self.rooms_index, self.rooms_error = [], 1, None
         self.net_room = None
+        self.warmup = False           # разминка против бота, пока ждём соперника в лобби комнаты
+        self.lobby_notice = None      # надпись в лобби («Соперник пришёл!»)
         self.lobby_id = None          # номер сервера (для запомненного входа)
         self.server_db = None         # база аккаунтов своего сервера (None — рядом с настройками)
         self.account_user = None      # вошли в аккаунт на этом сервере — имя, иначе гость
@@ -350,6 +353,11 @@ class Game(ScreensMixin):
                 if not self.net_frame(dt):
                     self.leave_net(t(self.net_end), voluntary=False)
                     continue
+                if self.warmup:
+                    self.warm_frame(dt)
+                    if self.warmup:
+                        self.draw()
+                        continue
                 if self.net_waiting:
                     self.draw_lobby()
                     continue
@@ -379,6 +387,9 @@ class Game(ScreensMixin):
             steps += 1
             if self.watching:             # зритель ничего не шлёт
                 self.pending = {pid: Command() for pid in PLAYER_IDS}
+                continue
+            if self.warmup:               # разминка: серверу — пустые команды (связь жива), нажатия — себе
+                self.net.send({"type": "cmd", "move": [0, 0]})
                 continue
             held = self.held | self.pad_held()
             dx = dy = 0
@@ -418,10 +429,72 @@ class Game(ScreensMixin):
     def show_playback(self, dt):
         snap, events, waiting = self.playback.advance(dt)
         if snap is not None:
-            self.snap = snap
             self.net_waiting = waiting
-        self.handle_events([tuple(e) for e in events])
+            if not self.warmup:           # в разминке на экране — свой матч
+                self.snap = snap
+        if not self.warmup:
+            self.handle_events([tuple(e) for e in events])
         self.tick_popups(dt)
+
+    # ------------------------------------------------------------------ разминка в лобби
+
+    def start_warmup(self):
+        """Лобби комнаты: партия своим героем против бота на этом компьютере, пока ждём соперника."""
+        if not (self.net and self.net_waiting) or self.watching or self.reconnect_until is not None:
+            return
+        me, other = self.me, ("red" if self.me == "blue" else "blue")
+        mine = self.side_hero(me)
+        self.match = Match()
+        self.match.set_heroes({me: mine, other: next(h for h in HEROES if h != mine)})
+        self.warm_bot = Bot(7, forward=0.0 if other == "blue" else math.pi)
+        self.warmup = True
+        self.lobby_notice = None
+        self.pending = {pid: Command() for pid in PLAYER_IDS}
+        self.warm_acc = 0.0
+        self.popups = []
+        self.win_time = 0
+        self.snap = snapshot(self.match)
+
+    def stop_warmup(self, notice=None):
+        self.warmup = False
+        self.lobby_notice = notice
+        self.popups = []
+        self.restart()                    # свой матч — в исходное; экран снова по снимкам сервера
+
+    def warm_frame(self, dt):
+        """Кадр разминки: свои нажатия и бот, такт 60 Гц. Пришёл соперник или партия началась — стоп."""
+        other = "red" if self.me == "blue" else "blue"
+        if not self.net_waiting or (self.net_seats.get(other) or {}).get("who") in ("human", "away"):
+            self.stop_warmup(t("net.warm_over"))
+            return
+        if self.snap["winner"]:
+            return
+        self.warm_acc += dt
+        steps = 0
+        while self.warm_acc >= STEP and steps < MAX_STEPS_PER_FRAME:
+            self.warm_acc -= STEP
+            steps += 1
+            held = self.held | self.pad_held()
+            dx = dy = 0
+            fire = melee = False
+            slot = None
+            for pid in PLAYER_IDS:        # обе раскладки управляют своим магом, как в сети
+                c, p = self.controls[pid], self.pending[pid]
+                dx += (c.right in held) - (c.left in held)
+                dy += (c.down in held) - (c.up in held)
+                fire, melee = fire or p.fire, melee or p.melee
+                slot = p.use_slot if p.use_slot is not None else slot
+            self.pending = {pid: Command() for pid in PLAYER_IDS}
+            move = (max(-1, min(1, dx)), max(-1, min(1, dy)))
+            commands = {self.me: Command(move=move, fire=fire, melee=melee, use_slot=slot,
+                                         aim=self.aim_for(self.me, move)),
+                        other: Command(*self.warm_bot.act())}
+            self.handle_events(self.match.step(STEP, commands))
+        if steps == MAX_STEPS_PER_FRAME:
+            self.warm_acc = 0.0
+        self.snap = snapshot(self.match)
+        if self.snap["winner"] and not self.win_time:
+            self.win_time = pygame.time.get_ticks()
 
     def try_reconnect(self, now, dt):
         """Связь потеряна: раз в секунду пробуем вернуться на своё место по ключу."""
@@ -479,6 +552,7 @@ class Game(ScreensMixin):
     def enter_net(self, conn, seat, address=None):
         """Войти в комнату: соединение с сервером и место (seat: комната, цвет и ключ для возврата)."""
         self.restart()
+        self.warmup, self.lobby_notice = False, None
         self.net, self.me = conn, seat["you"]
         self.net_addr, self.net_token, self.net_room = address, seat.get("token"), seat.get("room")
         self.net_seats, self.net_phase, self.net_paused = {}, "lobby", False
@@ -515,6 +589,7 @@ class Game(ScreensMixin):
                     conn.flush()
                 conn.close()
         self.net, self.lobby_conn, self.me = None, None, None
+        self.warmup, self.lobby_notice = False, None
         self.reconnect_until = None
         self.net_waiting = False
         pygame.display.set_caption(t("title"))
@@ -906,15 +981,19 @@ class Game(ScreensMixin):
             self.account_key(sc)
             return
         if sc == pygame.KSCAN_ESCAPE:
-            if self.net:
+            if self.warmup:
+                self.stop_warmup()        # разминка — назад в лобби комнаты
+            elif self.net:
                 self.leave_room()         # из комнаты — к списку комнат сервера
             else:
                 self.state = "menu"
             return
         if self.watching:                 # зритель: только Esc (выше)
             return
-        if self.net and self.net_waiting:
-            if sc == pygame.KSCAN_B:
+        if self.net and self.net_waiting and not self.warmup:
+            if sc == pygame.KSCAN_T:
+                self.start_warmup()
+            elif sc == pygame.KSCAN_B:
                 self.take_bot()
             elif sc in (pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER, pygame.KSCAN_SPACE):
                 self.send_ready(not self.my_ready())
@@ -922,7 +1001,9 @@ class Game(ScreensMixin):
                 self.next_hero(-1 if sc in (pygame.KSCAN_LEFT, pygame.KSCAN_A) else 1)
             return
         if self.snap["winner"] and sc == pygame.KSCAN_R:
-            if self.net:
+            if self.warmup:
+                self.start_warmup()       # разминка — ещё раз
+            elif self.net:
                 self.send_ready(True)     # реванш — когда готовы оба
             else:
                 self.restart()
@@ -1014,7 +1095,10 @@ class Game(ScreensMixin):
             if btn in (*back, B.CONTROLLER_BUTTON_START):
                 self.on_key(B.KSCAN_ESCAPE)
             return
-        if self.net and self.net_waiting:
+        if self.net and self.net_waiting and not self.warmup:
+            if btn == B.CONTROLLER_BUTTON_BACK:
+                self.start_warmup()
+                return
             if btn == B.CONTROLLER_BUTTON_Y:
                 self.take_bot()
             elif btn == B.CONTROLLER_BUTTON_A:
@@ -1275,6 +1359,8 @@ class Game(ScreensMixin):
 
     def player_label(self, pid):
         """Подпись игрока: в сетевой игре — имя или «Бот», иначе (и без имени) — имя героя."""
+        if self.warmup and pid != self.me:
+            return t("name.bot")
         if self.net:
             seat = self.net_seats.get(pid) or {}
             if seat.get("who") == "bot":
