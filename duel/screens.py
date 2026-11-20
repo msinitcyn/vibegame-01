@@ -73,7 +73,13 @@ class ScreensMixin:
             s.blit(txt, txt.get_rect(center=rect.center))
         if self.menu_message:
             img = self.font.render(self.menu_message, True, BAD_TEXT)
-            s.blit(img, img.get_rect(center=(WIDTH // 2, 500)))
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 528)))
+        u = self.updater
+        if u.available and not u.can_install:       # из исходников: только сообщить
+            img = self.small.render(tr("update.source", v=u.latest), True, (120, 220, 140))
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 40)))
+        img = self.tiny_text.render(f"v{u.version}", True, GREY)
+        s.blit(img, img.get_rect(bottomright=(WIDTH - 8, HEIGHT - 6)))
         hints = [(tr("menu.hint", n=len(self.menu)), GREY)]
         n = len(self.pads.pads)
         if n:
@@ -86,6 +92,35 @@ class ScreensMixin:
         for i, (text, color) in enumerate(hints):
             img = self.small.render(text, True, color)
             s.blit(img, img.get_rect(center=(WIDTH // 2, 560 + i * 25)))
+        pygame.display.flip()
+
+    def draw_update(self):
+        """Экран обновления: скачивание с долей, проверка, установка или ошибка."""
+        s = self.screen
+        s.fill(BG)
+        u = self.updater
+        img = self.big.render(tr("update.title", v=u.latest or ""), True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 160)))
+        state = u.state
+        text = tr("update." + state) if state != "error" else tr("update.err." + (u.error or "download"))
+        img = self.font.render(text, True, BAD_TEXT if state == "error" else WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 300)))
+        if state == "downloading":
+            bar = pygame.Rect(0, 0, 500, 22)
+            bar.center = (WIDTH // 2, 350)
+            pygame.draw.rect(s, (26, 29, 40), bar, border_radius=6)
+            fill = bar.copy()
+            fill.w = max(6, int(bar.w * u.progress))
+            pygame.draw.rect(s, BLUE, fill, border_radius=6)
+            pygame.draw.rect(s, GREY, bar, 2, border_radius=6)
+            pct = self.small.render(f"{int(u.progress * 100)} %", True, WHITE)
+            s.blit(pct, pct.get_rect(center=bar.center))
+        hint = {"error": "update.hint_error", "downloading": "update.hint_back"}.get(state)
+        if hint:
+            img = self.small.render(tr(hint), True, GREY)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 430)))
+        img = self.small.render(tr("update.from", a=u.version, b=u.latest or ""), True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 220)))
         pygame.display.flip()
 
     JOIN_ROWS = 5                     # сколько найденных игр помещается на экране
@@ -271,17 +306,18 @@ class ScreensMixin:
                   "aim_mode": f"◀  {tr('settings.aim_mode', mode=tr('aim_mode.' + self.settings.get('aim_mode', 'move')))}  ▶",
                   "aim_stick": f"◀  {tr('settings.aim_stick', n=self.settings.get('aim_stick', 6))}  ▶",
                   "aim_mouse": f"◀  {tr('settings.aim_mouse', n=self.settings.get('aim_mouse', 5))}  ▶",
+                  "updates": f"◀  {tr('settings.updates', v=tr('yes' if self.settings.get('check_updates', True) else 'no'))}  ▶",
                   "back": tr("settings.back")}
         for i, line in enumerate(self.settings_rows):
             sel = i == self.settings_index
-            rect = pygame.Rect(0, 0, 460, 48)
-            rect.center = (WIDTH // 2, 200 + i * 56)
+            rect = pygame.Rect(0, 0, 460, 44)
+            rect.center = (WIDTH // 2, 190 + i * 50)
             pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=10)
             pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
             txt = self.font.render(labels[line], True, WHITE if sel else GREY)
             s.blit(txt, txt.get_rect(center=rect.center))
         img = self.small.render(tr("settings.name_hint" if row == "name" else "settings.hint"), True, GREY)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 560)))
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 190 + len(self.settings_rows) * 50)))
         pygame.display.flip()
 
     def draw_help(self):

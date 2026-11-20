@@ -10,7 +10,8 @@ from pathlib import Path
 
 DEFAULTS = {"lang": "ru", "name": "", "last_address": "localhost",
             "aim_stick": 6, "aim_mouse": 5,       # чувствительность прицела, 1–10
-            "aim_mode": "move"}                   # прицел: "move" — по движению, "stick" — стик и мышь
+            "aim_mode": "move",                   # прицел: "move" — по движению, "stick" — стик и мышь
+            "check_updates": True}                # при запуске спрашивать GitHub о новой версии
 AIM_MODES = ("move", "stick")
 AIM_LEVELS = (1, 10)
 NAME_MAX = 16                     # длина имени игрока

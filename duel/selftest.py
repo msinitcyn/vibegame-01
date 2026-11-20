@@ -15,6 +15,7 @@ def run(seconds=None):
     if seconds is None:
         seconds = float(os.environ.get("DUEL_SELFTEST_SECONDS", "5"))
     os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    os.environ.setdefault("DUEL_NO_UPDATE_CHECK", "1")       # самопроверка не ходит в интернет
     os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
     import pygame
     from .game import Game

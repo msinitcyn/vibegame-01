@@ -83,6 +83,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          (cd files && sha256sum * > SHA256SUMS && cat SHA256SUMS)   # по ним игра проверяет обновление
           ls -l files
           gh release create "${{ github.ref_name }}" files/* \
             --repo "${{ github.repository }}" --title "${{ github.ref_name }}" --generate-notes

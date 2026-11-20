@@ -5,6 +5,7 @@
 всплывающие надписи на языке игрока. Отрисовка — в ScreensMixin (duel/screens.py).
 """
 import math
+import os
 import time
 
 import pygame
@@ -43,6 +44,7 @@ from .audio import MUSIC_END, Audio
 from .render import DIR
 from .screens import ScreensMixin
 from .sprites import reload_all
+from .update import Updater, restart as restart_updated
 
 MAX_STEPS_PER_FRAME = 5           # после долгого кадра не «догоняем» больше этого
 ADDRESS_MAX = 64                  # длина адреса на экране «Подключиться»
@@ -139,7 +141,8 @@ class Game(ScreensMixin):
         self.join_touched = False     # игрок листал или набирал — тогда игру сами не выбираем
         self.finder = None            # поиск игр в сети, пока открыт экран «Подключиться»
         self.menu_index = 0
-        self.settings_rows = ["lang", "name", "aim_mode", "aim_stick", "aim_mouse", "back"]
+        self.settings_rows = ["lang", "name", "aim_mode", "aim_stick", "aim_mouse", "updates", "back"]
+        self.updater = Updater()          # новая версия: проверка — в run(), по настройке
         self.help_page = 0
         self.settings_index = 0
         self.state = "menu"
@@ -209,7 +212,47 @@ class Game(ScreensMixin):
         self.handle_events(events)
         self.tick_popups(dt)
 
+    def start_update_check(self):
+        """Спросить GitHub о новой версии (в фоне), если не выключено в настройках и не в тестах."""
+        if self.settings.get("check_updates", True) and not os.environ.get("DUEL_NO_UPDATE_CHECK"):
+            self.updater.check()
+
+    def refresh_menu(self):
+        """Пункт «Обновить» появляется, когда нашлась новая версия и её можно поставить."""
+        can = self.updater.available and self.updater.can_install
+        if can and "update" not in self.menu:
+            self.menu.append("update")
+        elif not can and "update" in self.menu and self.state != "update":
+            self.menu.remove("update")
+            self.menu_index = min(self.menu_index, len(self.menu) - 1)
+
+    def update_frame(self):
+        """Экран обновления: скачали и проверили — ставим. True — игре пора выйти."""
+        u = self.updater
+        if u.state != "ready":
+            return False
+        u.state = "installing"
+        self.draw_update()
+        target = u.install()
+        if target is False:
+            return False                  # ошибка — видна на экране, Esc — в меню
+        pygame.quit()
+        if target is not None:            # Linux: файл заменён — запускаемся заново
+            restart_updated(target)
+        return True                       # Windows: установщик запущен — выходим
+
+    def update_key(self, sc):
+        if sc in (pygame.KSCAN_ESCAPE, pygame.KSCAN_BACKSPACE) and self.updater.state not in (
+                "verifying", "installing", "ready"):
+            self.state = "menu"
+            if self.updater.state == "error":
+                self.updater.state = "available"
+        elif sc in (pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER, pygame.KSCAN_SPACE) and \
+                self.updater.state == "error":
+            self.updater.start()          # ещё раз
+
     def run(self):
+        self.start_update_check()
         while True:
             dt = self.clock.tick(FPS) / 1000
             for e in pygame.event.get():
@@ -252,6 +295,12 @@ class Game(ScreensMixin):
                 self.win_time = pygame.time.get_ticks()
             self.update_music()
             self.sync_mouse_capture()
+            self.refresh_menu()
+            if self.state == "update":
+                if self.update_frame():
+                    return
+                self.draw_update()
+                continue
             if self.state == "menu":
                 self.draw_menu()
                 continue
@@ -495,7 +544,10 @@ class Game(ScreensMixin):
 
     def net_error(self, e):
         key = error_key(e)
-        return t("net.fail", err=t("net.err." + key) if key else str(e))
+        text = t("net.fail", err=t("net.err." + key) if key else str(e))
+        if key == "proto" and self.updater.available:          # друг уже обновился — подскажем
+            text += " " + t("update.hint_proto", v=self.updater.latest)
+        return text
 
     def take_bot(self):
         """Лобби у создателя: свободное место — боту, а сам создатель готов."""
@@ -587,6 +639,9 @@ class Game(ScreensMixin):
         if self.state == "menu":
             self.menu_key(sc)
             return
+        if self.state == "update":
+            self.update_key(sc)
+            return
         if self.state == "help":
             if sc in (pygame.KSCAN_ESCAPE, pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER,
                       pygame.KSCAN_SPACE, pygame.KSCAN_BACKSPACE):
@@ -649,6 +704,12 @@ class Game(ScreensMixin):
                 self.on_key(B.KSCAN_RETURN)
             return
         back = (B.CONTROLLER_BUTTON_X, B.CONTROLLER_BUTTON_B)   # □ (и ○) — назад во всех меню
+        if self.state == "update":
+            if btn in (*back, B.CONTROLLER_BUTTON_START):
+                self.on_key(B.KSCAN_ESCAPE)
+            elif btn == B.CONTROLLER_BUTTON_A:
+                self.on_key(B.KSCAN_RETURN)
+            return
         if self.state == "help":
             if btn in (B.CONTROLLER_BUTTON_A, *back, B.CONTROLLER_BUTTON_START):
                 self.state = "menu"
@@ -911,6 +972,13 @@ class Game(ScreensMixin):
                 lo, hi = settings.AIM_LEVELS
                 self.settings[row] = max(lo, min(hi, self.settings.get(row, settings.DEFAULTS[row]) + step))
                 settings.save(self.settings)
+        elif row == "updates":
+            if sc in (K.KSCAN_A, K.KSCAN_LEFT, K.KSCAN_D, K.KSCAN_RIGHT, K.KSCAN_RETURN, K.KSCAN_KP_ENTER,
+                      K.KSCAN_SPACE):
+                self.settings["check_updates"] = not self.settings.get("check_updates", True)
+                settings.save(self.settings)
+                if self.settings["check_updates"]:
+                    self.start_update_check()
         elif row == "lang":
             step = {K.KSCAN_A: -1, K.KSCAN_LEFT: -1, K.KSCAN_D: 1, K.KSCAN_RIGHT: 1,
                     K.KSCAN_RETURN: 1, K.KSCAN_KP_ENTER: 1, K.KSCAN_SPACE: 1}.get(sc)
@@ -972,7 +1040,7 @@ class Game(ScreensMixin):
         down = (pygame.KSCAN_S, pygame.KSCAN_DOWN)
         ok = (pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER, pygame.KSCAN_SPACE)
         digits = (pygame.KSCAN_1, pygame.KSCAN_2, pygame.KSCAN_3, pygame.KSCAN_4, pygame.KSCAN_5,
-                  pygame.KSCAN_6)
+                  pygame.KSCAN_6, pygame.KSCAN_7)
         if sc in up:
             self.menu_index = (self.menu_index - 1) % len(self.menu)
         elif sc in down:
@@ -986,7 +1054,8 @@ class Game(ScreensMixin):
     def menu_label(self, i):
         return {"play": t("menu.two"), "host": t("menu.host"), "join": t("menu.join"),
                 "test": t("menu.test", hp=TEST_HP), "help": t("menu.help"),
-                "settings": t("menu.settings")}[self.menu[i]]
+                "settings": t("menu.settings"),
+                "update": t("menu.update", v=self.updater.latest or "")}[self.menu[i]]
 
     def menu_select(self):
         action = self.menu[self.menu_index]
@@ -1003,6 +1072,9 @@ class Game(ScreensMixin):
             self.host_game()
         elif action == "join":
             self.open_join()
+        elif action == "update":
+            self.state = "update"
+            self.updater.start()
         else:
             self.open_pick(MAX_HP)
 

@@ -41,3 +41,5 @@ Name: "{autodesktop}\Spellgunners"; Filename: "{app}\spellgunners.exe"; Tasks: d
 
 [Run]
 Filename: "{app}\spellgunners.exe"; Description: "{cm:LaunchProgram,Spellgunners}"; Flags: nowait postinstall skipifsilent
+; автообновление ставит тихо (/SILENT) — тогда игру запускаем сами
+Filename: "{app}\spellgunners.exe"; Flags: nowait; Check: WizardSilent

@@ -92,6 +92,7 @@ FONT_FILES = {False: "DejaVuSansCondensed.ttf", True: "DejaVuSansCondensed-Bold.
 ICON_FILE = ASSETS / "icon.png"
 MUSIC_DIR = ASSETS / "music"
 SOUNDS_DIR = ASSETS / "sounds"
+UPDATE_REPO = "msinitcyn/vibegame-01"     # откуда брать новые версии (GitHub Releases)
 SPRITES_DIR = ASSETS / "sprites"
 # Маг нарисован один раз — assets/sprites/mage.png в ледяных (синих) цветах.
 # Красный получается заменой цветов команды: «цвет на рисунке» -> «цвет у красного».

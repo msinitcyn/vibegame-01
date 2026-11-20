@@ -69,15 +69,24 @@ def find_iscc():
     return None
 
 
+def write_version():
+    """Вшить версию в игру: duel/_version.py (в git не хранится) — по ней игра ищет обновления."""
+    path = ROOT / "duel" / "_version.py"
+    path.write_text(f'VERSION = "{version()}"\n', encoding="utf-8")
+    return path
+
+
 def build():
     if not ICON.exists():
         make_icon()
+    write_version()
     WORK.mkdir(exist_ok=True)
     DIST.mkdir(exist_ok=True)
     sep = ";" if WINDOWS else ":"
     args = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onefile",
             "--name", NAME, "--distpath", str(DIST), "--workpath", str(WORK / "pyinstaller"),
-            "--specpath", str(WORK), "--add-data", f"{ROOT / 'assets'}{sep}assets"]
+            "--specpath", str(WORK), "--add-data", f"{ROOT / 'assets'}{sep}assets",
+            "--hidden-import", "duel._version"]
     if WINDOWS:
         args += ["--windowed", "--icon", str(make_ico(ICON, WORK / "icon.ico"))]
     subprocess.check_call(args + [str(ROOT / "main.py")], cwd=ROOT)
