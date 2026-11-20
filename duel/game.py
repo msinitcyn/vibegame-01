@@ -11,6 +11,7 @@ import time
 import pygame
 
 from .bot import Bot
+from . import config
 from .commands import Command
 from .config import (
     HELP_PAGES,
@@ -48,6 +49,7 @@ from .sprites import reload_all
 from .update import Updater, restart as restart_updated
 
 MAX_STEPS_PER_FRAME = 5           # после долгого кадра не «догоняем» больше этого
+GO_FLASH = 0.6                    # сколько видно «В бой!» после отсчёта, сек
 ADDRESS_MAX = 64                  # длина адреса на экране «Подключиться»
 CONNECT_TIMEOUT = 3.0
 SILENCE = 3.0                     # столько секунд без сообщений сервера — связь потеряна
@@ -146,6 +148,9 @@ class Game(ScreensMixin):
         self.rooms_list, self.rooms_index, self.rooms_error = [], 1, None
         self.net_room = None
         self.warmup = False           # разминка против бота, пока ждём соперника в лобби комнаты
+        self.countdown = 0.0          # отсчёт перед партией за этим компьютером (хотсит, разминка), сек
+        self.net_countdown = 0.0      # отсчёт с сервера (сетевая партия)
+        self.go_flash = 0.0           # сколько ещё показывать «В бой!»
         self.lobby_notice = None      # надпись в лобби («Соперник пришёл!»)
         self.lobby_id = None          # номер сервера (для запомненного входа)
         self.server_db = None         # база аккаунтов своего сервера (None — рядом с настройками)
@@ -187,12 +192,33 @@ class Game(ScreensMixin):
         return self.match.players
 
     def start(self, hp=MAX_HP, heroes=None):
-        """Новая партия двух игроков (в тестовом режиме — с другим числом жизней)."""
+        """Новая партия двух игроков (в тестовом режиме — с другим числом жизней) — после отсчёта."""
         self.start_hp = hp
         self.heroes = dict(heroes or DEFAULT_HERO)
         self.state = "play"
         self.held.clear()
         self.restart()
+        self.countdown = float(config.COUNTDOWN)
+
+    def count_down(self, dt):
+        """Отсчёт перед партией за этим компьютером (хотсит, разминка). True — ещё идёт: матч стоит,
+        нажатия не копятся. Кончился — полсекунды «В бой!»."""
+        if self.countdown <= 0:
+            return False
+        self.countdown -= dt
+        self.pending = {pid: Command() for pid in PLAYER_IDS}
+        if self.countdown <= 0:
+            self.countdown = 0.0
+            self.go_flash = GO_FLASH
+            self.time_acc = 0.0
+            return False
+        return True
+
+    def countdown_left(self):
+        """Сколько секунд отсчёта осталось на экране: по сети — с сервера, иначе — свой."""
+        if self.net and not self.warmup:
+            return self.net_countdown
+        return self.countdown
 
     def restart(self, seed=None):
         # без зерна — каждый раз новая партия; герои — выбранные перед партией
@@ -279,6 +305,7 @@ class Game(ScreensMixin):
         self.start_update_check()
         while True:
             dt = self.clock.tick(FPS) / 1000
+            self.go_flash = max(0.0, self.go_flash - dt)
             for e in pygame.event.get():
                 if e.type == pygame.QUIT:
                     return
@@ -361,6 +388,8 @@ class Game(ScreensMixin):
                 if self.net_waiting:
                     self.draw_lobby()
                     continue
+            elif self.count_down(dt):
+                pass                          # отсчёт перед партией — матч стоит
             elif not self.snap["winner"]:
                 # фиксированный такт: копим время кадров, делаем целое число шагов
                 self.time_acc += dt
@@ -412,6 +441,11 @@ class Game(ScreensMixin):
             if msg.get("type") == "state":
                 self.net_seats = msg.get("seats") or {}
                 self.net_spectators = int(msg.get("spectators") or 0)
+                left = msg.get("countdown") or 0
+                left = float(left) if isinstance(left, (int, float)) and not isinstance(left, bool) else 0.0
+                if self.net_countdown > 0 and left <= 0:
+                    self.go_flash = GO_FLASH      # отсчёт сервера кончился — «В бой!»
+                self.net_countdown = left
                 self.net_phase = msg.get("phase", "play")
                 self.net_paused = bool(msg.get("paused"))
                 self.playback.push(msg["tick"], msg["snap"], msg["events"], msg.get("waiting", False),
@@ -453,6 +487,7 @@ class Game(ScreensMixin):
         self.warm_acc = 0.0
         self.popups = []
         self.win_time = 0
+        self.countdown = float(config.COUNTDOWN)
         self.snap = snapshot(self.match)
 
     def stop_warmup(self, notice=None):
@@ -467,7 +502,7 @@ class Game(ScreensMixin):
         if not self.net_waiting or (self.net_seats.get(other) or {}).get("who") in ("human", "away"):
             self.stop_warmup(t("net.warm_over"))
             return
-        if self.snap["winner"]:
+        if self.snap["winner"] or self.count_down(dt):
             return
         self.warm_acc += dt
         steps = 0
@@ -553,6 +588,7 @@ class Game(ScreensMixin):
         """Войти в комнату: соединение с сервером и место (seat: комната, цвет и ключ для возврата)."""
         self.restart()
         self.warmup, self.lobby_notice = False, None
+        self.net_countdown = 0.0
         self.net, self.me = conn, seat["you"]
         self.net_addr, self.net_token, self.net_room = address, seat.get("token"), seat.get("room")
         self.net_seats, self.net_phase, self.net_paused = {}, "lobby", False
@@ -1017,6 +1053,7 @@ class Game(ScreensMixin):
                 self.send_ready(True)     # реванш — когда готовы оба
             else:
                 self.restart()
+                self.countdown = float(config.COUNTDOWN)
         if not self.snap["winner"]:
             # нажатия копятся в команду и применяются в ближайшем такте матча
             for pid, c in self.controls.items():

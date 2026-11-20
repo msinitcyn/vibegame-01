@@ -210,6 +210,7 @@ TEXTS = {
         "popup.mobdead": "моб повержен",
         "win": "Победа: {name}!",
         "win.hint": "R — ещё раз, Esc — в меню",
+        "countdown.go": "В бой!",
 
         "item.triple": "веер",
         "item.shrink": "уменьшение",
@@ -472,6 +473,7 @@ TEXTS = {
         "popup.mobdead": "mob defeated",
         "win": "{name} wins!",
         "win.hint": "R — again, Esc — menu",
+        "countdown.go": "Fight!",
 
         "item.triple": "fan",
         "item.shrink": "shrink",
@@ -735,6 +737,7 @@ TEXTS = {
         "popup.mobdead": "hirviö kaatui",
         "win": "{name} voitti!",
         "win.hint": "R — uudestaan, Esc — valikkoon",
+        "countdown.go": "Taisteluun!",
 
         "item.triple": "viuhka",
         "item.shrink": "kutistus",

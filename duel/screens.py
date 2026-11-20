@@ -245,7 +245,7 @@ class ScreensMixin:
                 tr("hero." + seat["hero"]) if who and seat.get("hero") else tr("net.free_seat")))
         phase = r.get("phase")
         free = any(not (seats.get(pid) or {}).get("who") for pid in ("blue", "red"))
-        if phase == "play":
+        if phase in ("play", "countdown"):
             status, color = tr("net.st_playing"), BLUE
         elif phase == "over":
             status, color = tr("net.st_over"), GREY
@@ -350,6 +350,28 @@ class ScreensMixin:
         if self.net:
             return self.key_names["blue"][i] if pid == self.me else ""
         return self.key_names[pid][i]
+
+    def draw_countdown(self):
+        """Отсчёт перед партией: крупная цифра 3 – 2 – 1 по центру поля, потом «В бой!»."""
+        left = self.countdown_left()
+        if left > 0:
+            text, k = str(math.ceil(left - 1e-9)), left % 1 or 1.0
+        elif self.go_flash > 0:
+            text, k = tr("countdown.go"), 1.0
+        else:
+            return
+        s = self.screen
+        cy = (TOP + BOTTOM) // 2
+        size = 1.0 + 0.35 * k                 # цифра «выпрыгивает» и уменьшается к следующей
+        img = self.big.render(text, True, WHITE)
+        img = pygame.transform.smoothscale(img, (int(img.get_width() * size), int(img.get_height() * size)))
+        back = pygame.Surface((img.get_width() + 60, img.get_height() + 24), pygame.SRCALPHA)
+        pygame.draw.rect(back, (16, 12, 20, 170), back.get_rect(), border_radius=24)
+        s.blit(back, back.get_rect(center=(WIDTH // 2, cy)))
+        shadow = self.big.render(text, True, (16, 12, 20))
+        shadow = pygame.transform.smoothscale(shadow, img.get_size())
+        s.blit(shadow, shadow.get_rect(center=(WIDTH // 2 + 3, cy + 3)))
+        s.blit(img, img.get_rect(center=(WIDTH // 2, cy)))
 
     def draw_watch_banner(self):
         """Зрителю — надпись сверху: «Вы зритель» (и число зрителей)."""
@@ -759,6 +781,7 @@ class ScreensMixin:
             rect.clamp_ip(pygame.Rect(0, TOP, WIDTH, BOTTOM - TOP))
             s.blit(img, rect)
         self.draw_hud()
+        self.draw_countdown()
 
         if self.snap["winner"]:
             shade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)

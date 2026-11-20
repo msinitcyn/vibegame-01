@@ -23,6 +23,9 @@ from duel.match import Match  # noqa: E402
 DT = 1 / 60
 
 
+import duel.config  # noqa: E402
+duel.config.COUNTDOWN = 0.0     # партии в тестах начинаются сразу; сам отсчёт — в своих тестах
+
 def quiet(m):
     """Без случайных пачек патронов и волн мобов — только то, что тест создаст сам."""
     m.ammo_timer = {p: 1e9 for p in m.players}

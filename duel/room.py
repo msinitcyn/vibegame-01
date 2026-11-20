@@ -14,6 +14,7 @@ import secrets
 
 from .bot import Bot
 from .commands import Command
+from . import config
 from .config import DEFAULT_HERO, HEROES
 from .match import STEP, Match
 from .snapshot import snapshot
@@ -73,6 +74,7 @@ class Room:
         self.phase = "lobby"
         self.events = []              # события с прошлого снимка
         self.games = 0                # номер партии: клиент не сглаживает между партиями
+        self.countdown = 0.0          # фаза countdown: секунд до начала партии
         self.new_match()
 
     # ------------------------------------------------------------------ места
@@ -317,17 +319,21 @@ class Room:
     def tick(self):
         self.tick_no += 1
         if self.phase == "lobby" and self.all_ready():
-            self.phase = "play"
-            self.match.set_heroes(self.seat_heroes())
+            self.start_countdown()
             for s in self.seats.values():
                 s.ready = False
-            self.log("все готовы — партия началась")
+            self.log("все готовы — отсчёт")
         elif self.phase == "over" and self.all_ready():
-            self.phase = "play"
             self.new_match()
-            self.match.set_heroes(self.seat_heroes())
-            self.log("реванш")
+            self.start_countdown()
+            self.log("реванш — отсчёт")
         paused = any(s.away_until is not None for s in self.seats.values())
+        if self.phase == "countdown" and not paused:
+            self.countdown -= STEP
+            if self.countdown <= 1e-9:
+                self.countdown = 0.0
+                self.phase = "play"
+                self.log("партия началась")
         if self.phase == "play" and not paused:
             self.play_tick()
             if self.match.winner:
@@ -335,11 +341,18 @@ class Room:
         if self.tick_no % SEND_EVERY == 0:
             msg = {"type": "state", "room": self.id, "tick": self.tick_no, "game": self.games,
                    "phase": self.phase, "waiting": self.phase == "lobby", "paused": paused,
+                   "countdown": round(self.countdown, 2) if self.phase == "countdown" else 0,
                    "seats": self.seats_info(), "spectators": len(self.spectators),
                    "snap": snapshot(self.match), "events": self.events}
             self.events = []
             for conn in list(self.conns.values()) + self.spectators:
                 conn.send(msg)
+
+    def start_countdown(self):
+        """Все готовы: герои по местам, отсчёт перед партией (0 — сразу в бой)."""
+        self.match.set_heroes(self.seat_heroes())
+        self.countdown = float(config.COUNTDOWN)
+        self.phase = "countdown" if self.countdown > 0 else "play"
 
     def play_tick(self):
         commands = {}
