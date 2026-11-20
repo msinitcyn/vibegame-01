@@ -181,10 +181,16 @@ def restart(target, argv=None):
     os.execv(target, [target] + list(sys.argv[1:] if argv is None else argv))
 
 
+def setup_log():
+    """Журнал тихой установки на Windows (смотреть, если обновление не встало)."""
+    return Path(tempfile.gettempdir()) / "spellgunners-update.log"
+
+
 def run_windows_setup(setup):
-    """Тихая установка отдельным процессом; игра после этого выходит, установщик её запустит."""
+    """Тихая установка отдельным процессом; игра после этого выходит. Установщик сам ждёт, пока
+    игра закроется (мьютекс single.MUTEX_NAME), ставит и запускает новую версию."""
     flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-    subprocess.Popen([str(setup), "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS"],
+    subprocess.Popen([str(setup), "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", f"/LOG={setup_log()}"],
                      creationflags=flags, close_fds=True)
 
 

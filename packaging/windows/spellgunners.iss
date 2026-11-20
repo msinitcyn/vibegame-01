@@ -39,6 +39,28 @@ Source: "..\..\dist\spellgunners-windows.exe"; DestDir: "{app}"; DestName: "spel
 Name: "{autoprograms}\Spellgunners"; Filename: "{app}\spellgunners.exe"
 Name: "{autodesktop}\Spellgunners"; Filename: "{app}\spellgunners.exe"; Tasks: desktopicon
 
+[Code]
+// Автообновление запускает установщик и сразу выходит из игры — ждём, пока игра закроется
+// (мьютекс берёт duel/single.py), иначе spellgunners.exe занят, замена не удаётся и всё откатывается.
+function InitializeSetup(): Boolean;
+var
+  i: Integer;
+begin
+  i := 0;
+  while CheckForMutexes('SpellgunnersRunning') and (i < 100) do
+  begin
+    Sleep(200);
+    i := i + 1;
+  end;
+  if i > 0 then
+    Sleep(2000)    // собранная игра (onefile) ещё секунду-другую убирает за собой и держит файл
+  else if WizardSilent then
+    Sleep(4000);   // обновление из версии до 0.7.2: мьютекса там нет — просто даём игре закрыться
+  if CheckForMutexes('SpellgunnersRunning') and not WizardSilent then
+    MsgBox('Spellgunners ещё открыт — закройте игру, и установка продолжится.', mbInformation, MB_OK);
+  Result := True;
+end;
+
 [Run]
 Filename: "{app}\spellgunners.exe"; Description: "{cm:LaunchProgram,Spellgunners}"; Flags: nowait postinstall skipifsilent
 ; автообновление ставит тихо (/SILENT) — тогда игру запускаем сами

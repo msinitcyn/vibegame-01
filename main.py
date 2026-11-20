@@ -19,6 +19,14 @@ if __name__ == "__main__":
     if args.selftest:
         from duel.selftest import run
         raise SystemExit(run())
+    # одна копия игры (DUEL_MULTI=1 — можно несколько, для проверки сети на одном компьютере)
+    if not os.environ.get("DUEL_MULTI"):
+        from duel import settings, single
+        from duel.i18n import set_lang, t
+        if not single.acquire():
+            set_lang(settings.load().get("lang", "ru"))
+            single.tell_already_running(t("already_running"))
+            raise SystemExit(0)
     net = None
     if args.connect:
         # кнопки геймпада доходят и до окна без фокуса — два клиента на одном компьютере
