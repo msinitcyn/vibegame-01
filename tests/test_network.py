@@ -595,3 +595,58 @@ def test_hero_artifacts_travel_and_draw(server, game):
         game.handle_events([tuple(e) for e in s["events"]])
         game.draw()
     assert set(ITEM_SOUNDS) <= set(played)
+
+
+# ------------------------------------------------------------------ зрители
+
+def spectator(srv):
+    conn = Conn(socket.create_connection(("127.0.0.1", srv.port)))
+    msgs = []
+    wait(srv, lambda: msgs.extend(conn.recv()) or any(m["type"] == "hello" for m in msgs))
+    conn.send({"type": "join", "name": "Петя", "role": "spectator"})
+    wait(srv, lambda: msgs.extend(conn.recv()) or any(m["type"] in ("watch", "full") for m in msgs))
+    return conn, msgs
+
+
+def test_spectator_watches_without_seat(server):
+    a, b = Client(server), Client(server)
+    conn, msgs = spectator(server)
+    assert any(m["type"] == "watch" for m in msgs) and len(server.spectators) == 1
+    assert server.seats["blue"].conn and server.seats["red"].conn       # места не занял
+    playing(server, a, b)
+    wait(server, lambda: msgs.extend(conn.recv()) or any(m["type"] == "state" and m["phase"] == "play"
+                                                         for m in msgs), clients=(a, b))
+    state = [m for m in msgs if m["type"] == "state"][-1]
+    assert state["spectators"] == 1 and state["snap"]["players"]
+    assert a.last()["spectators"] == 1                                   # игроки видят зрителя
+
+
+def test_spectator_commands_ignored(server):
+    a, b = Client(server), Client(server)
+    playing(server, a, b)
+    conn, _ = spectator(server)
+    m = server.match
+    hp, y = m.blue.hp, m.blue.y
+    for _ in range(20):
+        conn.send({"type": "cmd", "move": [0, 1], "fire": True})
+        conn.send({"type": "ready", "ready": False})
+        a.cmd()
+        b.cmd()
+        server.step()
+    assert m.blue.y == y and not any(x.owner is m.blue for x in m.bullets) and m.blue.hp == hp
+
+
+def test_spectator_alone_gets_lobby_and_leaves(server):
+    conn, msgs = spectator(server)
+    wait(server, lambda: msgs.extend(conn.recv()) or any(m["type"] == "state" for m in msgs))
+    conn.send({"type": "leave"})
+    wait(server, lambda: not server.spectators)
+
+
+def test_too_many_spectators(server):
+    from duel.server import MAX_SPECTATORS
+    conns = [spectator(server)[0] for _ in range(MAX_SPECTATORS)]
+    _, msgs = spectator(server)
+    assert any(m["type"] == "full" for m in msgs)
+    for c in conns:
+        c.close()

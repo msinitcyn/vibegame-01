@@ -33,6 +33,7 @@ SEND_EVERY = 2                    # снимок раз в 2 такта — 30 �
 HOLD = 30.0                       # секунд держим место потерявшему связь
 SILENCE = 3.0                     # столько секунд без сообщений — связь потеряна
 JOIN_WAIT = 5.0                   # новичок без join столько секунд — закрываем
+MAX_SPECTATORS = 8                # зрителей больше не пускаем
 NAME_MAX = 16
 
 
@@ -73,6 +74,7 @@ class Server:
                 log(f"поиск игр в сети не работает (порт {discovery_port}: {e}) — подключаться по адресу")
         self.seats = {pid: Seat() for pid in PIDS}
         self.newcomers = []           # [(Conn, когда подключился)] — ещё не прислали join
+        self.spectators = []          # соединения зрителей: получают снимки, ничего не меняют
         self.bot = bot
         self.proto = proto            # версия протокола в приветствии (тесты проверяют несовпадение)
         self.bots = {pid: Bot(i + 1, forward=0.0 if pid == "blue" else math.pi) for i, pid in enumerate(PIDS)}
@@ -187,6 +189,16 @@ class Server:
                 else:
                     keep.append((conn, since))
                 continue
+            if join.get("role") == "spectator":
+                self.spectators = [c for c in self.spectators if not c.closed]
+                if len(self.spectators) >= MAX_SPECTATORS:
+                    conn.send({"type": "full"})
+                    conn.close()
+                else:
+                    self.spectators.append(conn)
+                    conn.send({"type": "watch"})
+                    self.log(f"{conn.addr[0]}:{conn.addr[1]} смотрит (зрителей: {len(self.spectators)})")
+                continue
             token = join.get("token")
             pid = next((p for p, s in self.seats.items() if token and s.token == token and s.conn is None),
                        None)
@@ -209,8 +221,25 @@ class Server:
             self.log(f"{conn.addr[0]}:{conn.addr[1]} {'вернулся' if back else 'подключился'} — {pid}")
         self.newcomers = keep
 
+    def read_spectators(self):
+        """Зрители ничего не шлют, кроме «ушёл»; закрытые соединения убираем."""
+        keep = []
+        for conn in self.spectators:
+            if any(m.get("type") == "leave" for m in conn.recv()):
+                conn.close()
+            if conn.closed:
+                self.log("зритель ушёл")
+            else:
+                keep.append(conn)
+        self.spectators = keep
+
+    def has_audience(self):
+        """Есть кому слать снимки: игроки, зрители или отошедший игрок, чьё место держим."""
+        return bool(self.conns or self.spectators or any(s.away_until for s in self.seats.values()))
+
     def read(self):
         self.seat_newcomers()
+        self.read_spectators()
         now = self.clock()
         for pid, s in self.seats.items():
             if s.conn is None:
@@ -275,7 +304,7 @@ class Server:
         self.answer_finders()
         self.accept()
         self.read()
-        if self.conns or any(s.away_until for s in self.seats.values()):
+        if self.has_audience():
             self.tick()
 
     def seats_info(self):
@@ -319,9 +348,10 @@ class Server:
             seats = self.seats_info()
             msg = {"type": "state", "tick": self.tick_no, "game": self.games, "phase": self.phase,
                    "waiting": self.phase == "lobby", "paused": paused, "seats": seats,
+                   "spectators": len(self.spectators),
                    "snap": snapshot(self.match), "events": self.events}
             self.events = []
-            for conn in self.conns.values():
+            for conn in list(self.conns.values()) + self.spectators:
                 conn.send(msg)
 
     def play_tick(self):
@@ -342,12 +372,13 @@ class Server:
 
     def close(self):
         """Закрыть всё; подключённым — «bye»: создатель вышел, переподключаться некуда."""
-        for conn in list(self.conns.values()) + [c for c, _ in self.newcomers]:
+        for conn in list(self.conns.values()) + self.spectators + [c for c, _ in self.newcomers]:
             conn.send({"type": "bye"})
             conn.flush()
             conn.close()
         self.seats = {pid: Seat() for pid in PIDS}
         self.newcomers = []
+        self.spectators = []
         for s in (self.listener, self.finder_sock):
             try:
                 if s:
@@ -367,7 +398,7 @@ class Server:
         while self.running:
             # не дольше 0,1 с, чтобы stop() из другого потока срабатывал быстро
             wait = min(0.1, max(0.0, next_tick - time.monotonic()))
-            socks = [self.listener] + list(self.conns.values()) + [c for c, _ in self.newcomers]
+            socks = [self.listener] + list(self.conns.values()) + self.spectators + [c for c, _ in self.newcomers]
             if self.finder_sock:
                 socks.append(self.finder_sock)
             select.select(socks, [], [], wait)
@@ -376,12 +407,12 @@ class Server:
             self.read()
             now = time.monotonic()
             while now >= next_tick:
-                if self.conns or any(s.away_until for s in self.seats.values()):
-                    self.tick()           # без игроков матч стоит
+                if self.has_audience():
+                    self.tick()           # без игроков и зрителей матч стоит
                 next_tick += STEP
                 if now - next_tick > 0.25:  # после долгой паузы не догоняем
                     next_tick = now
-            for conn in list(self.conns.values()) + [c for c, _ in self.newcomers]:
+            for conn in list(self.conns.values()) + self.spectators + [c for c, _ in self.newcomers]:
                 conn.flush()
 
 

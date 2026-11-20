@@ -233,3 +233,50 @@ def test_join_screen_with_many_games(game):
     assert [g["name"] for g in game.join_games()] == ["pc-0", "pc-1", "pc-2"]
     game.on_key(pygame.KSCAN_ESCAPE)
     assert game.finder is None and game.state == "menu"
+
+
+def test_third_player_becomes_spectator(game):
+    srv = start_in_thread(0, discovery_port=None, log=lambda text: None)
+    try:
+        blue, _ = connect(f"127.0.0.1:{srv.port}", timeout=3, name="Аня")
+        red = guest_conn(srv.port)
+        blue.send({"type": "ready", "ready": True})
+        game.state = "join"
+        game.address = f"127.0.0.1:{srv.port}"
+        game.join_pick = None
+        game.join_touched = True
+        game.on_key(pygame.KSCAN_RETURN)
+        assert game.net and game.me is None and game.watching and not game.join_error
+        frames(game, lambda: game.net_seats and not game.net_waiting, keep=(blue, red))
+        assert game.net_spectators == 1
+        game.draw()
+        game.on_key(pygame.KSCAN_SPACE)               # зритель не стреляет
+        game.on_key(pygame.KSCAN_RETURN)
+        frames(game, lambda: True, keep=(blue, red))
+        assert not srv.match.bullets                  # ни одной пули: игроки-заглушки не стреляют, зритель не может
+        game.on_key(pygame.KSCAN_ESCAPE)
+        assert game.state == "menu" and not game.net
+        deadline = time.monotonic() + 3
+        while srv.spectators and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert not srv.spectators
+        blue.close()
+        red.close()
+    finally:
+        srv.stop()
+        srv.thread.join(timeout=2)
+
+
+def test_spectator_lobby_draws(game):
+    srv = start_in_thread(0, discovery_port=None, log=lambda text: None)
+    try:
+        conn, seat = connect(f"127.0.0.1:{srv.port}", timeout=3, role="spectator")
+        assert seat["you"] is None
+        game.enter_net(conn, seat, f"127.0.0.1:{srv.port}")
+        frames(game, lambda: game.net_seats)
+        game.draw_lobby()
+        game.on_key(pygame.KSCAN_RETURN)              # «готов» зрителя никуда не уходит
+        game.leave_net()
+    finally:
+        srv.stop()
+        srv.thread.join(timeout=2)

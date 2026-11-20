@@ -152,6 +152,7 @@ class Game(ScreensMixin):
         self.net_port = PORT          # порт своего сервера (тесты ставят 0 — любой свободный)
         self.discovery_port = DISCOVERY_PORT    # порт поиска игр (тесты ставят None — не отвечать в сеть)
         self.net_waiting = False      # сервер ждёт второго игрока
+        self.net_spectators = 0       # сколько зрителей у сетевой игры
         self.net_seats = {}           # места из сообщений сервера: кто сидит, имя, готовность
         self.net_phase = "lobby"      # lobby / play / over
         self.net_paused = False       # кто-то потерял связь — партия на паузе
@@ -350,6 +351,9 @@ class Game(ScreensMixin):
         while self.time_acc >= STEP and steps < MAX_STEPS_PER_FRAME:
             self.time_acc -= STEP
             steps += 1
+            if self.watching:             # зритель ничего не шлёт
+                self.pending = {pid: Command() for pid in PLAYER_IDS}
+                continue
             held = self.held | self.pad_held()
             dx = dy = 0
             fire = melee = False
@@ -370,6 +374,7 @@ class Game(ScreensMixin):
             self.net_heard = now
             if msg.get("type") == "state":
                 self.net_seats = msg.get("seats") or {}
+                self.net_spectators = int(msg.get("spectators") or 0)
                 self.net_phase = msg.get("phase", "play")
                 self.net_paused = bool(msg.get("paused"))
                 self.playback.push(msg["tick"], msg["snap"], msg["events"], msg.get("waiting", False),
@@ -405,7 +410,7 @@ class Game(ScreensMixin):
             self.next_try = now + RECONNECT_EVERY
             try:
                 conn, seat = connect(self.net_addr, timeout=RECONNECT_EVERY, name=self.player_name(),
-                                     token=self.net_token)
+                                     token=self.net_token, role="spectator" if self.watching else "player")
             except (ConnectionError, OSError) as e:
                 if error_key(e) in ("full", "proto"):    # место уже отдали — вернуться не выйдет
                     self.net_end = "net.lost"
@@ -417,8 +422,15 @@ class Game(ScreensMixin):
             self.reconnect_until = None
         return True
 
+    @property
+    def watching(self):
+        """Сетевая игра без своего места — зритель."""
+        return self.net is not None and self.me is None
+
     def next_hero(self, step):
         """Лобби: следующий свободный герой (занятых соперником пропускаем)."""
+        if self.watching:
+            return
         mine = self.side_hero(self.me)
         taken = {s.get("hero") for pid, s in self.net_seats.items() if pid != self.me and s.get("who")}
         i = HEROES.index(mine)
@@ -434,7 +446,7 @@ class Game(ScreensMixin):
         return bool(self.net_seats.get(self.me, {}).get("ready"))
 
     def send_ready(self, ready):
-        if self.net and self.reconnect_until is None:
+        if self.net and self.reconnect_until is None and not self.watching:
             self.net.send({"type": "ready", "ready": ready})
 
     # ------------------------------------------------------------------ сетевая игра
@@ -445,13 +457,15 @@ class Game(ScreensMixin):
         self.net, self.me = conn, seat["you"]
         self.net_addr, self.net_token = address, seat.get("token")
         self.net_seats, self.net_phase, self.net_paused = {}, "lobby", False
+        self.net_spectators = 0
         self.reconnect_until = None
         self.net_heard = time.monotonic()
         self.playback = Playback()
         self.net_waiting = True
         self.state = "play"
         self.held.clear()
-        pygame.display.set_caption(f"{t('title')} — {t('net.title_suffix', name=t('name.' + self.me))}")
+        who = t("net.spectator") if self.me is None else t("name." + self.me)
+        pygame.display.set_caption(f"{t('title')} — {t('net.title_suffix', name=who)}")
 
     def leave_net(self, message=None, voluntary=True):
         """Выйти из сетевой игры в меню; свой сервер — остановить. Сам ушёл — место освобождается сразу."""
@@ -532,7 +546,14 @@ class Game(ScreensMixin):
         found = [g["address"] for g in self.join_games()]
         address = self.join_pick if self.join_pick in found else (self.address.strip() or "localhost")
         try:
-            conn, seat = connect(address, timeout=CONNECT_TIMEOUT, name=self.player_name())
+            try:
+                conn, seat = connect(address, timeout=CONNECT_TIMEOUT, name=self.player_name())
+            except ConnectionError as e:
+                if error_key(e) != "full":
+                    raise
+                # мест нет — смотрим
+                conn, seat = connect(address, timeout=CONNECT_TIMEOUT, name=self.player_name(),
+                                     role="spectator")
         except (ConnectionError, OSError, ValueError) as e:
             self.join_error = self.net_error(e)
             return
@@ -664,6 +685,8 @@ class Game(ScreensMixin):
                 self.leave_net()
             self.state = "menu"
             return
+        if self.watching:                 # зритель: только Esc (выше)
+            return
         if self.net and self.net_waiting:
             if sc == pygame.KSCAN_B:
                 self.take_bot()
@@ -753,6 +776,10 @@ class Game(ScreensMixin):
             elif btn == B.CONTROLLER_BUTTON_A:
                 self.on_key(B.KSCAN_RETURN)
             elif btn in (*back, B.CONTROLLER_BUTTON_START):
+                self.on_key(B.KSCAN_ESCAPE)
+            return
+        if self.watching:                 # зритель: только выход
+            if btn in (*back, B.CONTROLLER_BUTTON_START):
                 self.on_key(B.KSCAN_ESCAPE)
             return
         if self.net and self.net_waiting:

@@ -223,12 +223,29 @@ class ScreensMixin:
             text = "   ".join(self._addresses) if self._addresses else tr("net.no_addr")
             img = self.font.render(text, True, BLUE if self._addresses else BAD_TEXT)
             s.blit(img, img.get_rect(center=(WIDTH // 2, y + 32)))
-        hints = [tr("net.lobby_hint")] + ([tr("net.lobby_hint_host")] if self.host_server else [])
+        if self.watching:
+            hints = [tr("net.watch_hint")]
+        else:
+            hints = [tr("net.lobby_hint")] + ([tr("net.lobby_hint_host")] if self.host_server else [])
+        if self.net_spectators:
+            hints.append(tr("net.spectators", n=self.net_spectators))
         for i, text in enumerate(hints):
             img = self.small.render(text, True, GREY)
             s.blit(img, img.get_rect(center=(WIDTH // 2, 560 + i * 24)))
+        self.draw_watch_banner()
         self.draw_net_notice()
         pygame.display.flip()
+
+    def draw_watch_banner(self):
+        """Зрителю — надпись сверху: «Вы зритель» (и число зрителей)."""
+        if not self.watching:
+            return
+        text = tr("net.watching") + (f"   ·   {tr('net.spectators', n=self.net_spectators)}"
+                                     if self.net_spectators > 1 else "")
+        img = self.small.render(text, True, (255, 230, 140))
+        box = img.get_rect(midbottom=(WIDTH // 2, HEIGHT - 8)).inflate(20, 8)
+        pygame.draw.rect(self.screen, (16, 12, 20), box, border_radius=8)
+        self.screen.blit(img, img.get_rect(center=box.center))
 
     def draw_net_notice(self):
         """Поверх экрана: «переподключаемся…» у себя или «у соперника пропала связь — пауза»."""
@@ -634,7 +651,9 @@ class ScreensMixin:
             t = self.big.render(tr("win", name=self.player_label(w)), True, self.side_color(w))
             s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 20)))
             hint = tr("win.hint")
-            if self.net:
+            if self.watching:
+                hint = tr("net.watch_over")
+            elif self.net:
                 other = "red" if self.me == "blue" else "blue"
                 if self.my_ready():
                     hint = tr("net.rematch_wait")
@@ -644,4 +663,5 @@ class ScreensMixin:
             s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 40)))
         if self.net:
             self.draw_net_notice()
+            self.draw_watch_banner()
         pygame.display.flip()

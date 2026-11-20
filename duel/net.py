@@ -1,12 +1,14 @@
 """Сеть: сообщения JSON по TCP, по одному в строке.
 
-Рукопожатие (протокол 3):
-    сервер -> {"type": "hello", "proto": 3, "role": "player"}
-    клиент -> {"type": "join", "name": "Маша", "token": null | "ключ места при возврате"}
-    сервер -> {"type": "seat", "you": "red", "token": "…"}   или   {"type": "full"}
+Рукопожатие (протокол 4):
+    сервер -> {"type": "hello", "proto": 4, "role": "player"}
+    клиент -> {"type": "join", "name": "Маша", "token": null | "ключ места при возврате",
+               "role": "player" | "spectator"}
+    сервер -> {"type": "seat", "you": "red", "token": "…"}   или   {"type": "watch"}   или   {"type": "full"}
 Сервер -> клиент, 30 раз в секунду:
     {"type": "state", "tick": N, "game": K, "phase": "lobby" | "play" | "over", "waiting": bool,
      "paused": bool, "seats": {"blue": {"who": "human"|"bot"|"away"|null, "name", "ready", "away_left"}},
+     "spectators": N,
      "snap": {...}, "events": [[...], ...]}
     {"type": "bye"}                                  создатель игры вышел, сервер закрывается
 Клиент -> сервер:
@@ -19,7 +21,7 @@
 import json
 import socket
 
-PROTO = 3                          # 3: место по запросу join, лобби, готовность, возврат на место
+PROTO = 4                          # 4: зрители (роль в join); 3: лобби, готовность, возврат на место
 PORT = 5555
 MAX_OUT = 1024 * 1024              # клиент не читает (~7 с снимков) — отключаем, а не копим
 
@@ -116,9 +118,9 @@ def error_key(e):
     return None
 
 
-def connect(address, timeout=5.0, name="", token=None):
-    """Подключиться к серверу: приветствие, проверка версии, просьба о месте.
-    Возвращает (Conn, seat), где seat = {"you": цвет, "token": ключ места}."""
+def connect(address, timeout=5.0, name="", token=None, role="player"):
+    """Подключиться к серверу: приветствие, проверка версии, просьба о месте (или смотреть).
+    Возвращает (Conn, seat): seat = {"you": цвет, "token": ключ места}; у зрителя — {"you": None}."""
     import time
     sock = socket.create_connection(parse_address(address), timeout=timeout)
     conn = Conn(sock)
@@ -131,10 +133,12 @@ def connect(address, timeout=5.0, name="", token=None):
                 if msg.get("proto") != PROTO:
                     conn.close()
                     raise NetError("proto", f"другая версия протокола: {msg.get('proto')} (у нас {PROTO})")
-                conn.send({"type": "join", "name": name, "token": token})
+                conn.send({"type": "join", "name": name, "token": token, "role": role})
                 asked = True
             elif kind == "seat" and asked:
                 return conn, msg
+            elif kind == "watch" and asked:
+                return conn, {"you": None, "token": None, "watch": True}
             elif kind == "full":
                 conn.close()
                 raise NetError("full", "на сервере нет свободных мест")
