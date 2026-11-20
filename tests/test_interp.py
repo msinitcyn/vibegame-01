@@ -126,3 +126,13 @@ def test_waiting_flag_passes_through():
     pb = Playback()
     pb.push(100, snap(), waiting=True)
     assert pb.advance(0)[2] is True
+
+
+def test_flying_beam_is_smoothed_between_snapshots():
+    from duel.interp import lerp_snap
+    base = {k: [] for k in ("players", "clones", "bullets", "mobs", "mob_shots")}
+    a = dict(base, beams=[{"id": 7, "owner": "blue", "pts": [[100, 100], [200, 100], [300, 100]]}])
+    b = dict(base, beams=[{"id": 7, "owner": "blue", "pts": [[130, 100], [330, 100]]}])
+    mid = lerp_snap(a, b, 0.5)["beams"][0]["pts"]
+    assert mid[0] == [115, 100] and mid[-1] == [315, 100]
+    assert lerp_snap(a, b, 0.0)["beams"][0]["pts"][-1] == [300, 100]

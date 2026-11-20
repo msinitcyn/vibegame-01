@@ -32,7 +32,41 @@ def lerp_snap(a, b, k):
                 o = dict(o, x=o["x"] + (n["x"] - o["x"]) * k, y=o["y"] + (n["y"] - o["y"]) * k)
             moved.append(o)
         out[kind] = moved
+    if a.get("beams"):                    # летящий луч: ломаная — сглаживаем по точкам вдоль неё
+        nxt = {o["id"]: o for o in b.get("beams", [])}
+        out["beams"] = [lerp_beam(o, nxt.get(o["id"]), k) for o in a["beams"]]
     return out
+
+
+BEAM_SAMPLES = 16
+
+
+def resample(pts, n=BEAM_SAMPLES):
+    """n точек ломаной на равных расстояниях от хвоста до головы."""
+    segs = [math.hypot(x1 - x0, y1 - y0) for (x0, y0), (x1, y1) in zip(pts, pts[1:])]
+    total = sum(segs)
+    if total == 0:
+        return [list(pts[-1])] * n
+    out, i, run = [], 0, 0.0
+    for j in range(n):
+        d = total * j / (n - 1)
+        while i < len(segs) - 1 and run + segs[i] < d:
+            run += segs[i]
+            i += 1
+        t = 0.0 if segs[i] == 0 else min(1.0, (d - run) / segs[i])
+        (x0, y0), (x1, y1) = pts[i], pts[i + 1]
+        out.append([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t])
+    return out
+
+
+def lerp_beam(o, n, k):
+    """Луч между снимками: обе ломаные — по BEAM_SAMPLES точек, точки сдвигаются по доле k."""
+    if n is None or len(o["pts"]) < 2 or len(n["pts"]) < 2:
+        return o
+    pa, pb = resample(o["pts"]), resample(n["pts"])
+    if math.hypot(pb[-1][0] - pa[-1][0], pb[-1][1] - pa[-1][1]) > MAX_JUMP:
+        return o
+    return dict(o, pts=[[x0 + (x1 - x0) * k, y0 + (y1 - y0) * k] for (x0, y0), (x1, y1) in zip(pa, pb)])
 
 
 class Playback:

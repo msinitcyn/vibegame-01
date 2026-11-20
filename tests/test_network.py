@@ -564,3 +564,34 @@ def test_client_changes_hero_in_lobby(game):
     finally:
         game.leave_net()
         srv.stop()
+
+
+def test_hero_artifacts_travel_and_draw(server, game):
+    """Все артефакты героев на сервере → снимки по сети → экран клиента и звуки."""
+    import json
+    from duel.config import HERO_ONLY_ITEMS, ITEM_SOUNDS, TOP
+    from duel.entities import Mob
+    a, b = Client(server), Client(server)
+    playing(server, a, b)
+    m = server.match
+    m.blue.hp = m.red.hp = 1000
+    m.mobs += [Mob(300, TOP + 200 + i * 40, 6) for i in range(3)]
+    for kind in HERO_ONLY_ITEMS:
+        if kind != "immune":                     # кора заблокировала бы лассо и круг
+            m.apply_item(m.blue, kind)
+    m.apply_item(m.red, "immune")
+    for _ in range(40):
+        a.cmd(move=(1, 0))
+        b.cmd()
+        server.step()
+    states = a.states()
+    kinds = {k for s in states for k, v in s["snap"].items() if isinstance(v, list) and v}
+    assert {"ice", "trees", "rings", "sentries", "clones", "walls", "beams"} <= kinds
+    played = []
+    game.audio.item = played.append
+    for s in states:
+        snap = json.loads(json.dumps(s["snap"]))
+        game.snap = snap
+        game.handle_events([tuple(e) for e in s["events"]])
+        game.draw()
+    assert set(ITEM_SOUNDS) <= set(played)
