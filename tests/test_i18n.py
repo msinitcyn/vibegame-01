@@ -45,7 +45,8 @@ def test_all_screens_draw_in_every_language(game, lang, lang_restore):
         game.state = state
         draw()
     game.state = "help"
-    game.help_page = 1                          # вторая страница справки — правила
+    from duel.config import HELP_PAGES
+    game.help_page = HELP_PAGES - 1             # последняя вкладка справки — правила
     game.draw_help()
     game.match.winner = game.match.blue
     game.refresh_snap()

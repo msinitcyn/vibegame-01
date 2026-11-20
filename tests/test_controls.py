@@ -172,15 +172,24 @@ def test_pad_menu_navigation(game):
 def test_help_pages(game):
     game.state = "menu"
     game.on_key(pygame.KSCAN_4)
+    from duel.config import HELP_PAGES
     assert game.state == "help" and game.help_page == 0
     game.on_key(pygame.KSCAN_D)
     assert game.help_page == 1
     game.on_key(pygame.KSCAN_LEFT)
     assert game.help_page == 0
     game.on_key(pygame.KSCAN_LEFT)
-    assert game.help_page == 4                  # по кругу: 5 страниц
-    for page in range(5):
-        game.help_page = page
+    assert game.help_page == HELP_PAGES - 1     # по кругу
+    game.on_key(pygame.KSCAN_RIGHT)
+    game.on_key(pygame.KSCAN_S)                 # второй артефакт вкладки
+    assert game.help_index == 1
+    game.on_key(pygame.KSCAN_RETURN)            # «Подробнее» — сценка во весь экран
+    assert game.help_full
+    game.draw_help()
+    game.on_key(pygame.KSCAN_ESCAPE)            # назад к списку, не в меню
+    assert not game.help_full and game.state == "help"
+    for page in range(HELP_PAGES):
+        game.help_tab(page)
         game.draw_help()
     game.on_key(pygame.KSCAN_ESCAPE)
     assert game.state == "menu"

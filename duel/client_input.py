@@ -7,7 +7,7 @@ import pygame
 
 from . import config
 from . import settings
-from .config import HEIGHT, HELP_PAGES, TOP, WIDTH
+from .config import HEIGHT, TOP, WIDTH
 from .gamepad import (
     PAD_AIM_RESET,
     PAD_DOWN,
@@ -48,12 +48,7 @@ class InputMixin:
             self.keys_key(sc)
             return
         if self.state == "help":
-            if sc in (pygame.KSCAN_ESCAPE, pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER,
-                      pygame.KSCAN_SPACE, pygame.KSCAN_BACKSPACE):
-                self.state = "menu"
-            elif sc in (pygame.KSCAN_A, pygame.KSCAN_D, pygame.KSCAN_LEFT, pygame.KSCAN_RIGHT):
-                step = -1 if sc in (pygame.KSCAN_A, pygame.KSCAN_LEFT) else 1
-                self.help_page = (self.help_page + step) % HELP_PAGES     # листаем по кругу
+            self.help_key(sc)
             return
         if self.state == "settings":
             self.settings_key(sc)
@@ -185,8 +180,14 @@ class InputMixin:
                 self.on_key(B.KSCAN_RETURN)
             return
         if self.state == "help":
-            if btn in (B.CONTROLLER_BUTTON_A, *back, B.CONTROLLER_BUTTON_START):
-                self.state = "menu"
+            if btn == B.CONTROLLER_BUTTON_A:
+                self.on_key(B.KSCAN_RETURN)
+            elif btn in (*back, B.CONTROLLER_BUTTON_START):
+                self.on_key(B.KSCAN_ESCAPE)
+            elif btn in (B.CONTROLLER_BUTTON_DPAD_UP, PAD_UP):
+                self.on_key(B.KSCAN_UP)
+            elif btn in (B.CONTROLLER_BUTTON_DPAD_DOWN, PAD_DOWN):
+                self.on_key(B.KSCAN_DOWN)
             elif btn in (B.CONTROLLER_BUTTON_DPAD_LEFT, PAD_LEFT):
                 self.on_key(B.KSCAN_LEFT)
             elif btn in (B.CONTROLLER_BUTTON_DPAD_RIGHT, PAD_RIGHT):

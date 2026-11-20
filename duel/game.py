@@ -112,7 +112,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin):
                               "updates", "check_now", "back"]
         self.keys_col, self.keys_row, self.keys_wait, self.keys_msg = 0, 0, None, None
         self.updater = Updater()          # новая версия: проверка — в run(), по настройке
-        self.help_page = 0
+        self.help_page = self.help_index = 0      # справка: вкладка и артефакт в ней
+        self.help_full = False                    # «Подробнее»: сценка во весь экран
         self.settings_index = 0
         self.state = "menu"
         self.start_hp = MAX_HP

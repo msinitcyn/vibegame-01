@@ -81,9 +81,8 @@ ITEM_LEVEL = {
 LEVEL_WEIGHT = {1: 1.0, 2: 0.7, 3: 0.4, 4: 0.2}      # относительная частота выпадения
 LEVEL_MIN_MOB_HP = {1: 0, 2: 0, 3: 5, 4: 6}         # из моба с меньшим запасом жизней — не выпадает
 # справка: страницы артефактов героев (герои по порядку) и всего страниц
-HELP_HERO_PAGES = (("light", "nature"), ("frost", "fire"), ("dark",))
-HELP_PAGES = 2 + len(HELP_HERO_PAGES)
-DEMO_BOX = (200, 100)            # окошко сценки артефакта в справке (сценарии — assets/demos/*.json)
+HELP_TABS = ("common", "fire", "frost", "nature", "dark", "light", "rules")   # вкладки справки
+HELP_PAGES = len(HELP_TABS)
 # артефакт -> герой: выпадает только ему (подобрать может любой)
 HERO_ONLY_ITEMS = {"beam": "light", "clearfoe": "light", "breaker": "light", "mobpeace": "light", "invisible": "light",
                    "icewalk": "frost", "foe_freeze": "frost", "shield": "frost", "slowfoe": "frost",

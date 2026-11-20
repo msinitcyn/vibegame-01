@@ -40,14 +40,21 @@ def test_menu_hover_and_click(game):
     assert pygame.event.get(pygame.QUIT)
 
 
-def test_help_pages_by_halves_and_back_button(game):
-    game.state, game.help_page = "help", 0
+def test_help_tabs_list_and_back_button(game):
+    game.state, game.help_page, game.help_index, game.help_full = "help", 0, 0, False
     redraw(game, game.draw_help)
-    click(game, (900, 400))
+    tabs = sorted((h for h in game.hits if h[0].h == 34), key=lambda h: h[0].x)
+    click(game, tabs[1][0].center)                    # вкладка первого героя
     assert game.help_page == 1
     redraw(game, game.draw_help)
-    click(game, (100, 400))
-    assert game.help_page == 0
+    rows = [h for h in game.hits if h[0].w == 300]
+    game.on_mouse_move(rows[1][0].center)             # наведение — выбрать
+    assert game.help_index == 1
+    click(game, rows[1][0].center)                    # щелчок по выбранному — подробнее
+    assert game.help_full
+    redraw(game, game.draw_help)
+    click(game, (500, 400))                           # щелчок — назад к списку
+    assert not game.help_full
     redraw(game, game.draw_help)
     click(game, (44, 30))                             # «←»
     assert game.state == "menu"

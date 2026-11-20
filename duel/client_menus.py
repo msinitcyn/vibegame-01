@@ -7,7 +7,8 @@ import pygame
 
 from . import keys
 from . import settings
-from .config import DEFAULT_HERO, HEROES, MAX_HP, TEST_HP
+from .config import DEFAULT_HERO, HELP_PAGES, HELP_TABS, HERO_ONLY_ITEMS, HEROES, MAX_HP, TEST_HP
+from .items import HELP_SECTIONS
 from .i18n import get_lang, LANGS, set_lang, t
 from .update import restart as restart_updated
 from .client_common import Controls, PLAYER_IDS
@@ -117,7 +118,8 @@ class MenusMixin:
         self.menu_message = None
         if action == "help":
             self.state = "help"
-            self.help_page = 0
+            self.help_page = self.help_index = 0
+            self.help_full = False
         elif action == "settings":
             self.state = "settings"
             self.settings_back = "menu"
@@ -136,6 +138,42 @@ class MenusMixin:
         """Из настроек — туда, откуда пришли: в меню или обратно в партию (на паузу)."""
         self.state = self.settings_back if self.settings_back == "play" else "menu"
         self.settings_back = "menu"
+
+    # ------------------------------------------------------------------ справка
+
+    def help_kinds(self, page=None):
+        """Артефакты вкладки справки (на «Правилах» — ни одного)."""
+        tab = HELP_TABS[self.help_page if page is None else page]
+        if tab == "rules":
+            return []
+        if tab == "common":
+            return [k for sec, ks in HELP_SECTIONS if sec != "hero" for k in ks]
+        return [k for k in dict(HELP_SECTIONS)["hero"] if HERO_ONLY_ITEMS[k] == tab]
+
+    def help_kind(self):
+        kinds = self.help_kinds()
+        return kinds[min(self.help_index, len(kinds) - 1)] if kinds else None
+
+    def help_tab(self, page):
+        self.help_page, self.help_index, self.help_full = page % HELP_PAGES, 0, False
+
+    def help_key(self, sc):
+        """Справка: W/S — артефакт, A/D — вкладка, Enter — подробнее (сценка во весь экран), Esc — назад."""
+        K = pygame
+        if self.help_full:
+            if sc in (K.KSCAN_ESCAPE, K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE, K.KSCAN_BACKSPACE):
+                self.help_full = False
+            return
+        n = len(self.help_kinds())
+        if sc in (K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE):
+            self.state = "menu"
+        elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE) and n:
+            self.help_full = True
+        elif sc in (K.KSCAN_W, K.KSCAN_UP, K.KSCAN_S, K.KSCAN_DOWN) and n:
+            step = -1 if sc in (K.KSCAN_W, K.KSCAN_UP) else 1
+            self.help_index = (self.help_index + step) % n
+        elif sc in (K.KSCAN_A, K.KSCAN_LEFT, K.KSCAN_D, K.KSCAN_RIGHT):
+            self.help_tab(self.help_page + (-1 if sc in (K.KSCAN_A, K.KSCAN_LEFT) else 1))
 
     def settings_key(self, sc):
         """Экран настроек: W/S — строка, A/D или Enter — изменить, Esc — назад.

@@ -4,7 +4,6 @@
 import pygame
 
 from .config import (
-    DEMO_BOX,
     TOP,
     AMMO_COLOR,
     AMMO_PACK,
@@ -13,10 +12,8 @@ from .config import (
     BLUE,
     GREY,
     HEIGHT,
-    HELP_HERO_PAGES,
-    HELP_PAGES,
+    HELP_TABS,
     HERO_COLOR,
-    HERO_ONLY_ITEMS,
     HERO_SPRITE,
     HEROES,
     MELEE_COOLDOWN,
@@ -39,7 +36,7 @@ from .demos import Demo, has_demo, load as load_demo
 from .render import draw_field
 from .snapshot import snapshot
 from .icons import draw_icon
-from .items import HELP_SECTIONS, item_help, item_name, ITEMS, section_title
+from .items import item_help, item_name, ITEMS
 from .sprites import draw_unit
 
 
@@ -259,90 +256,129 @@ class MenuScreensMixin:
         pygame.display.flip()
 
     def draw_help(self):
-        """Справка: общие артефакты, артефакты героев (две страницы), правила."""
+        """Справка: вкладки (общие, герои, правила); слева список артефактов вкладки, справа — сценка
+        выбранного и описание; «Подробнее» — сценка во весь экран."""
         s = self.screen
         s.fill(BG)
-        # щелчок по левой половине — назад по страницам, по правой — вперёд
-        self.hit((0, 0, WIDTH // 2, HEIGHT), lambda: self.on_key(pygame.KSCAN_LEFT))
-        self.hit((WIDTH // 2, 0, WIDTH - WIDTH // 2, HEIGHT), lambda: self.on_key(pygame.KSCAN_RIGHT))
-        page = self.help_page
-        heroes = page - 1 if 1 <= page <= len(HELP_HERO_PAGES) else None
-        title = (tr("help.title") if page == 0 else tr("sec.hero") if heroes is not None else tr("help.rules"))
-        img = self.font.render(title, True, WHITE)
+        kind = self.help_kind()
+        if self.help_full and kind:
+            self.draw_help_full(kind)
+            pygame.display.flip()
+            return
+        img = self.font.render(tr("help.title"), True, WHITE)
         s.blit(img, img.get_rect(center=(WIDTH // 2, 24)))
-        if page == 0:
-            self.draw_help_items()
-        elif heroes is not None:
-            self.draw_help_heroes(HELP_HERO_PAGES[heroes])
-        else:
+        self.draw_help_tabs()
+        tab = HELP_TABS[self.help_page]
+        if tab == "rules":
             self.draw_help_rules()
-        hint = self.small.render(f"{tr('help.pages', page=page + 1, pages=HELP_PAGES)}    "
-                                 f"{tr('help.back')}", True, GREY)
+        else:
+            self.draw_help_list()
+            self.draw_help_focus(kind)
+            note = tr("help.levels") if tab == "common" else tr("help.hero_note")
+            for j, line in enumerate(self.wrap(note, WIDTH - 80, self.small)):
+                img = self.small.render(line, True, GREY)
+                s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 58 + j * 19)))
+        hint = self.small.render(tr("help.keys"), True, GREY)
         s.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 16)))
         self.back_button()
         pygame.display.flip()
 
-    def draw_help_items(self):
-        s = self.screen
-        row_h, col_w = 46, 470
-        sections = dict(HELP_SECTIONS)
-        cols = {0: ["defense", "weapon"], 1: ["debuff"]}     # колонки примерно поровну
-        for col, ids in cols.items():
-            x0 = 20 + col * (col_w + 20)
-            y = 50
-            for section in ids:
-                h = self.font.render(section_title(section), True, (200, 205, 220))
-                s.blit(h, (x0, y))
-                pygame.draw.line(s, GREY, (x0, y + 24), (x0 + col_w, y + 24), 1)
-                y += 32
-                for kind in sections[section]:
-                    draw_icon(s, kind, (x0 + 20, y + 20), 18)
-                    name = self.font.render(item_name(kind), True, ITEMS[kind][1])
-                    s.blit(name, (x0 + 48, y))
-                    for j, line in enumerate(self.wrap(item_help(kind), col_w - 50)):
-                        s.blit(self.tiny_text.render(line, True, WHITE), (x0 + 48, y + 21 + j * 14))
-                    y += row_h
-                y += 6
-        for j, line in enumerate(self.wrap(tr("help.levels"), WIDTH - 80, self.small)):
-            img = self.small.render(line, True, GREY)
-            s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 70 + j * 19)))
+    def help_tab_label(self, tab):
+        if tab == "common":
+            return tr("help.tab_common"), (200, 205, 220)
+        if tab == "rules":
+            return tr("help.rules"), (200, 205, 220)
+        return tr("hero." + tab), HERO_COLOR[tab]
 
-    def draw_help_heroes(self, heroes):
-        """Артефакты героев: слева маг героя, справа его артефакты (значок, название, описание)."""
+    def draw_help_tabs(self):
+        """Вкладки сверху: щелчок — открыть."""
         s = self.screen
-        y = 56
-        kinds = dict(HELP_SECTIONS)["hero"]
-        demo_w, demo_h = DEMO_BOX
-        texts = {k: self.wrap(item_help(k), WIDTH - 220 - (demo_w + 16 if has_demo(k) else 0), self.small)
-                 for k in kinds if HERO_ONLY_ITEMS[k] in heroes}
-        # высота строки: текст или окошко сценки (если есть)
-        tall = {k: max(42 + 19 * len(v), demo_h + 8 if has_demo(k) else 0) for k, v in texts.items()}
-        # не влезает над подписью внизу — плотнее (строки ближе, отступы меньше)
-        full = sum(tall.values()) + 6 * len(heroes)
-        head, line_h, gap = (28, 19, 8) if y + full <= HEIGHT - 64 else (25, 17, 3)
-        for hero in heroes:
-            mine = [k for k in kinds if HERO_ONLY_ITEMS[k] == hero]
-            top = y
-            for kind in mine:
-                draw_icon(s, kind, (150, y + head - 2), 22 if gap > 3 else 19)
-                name = self.font.render(item_name(kind), True, ITEMS[kind][1])
-                s.blit(name, (186, y))
-                lines = texts[kind]
-                for j, line in enumerate(lines):
-                    s.blit(self.small.render(line, True, WHITE), (186, y + head + j * line_h))
-                step = head + 6 + line_h * len(lines) + gap
-                if has_demo(kind):                    # сценка: как работает артефакт
-                    box = pygame.Rect(WIDTH - 24 - demo_w, y, demo_w, demo_h)
-                    self.draw_demo(kind, box)
-                    step = max(step, demo_h + 4 + gap)
-                y += step
-            pygame.draw.line(s, HERO_COLOR[hero], (24, top), (24, y - 10), 3)
-            draw_unit(s, HERO_SPRITE[hero], (70, (top + y) // 2 - 10), 28, 1)
-            label = self.small.render(tr("hero." + hero), True, HERO_COLOR[hero])
-            s.blit(label, label.get_rect(center=(70, (top + y) // 2 + 30)))
-            y += 6
-        note = self.small.render(tr("help.hero_note"), True, GREY)
-        s.blit(note, note.get_rect(center=(WIDTH // 2, HEIGHT - 44)))
+        n, gap, x0 = len(HELP_TABS), 8, 90
+        w = (WIDTH - 24 - x0 - gap * (n - 1)) // n
+        for i, tab in enumerate(HELP_TABS):
+            rect = pygame.Rect(x0 + i * (w + gap), 48, w, 34)
+            sel = i == self.help_page
+            label, color = self.help_tab_label(tab)
+            on = sel or self.hovered(rect)
+            pygame.draw.rect(s, (40, 46, 66) if on else (26, 29, 40), rect, border_radius=8)
+            pygame.draw.rect(s, color if sel else (60, 64, 80), rect, 3 if sel else 1, border_radius=8)
+            img = self.small.render(label, True, color if on else GREY)
+            s.blit(img, img.get_rect(center=rect.center))
+            self.hit(rect, lambda i=i: self.help_tab(i))
+
+    def draw_help_list(self):
+        """Список артефактов вкладки: значок и название; наведение — выбрать, щелчок по выбранному — подробнее."""
+        s = self.screen
+        x0, y0, w, row = 24, 100, 300, 44
+        for i, kind in enumerate(self.help_kinds()):
+            rect = pygame.Rect(x0, y0 + i * row, w, row - 4)
+            sel = i == min(self.help_index, len(self.help_kinds()) - 1)
+            pygame.draw.rect(s, (40, 46, 66) if sel else (22, 25, 34), rect, border_radius=8)
+            if sel:
+                pygame.draw.rect(s, ITEMS[kind][1], rect, 2, border_radius=8)
+            draw_icon(s, kind, (rect.x + 22, rect.centery), 15)
+            name = item_name(kind)
+            font = self.font if self.font.size(name)[0] <= w - 52 else self.small
+            img = font.render(name, True, ITEMS[kind][1] if sel else (200, 205, 220))
+            s.blit(img, img.get_rect(midleft=(rect.x + 46, rect.centery)))
+            self.hit(rect, lambda i=i: (setattr(self, "help_index", i), setattr(self, "help_full", True)),
+                     lambda i=i: setattr(self, "help_index", i))
+
+    def help_demo_box(self):
+        x0 = 344
+        w = WIDTH - 24 - x0
+        return pygame.Rect(x0, 100, w, w // 2)
+
+    def draw_help_focus(self, kind):
+        """Справа: сценка выбранного артефакта (или крупный значок), название, описание, «Подробнее»."""
+        if kind is None:
+            return
+        s = self.screen
+        box = self.help_demo_box()
+        if getattr(self, "_help_focus", None) != kind:      # выбрали другой — его сценка с начала
+            self._help_focus = kind
+            self.__dict__.get("_demos", {}).pop(kind, None)
+        if has_demo(kind):
+            self.draw_demo(kind, box)
+        else:
+            pygame.draw.rect(s, (22, 25, 34), box, border_radius=8)
+            pygame.draw.rect(s, (60, 64, 80), box, 1, border_radius=8)
+            draw_icon(s, kind, (box.centerx, box.centery - 14), 54)
+            img = self.small.render(tr("help.no_demo"), True, GREY)
+            s.blit(img, img.get_rect(center=(box.centerx, box.bottom - 26)))
+        self.hit(box, lambda: setattr(self, "help_full", True))
+        y = box.bottom + 14
+        img = self.font.render(item_name(kind), True, ITEMS[kind][1])
+        s.blit(img, (box.x, y))
+        y += 32
+        for line in self.wrap(item_help(kind), box.w, self.small):
+            s.blit(self.small.render(line, True, WHITE), (box.x, y))
+            y += 20
+        self.button((box.right - 90, y + 26), tr("help.more"), lambda: setattr(self, "help_full", True), w=180)
+
+    def draw_help_full(self, kind):
+        """«Подробнее»: сценка во весь экран (или крупный значок), под ней название и описание."""
+        s = self.screen
+        lines = self.wrap(item_help(kind), WIDTH - 80, self.small)
+        bottom = HEIGHT - 60 - 32 - 20 * len(lines)
+        w = min(WIDTH - 40, (bottom - 20) * 2)
+        box = pygame.Rect(0, 0, w, w // 2)
+        box.midtop = (WIDTH // 2, 16)
+        if has_demo(kind):
+            self.draw_demo(kind, box)
+        else:
+            draw_icon(s, kind, box.center, 120)
+        y = box.bottom + 14
+        img = self.font.render(item_name(kind), True, ITEMS[kind][1])
+        s.blit(img, img.get_rect(midtop=(WIDTH // 2, y)))
+        y += 32
+        for line in lines:
+            img = self.small.render(line, True, WHITE)
+            s.blit(img, img.get_rect(midtop=(WIDTH // 2, y)))
+            y += 20
+        hint = self.small.render(tr("help.keys_full"), True, GREY)
+        s.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 16)))
+        self.hit((0, 0, WIDTH, HEIGHT), lambda: setattr(self, "help_full", False))
 
     def draw_demo(self, kind, box):
         """Окошко сценки артефакта: своя маленькая партия по сценарию (assets/demos/<kind>.json)."""
@@ -363,7 +399,10 @@ class MenuScreensMixin:
         draw_field(field, snap, self.tiny)
         vx, vy, vw, vh = demo.data["view"]
         view = pygame.Rect(int(vx), int(vy), int(vw), int(vh)).clip(field.get_rect())
-        img = pygame.transform.smoothscale(field.subsurface(view), box.size)
+        part = field.subsurface(view)
+        # крупнее, чем на поле, — по пикселям (чётко, как пиксель-арт); мельче — сглаженно
+        img = (pygame.transform.scale(part, box.size) if box.w >= view.w
+               else pygame.transform.smoothscale(part, box.size))
         self.screen.blit(img, box)
         pygame.draw.rect(self.screen, (90, 96, 120), box.inflate(4, 4), 2, border_radius=6)
 
@@ -373,7 +412,7 @@ class MenuScreensMixin:
                        ammo=START_AMMO, pack=AMMO_PACK, every=f"{MOB_EVERY:.0f}",
                        mmax=MOB_MAX, mhp=MOB_MAX_HP, ranged=MOB_RANGED_EVERY, range=MOB_RANGE,
                        melee=MELEE_DAMAGE, melee_cd=f"{MELEE_COOLDOWN:g}".replace(".", tr("decimal")))
-        x0, y, width = 80, 70, WIDTH - 160
+        x0, y, width = 80, 100, WIDTH - 160
         for i in range(1, 11):
             lines = self.wrap(tr(f"note.{i}", **numbers), width, self.small)
             for j, line in enumerate(lines):

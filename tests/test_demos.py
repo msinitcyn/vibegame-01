@@ -29,7 +29,12 @@ def test_lasso_pulls_runner_back():
 
 
 def test_help_page_with_demo_draws(game):
-    game.state, game.help_page = "help", 2
+    from duel.config import HELP_TABS
+    game.state, game.help_page, game.help_full = "help", HELP_TABS.index("fire"), False
+    game.help_index = game.help_kinds().index("lasso")
     game.hits = []
     game.draw_help()
     assert "lasso" in game._demos
+    game.help_full = True                       # во весь экран
+    game.draw_help()
+    game.help_full = False
