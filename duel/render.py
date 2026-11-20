@@ -32,6 +32,7 @@ from .config import (
     SHIELD_GAP,
     WALL_W,
 )
+from . import vfx
 from .icons import draw_icon
 from .items import ITEMS
 from .sprites import draw_unit
@@ -358,22 +359,6 @@ def draw_fire_ring(surf, ring, t):
         pygame.draw.polygon(surf, (255, 235, 130), [(fx - 2, fy + 2), (fx + 2, fy + 2), (fx, fy - h * 0.55)])
 
 
-def draw_pull(surf, victim, puller, color):
-    """Нить притяжения: волнистая линия от того, кто тянет, к тому, кого тянут."""
-    x0, y0, x1, y1 = puller["x"], puller["y"], victim["x"], victim["y"]
-    n = 14
-    nx, ny = -(y1 - y0), x1 - x0
-    nl = math.hypot(nx, ny) or 1.0
-    pts = []
-    for i in range(n + 1):
-        k = i / n
-        w = math.sin(k * math.pi * 4) * 7 * math.sin(k * math.pi)
-        pts.append((x0 + (x1 - x0) * k + nx / nl * w, y0 + (y1 - y0) * k + ny / nl * w))
-    pygame.draw.lines(surf, (16, 12, 20), False, pts, 7)
-    pygame.draw.lines(surf, color, False, pts, 4)
-    pygame.draw.lines(surf, (255, 230, 120), False, pts, 1)          # огненная сердцевина
-
-
 def draw_guardian(surf, g, font, heroes):
     """Страж арены: спит — серая каменная статуя на постаменте; проснулся — живой, с кольцом цвета
     игрока, на которого охотится, и полоской жизней."""
@@ -439,7 +424,7 @@ def draw_field(surf, snap, font, viewer=None):
             surf.blit(ring, (int(p["x"]) - c, int(p["y"]) - c))
         if "lassoed" in p.get("effects", {}):
             puller = by_id["red" if p["id"] == "blue" else "blue"]
-            draw_pull(surf, p, puller, side_color(heroes, puller["id"]))
+            vfx.draw_lasso(surf, p, puller, side_color(heroes, puller["id"]), snap.get("time", 0))
     for b in snap.get("beams", []):
         draw_beam(surf, b, heroes)
     for p in snap["players"]:
