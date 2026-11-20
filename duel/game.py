@@ -36,7 +36,7 @@ from . import settings
 from .interp import Playback
 from .match import STEP, Match
 from .discovery import DISCOVERY_PORT, Finder
-from .net import PORT, connect, error_key
+from .net import PORT, NetError, connect, enter_room, error_key, open_server
 from .snapshot import player as snap_player, snapshot
 from .gamepad import (Gamepads, PAD_AIM_RESET, PAD_DOWN, PAD_FIRE, PAD_ITEM_BUTTONS, PAD_LEFT, PAD_MELEE,
                       PAD_RIGHT, PAD_UP)
@@ -133,13 +133,17 @@ class Game(ScreensMixin):
         self.held = set()             # зажатые физические клавиши
         self.pads = Gamepads()
         # пункты меню; подписи — menu_label()
-        self.menu = ["play", "host", "join", "test", "help", "settings"]
+        self.menu = ["play", "net", "test", "help", "settings"]
         self.menu_message = None      # ошибка или «связь потеряна» — показывается в меню
         self.address = self.settings.get("last_address", "localhost")
         self.join_error = None
         self.join_pick = None         # адрес выбранной найденной игры (None — строка ручного ввода)
         self.join_touched = False     # игрок листал или набирал — тогда игру сами не выбираем
-        self.finder = None            # поиск игр в сети, пока открыт экран «Подключиться»
+        self.finder = None            # поиск серверов в сети, пока открыт экран серверов
+        self.lobby_conn = None        # соединение с сервером на экране комнат
+        self.lobby_addr = self.lobby_server = None
+        self.rooms_list, self.rooms_index, self.rooms_error = [], 0, None
+        self.net_room = None
         self.menu_index = 0
         self.settings_rows = ["lang", "name", "aim_mode", "aim_stick", "aim_mouse", "updates", "back"]
         self.updater = Updater()          # новая версия: проверка — в run(), по настройке
@@ -253,6 +257,18 @@ class Game(ScreensMixin):
             self.updater.start()          # ещё раз
 
     def run(self):
+        """Главный цикл; на выходе — закрыть сетевую игру и остановить свой сервер."""
+        try:
+            self.main_loop()
+        finally:
+            for conn in (self.net, self.lobby_conn):
+                if conn and not conn.closed:
+                    conn.send({"type": "leave"})
+                    conn.flush()
+                    conn.close()
+            self.stop_own_server()
+
+    def main_loop(self):
         self.start_update_check()
         while True:
             dt = self.clock.tick(FPS) / 1000
@@ -269,7 +285,6 @@ class Game(ScreensMixin):
                 if e.type == pygame.KEYDOWN:
                     self.held.add(e.scancode)
                     if e.scancode == pygame.KSCAN_ESCAPE and self.state == "menu":
-                        self.leave_net()
                         return
                     self.on_key(e.scancode)
                 if e.type == pygame.MOUSEMOTION:
@@ -319,6 +334,11 @@ class Game(ScreensMixin):
                     self.finder.poll()
                 self.join_autopick()
                 self.draw_join()
+                continue
+            if self.state == "rooms":
+                self.rooms_frame()
+                if self.state == "rooms":
+                    self.draw_rooms()
                 continue
             if self.net:
                 if not self.net_frame(dt):
@@ -384,9 +404,6 @@ class Game(ScreensMixin):
                 return False
         self.show_playback(dt)
         if self.net.closed or now - self.net_heard > SILENCE:
-            if self.host_server:          # свой сервер в этой же программе — возвращаться некуда
-                self.net_end = "net.lost"
-                return False
             self.net.close()
             self.reconnect_until = now + RECONNECT_FOR
             self.next_try = now
@@ -410,9 +427,10 @@ class Game(ScreensMixin):
             self.next_try = now + RECONNECT_EVERY
             try:
                 conn, seat = connect(self.net_addr, timeout=RECONNECT_EVERY, name=self.player_name(),
-                                     token=self.net_token, role="spectator" if self.watching else "player")
+                                     token=self.net_token, role="spectator" if self.watching else "player",
+                                     room=self.net_room)
             except (ConnectionError, OSError) as e:
-                if error_key(e) in ("full", "proto"):    # место уже отдали — вернуться не выйдет
+                if error_key(e) in ("full", "proto", "noroom"):    # место или комнату уже отдали
                     self.net_end = "net.lost"
                     return False
                 return True
@@ -452,10 +470,10 @@ class Game(ScreensMixin):
     # ------------------------------------------------------------------ сетевая игра
 
     def enter_net(self, conn, seat, address=None):
-        """Начать сетевую игру: соединение и место от сервера (seat: цвет и ключ для возврата)."""
+        """Войти в комнату: соединение с сервером и место (seat: комната, цвет и ключ для возврата)."""
         self.restart()
         self.net, self.me = conn, seat["you"]
-        self.net_addr, self.net_token = address, seat.get("token")
+        self.net_addr, self.net_token, self.net_room = address, seat.get("token"), seat.get("room")
         self.net_seats, self.net_phase, self.net_paused = {}, "lobby", False
         self.net_spectators = 0
         self.reconnect_until = None
@@ -467,48 +485,65 @@ class Game(ScreensMixin):
         who = t("net.spectator") if self.me is None else t("name." + self.me)
         pygame.display.set_caption(f"{t('title')} — {t('net.title_suffix', name=who)}")
 
+    def leave_room(self):
+        """Esc в комнате: выйти из неё и остаться на сервере — снова список комнат."""
+        conn = self.net
+        if conn is None or conn.closed or self.reconnect_until is not None:
+            self.leave_net()              # связи нет — назад к серверам
+            return
+        conn.send({"type": "leave"})
+        self.net, self.me = None, None
+        self.net_waiting = False
+        self.restart()
+        pygame.display.set_caption(t("title"))
+        self.show_rooms(conn, self.net_addr, self.lobby_server)
+
     def leave_net(self, message=None, voluntary=True):
-        """Выйти из сетевой игры в меню; свой сервер — остановить. Сам ушёл — место освобождается сразу."""
-        if self.net:
-            if voluntary and not self.net.closed:
-                self.net.send({"type": "leave"})
-                self.net.flush()
-            self.net.close()
+        """Уйти с сервера (или связь кончилась): закрыть соединение — экран серверов с причиной.
+        Свой сервер продолжает работать."""
+        for conn in (self.net, self.lobby_conn):
+            if conn:
+                if voluntary and not conn.closed:
+                    conn.send({"type": "leave"})
+                    conn.flush()
+                conn.close()
+        self.net, self.lobby_conn, self.me = None, None, None
         self.reconnect_until = None
+        self.net_waiting = False
+        pygame.display.set_caption(t("title"))
+        self.restart()
+        self.open_join(message)
+
+    # ------------------------------------------------------------------ свой сервер
+
+    def create_own_server(self):
+        """«Создать свой сервер»: сервер с лобби в фоновом потоке — и сразу к нему."""
+        if not self.host_server:
+            from .server import start_in_thread
+            try:
+                self.host_server = start_in_thread(self.net_port, discovery_port=self.discovery_port,
+                                                   name=self.player_name() or None)
+            except OSError:
+                self.join_error = t("net.port_busy", port=self.net_port)
+                return
+            self.__dict__.pop("_addresses", None)       # адрес в сети мог смениться — найти заново
+        self.open_rooms(self.own_address())
+
+    def own_address(self):
+        return f"127.0.0.1:{self.host_server.port}"
+
+    def stop_own_server(self):
         if self.host_server:
             self.host_server.stop()
             self.host_server.thread.join(timeout=2)
-        self.net, self.me, self.host_server = None, None, None
-        self.net_waiting = False
-        self.state = "menu"
-        self.menu_message = message
-        pygame.display.set_caption(t("title"))
-        self.restart()
+        self.host_server = None
 
-    def host_game(self):
-        """«Создать игру по сети»: свой сервер в фоновом потоке и подключение к нему синим."""
-        from .server import start_in_thread
-        try:
-            srv = start_in_thread(self.net_port, discovery_port=self.discovery_port)
-        except OSError:
-            self.menu_message = t("net.port_busy", port=self.net_port)
-            return
-        try:
-            address = f"127.0.0.1:{srv.port}"
-            conn, seat = connect(address, timeout=CONNECT_TIMEOUT, name=self.player_name())
-        except (ConnectionError, OSError) as e:
-            srv.stop()
-            self.menu_message = self.net_error(e)
-            return
-        self.menu_message = None
-        self.enter_net(conn, seat, address)
-        self.host_server = srv
-        self.__dict__.pop("_addresses", None)       # адрес в сети мог смениться — найти заново
+    # ------------------------------------------------------------------ экран серверов
 
-    def open_join(self):
-        """Экран «Подключиться»: начать искать игры в сети."""
+    def open_join(self, message=None):
+        """Экран серверов («Играть по сети»): найденные в сети, свой, адрес вручную, «Создать свой»."""
         self.state = "join"
-        self.join_error = None
+        self.join_error = message
         self.join_pick = None
         self.join_touched = False
         self.close_finder()
@@ -524,44 +559,63 @@ class Game(ScreensMixin):
         self.finder = None
 
     def join_games(self):
-        """Найденные в сети игры для экрана «Подключиться»."""
-        return self.finder.games() if self.finder else []
+        """Найденные в сети серверы (кроме своего — он отдельной строкой)."""
+        games = self.finder.games() if self.finder else []
+        if self.host_server:
+            from .net import local_addresses
+            mine = {"127.0.0.1", "localhost", *local_addresses()}
+            port = str(self.host_server.port)
+            games = [g for g in games if not (g["address"].rsplit(":", 1)[1] == port
+                                              and g["address"].rsplit(":", 1)[0] in mine)]
+        return games
+
+    def join_rows(self):
+        """Строки экрана серверов: свой, найденные, ручной ввод (None), создать/остановить свой."""
+        rows = ["own"] if self.host_server else []
+        rows += [g["address"] for g in self.join_games()]
+        return rows + [None, "stop" if self.host_server else "create"]
 
     def join_autopick(self):
-        """Пока игрок ничего не трогал, выбрана первая найденная игра — сразу Enter."""
+        """Пока игрок ничего не трогал, выбран первый сервер (свой или найденный) — сразу Enter."""
         if not self.join_touched and self.join_pick is None:
-            games = self.join_games()
-            if games:
-                self.join_pick = games[0]["address"]
+            rows = self.join_rows()
+            if rows[0] is not None:
+                self.join_pick = rows[0]
 
     def join_move(self, step):
-        """Сдвинуть выбор по списку: найденные игры, затем строка ручного ввода."""
-        rows = [g["address"] for g in self.join_games()] + [None]
-        i = rows.index(self.join_pick) if self.join_pick in rows else len(rows) - 1
+        rows = self.join_rows()
+        i = rows.index(self.join_pick) if self.join_pick in rows else rows.index(None)
         self.join_pick = rows[max(0, min(len(rows) - 1, i + step))]
 
     def join_game(self):
-        """Подключиться к выбранной игре или по адресу, введённому вручную."""
+        """Enter на экране серверов."""
         self.join_autopick()
-        found = [g["address"] for g in self.join_games()]
-        address = self.join_pick if self.join_pick in found else (self.address.strip() or "localhost")
+        pick = self.join_pick
+        if pick == "create":
+            self.create_own_server()
+        elif pick == "stop":
+            self.stop_own_server()
+            self.join_pick = "create"
+        elif pick == "own" and self.host_server:
+            self.open_rooms(self.own_address())
+        elif pick in [g["address"] for g in self.join_games()]:
+            self.open_rooms(pick)
+        else:
+            self.open_rooms(self.address.strip() or "localhost", remember=True)
+
+    def open_rooms(self, address, remember=False):
+        """Подключиться к серверу и показать его комнаты."""
         try:
-            try:
-                conn, seat = connect(address, timeout=CONNECT_TIMEOUT, name=self.player_name())
-            except ConnectionError as e:
-                if error_key(e) != "full":
-                    raise
-                # мест нет — смотрим
-                conn, seat = connect(address, timeout=CONNECT_TIMEOUT, name=self.player_name(),
-                                     role="spectator")
+            conn, hello = open_server(address, timeout=CONNECT_TIMEOUT)
         except (ConnectionError, OSError, ValueError) as e:
             self.join_error = self.net_error(e)
             return
         self.join_error = None
-        self.settings["last_address"] = address
-        settings.save(self.settings)
+        if remember:
+            self.settings["last_address"] = address
+            settings.save(self.settings)
         self.close_finder()
-        self.enter_net(conn, seat, address)
+        self.show_rooms(conn, address, hello.get("server") or address)
 
     def net_error(self, e):
         key = error_key(e)
@@ -570,14 +624,8 @@ class Game(ScreensMixin):
             text += " " + t("update.hint_proto", v=self.updater.latest)
         return text
 
-    def take_bot(self):
-        """Лобби у создателя: свободное место — боту, а сам создатель готов."""
-        if self.host_server and self.net_waiting:
-            self.host_server.bot = True
-            self.send_ready(True)
-
     def join_key(self, sc):
-        """Экран «Подключиться»: набор адреса по физическим клавишам (в любой раскладке)."""
+        """Экран серверов: выбор строки, набор адреса по физическим клавишам (в любой раскладке)."""
         K = pygame
         if sc == K.KSCAN_ESCAPE:
             self.close_finder()
@@ -601,6 +649,78 @@ class Game(ScreensMixin):
             self.join_pick = None     # набор адреса — строка ручного ввода
             self.address += ch
             self.join_error = None
+
+    # ------------------------------------------------------------------ экран комнат
+
+    def show_rooms(self, conn, address, server_name):
+        """Экран комнат сервера: соединение в лобби сервера, список приходит раз в секунду."""
+        self.lobby_conn, self.lobby_addr, self.lobby_server = conn, address, server_name
+        self.net_addr = address
+        self.rooms_list, self.rooms_index, self.rooms_error = [], 0, None
+        conn.send({"type": "rooms"})
+        self.state = "rooms"
+
+    def rooms_frame(self):
+        """Кадр экрана комнат: свежий список; сервер закрылся или пропал — к серверам."""
+        conn = self.lobby_conn
+        for msg in conn.recv():
+            if msg.get("type") == "rooms":
+                self.rooms_list = [r for r in msg.get("rooms") or [] if isinstance(r, dict)]
+                self.lobby_server = msg.get("server") or self.lobby_server
+            elif msg.get("type") == "bye":
+                self.leave_net(t("net.host_left"), voluntary=False)
+                return
+        if conn.closed:
+            self.leave_net(t("net.lost"), voluntary=False)
+            return
+        self.rooms_index = max(0, min(len(self.rooms_list), self.rooms_index))
+
+    def rooms_key(self, sc):
+        """Экран комнат: ↑/↓ (W/S) — выбор, Enter — создать/войти (мест нет — смотреть),
+        V — смотреть, Esc — к серверам."""
+        K = pygame
+        if sc in (K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE):
+            self.leave_net()
+        elif sc in (K.KSCAN_UP, K.KSCAN_W):
+            self.rooms_index = max(0, self.rooms_index - 1)
+        elif sc in (K.KSCAN_DOWN, K.KSCAN_S):
+            self.rooms_index = min(len(self.rooms_list), self.rooms_index + 1)
+        elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
+            self.rooms_enter(watch=False)
+        elif sc == K.KSCAN_V:
+            self.rooms_enter(watch=True)
+
+    def rooms_enter(self, watch):
+        """Создать комнату (первая строка) или войти в выбранную: игроком, а если мест нет — зрителем."""
+        conn, name = self.lobby_conn, self.player_name()
+        try:
+            if self.rooms_index == 0:
+                if watch:
+                    return
+                seat = enter_room(conn, CONNECT_TIMEOUT, name, create=True)
+            else:
+                room = self.rooms_list[self.rooms_index - 1].get("id")
+                try:
+                    seat = enter_room(conn, CONNECT_TIMEOUT, name, role="spectator" if watch else "player",
+                                      room=room)
+                except NetError as e:
+                    if e.key != "full" or watch:
+                        raise
+                    seat = enter_room(conn, CONNECT_TIMEOUT, name, role="spectator", room=room)
+        except (ConnectionError, OSError) as e:
+            if conn.closed:
+                self.leave_net(self.net_error(e), voluntary=False)
+            else:
+                self.rooms_error = self.net_error(e)
+                conn.send({"type": "rooms"})
+            return
+        self.lobby_conn = None
+        self.enter_net(conn, seat, self.lobby_addr)
+
+    def take_bot(self):
+        """Лобби комнаты: свободное место — боту (и сам «готов»)."""
+        if self.net and self.net_waiting and not self.watching and self.reconnect_until is None:
+            self.net.send({"type": "bot"})
 
     # ------------------------------------------------------------------ события матча
 
@@ -680,10 +800,14 @@ class Game(ScreensMixin):
         if self.state == "join":
             self.join_key(sc)
             return
+        if self.state == "rooms":
+            self.rooms_key(sc)
+            return
         if sc == pygame.KSCAN_ESCAPE:
             if self.net:
-                self.leave_net()
-            self.state = "menu"
+                self.leave_room()         # из комнаты — к списку комнат сервера
+            else:
+                self.state = "menu"
             return
         if self.watching:                 # зритель: только Esc (выше)
             return
@@ -768,13 +892,15 @@ class Game(ScreensMixin):
             if btn in keys:
                 self.on_key(keys[btn])
             return
-        if self.state == "join":
+        if self.state in ("join", "rooms"):
             if btn in (B.CONTROLLER_BUTTON_DPAD_UP, PAD_UP):
                 self.on_key(B.KSCAN_UP)
             elif btn in (B.CONTROLLER_BUTTON_DPAD_DOWN, PAD_DOWN):
                 self.on_key(B.KSCAN_DOWN)
             elif btn == B.CONTROLLER_BUTTON_A:
                 self.on_key(B.KSCAN_RETURN)
+            elif btn == B.CONTROLLER_BUTTON_Y and self.state == "rooms":
+                self.on_key(B.KSCAN_V)        # △ — смотреть
             elif btn in (*back, B.CONTROLLER_BUTTON_START):
                 self.on_key(B.KSCAN_ESCAPE)
             return
@@ -1059,7 +1185,7 @@ class Game(ScreensMixin):
         pygame.display.set_caption(t("title"))
 
     def update_music(self):
-        in_menu = self.state in ("menu", "help", "settings", "join", "pick") or self.net_waiting
+        in_menu = self.state in ("menu", "help", "settings", "join", "rooms", "pick") or self.net_waiting
         self.audio.music("menu" if in_menu else "game")
 
     def menu_key(self, sc):
@@ -1079,7 +1205,7 @@ class Game(ScreensMixin):
             self.menu_select()
 
     def menu_label(self, i):
-        return {"play": t("menu.two"), "host": t("menu.host"), "join": t("menu.join"),
+        return {"play": t("menu.two"), "net": t("menu.net"),
                 "test": t("menu.test", hp=TEST_HP), "help": t("menu.help"),
                 "settings": t("menu.settings"),
                 "update": t("menu.update", v=self.updater.latest or "")}[self.menu[i]]
@@ -1095,9 +1221,7 @@ class Game(ScreensMixin):
             self.settings_index = 0
         elif action == "test":
             self.open_pick(TEST_HP)
-        elif action == "host":
-            self.host_game()
-        elif action == "join":
+        elif action == "net":
             self.open_join()
         elif action == "update":
             self.state = "update"

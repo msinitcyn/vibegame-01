@@ -80,7 +80,7 @@ def test_menu_keys(game):
     game.state = "menu"
     game.menu_index = 0
     # режимов против компьютера в хотсите нет; сетевая игра — пункты 2 и 3
-    assert game.menu == ["play", "host", "join", "test", "help", "settings"]
+    assert game.menu == ["play", "net", "test", "help", "settings"]
     game.on_key(pygame.KSCAN_RETURN)
     assert game.state == "pick"                 # сначала выбор героев
     game.on_key(pygame.KSCAN_SPACE)
@@ -88,15 +88,15 @@ def test_menu_keys(game):
     assert game.state == "play" and game.match.blue.hp == 10
     game.on_key(pygame.KSCAN_ESCAPE)
     assert game.state == "menu"
-    game.on_key(pygame.KSCAN_5)
+    game.on_key(pygame.KSCAN_4)
     assert game.state == "help"
     game.on_key(pygame.KSCAN_ESCAPE)
     assert game.state == "menu"
-    game.on_key(pygame.KSCAN_3)
-    assert game.state == "join"
+    game.on_key(pygame.KSCAN_2)
+    assert game.state == "join"                 # «Играть по сети» — экран серверов
     game.on_key(pygame.KSCAN_ESCAPE)
     assert game.state == "menu"
-    game.on_key(pygame.KSCAN_4)
+    game.on_key(pygame.KSCAN_3)
     assert game.state == "pick"
     game.on_key(pygame.KSCAN_SPACE)
     game.on_key(pygame.KSCAN_RETURN)
@@ -151,10 +151,10 @@ def test_pad_menu_navigation(game):
     with_pads(game)
     game.state = "menu"
     game.menu_index = 0
-    for _ in range(3):
+    for _ in range(2):
         game.on_pad(101, pygame.CONTROLLER_BUTTON_DPAD_DOWN)
     game.on_pad(101, pygame.CONTROLLER_BUTTON_A)
-    assert game.state == "pick"                                     # четвёртый пункт — тестовый режим
+    assert game.state == "pick"                                     # третий пункт — тестовый режим
     game.on_pad(100, pygame.CONTROLLER_BUTTON_A)
     game.on_pad(101, pygame.CONTROLLER_BUTTON_A)
     assert game.state == "play" and game.match.blue.hp == 1000
@@ -164,7 +164,7 @@ def test_pad_menu_navigation(game):
 
 def test_help_pages(game):
     game.state = "menu"
-    game.on_key(pygame.KSCAN_5)
+    game.on_key(pygame.KSCAN_4)
     assert game.state == "help" and game.help_page == 0
     game.on_key(pygame.KSCAN_D)
     assert game.help_page == 1

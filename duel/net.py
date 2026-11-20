@@ -1,27 +1,30 @@
 """Сеть: сообщения JSON по TCP, по одному в строке.
 
-Рукопожатие (протокол 4):
-    сервер -> {"type": "hello", "proto": 4, "role": "player"}
-    клиент -> {"type": "join", "name": "Маша", "token": null | "ключ места при возврате",
-               "role": "player" | "spectator"}
-    сервер -> {"type": "seat", "you": "red", "token": "…"}   или   {"type": "watch"}   или   {"type": "full"}
-Сервер -> клиент, 30 раз в секунду:
-    {"type": "state", "tick": N, "game": K, "phase": "lobby" | "play" | "over", "waiting": bool,
-     "paused": bool, "seats": {"blue": {"who": "human"|"bot"|"away"|null, "name", "ready", "away_left"}},
-     "spectators": N,
-     "snap": {...}, "events": [[...], ...]}
-    {"type": "bye"}                                  создатель игры вышел, сервер закрывается
-Клиент -> сервер:
-    {"type": "cmd", "move": [dx, dy], "fire": bool, "melee": bool, "slot": int|null}   каждый такт
-    {"type": "ready", "ready": bool}                 готов к партии (в лобби) или к реваншу (после победы)
-    {"type": "name", "name": "Маша"}                 сменить имя
-    {"type": "hero", "hero": "nature"}               сменить героя (в лобби; занятого соперником — нельзя)
-    {"type": "leave"}                                ушёл сам (Esc) — место свободно сразу
+Протокол 5 — сервер с лобби и комнатами:
+    сервер -> {"type": "hello", "proto": 5, "role": "lobby", "server": "Дом"}
+В лобби клиент -> сервер:
+    {"type": "rooms"}                                    список комнат (сейчас и раз в секунду)
+    {"type": "create", "name": "Маша"}                   новая комната, сам — синий
+    {"type": "join", "room": 3 | null, "role": "player" | "spectator", "name", "token"}
+                                                         room null — первая подходящая (или новая)
+    сервер -> {"type": "rooms", "server": "Дом", "rooms": [{"id", "name", "phase", "seats", "spectators"}]}
+              {"type": "seat", "room": 3, "you": "red", "token": "…"}   {"type": "watch", "room": 3}
+              {"type": "full"}   {"type": "noroom"}
+В комнате, сервер -> клиент, 30 раз в секунду:
+    {"type": "state", "room": 3, "tick": N, "game": K, "phase": "lobby" | "play" | "over", "waiting": bool,
+     "paused": bool, "seats": {"blue": {"who": "human"|"bot"|"away"|null, "name", "ready", "hero", "away_left"}},
+     "spectators": N, "snap": {...}, "events": [[...], ...]}
+    {"type": "bye"}                                      сервер закрывается
+В комнате, клиент -> сервер:
+    {"type": "cmd", "move": [dx, dy], "fire": bool, "melee": bool, "slot": int|null, "aim": float}
+    {"type": "ready", "ready": bool}   {"type": "name", "name"}   {"type": "hero", "hero"}
+    {"type": "bot"}                                      бот на свободное место (в лобби комнаты)
+    {"type": "leave"}                                    вышел из комнаты — снова в лобби сервера
 """
 import json
 import socket
 
-PROTO = 4                          # 4: зрители (роль в join); 3: лобби, готовность, возврат на место
+PROTO = 5                          # 5: лобби с комнатами; 4: зрители; 3: лобби, готовность, возврат
 PORT = 5555
 MAX_OUT = 1024 * 1024              # клиент не читает (~7 с снимков) — отключаем, а не копим
 MAX_LINE = 64 * 1024               # сообщение длиннее — нарушение протокола (снимок ~6 КБ)
@@ -140,38 +143,67 @@ def error_key(e):
     return None
 
 
-def connect(address, timeout=5.0, name="", token=None, role="player"):
-    """Подключиться к серверу: приветствие, проверка версии, просьба о месте (или смотреть).
-    Возвращает (Conn, seat): seat = {"you": цвет, "token": ключ места}; у зрителя — {"you": None}."""
+def wait_for(conn, kinds, timeout):
+    """Ждать сообщения одного из видов kinds. Остальные (снимки, списки) пропускаем.
+    «bye» и закрытие — ошибка; не дождались — тоже."""
     import time
-    sock = socket.create_connection(parse_address(address), timeout=timeout)
-    conn = Conn(sock)
     deadline = time.monotonic() + timeout
-    asked = False
     while time.monotonic() < deadline:
         for msg in conn.recv():
             kind = msg.get("type")
-            if kind == "hello":
-                if msg.get("proto") != PROTO:
-                    conn.close()
-                    raise NetError("proto", f"другая версия протокола: {msg.get('proto')} (у нас {PROTO})")
-                conn.send({"type": "join", "name": name, "token": token, "role": role})
-                asked = True
-            elif kind == "seat" and asked:
-                return conn, msg
-            elif kind == "watch" and asked:
-                return conn, {"you": None, "token": None, "watch": True}
-            elif kind == "full":
+            if kind in kinds:
+                return msg
+            if kind == "bye":
                 conn.close()
-                raise NetError("full", "на сервере нет свободных мест")
-            elif kind == "bye":
-                conn.close()
-                raise NetError("timeout", "сервер закрывается")
+                raise NetError("bye", "сервер закрывается")
         if conn.closed:
             break
         time.sleep(0.01)
-    conn.close()
     raise NetError("timeout", "сервер не ответил")
+
+
+def open_server(address, timeout=5.0):
+    """Подключиться к серверу и проверить версию. Возвращает (Conn, hello)."""
+    sock = socket.create_connection(parse_address(address), timeout=timeout)
+    conn = Conn(sock)
+    try:
+        hello = wait_for(conn, ("hello",), timeout)
+    except NetError:
+        conn.close()
+        raise
+    if hello.get("proto") != PROTO:
+        conn.close()
+        raise NetError("proto", f"другая версия протокола: {hello.get('proto')} (у нас {PROTO})")
+    return conn, hello
+
+
+def enter_room(conn, timeout=5.0, name="", token=None, role="player", room=None, create=False):
+    """На уже открытом соединении с сервером: создать комнату или войти в неё.
+    Возвращает seat: {"room", "you": цвет, "token"}; зрителю — {"room", "you": None, "watch": True}."""
+    if create:
+        conn.send({"type": "create", "name": name})
+    else:
+        conn.send({"type": "join", "room": room, "role": role, "name": name, "token": token})
+    msg = wait_for(conn, ("seat", "watch", "full", "noroom"), timeout)
+    kind = msg["type"]
+    if kind == "seat":
+        return msg
+    if kind == "watch":
+        return {"room": msg.get("room"), "you": None, "token": None, "watch": True}
+    if kind == "noroom":
+        raise NetError("noroom", "такой комнаты уже нет")
+    raise NetError("full", "мест нет" if msg.get("why") != "rooms" else "на сервере нет мест для комнат")
+
+
+def connect(address, timeout=5.0, name="", token=None, role="player", room=None, create=False):
+    """Подключиться к серверу и сразу в комнату (переподключение, тесты, --connect).
+    room=None — первая подходящая комната (или новая). Возвращает (Conn, seat)."""
+    conn, _ = open_server(address, timeout)
+    try:
+        return conn, enter_room(conn, timeout, name, token, role, room, create)
+    except NetError:
+        conn.close()
+        raise
 
 
 def local_addresses():

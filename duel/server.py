@@ -1,20 +1,18 @@
-"""Сервер матча без окна.
+"""Сервер без окна: лобби с комнатами на одном порту.
 
-    python -m duel.server                 # ждёт двух игроков
-    python -m duel.server --bot           # пустое место занимает бот
+    python -m duel.server                 # сервер с лобби; комнаты создают игроки
+    python -m duel.server --name "Дом"    # имя в списке серверов (иначе — имя компьютера)
+    python -m duel.server --bot           # в новых комнатах пустое место сразу занимает бот
     python -m duel.server --port 5555
 
-Рукопожатие (протокол 3): сервер шлёт hello, клиент просит место join (имя, ключ места при
-возврате), сервер отвечает seat (цвет, ключ) или full. Первый получивший место — синий.
+Протокол 5 (подробно — duel/net.py): сервер шлёт hello; клиент в лобби просит список комнат
+(rooms), создаёт комнату (create) или входит в неё (join — игроком или зрителем). В комнате —
+партия (duel/room.py). Вышедший из комнаты (leave) возвращается в лобби на том же соединении.
 
-Фазы: lobby (ждём, пока оба места заняты и все люди «готов»), play (матч идёт; пауза, пока
-кто-то потерял связь), over (есть победитель; новая партия, когда все люди «готов»).
-Потерявшему связь место держится HOLD секунд; Esc у клиента (leave) освобождает сразу.
-Снимки — раз в SEND_EVERY тактов (30 в секунду) со всеми событиями с прошлого снимка.
+Сервер шагает все комнаты 60 раз в секунду, раз в секунду шлёт список комнат тем, кто в лобби;
+пустые комнаты убирает. Свой сервер внутри игры («Создать свой сервер») — тот же класс в потоке.
 """
 import argparse
-import math
-import secrets
 import select
 import socket
 import threading
@@ -22,163 +20,84 @@ import time
 import traceback
 
 from . import discovery
-from .bot import Bot
-from .commands import Command
-from .config import DEFAULT_HERO, HEROES
-from .match import STEP, Match
 from .net import PORT, PROTO, Conn
-from .snapshot import snapshot
+from .room import PIDS, Room, Seat, clean_name
+from .match import STEP
 
-PIDS = ("blue", "red")
-SEND_EVERY = 2                    # снимок раз в 2 такта — 30 в секунду
-HOLD = 30.0                       # секунд держим место потерявшему связь
-SILENCE = 3.0                     # столько секунд без сообщений — связь потеряна
-JOIN_WAIT = 5.0                   # новичок без join столько секунд — закрываем
-MAX_SPECTATORS = 8                # зрителей больше не пускаем
-MAX_PENDING = 16                  # подключений, ещё не приславших join
-MAX_CONNS = 32                    # соединений всего (игроки, зрители, новички)
-NAME_MAX = 16
-
-
-def parse_move(value):
-    """Движение из команды: два числа → каждое -1/0/1; что-то другое — None (не двигаться)."""
-    if not isinstance(value, (list, tuple)) or len(value) != 2:
-        return None
-    out = []
-    for v in value:
-        if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
-            return None
-        out.append((v > 0) - (v < 0))
-    return tuple(out)
-
-
-def clean_name(text):
-    return "".join(ch for ch in str(text or "") if ch.isprintable()).strip()[:NAME_MAX]
-
-
-class Seat:
-    """Место игрока: соединение, ключ для возврата, имя, готовность, удержание после обрыва."""
-
-    def __init__(self):
-        self.conn = None
-        self.token = None
-        self.name = ""
-        self.ready = False
-        self.away_until = None        # момент (monotonic), до которого место держится за отошедшим
-        self.last_seen = 0.0
-        self.hero = None              # герой игрока на этом месте (только вид)
-
-    @property
-    def free(self):
-        return self.conn is None and self.away_until is None
+JOIN_WAIT = 5.0                   # новичок без запроса столько секунд — закрываем
+MAX_PENDING = 16                  # подключений, ещё ничего не попросивших
+MAX_CONNS = 32                    # соединений всего (в лобби, в комнатах, новички)
+MAX_ROOMS = 16                    # комнат на сервере
+LIST_EVERY = 60                   # список комнат тем, кто в лобби, — раз в секунду (тактов)
 
 
 class Server:
     def __init__(self, port=PORT, bot=False, host="0.0.0.0", proto=PROTO, log=print,
-                 discovery_port=discovery.DISCOVERY_PORT, clock=time.monotonic):
+                 discovery_port=discovery.DISCOVERY_PORT, clock=time.monotonic, name=None):
         self.log = log
         self.clock = clock            # часы (тесты подменяют, чтобы не ждать секунды)
         self.listener = socket.create_server((host, port))
         self.listener.setblocking(False)
         self.port = self.listener.getsockname()[1]
+        self.name = clean_name(name) or socket.gethostname()[:16]
         self.finder_sock = None       # отвечает на поиск игр в сети (None — поиск выключен)
         if discovery_port is not None:
             try:
                 self.finder_sock = discovery.listen_socket(discovery_port)
             except OSError as e:
                 log(f"поиск игр в сети не работает (порт {discovery_port}: {e}) — подключаться по адресу")
-        self.seats = {pid: Seat() for pid in PIDS}
-        self.newcomers = []           # [(Conn, когда подключился)] — ещё не прислали join
-        self.spectators = []          # соединения зрителей: получают снимки, ничего не меняют
-        self.bot = bot
+        self.newcomers = []           # [(Conn, когда подключился)] — ещё ничего не попросили
+        self.lobby = []               # соединения в лобби: смотрят список комнат
+        self.rooms = {}               # номер -> Room
+        self.next_room = 1
+        self.bot = bot                # новые комнаты — сразу с ботом
         self.proto = proto            # версия протокола в приветствии (тесты проверяют несовпадение)
-        self.bots = {pid: Bot(i + 1, forward=0.0 if pid == "blue" else math.pi) for i, pid in enumerate(PIDS)}
-        self.tick_no = 0              # номер такта сервера (для плавной анимации у клиентов)
-        self.phase = "lobby"
-        self.events = []              # события с прошлого снимка
+        self.tick_no = 0
         self.running = True
-        self.games = 0                # номер партии: клиент не сглаживает между партиями
-        self.new_match()
 
-    # ------------------------------------------------------------------ места
+    # ------------------------------------------------------------------ комнаты
 
     @property
-    def conns(self):
-        """Подключённые игроки: цвет -> соединение."""
-        return {pid: s.conn for pid, s in self.seats.items() if s.conn}
+    def room(self):
+        """Первая комната (удобно, когда она одна — в тестах и простой игре вдвоём)."""
+        return next(iter(self.rooms.values()), None)
 
-    @property
-    def names(self):
-        return {pid: s.name for pid, s in self.seats.items() if s.name and not s.free}
+    def players(self):
+        return sum(len(r.conns) for r in self.rooms.values())
 
-    @property
-    def started(self):
-        return self.phase != "lobby"
-
-    def bot_seats(self):
-        """Места, где сейчас играет бот (свободные, если бот разрешён и кто-то подключён)."""
-        if not self.bot or not self.conns:
-            return []
-        return [pid for pid, s in self.seats.items() if s.free]
-
-    def full(self):
-        """Оба места заняты (людьми, отошедшими или ботом)."""
-        return all(not s.free for s in self.seats.values()) or bool(self.bot_seats())
-
-    def all_ready(self):
-        humans = [s for s in self.seats.values() if not s.free]
-        return self.full() and all(s.ready for s in humans)
-
-    def taken_heroes(self, pid):
-        """Герои, занятые другими местами (люди, отошедшие и бот)."""
-        heroes = self.seat_heroes()
-        return {h for p, h in heroes.items() if p != pid and h}
-
-    def seat_heroes(self):
-        """Герой каждого места: у людей — свой, у бота — первый свободный, у пустого — None."""
-        out = {pid: s.hero for pid, s in self.seats.items() if not s.free}
-        for pid in self.bot_seats():
-            out[pid] = next(h for h in [DEFAULT_HERO[pid], *HEROES] if h not in out.values())
+    def all_conns(self):
+        out = list(self.lobby) + [c for c, _ in self.newcomers]
+        for r in self.rooms.values():
+            out += r.all_conns()
         return out
 
-    def free_hero(self, pid):
-        taken = self.taken_heroes(pid)
-        return next(h for h in [DEFAULT_HERO[pid], *HEROES] if h not in taken)
+    def rooms_info(self):
+        return [r.info() for r in sorted(self.rooms.values(), key=lambda r: r.id)]
 
-    def new_match(self):
-        self.games += 1
-        self.match = Match()
-        self.pending = {pid: Command() for pid in PIDS}
-        for s in self.seats.values():
-            s.ready = False
-        self.log(f"новая партия (зерно {self.match.seed})")
+    def send_rooms(self, conns=None):
+        msg = {"type": "rooms", "server": self.name, "rooms": self.rooms_info()}
+        for conn in (self.lobby if conns is None else conns):
+            conn.send(msg)
 
-    def to_lobby(self, why):
-        self.log(why + " — снова лобби")
-        self.phase = "lobby"
-        self.new_match()
+    def create_room(self, name=""):
+        if len(self.rooms) >= MAX_ROOMS:
+            return None
+        room = Room(self.next_room, name=name, bot=self.bot, clock=self.clock, log=self.log)
+        self.rooms[room.id] = room
+        self.next_room += 1
+        self.log(f"комната {room.id} создана")
+        return room
 
-    def free_seat(self, pid, why):
-        """Место освободилось окончательно (ушёл сам или не вернулся)."""
-        s = self.seats[pid]
-        if s.conn:
-            s.conn.close()
-        self.seats[pid] = Seat()
-        self.log(f"{pid} {why}")
-        if self.phase != "lobby":
-            self.to_lobby("соперник вышел")
-
-    def drop(self, pid):
-        """Связь с игроком потеряна: в партии место держится HOLD секунд, в лобби — свободно."""
-        s = self.seats[pid]
-        if s.conn:
-            s.conn.close()
-            s.conn = None
-        if self.phase == "lobby":
-            self.free_seat(pid, "отключился")
-        else:
-            s.away_until = self.clock() + HOLD
-            self.log(f"{pid} потерял связь — держим место {HOLD:.0f} с")
+    def quick_room(self, role):
+        """Комната для join без номера: игроку — первая со свободным местом (иначе новая),
+        зрителю — первая с игроками."""
+        rooms = sorted(self.rooms.values(), key=lambda r: r.id)
+        if role == "spectator":
+            return next(iter(rooms), None)
+        free = [r for r in rooms if r.open_seat()]
+        # сначала — комнаты в лобби (там ждут), потом — где можно сменить бота
+        return next((r for r in free if r.phase == "lobby"), None) or next(iter(free), None) \
+            or self.create_room()
 
     # ------------------------------------------------------------------ подключения
 
@@ -188,139 +107,89 @@ class Server:
                 sock, addr = self.listener.accept()
             except (BlockingIOError, OSError):
                 return
-            total = len(self.conns) + len(self.spectators) + len(self.newcomers)
-            if len(self.newcomers) >= MAX_PENDING or total >= MAX_CONNS:
+            if len(self.newcomers) >= MAX_PENDING or len(self.all_conns()) >= MAX_CONNS:
                 sock.close()              # наплыв подключений — лишние сразу закрываем
                 continue
             conn = Conn(sock)
             conn.addr = addr
-            conn.send({"type": "hello", "proto": self.proto, "role": "player"})
+            conn.send({"type": "hello", "proto": self.proto, "role": "lobby", "server": self.name})
             self.newcomers.append((conn, self.clock()))
 
-    def seat_newcomers(self):
+    def read_lobby(self):
+        """Новички и соединения в лобби: rooms / create / join."""
         now = self.clock()
-        keep = []
+        keep_new = []
         for conn, since in self.newcomers:
             try:
-                if self.seat_one(conn, since, now):
-                    keep.append((conn, since))
+                where = self.handle(conn, now)
             except Exception as e:        # последний рубеж: виновато одно соединение — закрыть его
-                self.log(f"{conn.addr[0]}: ошибка при входе — {e!r}")
+                self.log(f"{conn.addr[0]}: ошибка — {e!r}")
                 conn.close()
-        self.newcomers = keep
-
-    def seat_one(self, conn, since, now):
-        """Новичок: ждём join; True — ещё ждём (оставить в списке)."""
-        join = next((m for m in conn.recv() if m.get("type") == "join"), None)
-        if join is None:
-            if conn.violation:
-                self.log(f"{conn.addr[0]}: нарушение протокола — {conn.violation}")
-            if conn.closed or now - since > JOIN_WAIT:
-                conn.close()
-                return False
-            return True
-        if join.get("role") == "spectator":
-            self.spectators = [c for c in self.spectators if not c.closed]
-            if len(self.spectators) >= MAX_SPECTATORS:
-                conn.send({"type": "full"})
-                conn.close()
-            else:
-                self.spectators.append(conn)
-                conn.send({"type": "watch"})
-                self.log(f"{conn.addr[0]}:{conn.addr[1]} смотрит (зрителей: {len(self.spectators)})")
-            return False
-        token = join.get("token")
-        pid = next((p for p, s in self.seats.items() if token and s.token == token and s.conn is None),
-                   None)
-        back = pid is not None
-        if pid is None:
-            pid = next((p for p, s in self.seats.items() if s.free), None)
-        if pid is None:
-            conn.send({"type": "full"})
-            conn.close()
-            return False
-        s = self.seats[pid]
-        s.conn, s.away_until, s.last_seen = conn, None, now
-        if not back:
-            s.token = secrets.token_hex(8)
-            s.ready = False
-            s.hero = self.free_hero(pid)
-            self.pending[pid] = Command()
-        s.name = clean_name(join.get("name")) or s.name
-        conn.send({"type": "seat", "you": pid, "token": s.token})
-        self.log(f"{conn.addr[0]}:{conn.addr[1]} {'вернулся' if back else 'подключился'} — {pid}")
-        return False
-
-    def read_spectators(self):
-        """Зрители ничего не шлют, кроме «ушёл»; закрытые соединения убираем."""
-        keep = []
-        for conn in self.spectators:
-            if any(m.get("type") == "leave" for m in conn.recv()):
-                conn.close()
-            if conn.closed:
-                self.log("зритель ушёл")
-            else:
-                keep.append(conn)
-        self.spectators = keep
-
-    def has_audience(self):
-        """Есть кому слать снимки: игроки, зрители или отошедший игрок, чьё место держим."""
-        return bool(self.conns or self.spectators or any(s.away_until for s in self.seats.values()))
-
-    def read(self):
-        self.seat_newcomers()
-        self.read_spectators()
-        now = self.clock()
-        for pid, s in self.seats.items():
-            if s.conn is None:
-                if s.away_until is not None and now > s.away_until:
-                    self.free_seat(pid, "не вернулся")
                 continue
+            if where == "lobby":
+                self.lobby.append(conn)
+            elif where is None and not conn.closed and now - since <= JOIN_WAIT:
+                keep_new.append((conn, since))
+            elif where is None:
+                if conn.violation:
+                    self.log(f"{conn.addr[0]}: нарушение протокола — {conn.violation}")
+                conn.close()
+        self.newcomers = keep_new
+        keep = []
+        for conn in self.lobby:
             try:
-                self.read_player(pid, s, now)
-            except Exception as e:        # последний рубеж: ошибка одного соединения — как обрыв связи
-                self.log(f"{pid}: ошибка в сообщении — {e!r}")
-                if s.conn:
-                    s.conn.close()
-            if self.seats[pid] is not s or s.conn is None:
-                continue              # место освободили выше
-            if s.conn.violation:
-                self.log(f"{pid}: нарушение протокола — {s.conn.violation}")
-                s.conn.violation = None
-            if s.conn.closed or now - s.last_seen > SILENCE:
-                self.drop(pid)
+                where = self.handle(conn, now)
+            except Exception as e:
+                self.log(f"{conn.addr[0]}: ошибка — {e!r}")
+                conn.close()
+                continue
+            if where in ("lobby", None) and not conn.closed:
+                keep.append(conn)
+        self.lobby = keep
 
-    def read_player(self, pid, s, now):
-        """Сообщения игрока за такт: команды, имя, готовность, герой, выход."""
-        for msg in s.conn.recv():
-            s.last_seen = now
+    def handle(self, conn, now):
+        """Запросы соединения вне комнат. Возвращает: "room" — ушло в комнату, "lobby" — в лобби
+        (смотрит список), None — ещё ничего не решено."""
+        where = None
+        for msg in conn.recv():
             kind = msg.get("type")
-            if kind == "cmd":
-                c = self.pending[pid]
-                c.move = parse_move(msg.get("move")) or (0, 0)
-                c.fire = c.fire or bool(msg.get("fire"))
-                c.melee = c.melee or bool(msg.get("melee"))
-                slot = msg.get("slot")
-                if isinstance(slot, int) and not isinstance(slot, bool) and slot in (0, 1, 2, 3):
-                    c.use_slot = slot
-                aim = msg.get("aim")
-                if isinstance(aim, (int, float)) and not isinstance(aim, bool) and math.isfinite(aim):
-                    c.aim = float(aim)
-            elif kind == "name":
-                s.name = clean_name(msg.get("name"))
-            elif kind == "ready":
-                s.ready = bool(msg.get("ready", True))
-            elif kind == "hero":
-                hero = msg.get("hero")
-                if isinstance(hero, str) and self.phase == "lobby" and hero in HEROES and hero not in self.taken_heroes(pid):
-                    if hero != s.hero:
-                        s.hero, s.ready = hero, False
+            if kind == "rooms":
+                where = "lobby"
+                self.send_rooms([conn])
+            elif kind == "create":
+                room = self.create_room(msg.get("name"))
+                if room is None:
+                    conn.send({"type": "full", "why": "rooms"})
+                    where = "lobby"
+                    continue
+                room.seat(conn, {"role": "player", "name": msg.get("name")}, now)
+                return "room"
+            elif kind == "join":
+                role = "spectator" if msg.get("role") == "spectator" else "player"
+                rid = msg.get("room")
+                token = msg.get("token")
+                mine = next((r for r in self.rooms.values()
+                             if token and any(s.token == token for s in r.seats.values())), None)
+                if rid is None and mine is not None:
+                    room = mine               # возврат на своё место по ключу
+                elif rid is None:
+                    room = self.quick_room(role)
+                else:
+                    room = self.rooms.get(rid) if isinstance(rid, int) and not isinstance(rid, bool) else None
+                if room is None:
+                    conn.send({"type": "noroom"} if rid is not None else {"type": "full"})
+                    where = "lobby"
+                    continue
+                if room.seat(conn, msg, now):
+                    return "room"
+                where = "lobby"       # мест нет — остаётся в лобби, может войти зрителем
             elif kind == "leave":
-                self.free_seat(pid, "вышел")
-                break
+                conn.close()
+                return None
+        return where
 
     def answer_finders(self):
-        """Ответить всем, кто ищет игры в сети: порт игры, имя создателя, свободные места."""
+        """Ответить всем, кто ищет серверы в сети: порт, имя, комнат и игроков."""
         while self.finder_sock:
             try:
                 data, addr = self.finder_sock.recvfrom(discovery.MAX_PACKET + 1)
@@ -330,96 +199,69 @@ class Server:
                 return
             msg = discovery.decode(data)
             if msg and msg["type"] == "who":
-                free = sum(1 for s in self.seats.values() if s.free)
-                # в списке игр — имя создателя (он синий), иначе имя компьютера
                 try:
-                    self.finder_sock.sendto(discovery.answer(self.port, free, self.seats["blue"].name or None),
-                                            addr)
+                    self.finder_sock.sendto(discovery.answer(self.port, self.name, len(self.rooms),
+                                                             self.players()), addr)
                 except OSError:
                     pass
 
     # ------------------------------------------------------------------ такт
 
     def step(self):
-        """Один такт сервера: подключения, команды, шаг матча (если есть игроки)."""
+        """Один такт сервера: подключения, лобби, все комнаты."""
         self.answer_finders()
         self.accept()
-        self.read()
-        if self.has_audience():
-            self.tick()
-
-    def seats_info(self):
-        now = self.clock()
-        out = {}
-        bots = self.bot_seats()
-        heroes = self.seat_heroes()
-        for pid, s in self.seats.items():
-            if s.conn:
-                who = "human"
-            elif s.away_until is not None:
-                who = "away"
-            elif pid in bots:
-                who = "bot"
-            else:
-                who = None
-            out[pid] = {"who": who, "name": s.name if who in ("human", "away") else "",
-                        "ready": s.ready or who == "bot", "hero": heroes.get(pid),
-                        "away_left": max(0, round(s.away_until - now)) if who == "away" else 0}
-        return out
+        self.read_lobby()
+        self.tick()
 
     def tick(self):
         self.tick_no += 1
-        if self.phase == "lobby" and self.all_ready():
-            self.phase = "play"
-            self.match.set_heroes(self.seat_heroes())
-            for s in self.seats.values():
-                s.ready = False
-            self.log("все готовы — партия началась")
-        elif self.phase == "over" and self.all_ready():
-            self.phase = "play"
-            self.new_match()
-            self.match.set_heroes(self.seat_heroes())
-            self.log("реванш")
-        paused = any(s.away_until is not None for s in self.seats.values())
-        if self.phase == "play" and not paused:
-            self.play_tick()
-            if self.match.winner:
-                self.phase = "over"
-        if self.tick_no % SEND_EVERY == 0:
-            seats = self.seats_info()
-            msg = {"type": "state", "tick": self.tick_no, "game": self.games, "phase": self.phase,
-                   "waiting": self.phase == "lobby", "paused": paused, "seats": seats,
-                   "spectators": len(self.spectators),
-                   "snap": snapshot(self.match), "events": self.events}
-            self.events = []
-            for conn in list(self.conns.values()) + self.spectators:
-                conn.send(msg)
-
-    def play_tick(self):
-        commands = {}
-        bots = self.bot_seats()
-        for pid in PIDS:
-            if self.seats[pid].conn:
-                commands[pid] = self.pending[pid]
-            elif pid in bots:
-                commands[pid] = Command(*self.bots[pid].act())
-        # нажатия — один раз; направление и прицел держатся до следующей команды клиента
-        self.pending = {pid: Command(move=self.pending[pid].move) for pid in PIDS}
-        self.events += [list(e) for e in self.match.step(STEP, commands)]
+        now = self.clock()
+        for room in list(self.rooms.values()):
+            try:
+                for conn in room.read(now):          # вышли из комнаты — снова в лобби
+                    self.lobby.append(conn)
+                    self.send_rooms([conn])
+                if not room.empty:
+                    room.tick()
+            except Exception:             # ошибка одной комнаты не роняет остальные
+                self.log(f"ошибка в комнате {room.id}:\n" + traceback.format_exc())
+                for conn in room.all_conns():
+                    conn.close()
+                room.seats = {pid: Seat() for pid in PIDS}
+                room.spectators = []
+            if room.empty:
+                del self.rooms[room.id]
+                self.log(f"комната {room.id} пуста — убрана")
+        if self.tick_no % LIST_EVERY == 0 and self.lobby:
+            self.send_rooms()
 
     def stop(self):
         """Остановить сервер (можно из другого потока): цикл run() завершится, порт освободится."""
         self.running = False
 
     def close(self):
-        """Закрыть всё; подключённым — «bye»: создатель вышел, переподключаться некуда."""
-        for conn in list(self.conns.values()) + self.spectators + [c for c, _ in self.newcomers]:
+        """Закрыть всё; подключённым — «bye»: сервер закрывается, переподключаться некуда."""
+        conns = self.all_conns()
+        for conn in conns:
             conn.send({"type": "bye"})
             conn.flush()
+            try:
+                conn.sock.shutdown(socket.SHUT_WR)   # «bye» и конец передачи — до закрытия
+            except OSError:
+                pass
+        # дочитать входящее: закрыть сокет с непрочитанными данными — это сброс (RST),
+        # и клиент потерял бы уже пришедшее «bye»
+        deadline = time.monotonic() + 0.5
+        while time.monotonic() < deadline and any(not c.closed for c in conns):
+            for conn in conns:
+                if not conn.closed:
+                    conn.flush()
+                    conn.recv()
+            time.sleep(0.005)
+        for conn in conns:
             conn.close()
-        self.seats = {pid: Seat() for pid in PIDS}
-        self.newcomers = []
-        self.spectators = []
+        self.newcomers, self.lobby, self.rooms = [], [], {}
         for s in (self.listener, self.finder_sock):
             try:
                 if s:
@@ -428,10 +270,10 @@ class Server:
                 pass
 
     def run(self):
-        self.log(f"сервер ждёт игроков на порту {self.port}" + (" (пустое место — бот)" if self.bot else ""))
-        next_tick = time.monotonic()
+        self.log(f"сервер «{self.name}» ждёт игроков на порту {self.port}"
+                 + (" (в новых комнатах — бот)" if self.bot else ""))
         try:
-            self.loop(next_tick)
+            self.loop(time.monotonic())
         finally:
             self.close()
 
@@ -439,33 +281,32 @@ class Server:
         while self.running:
             # не дольше 0,1 с, чтобы stop() из другого потока срабатывал быстро
             wait = min(0.1, max(0.0, next_tick - time.monotonic()))
-            socks = [self.listener] + list(self.conns.values()) + self.spectators + [c for c, _ in self.newcomers]
+            socks = [self.listener] + self.all_conns()
             if self.finder_sock:
                 socks.append(self.finder_sock)
             select.select(socks, [], [], wait)
             try:
                 self.answer_finders()
                 self.accept()
-                self.read()
+                self.read_lobby()
                 now = time.monotonic()
                 while now >= next_tick:
-                    if self.has_audience():
-                        self.tick()       # без игроков и зрителей матч стоит
+                    self.tick()
                     next_tick += STEP
                     if now - next_tick > 0.25:  # после долгой паузы не догоняем
                         next_tick = now
             except Exception:             # последний рубеж: записать и работать дальше
                 self.log("ошибка в такте сервера:\n" + traceback.format_exc())
                 next_tick = time.monotonic() + STEP
-            for conn in list(self.conns.values()) + self.spectators + [c for c, _ in self.newcomers]:
+            for conn in self.all_conns():
                 conn.flush()
 
 
-def start_in_thread(port=PORT, bot=False, log=None, discovery_port=discovery.DISCOVERY_PORT):
-    """Сервер в фоновом потоке (кнопка «Создать игру»). Порт занят — OSError сразу.
+def start_in_thread(port=PORT, bot=False, log=None, discovery_port=discovery.DISCOVERY_PORT, name=None):
+    """Сервер в фоновом потоке («Создать свой сервер»). Порт занят — OSError сразу.
     Остановить: server.stop(); server.thread.join()."""
     srv = Server(port, bot, log=log or (lambda text: print("[сервер]", text, flush=True)),
-                 discovery_port=discovery_port)
+                 discovery_port=discovery_port, name=name)
     srv.thread = threading.Thread(target=srv.run, name="duel-server", daemon=True)
     srv.thread.start()
     return srv
@@ -474,14 +315,15 @@ def start_in_thread(port=PORT, bot=False, log=None, discovery_port=discovery.DIS
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="python -m duel.server", description="Сервер Spellgunners")
     ap.add_argument("--port", type=int, default=PORT)
-    ap.add_argument("--bot", action="store_true", help="пустое место занимает бот")
+    ap.add_argument("--name", default=None, help="имя сервера в списке (иначе — имя компьютера)")
+    ap.add_argument("--bot", action="store_true", help="в новых комнатах пустое место занимает бот")
     args = ap.parse_args(argv)
     try:
-        srv = Server(args.port, args.bot, log=lambda text: print(text, flush=True))
+        srv = Server(args.port, args.bot, log=lambda text: print(text, flush=True), name=args.name)
     except OSError as e:
         raise SystemExit(f"не удалось запустить сервер на порту {args.port}: {e.strerror or e}.\n"
-                         f"Порт занят — уже работает другой сервер или игра «Создать игру по сети»; "
-                         f"остановите её или запустите на другом порту: --port {args.port + 10}")
+                         f"Порт занят — уже работает другой сервер или игра со своим сервером; "
+                         f"остановите его или запустите на другом порту: --port {args.port + 10}")
     try:
         srv.run()
     except KeyboardInterrupt:

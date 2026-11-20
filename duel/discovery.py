@@ -3,7 +3,7 @@
 Экран «Подключиться» раз в секунду шлёт широковещательный UDP-вопрос на порт 5556:
     {"type": "who", "game": "duel"}
 каждый сервер игры отвечает тому, кто спросил:
-    {"type": "here", "game": "duel", "proto": 2, "port": 5555, "name": "papa-laptop", "free": 1}
+    {"type": "here", "game": "duel", "proto": 5, "port": 5555, "name": "Дом", "rooms": 2, "players": 3}
 """
 import json
 import socket
@@ -36,7 +36,9 @@ def decode(data):
         if not isinstance(msg.get("port"), int) or not 0 < msg["port"] < 65536:
             return None
         msg["name"] = str(msg.get("name", "?"))[:40]
-        msg["free"] = int(msg.get("free", 0)) if isinstance(msg.get("free"), int) else 0
+        for key in ("rooms", "players"):
+            v = msg.get(key)
+            msg[key] = v if isinstance(v, int) and not isinstance(v, bool) and 0 <= v < 1000 else 0
     return msg
 
 
@@ -44,9 +46,9 @@ def question():
     return encode({"type": "who", "game": GAME})
 
 
-def answer(port, free, name=None):
+def answer(port, name=None, rooms=0, players=0):
     return encode({"type": "here", "game": GAME, "proto": PROTO, "port": port,
-                   "name": name or socket.gethostname(), "free": free})
+                   "name": name or socket.gethostname(), "rooms": rooms, "players": players})
 
 
 def broadcast_targets():
@@ -106,13 +108,13 @@ class Finder:
                 self.found[(addr, msg["port"])] = (msg, now)
 
     def games(self, now=None):
-        """Список найденных игр: [{"address": "host:port", "name", "free", "proto"}], по имени."""
+        """Найденные серверы: [{"address": "host:port", "name", "rooms", "players", "proto"}], по имени."""
         now = time.monotonic() if now is None else now
         out = []
         for (addr, port), (msg, seen) in self.found.items():
             if now - seen <= FRESH:
-                out.append({"address": f"{addr}:{port}", "name": msg["name"], "free": msg["free"],
-                            "proto": msg.get("proto")})
+                out.append({"address": f"{addr}:{port}", "name": msg["name"], "rooms": msg["rooms"],
+                            "players": msg["players"], "proto": msg.get("proto")})
         return sorted(out, key=lambda g: (g["name"], g["address"]))
 
     def close(self):

@@ -19,9 +19,11 @@ def free_udp_port():
 
 def test_packets_roundtrip():
     assert decode(question()) == {"type": "who", "game": "duel"}
-    msg = decode(answer(5555, 1, name="papa-laptop"))
+    msg = decode(answer(5555, "Дом", rooms=2, players=3))
     assert msg == {"type": "here", "game": "duel", "proto": PROTO, "port": 5555,
-                   "name": "papa-laptop", "free": 1}
+                   "name": "Дом", "rooms": 2, "players": 3}
+    bad = decode(json.dumps({"type": "here", "game": "duel", "port": 1, "rooms": True, "players": "x"}).encode())
+    assert bad["rooms"] == 0 and bad["players"] == 0
 
 
 def test_foreign_and_broken_packets_ignored():
@@ -53,17 +55,17 @@ def find(srv, finder, cond, timeout=3.0):
     raise AssertionError(f"не нашли: {finder.games(now)}")
 
 
-def test_finder_finds_server_and_free_places():
+def test_finder_finds_server_rooms_and_players():
     port = free_udp_port()
     srv = Server(port=0, host="127.0.0.1", log=lambda text: None, discovery_port=port)
     finder = Finder(port=port, targets=["127.0.0.1"])
     try:
         games = find(srv, finder, lambda g: g)
-        assert games == [{"address": f"127.0.0.1:{srv.port}", "name": socket.gethostname(),
-                          "free": 2, "proto": PROTO}]
+        assert games == [{"address": f"127.0.0.1:{srv.port}", "name": socket.gethostname()[:16],
+                          "rooms": 0, "players": 0, "proto": PROTO}]
         from tests.test_network import Client
         c = Client(srv)
-        find(srv, finder, lambda g: g and g[0]["free"] == 1)
+        find(srv, finder, lambda g: g and g[0]["rooms"] == 1 and g[0]["players"] == 1)
         c.conn.close()
     finally:
         finder.close()
@@ -72,7 +74,8 @@ def test_finder_finds_server_and_free_places():
 
 def test_stale_game_disappears():
     finder = Finder(port=free_udp_port(), targets=[])
-    finder.found[("10.0.0.5", 5555)] = ({"name": "x", "free": 1, "proto": PROTO, "port": 5555}, 100.0)
+    finder.found[("10.0.0.5", 5555)] = ({"name": "x", "rooms": 1, "players": 2, "proto": PROTO, "port": 5555},
+                                        100.0)
     assert len(finder.games(100.0 + FRESH - 0.1)) == 1
     assert finder.games(100.0 + FRESH + 0.1) == []
     finder.close()
@@ -99,7 +102,7 @@ def test_server_works_when_discovery_port_busy():
         assert srv.finder_sock is None and any("поиск игр" in line for line in logs)
         from tests.test_network import Client
         c = Client(srv)
-        assert c.you == "blue" and "blue" in srv.conns
+        assert c.you == "blue" and "blue" in srv.room.conns
         c.conn.close()
         srv.close()
     finally:

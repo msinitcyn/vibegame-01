@@ -123,63 +123,130 @@ class ScreensMixin:
         s.blit(img, img.get_rect(center=(WIDTH // 2, 220)))
         pygame.display.flip()
 
-    JOIN_ROWS = 5                     # сколько найденных игр помещается на экране
+    JOIN_ROWS = 5                     # сколько серверов помещается на экране
+
+    def own_addresses(self):
+        from .net import local_addresses
+        if not hasattr(self, "_addresses"):
+            self._addresses = local_addresses()
+        return self._addresses
+
+    def list_row(self, y, sel, left, right="", right_color=GREY, sub=None, w=640):
+        """Строка списка (серверы, комнаты): рамка, слева имя (и мелкий текст), справа состояние."""
+        s = self.screen
+        rect = pygame.Rect(0, 0, w, 40)
+        rect.center = (WIDTH // 2, y)
+        pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=10)
+        pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
+        name = self.font.render(f"{left}  ", True, WHITE if sel else GREY)
+        s.blit(name, name.get_rect(midleft=(rect.left + 16, rect.centery)))
+        if sub:
+            img = self.small.render(sub, True, GREY)
+            s.blit(img, img.get_rect(midleft=(rect.left + 16 + name.get_width(), rect.centery)))
+        if right:
+            img = self.small.render(right, True, right_color)
+            s.blit(img, img.get_rect(midright=(rect.right - 16, rect.centery)))
 
     def draw_join(self):
-        """Экран «Подключиться»: найденные в сети игры, строка ручного ввода, ошибка, подсказка."""
+        """Экран серверов: свой, найденные в сети, ручной ввод адреса, «Создать / остановить свой»."""
         from .net import PROTO
         s = self.screen
         s.fill(BG)
-        img = self.big.render(tr("net.join_title"), True, WHITE)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 80)))
+        img = self.big.render(tr("net.servers_title"), True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 70)))
         games = self.join_games()
-        found = [g["address"] for g in games]
-        manual_sel = self.join_pick not in found
-
-        img = self.font.render(tr("net.found") if games else tr("net.searching"), True, GREY)
-        s.blit(img, img.get_rect(midleft=(WIDTH // 2 - 300, 160)))
+        y = 140
+        if self.host_server:
+            srv = self.host_server
+            addrs = "  ".join(f"{a}" for a in self.own_addresses()) or "127.0.0.1"
+            self.list_row(y, self.join_pick == "own", tr("net.own_server", name=srv.name), addrs,
+                          (120, 220, 140), sub=None)
+            y += 50
+        img = self.small.render(tr("net.found") if games else tr("net.searching"), True, GREY)
+        s.blit(img, img.get_rect(midleft=(WIDTH // 2 - 320, y)))
+        y += 30
         if not games:
-            for i, line in enumerate(self.wrap(tr("net.none_hint"), 600, self.small)):
+            for i, line in enumerate(self.wrap(tr("net.none_hint"), 640, self.small)):
                 img = self.small.render(line, True, GREY)
-                s.blit(img, img.get_rect(midleft=(WIDTH // 2 - 300, 200 + i * 22)))
+                s.blit(img, img.get_rect(midleft=(WIDTH // 2 - 320, y + i * 22)))
         for i, g in enumerate(games[:self.JOIN_ROWS]):
-            sel = g["address"] == self.join_pick
-            rect = pygame.Rect(0, 0, 600, 40)
-            rect.center = (WIDTH // 2, 205 + i * 46)
-            pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=10)
-            pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
             if g["proto"] != PROTO:
                 status, color = tr("net.st_proto"), BAD_TEXT
-            elif g["free"] > 0:
-                status, color = tr("net.st_wait"), AMMO_COLOR
             else:
-                status, color = tr("net.st_full"), GREY
-            name = self.font.render(f"{g['name']}  ", True, WHITE if sel else GREY)
-            addr = self.small.render(g["address"].rsplit(":", 1)[0], True, GREY)
-            st = self.small.render(status, True, color)
-            s.blit(name, name.get_rect(midleft=(rect.left + 16, rect.centery)))
-            s.blit(addr, addr.get_rect(midleft=(rect.left + 16 + name.get_width(), rect.centery)))
-            s.blit(st, st.get_rect(midright=(rect.right - 16, rect.centery)))
-
-        img = self.font.render(tr("net.manual"), True, GREY)
-        s.blit(img, img.get_rect(midleft=(WIDTH // 2 - 300, 470)))
-        box = pygame.Rect(0, 0, 600, 48)
-        box.center = (WIDTH // 2, 515)
+                status, color = tr("net.st_server", rooms=g["rooms"], players=g["players"]), AMMO_COLOR
+            self.list_row(y + 20 + i * 46, g["address"] == self.join_pick, g["name"], status, color,
+                          sub=g["address"].rsplit(":", 1)[0])
+        y = 470
+        manual_sel = self.join_pick is None
+        img = self.small.render(tr("net.manual"), True, GREY)
+        s.blit(img, img.get_rect(midleft=(WIDTH // 2 - 320, y)))
+        box = pygame.Rect(0, 0, 640, 44)
+        box.center = (WIDTH // 2, y + 36)
         pygame.draw.rect(s, (40, 46, 66) if manual_sel else (26, 29, 40), box, border_radius=10)
         pygame.draw.rect(s, BLUE if manual_sel else GREY, box, 2, border_radius=10)
         cursor = "_" if manual_sel and pygame.time.get_ticks() // 500 % 2 else " "
         img = self.font.render(self.address + cursor, True, WHITE if manual_sel else GREY)
         s.blit(img, img.get_rect(midleft=(box.left + 16, box.centery)))
+        last = "stop" if self.host_server else "create"
+        self.list_row(y + 90, self.join_pick == last, tr("net." + last + "_server"))
         if self.join_error:
             img = self.font.render(self.join_error, True, BAD_TEXT)
-            s.blit(img, img.get_rect(center=(WIDTH // 2, 575)))
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 625)))
         img = self.small.render(tr("net.join_hint"), True, GREY)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 640)))
+        s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 30)))
+        pygame.display.flip()
+
+    def room_status(self, r):
+        """Состояние комнаты для списка: кто сидит, идёт ли партия."""
+        seats = r.get("seats") or {}
+        names = []
+        for pid in ("blue", "red"):
+            seat = seats.get(pid) or {}
+            who = seat.get("who")
+            names.append(tr("name.bot") if who == "bot" else seat.get("name") or (
+                tr("hero." + seat["hero"]) if who and seat.get("hero") else tr("net.free_seat")))
+        phase = r.get("phase")
+        free = any(not (seats.get(pid) or {}).get("who") for pid in ("blue", "red"))
+        if phase == "play":
+            status, color = tr("net.st_playing"), BLUE
+        elif phase == "over":
+            status, color = tr("net.st_over"), GREY
+        elif free:
+            status, color = tr("net.st_wait"), AMMO_COLOR
+        else:
+            status, color = tr("net.st_lobby"), GREY
+        if r.get("spectators"):
+            status += "  ·  " + tr("net.spectators", n=r["spectators"])
+        return f"{names[0]} — {names[1]}", status, color
+
+    def draw_rooms(self):
+        """Экран комнат сервера: «Создать комнату» и комнаты (кто сидит, идёт ли партия, зрители)."""
+        s = self.screen
+        s.fill(BG)
+        img = self.big.render(tr("net.rooms_title", name=self.lobby_server or ""), True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 70)))
+        img = self.small.render(self.lobby_addr or "", True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 115)))
+        self.list_row(160, self.rooms_index == 0, "+  " + tr("net.create_room"), w=760)
+        if not self.rooms_list:
+            img = self.small.render(tr("net.no_rooms"), True, GREY)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 230)))
+        rows = 8
+        first = max(0, min(self.rooms_index - rows, len(self.rooms_list) - rows))
+        for i, r in enumerate(self.rooms_list[first:first + rows]):
+            k = first + i + 1
+            players, status, color = self.room_status(r)
+            title = tr("net.room_name", name=r.get("name") or "?", id=r.get("id", "?"))
+            self.list_row(220 + i * 46, self.rooms_index == k, title, status, color, sub=players, w=760)
+        if self.rooms_error:
+            img = self.font.render(self.rooms_error, True, BAD_TEXT)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 625)))
+        img = self.small.render(tr("net.rooms_hint"), True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 30)))
         pygame.display.flip()
 
     def draw_lobby(self):
-        """Лобби сетевой игры: два места (кто сел, готов ли), у создателя — адрес компьютера."""
-        from .net import local_addresses
+        """Лобби комнаты: два места (кто сел, готов ли), сервер и комната."""
         s = self.screen
         s.fill(BG)
         img = self.big.render(tr("net.lobby_title"), True, WHITE)
@@ -214,19 +281,13 @@ class ScreensMixin:
             if pid == self.me:
                 img = self.small.render(tr("net.you"), True, WHITE)
                 s.blit(img, img.get_rect(center=(card.centerx + 40, card.bottom - 22)))
-        y = 380
-        if self.host_server:
-            if not hasattr(self, "_addresses"):
-                self._addresses = local_addresses()
-            img = self.small.render(tr("net.your_addr"), True, GREY)
-            s.blit(img, img.get_rect(center=(WIDTH // 2, y)))
-            text = "   ".join(self._addresses) if self._addresses else tr("net.no_addr")
-            img = self.font.render(text, True, BLUE if self._addresses else BAD_TEXT)
-            s.blit(img, img.get_rect(center=(WIDTH // 2, y + 32)))
+        where = tr("net.room_on", server=self.lobby_server or self.net_addr or "", room=self.net_room or "")
+        img = self.small.render(where, True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 380)))
         if self.watching:
             hints = [tr("net.watch_hint")]
         else:
-            hints = [tr("net.lobby_hint")] + ([tr("net.lobby_hint_host")] if self.host_server else [])
+            hints = [tr("net.lobby_hint"), tr("net.lobby_hint_host")]
         if self.net_spectators:
             hints.append(tr("net.spectators", n=self.net_spectators))
         for i, text in enumerate(hints):

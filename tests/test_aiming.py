@@ -135,12 +135,12 @@ def test_aim_goes_over_network():
         a, b = Client(srv), Client(srv)
         playing(srv, a, b)
         a.conn.send({"type": "cmd", "move": [0, 0], "fire": True, "melee": False, "slot": None, "aim": 2.0})
-        wait(srv, lambda: srv.match.blue.aim == 2.0 and srv.match.bullets, clients=(b,))
+        wait(srv, lambda: srv.room.match.blue.aim == 2.0 and srv.room.match.bullets, clients=(b,))
         a.conn.send({"type": "cmd", "move": [0, 0], "aim": "x"})        # мусор не ломает
         a.conn.send({"type": "cmd", "move": [0, 0], "aim": float("nan")} if False else
                     {"type": "cmd", "move": [0, 0], "aim": None})
         wait(srv, lambda: True, clients=(b,))
-        assert srv.match.blue.aim == 2.0
+        assert srv.room.match.blue.aim == 2.0
     finally:
         srv.close()
 

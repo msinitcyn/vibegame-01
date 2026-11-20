@@ -10,7 +10,8 @@ import pytest
 
 from duel import i18n
 from duel.net import PROTO, Conn, connect, parse_address
-from duel.server import HOLD, JOIN_WAIT, SEND_EVERY, SILENCE, Server, start_in_thread
+from duel.room import HOLD, SEND_EVERY, SILENCE
+from duel.server import JOIN_WAIT, Server, start_in_thread
 
 
 def wait(srv, cond, timeout=3.0, clients=()):
@@ -29,11 +30,11 @@ def wait(srv, cond, timeout=3.0, clients=()):
 class Client:
     """Клиент-заглушка: настоящее рукопожатие, копит все пришедшие сообщения."""
 
-    def __init__(self, srv, name="", token=None, ready=False):
+    def __init__(self, srv, name="", token=None, ready=False, room=None):
         self.conn = Conn(socket.create_connection(("127.0.0.1", srv.port)))
         self.msgs = []
         wait(srv, lambda: self.poll() and self.first("hello"))
-        self.conn.send({"type": "join", "name": name, "token": token})
+        self.conn.send({"type": "join", "name": name, "token": token, "room": room})
         wait(srv, lambda: self.poll() and (self.first("seat") or self.first("full")))
         self.seat = self.first("seat") or self.first("full")
         self.you = self.seat.get("you")
@@ -86,7 +87,7 @@ def playing(srv, *clients):
     """Двое в лобби нажали «готов» — партия идёт."""
     for c in clients:
         c.ready()
-    wait(srv, lambda: srv.phase == "play" and srv.match.match_time > 0, clients=clients)
+    wait(srv, lambda: srv.room.phase == "play" and srv.room.match.match_time > 0, clients=clients)
 
 
 # ------------------------------------------------------------------ протокол
@@ -119,12 +120,15 @@ def test_parse_address():
 
 def test_handshake_seats_and_full(server):
     a = Client(server)
-    assert a.first("hello") == {"type": "hello", "proto": PROTO, "role": "player"}
-    assert a.seat["type"] == "seat" and a.you == "blue" and len(a.seat["token"]) == 16
+    hello = a.first("hello")
+    assert hello["type"] == "hello" and hello["proto"] == PROTO and hello["role"] == "lobby" and hello["server"]
+    assert a.seat["type"] == "seat" and a.you == "blue" and len(a.seat["token"]) == 16 and a.seat["room"] == 1
     b = Client(server)
-    assert b.you == "red" and b.seat["token"] != a.seat["token"]
-    c = Client(server)
+    assert b.you == "red" and b.seat["token"] != a.seat["token"] and b.seat["room"] == 1
+    c = Client(server, room=1)                   # в ту же комнату — мест нет
     assert c.seat == {"type": "full"}
+    d = Client(server)                           # быстрый вход — новая комната
+    assert d.you == "blue" and d.seat["room"] == 2 and len(server.rooms) == 2
 
 
 def test_newcomer_without_join_is_closed():
@@ -172,16 +176,16 @@ def test_lobby_waits_for_both_ready(server):
         a.cmd()
         b.cmd()
         server.step()
-    assert server.phase == "lobby" and server.match.match_time == 0
+    assert server.room.phase == "lobby" and server.room.match.match_time == 0
     seats = a.last()["seats"]
     assert seats["blue"] == {"who": "human", "name": "Папа", "ready": False, "away_left": 0, "hero": "frost"}
     assert a.last()["waiting"] is True
     a.ready()
     wait(server, lambda: a.last()["seats"]["blue"]["ready"], clients=(a, b))
-    assert server.phase == "lobby"
+    assert server.room.phase == "lobby"
     b.ready()
-    wait(server, lambda: server.match.match_time > 0, clients=(a, b))
-    assert a.last()["phase"] == "play" or server.phase == "play"
+    wait(server, lambda: server.room.match.match_time > 0, clients=(a, b))
+    assert a.last()["phase"] == "play" or server.room.phase == "play"
 
 
 def test_ready_can_be_taken_back(server):
@@ -193,7 +197,7 @@ def test_ready_can_be_taken_back(server):
         a.cmd()
         b.cmd()
         server.step()
-    assert server.phase == "lobby"
+    assert server.room.phase == "lobby"
 
 
 def test_bot_counts_as_ready():
@@ -203,10 +207,10 @@ def test_bot_counts_as_ready():
         for _ in range(30):
             a.cmd()
             srv.step()
-        assert srv.phase == "lobby"                       # человек ещё не готов
+        assert srv.room.phase == "lobby"                       # человек ещё не готов
         assert a.last()["seats"]["red"]["who"] == "bot" and a.last()["seats"]["red"]["ready"]
         a.ready()
-        wait(srv, lambda: srv.match.match_time > 0, clients=(a,))
+        wait(srv, lambda: srv.room.match.match_time > 0, clients=(a,))
     finally:
         srv.close()
 
@@ -214,7 +218,7 @@ def test_bot_counts_as_ready():
 def test_command_moves_and_fires(server):
     a, b = Client(server), Client(server)
     playing(server, a, b)
-    blue = server.match.blue
+    blue = server.room.match.blue
     y0 = blue.y
     a.cmd(move=(0, 1), fire=True)
     wait(server, lambda: any(["shot", "blue"] in s["events"] for s in a.states()), clients=(b,))
@@ -226,32 +230,32 @@ def test_command_moves_and_fires(server):
 def test_bad_command_values_are_clamped(server):
     a = Client(server)
     a.cmd(move=(5, -9), slot=17)
-    wait(server, lambda: server.pending["blue"].move == (1, -1))
-    assert server.pending["blue"].use_slot is None
+    wait(server, lambda: server.room.pending["blue"].move == (1, -1))
+    assert server.room.pending["blue"].use_slot is None
 
 
 def test_rematch_needs_both(server):
     a, b = Client(server), Client(server)
     playing(server, a, b)
-    old = server.match
+    old = server.room.match
     old.red.hp = 0
-    wait(server, lambda: server.phase == "over", clients=(a, b))
+    wait(server, lambda: server.room.phase == "over", clients=(a, b))
     a.ready()
     for _ in range(30):
         a.cmd()
         b.cmd()
         server.step()
-    assert server.match is old and server.phase == "over"
+    assert server.room.match is old and server.room.phase == "over"
     assert b.last()["seats"]["blue"]["ready"]            # второй видит, что первый готов
     b.ready()
-    wait(server, lambda: server.match is not old and server.phase == "play", clients=(a, b))
+    wait(server, lambda: server.room.match is not old and server.room.phase == "play", clients=(a, b))
 
 
 def test_bot_takes_empty_place_and_yields():
     srv = make_server(bot=True)
     try:
         human = Client(srv, ready=True)
-        red = srv.match.red
+        red = srv.room.match.red
         start = (red.x, red.y)
         wait(srv, lambda: (red.x, red.y) != start, clients=(human,))   # красным управляет бот
         human2 = Client(srv)                                           # пришёл человек — бот уступил
@@ -275,10 +279,10 @@ def test_bot_takes_empty_place_and_yields():
 def test_leave_returns_to_lobby(server):
     a, b = Client(server), Client(server)
     playing(server, a, b)
-    old = server.match
+    old = server.room.match
     b.conn.send({"type": "leave"})
-    wait(server, lambda: server.phase == "lobby", clients=(a,))
-    assert server.match is not old and server.seats["red"].free
+    wait(server, lambda: server.room.phase == "lobby", clients=(a,))
+    assert server.room.match is not old and server.room.seats["red"].free
     wait(server, lambda: a.last()["phase"] == "lobby" and a.last()["seats"]["red"]["who"] is None,
          clients=(a,))
 
@@ -291,19 +295,19 @@ def test_drop_holds_seat_pauses_and_comes_back():
         playing(srv, a, b)
         token = b.seat["token"]
         b.conn.close()                                     # Wi-Fi пропал — без leave
-        wait(srv, lambda: srv.seats["red"].away_until is not None, clients=(a,))
-        t = srv.match.match_time
+        wait(srv, lambda: srv.room.seats["red"].away_until is not None, clients=(a,))
+        t = srv.room.match.match_time
         for _ in range(30):
             a.cmd()
             srv.step()
-        assert srv.match.match_time == t                   # пауза
+        assert srv.room.match.match_time == t                   # пауза
         st = a.last()
         assert st["paused"] and st["seats"]["red"]["who"] == "away" and st["seats"]["red"]["away_left"] == HOLD
-        assert Client(srv).seat == {"type": "full"}        # место держится — чужому не дают
+        assert Client(srv, room=1).seat == {"type": "full"}   # место держится — чужому не дают
         back = Client(srv, token=token)
         assert back.you == "red" and back.seat["token"] == token
-        wait(srv, lambda: srv.match.match_time > t, clients=(a, back))
-        assert srv.phase == "play"
+        wait(srv, lambda: srv.room.match.match_time > t, clients=(a, back))
+        assert srv.room.phase == "play"
     finally:
         srv.close()
 
@@ -315,9 +319,9 @@ def test_hold_expires_back_to_lobby():
         a, b = Client(srv), Client(srv)
         playing(srv, a, b)
         b.conn.close()
-        wait(srv, lambda: srv.seats["red"].away_until is not None, clients=(a,))
+        wait(srv, lambda: srv.room.seats["red"].away_until is not None, clients=(a,))
         clock.now += HOLD + 1
-        wait(srv, lambda: srv.phase == "lobby" and srv.seats["red"].free, clients=(a,))
+        wait(srv, lambda: srv.room.phase == "lobby" and srv.room.seats["red"].free, clients=(a,))
         assert Client(srv, token=b.seat["token"]).you == "red"   # место свободно — новичком
     finally:
         srv.close()
@@ -330,7 +334,7 @@ def test_silence_counts_as_lost_connection():
         a, b = Client(srv), Client(srv)
         playing(srv, a, b)
         clock.now += SILENCE + 1                           # b молчит, a шлёт команды
-        wait(srv, lambda: srv.seats["red"].away_until is not None, clients=(a,))
+        wait(srv, lambda: srv.room.seats["red"].away_until is not None, clients=(a,))
     finally:
         srv.close()
 
@@ -338,8 +342,8 @@ def test_silence_counts_as_lost_connection():
 def test_drop_in_lobby_frees_at_once(server):
     a, b = Client(server), Client(server)
     b.conn.close()
-    wait(server, lambda: server.seats["red"].free, clients=(a,))
-    assert server.seats["red"].away_until is None
+    wait(server, lambda: server.room.seats["red"].free, clients=(a,))
+    assert server.room.seats["red"].away_until is None
 
 
 def test_bye_when_server_closes(server):
@@ -357,7 +361,7 @@ def test_bye_when_server_closes(server):
 def test_snapshots_30_per_second_and_no_lost_events(server):
     a, b = Client(server), Client(server)
     playing(server, a, b)
-    t0 = server.tick_no
+    t0 = server.room.tick_no
     a.msgs.clear()
     fired = 0
     for i in range(120):                         # 2 секунды игрового времени
@@ -365,8 +369,8 @@ def test_snapshots_30_per_second_and_no_lost_events(server):
             a.cmd(fire=True)                     # выстрел на нечётных и чётных тактах
             fired += 1
         b.cmd()
-        server.match.blue.cooldown = 0
-        server.match.blue.ammo = 100
+        server.room.match.blue.cooldown = 0
+        server.room.match.blue.ammo = 100
         server.step()
         time.sleep(0.001)
     for _ in range(10):
@@ -424,11 +428,11 @@ def test_name_in_discovery_answer():
     from duel.discovery import Finder
     from tests.test_discovery import find, free_udp_port
     port = free_udp_port()
-    srv = Server(port=0, host="127.0.0.1", log=lambda text: None, discovery_port=port)
+    srv = Server(port=0, host="127.0.0.1", log=lambda text: None, discovery_port=port, name="Дом")
     finder = Finder(port=port, targets=["127.0.0.1"])
     try:
         Client(srv, name="Папа")
-        find(srv, finder, lambda g: g and g[0]["name"] == "Папа" and g[0]["free"] == 1)
+        find(srv, finder, lambda g: g and g[0]["name"] == "Дом" and g[0]["rooms"] == 1 and g[0]["players"] == 1)
     finally:
         finder.close()
         srv.close()
@@ -439,7 +443,7 @@ def test_name_in_discovery_answer():
 def frames(game, cond, timeout=3.0):
     deadline = time.monotonic() + timeout
     while not cond():
-        assert game.net_frame(1 / 60), "сетевая игра закончилась"
+        assert game.net_frame(1 / 60), f"сетевая игра закончилась: {game.net_end}"
         assert time.monotonic() < deadline, "не дождались"
         time.sleep(1 / 120)
 
@@ -524,7 +528,7 @@ def test_heroes_in_lobby(server):
     assert a.last()["seats"]["blue"]["hero"] == "frost" and not a.last()["seats"]["red"]["ready"]
     a.conn.send({"type": "hero", "hero": "nature"})
     playing(server, a, b)
-    assert {p.id: p.hero for p in server.match.players} == {"blue": "nature", "red": "dark"}
+    assert {p.id: p.hero for p in server.room.match.players} == {"blue": "nature", "red": "dark"}
     wait(server, lambda: a.last()["phase"] == "play", clients=(a, b))
     assert next(p for p in a.last()["snap"]["players"] if p["id"] == "red")["hero"] == "dark"
 
@@ -573,7 +577,7 @@ def test_hero_artifacts_travel_and_draw(server, game):
     from duel.entities import Mob
     a, b = Client(server), Client(server)
     playing(server, a, b)
-    m = server.match
+    m = server.room.match
     m.blue.hp = m.red.hp = 1000
     m.mobs += [Mob(300, TOP + 200 + i * 40, 6) for i in range(3)]
     for kind in HERO_ONLY_ITEMS:
@@ -611,8 +615,8 @@ def spectator(srv):
 def test_spectator_watches_without_seat(server):
     a, b = Client(server), Client(server)
     conn, msgs = spectator(server)
-    assert any(m["type"] == "watch" for m in msgs) and len(server.spectators) == 1
-    assert server.seats["blue"].conn and server.seats["red"].conn       # места не занял
+    assert any(m["type"] == "watch" for m in msgs) and len(server.room.spectators) == 1
+    assert server.room.seats["blue"].conn and server.room.seats["red"].conn       # места не занял
     playing(server, a, b)
     wait(server, lambda: msgs.extend(conn.recv()) or any(m["type"] == "state" and m["phase"] == "play"
                                                          for m in msgs), clients=(a, b))
@@ -625,7 +629,7 @@ def test_spectator_commands_ignored(server):
     a, b = Client(server), Client(server)
     playing(server, a, b)
     conn, _ = spectator(server)
-    m = server.match
+    m = server.room.match
     hp, y = m.blue.hp, m.blue.y
     for _ in range(20):
         conn.send({"type": "cmd", "move": [0, 1], "fire": True})
@@ -636,15 +640,22 @@ def test_spectator_commands_ignored(server):
     assert m.blue.y == y and not any(x.owner is m.blue for x in m.bullets) and m.blue.hp == hp
 
 
-def test_spectator_alone_gets_lobby_and_leaves(server):
+def test_spectator_leaves_back_to_lobby(server):
+    a = Client(server)
     conn, msgs = spectator(server)
-    wait(server, lambda: msgs.extend(conn.recv()) or any(m["type"] == "state" for m in msgs))
+    wait(server, lambda: msgs.extend(conn.recv()) or any(m["type"] == "state" for m in msgs), clients=(a,))
     conn.send({"type": "leave"})
-    wait(server, lambda: not server.spectators)
+    wait(server, lambda: not server.room.spectators and len(server.lobby) == 1, clients=(a,))
+    wait(server, lambda: msgs.extend(conn.recv()) or any(m["type"] == "rooms" for m in msgs), clients=(a,))
+
+
+def test_no_rooms_spectator_gets_full(server):
+    _, msgs = spectator(server)
+    assert any(m["type"] == "full" for m in msgs)
 
 
 def test_too_many_spectators(server):
-    from duel.server import MAX_SPECTATORS
+    from duel.room import MAX_SPECTATORS
     conns = [spectator(server)[0] for _ in range(MAX_SPECTATORS)]
     _, msgs = spectator(server)
     assert any(m["type"] == "full" for m in msgs)
@@ -672,8 +683,8 @@ def test_bad_line_from_player_does_not_kill_server(server, line):
         server.step()
     seen = len(b.states())
     wait(server, lambda: len(b.states()) > seen + 2, clients=(b,))   # сервер жив и шлёт снимки
-    assert server.seats["red"].conn and not server.seats["red"].conn.closed
-    blue = server.seats["blue"]
+    assert server.room.seats["red"].conn and not server.room.seats["red"].conn.closed
+    blue = server.room.seats["blue"]
     # кривое сообщение — как обрыв связи (место держится), неверные значения — просто пропускаются
     assert blue.conn is None and blue.away_until is not None or blue.conn and not blue.conn.closed
 
@@ -681,7 +692,7 @@ def test_bad_line_from_player_does_not_kill_server(server, line):
 def test_bad_values_do_nothing(server):
     a, b = Client(server), Client(server)
     playing(server, a, b)
-    blue = server.match.blue
+    blue = server.room.match.blue
     x, y = blue.x, blue.y
     for _ in range(20):
         a.conn.send({"type": "cmd", "move": [1, 2, 3], "slot": True})
@@ -698,7 +709,7 @@ def test_garbage_before_join_closes_only_it(server):
         a.cmd()
         server.step()
         time.sleep(0.002)
-    assert not server.newcomers and server.seats["blue"].conn
+    assert not server.newcomers and server.room.seats["blue"].conn
     s.close()
 
 
@@ -737,7 +748,7 @@ def test_connection_flood_is_limited(server):
         a.cmd()
         server.step()
         time.sleep(0.002)
-    assert len(server.newcomers) <= MAX_PENDING and server.seats["blue"].conn
+    assert len(server.newcomers) <= MAX_PENDING and server.room.seats["blue"].conn
     b = None
     for s in socks:
         s.close()

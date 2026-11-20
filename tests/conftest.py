@@ -52,6 +52,7 @@ def game(_game):
     """Приложение в режиме «два игрока», без геймпадов, с фиксированным random."""
     random.seed(0)
     _game.leave_net()                       # прошлый тест мог оставить сетевую партию
+    _game.stop_own_server()                 # и свой сервер
     _game.menu_message = None
     _game.net_port = 0                      # свой сервер — на любом свободном порту
     _game.discovery_port = None             # и не отвечает на поиск в настоящей сети

@@ -132,7 +132,7 @@ def test_menu_shows_update_and_screen(game, tmp_path):
     assert game.menu[-1] == "update" and "9.9.0" in game.menu_label(len(game.menu) - 1)
     game.draw_menu()
     game.state = "menu"
-    game.on_key(pygame.KSCAN_7)
+    game.on_key(pygame.KSCAN_6)
     assert game.state == "update"
     import time
     for _ in range(200):
