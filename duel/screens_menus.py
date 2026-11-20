@@ -4,6 +4,8 @@
 import pygame
 
 from .config import (
+    DEMO_BOX,
+    TOP,
     AMMO_COLOR,
     AMMO_PACK,
     BAD_TEXT,
@@ -33,6 +35,9 @@ from .config import (
 )
 from .i18n import get_lang, LANGS, t as tr
 from . import keys
+from .demos import Demo, has_demo, load as load_demo
+from .render import draw_field
+from .snapshot import snapshot
 from .icons import draw_icon
 from .items import HELP_SECTIONS, item_help, item_name, ITEMS, section_title
 from .sprites import draw_unit
@@ -307,9 +312,13 @@ class MenuScreensMixin:
         s = self.screen
         y = 56
         kinds = dict(HELP_SECTIONS)["hero"]
-        texts = {k: self.wrap(item_help(k), WIDTH - 220, self.small) for k in kinds if HERO_ONLY_ITEMS[k] in heroes}
+        demo_w, demo_h = DEMO_BOX
+        texts = {k: self.wrap(item_help(k), WIDTH - 220 - (demo_w + 16 if has_demo(k) else 0), self.small)
+                 for k in kinds if HERO_ONLY_ITEMS[k] in heroes}
+        # высота строки: текст или окошко сценки (если есть)
+        tall = {k: max(42 + 19 * len(v), demo_h + 8 if has_demo(k) else 0) for k, v in texts.items()}
         # не влезает над подписью внизу — плотнее (строки ближе, отступы меньше)
-        full = sum(42 + 19 * len(v) for v in texts.values()) + 6 * len(heroes)
+        full = sum(tall.values()) + 6 * len(heroes)
         head, line_h, gap = (28, 19, 8) if y + full <= HEIGHT - 64 else (25, 17, 3)
         for hero in heroes:
             mine = [k for k in kinds if HERO_ONLY_ITEMS[k] == hero]
@@ -321,7 +330,12 @@ class MenuScreensMixin:
                 lines = texts[kind]
                 for j, line in enumerate(lines):
                     s.blit(self.small.render(line, True, WHITE), (186, y + head + j * line_h))
-                y += head + 6 + line_h * len(lines) + gap
+                step = head + 6 + line_h * len(lines) + gap
+                if has_demo(kind):                    # сценка: как работает артефакт
+                    box = pygame.Rect(WIDTH - 24 - demo_w, y, demo_w, demo_h)
+                    self.draw_demo(kind, box)
+                    step = max(step, demo_h + 4 + gap)
+                y += step
             pygame.draw.line(s, HERO_COLOR[hero], (24, top), (24, y - 10), 3)
             draw_unit(s, HERO_SPRITE[hero], (70, (top + y) // 2 - 10), 28, 1)
             label = self.small.render(tr("hero." + hero), True, HERO_COLOR[hero])
@@ -329,6 +343,29 @@ class MenuScreensMixin:
             y += 6
         note = self.small.render(tr("help.hero_note"), True, GREY)
         s.blit(note, note.get_rect(center=(WIDTH // 2, HEIGHT - 44)))
+
+    def draw_demo(self, kind, box):
+        """Окошко сценки артефакта: своя маленькая партия по сценарию (assets/demos/<kind>.json)."""
+        demos = self.__dict__.setdefault("_demos", {})
+        demo = demos.get(kind)
+        if demo is None:
+            demo = demos[kind] = Demo(load_demo(kind))
+            demo.clock = pygame.time.get_ticks()
+        now = pygame.time.get_ticks()
+        demo.update(min(0.1, (now - demo.clock) / 1000))
+        demo.clock = now
+        snap = snapshot(demo.match)
+        heroes = (demo.match.blue.hero, demo.match.red.hero)
+        field = self.__dict__.get("_demo_surface")
+        if field is None:
+            field = self._demo_surface = pygame.Surface((WIDTH, HEIGHT))
+        field.blit(self.field_background(heroes), (0, TOP))
+        draw_field(field, snap, self.tiny)
+        vx, vy, vw, vh = demo.data["view"]
+        view = pygame.Rect(int(vx), int(vy), int(vw), int(vh)).clip(field.get_rect())
+        img = pygame.transform.smoothscale(field.subsurface(view), box.size)
+        self.screen.blit(img, box)
+        pygame.draw.rect(self.screen, (90, 96, 120), box.inflate(4, 4), 2, border_radius=6)
 
     def draw_help_rules(self):
         s = self.screen

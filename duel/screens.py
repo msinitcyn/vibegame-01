@@ -234,11 +234,24 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
                     else img.get_rect(midright=(WIDTH - 10, cy))
                 s.blit(img, rect)
 
-    def field_background(self):
+    def field_background(self, heroes=None):
         """Поле: земли игроков — фонами их героев по половинам (кромками к центральной линии),
         в центре — круглая арена мобов с кромкой цветами обоих героев.
-        Рисуется заново, только когда сменились герои."""
-        heroes = (self.side_hero("blue"), self.side_hero("red"))
+        Рисуется заново, только когда сменились герои. heroes — (левый, правый), иначе — текущие
+        (сценки справки рисуют своё поле — у них свой кэш)."""
+        own = heroes is None
+        heroes = tuple(heroes) if heroes else (self.side_hero("blue"), self.side_hero("red"))
+        if not own:
+            cache = self.__dict__.setdefault("_demo_bg", {})
+            if heroes not in cache:
+                saved = getattr(self, "_field_bg", None)
+                self._field_bg = None
+                cache[heroes] = self.field_background_draw(heroes)
+                self._field_bg = saved
+            return cache[heroes]
+        return self.field_background_draw(heroes)
+
+    def field_background_draw(self, heroes):
         cached = getattr(self, "_field_bg", None)
         if cached is None or cached[0] != heroes:
             h = BOTTOM - TOP

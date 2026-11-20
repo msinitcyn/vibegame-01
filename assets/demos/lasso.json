@@ -1,0 +1,16 @@
+{
+  "heroes": {"blue": "fire", "red": "frost"},
+  "view": [330, 110, 320, 160],
+  "length": 4.6,
+  "setup": {
+    "blue": {"x": 395, "y": 190},
+    "red": {"x": 600, "y": 190}
+  },
+  "script": [
+    {"t": 0.0, "who": "blue", "aim_at": "red"},
+    {"t": 0.0, "who": "red", "aim_at": "blue"},
+    {"t": [0.3, 0.8], "who": "red", "move": [0, 1]},
+    {"t": 0.9, "who": "blue", "item": "lasso"},
+    {"t": [1.0, 3.9], "who": "red", "move": [1, 0]}
+  ]
+}

@@ -31,6 +31,10 @@ class InputMixin:
             # перечитать картинки с диска — удобно, пока рисуешь в редакторе
             reload_all()
             self._field_bg = None         # фон поля перерисуется из новых картинок
+            from . import demos           # и сценки справки — из новых сценариев
+            demos.reload_all()
+            self.__dict__.pop("_demos", None)
+            self.__dict__.pop("_demo_bg", None)
         if sc == pygame.KSCAN_F11:
             pygame.display.toggle_fullscreen()
             self.held.clear()
