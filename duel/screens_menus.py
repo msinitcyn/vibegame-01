@@ -62,8 +62,12 @@ class MenuScreensMixin:
         if u.available and not u.can_install:       # из исходников: только сообщить
             img = self.small.render(tr("update.source", v=u.latest), True, (120, 220, 140))
             s.blit(img, img.get_rect(center=(WIDTH // 2, 40)))
-        img = self.tiny_text.render(f"v{u.version}", True, GREY)
-        s.blit(img, img.get_rect(bottomright=(WIDTH - 8, HEIGHT - 6)))
+        text = f"v{u.version}  ·  {self.update_status_text(short=True)}"
+        rect = pygame.Rect((0, 0), self.tiny_text.size(text))
+        rect.bottomright = (WIDTH - 8, HEIGHT - 6)
+        img = self.tiny_text.render(text, True, WHITE if self.hovered(rect) else GREY)
+        s.blit(img, rect)
+        self.hit(rect.inflate(8, 8), self.check_updates_now)         # щелчок — проверить сейчас
         hints = [(tr("menu.hint", n=len(self.menu)), GREY)]
         n = len(self.pads.pads)
         if n:
@@ -175,6 +179,7 @@ class MenuScreensMixin:
                   "sfx": f"◀  {tr('settings.sfx', n=self.settings.get('sfx_volume', 5))}  ▶",
                   "keys": tr("settings.keys"),
                   "updates": f"◀  {tr('settings.updates', v=tr('yes' if self.settings.get('check_updates', True) else 'no'))}  ▶",
+                  "check_now": tr("settings.check_now"),
                   "back": tr("settings.back")}
         for i, line in enumerate(self.settings_rows):
             sel = i == self.settings_index
@@ -187,6 +192,9 @@ class MenuScreensMixin:
             self.hit(rect, lambda i=i, rect=rect: self.settings_click(i, rect),
                      lambda i=i: setattr(self, "settings_index", i))
         self.back_button()
+        if row in ("updates", "check_now"):                # итог последней проверки обновлений
+            img = self.small.render(self.update_status_text(), True, AMMO_COLOR)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 170 + len(self.settings_rows) * 46 + 24)))
         img = self.small.render(tr("settings.name_hint" if row == "name" else "settings.hint"), True, GREY)
         s.blit(img, img.get_rect(center=(WIDTH // 2, 170 + len(self.settings_rows) * 46)))
         pygame.display.flip()
@@ -196,7 +204,7 @@ class MenuScreensMixin:
         «Назад» — в меню; «Имя» — выбрать строку (дальше набирать с клавиатуры)."""
         self.settings_index = i
         row = self.settings_rows[i]
-        if row in ("back", "keys"):
+        if row in ("back", "keys", "check_now"):
             self.on_key(pygame.KSCAN_RETURN)
         elif row != "name":
             left = self.ui_mouse is not None and self.ui_mouse[0] < rect.centerx

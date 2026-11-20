@@ -193,3 +193,68 @@ def test_update_texts(lang, game):
     for err in ("download", "broken", "nosums", "write"):
         assert i18n.t("update.err." + err)
     i18n.set_lang("ru")
+
+
+def test_check_now_finds_release_published_later(game, tmp_path):
+    """Игру запустили до выпуска; «Проверить обновления» — и пункт «Обновить» появляется."""
+    releases = {"v": "0.4.0"}
+    u = fake_release(tmp_path)
+    fetch = u.fetch
+    u.fetch = lambda url: dict(fetch(url), tag_name="v" + releases["v"])
+    game.updater = u
+    u.check(wait=True)
+    game.refresh_menu()
+    assert "update" not in game.menu and game.update_status()[0] == "update.st_latest"
+    releases["v"] = "9.9.0"                            # выпуск собрался
+    game.state = "settings"
+    game.settings_index = game.settings_rows.index("check_now")
+    game.on_key(pygame.KSCAN_RETURN)
+    import time
+    for _ in range(200):
+        if u.state != "checking":
+            break
+        time.sleep(0.01)
+    game.refresh_menu()
+    assert game.menu[-1] == "update" and game.update_status()[:2] == ("update.st_new", "9.9.0")
+    game.draw_settings()
+    assert "9.9.0" in game.update_status_text()
+
+
+def test_offline_status_and_saved_between_runs(game):
+    from duel import settings
+    def offline(url):
+        raise OSError("нет сети")
+    game.updater = Updater(version="0.4.0", fetch=offline)
+    game.updater.recheck(wait=True)
+    assert game.update_status()[0] == "update.st_offline"
+    saved = settings.load()["last_update_check"]
+    assert saved["result"] == "offline" and saved["at"] > 0
+    game.updater = Updater(version="0.4.0")            # «новый запуск» — итог берётся из настроек
+    assert game.update_status()[0] == "update.st_offline"
+    assert game.update_status_text(short=True).startswith(__import__("duel.i18n", fromlist=["t"]).t(
+        "update.checked_at", t="")[:5])
+
+
+def test_menu_corner_click_rechecks(game):
+    calls = []
+    game.updater.recheck = lambda wait=False: calls.append(1)
+    game.state = "menu"
+    game.hits = []
+    game.draw_menu()
+    corner = next(h for h in game.hits if h[0].bottom >= game.screen.get_height() - 10 and h[0].right
+                  >= game.screen.get_width() - 10)
+    game.on_mouse_move(corner[0].center)
+    game.on_mouse_button(1)
+    assert calls
+
+
+def test_source_version_ignores_stale_build_file(monkeypatch, tmp_path):
+    """_version.py от давней сборки не должен менять версию игры из исходников."""
+    import sys
+    import types
+    fake = types.ModuleType("duel._version")
+    fake.VERSION = "0.0.1"
+    monkeypatch.setitem(sys.modules, "duel._version", fake)
+    assert update.current_version() != "0.0.1"
+    monkeypatch.setattr(update.sys, "frozen", True, raising=False)
+    assert update.current_version() == "0.0.1"

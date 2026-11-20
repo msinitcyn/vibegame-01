@@ -106,7 +106,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin):
         self.entry_name, self.entry_row = "", 1
         self.menu_index = 0
         self.settings_rows = ["lang", "name", "aim_mode", "aim_stick", "aim_mouse", "music", "sfx", "keys",
-                              "updates", "back"]
+                              "updates", "check_now", "back"]
         self.keys_col, self.keys_row, self.keys_wait, self.keys_msg = 0, 0, None, None
         self.updater = Updater()          # новая версия: проверка — в run(), по настройке
         self.help_page = 0

@@ -34,12 +34,14 @@ ROOT = Path(__file__).resolve().parent.parent
 # ------------------------------------------------------------------ версии
 
 def current_version():
-    """Своя версия: вшитая сборкой (duel/_version.py), иначе из pyproject.toml."""
-    try:
-        from ._version import VERSION
-        return VERSION
-    except ImportError:
-        pass
+    """Своя версия: в собранной игре — вшитая сборкой (duel/_version.py); из исходников — из
+    pyproject.toml (_version.py мог остаться от давней сборки и врать)."""
+    if frozen():
+        try:
+            from ._version import VERSION
+            return VERSION
+        except ImportError:
+            pass
     try:
         text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
         m = re.search(r'^version\s*=\s*"([^"]+)"', text, re.M)
@@ -201,6 +203,8 @@ class Updater:
         self.release = None
         self.progress = 0.0
         self.error = None               # ключ причины (update.err.*)
+        self.checked_at = None          # когда последний раз спросили GitHub (time.time())
+        self.offline = False            # последняя проверка не дозвалась до GitHub
         self.file = None                # скачанный и проверенный файл
         self._lock = threading.Lock()
 
@@ -222,16 +226,27 @@ class Updater:
         if wait:
             th.join()
 
+    def recheck(self, wait=False):
+        """Проверить ещё раз сейчас (кнопка «Проверить обновления»). Пока скачиваем — не мешаем."""
+        if self.state in ("checking", "downloading", "verifying", "ready", "installing"):
+            return
+        self.state = "idle"
+        self.check(wait)
+
     def _check(self):
+        import time
         try:
             rel = latest_release(self.fetch)
         except Exception:                 # нет сети, лимит, странный ответ — работаем дальше
+            self.offline, self.checked_at = True, time.time()
             self.state = "none"
             return
+        self.offline, self.checked_at = False, time.time()
         if is_newer(rel.version, self.version) and asset_name(self.system) in rel.assets:
             self.release = rel
             self.state = "available"
         else:
+            self.release = None
             self.state = "none"
 
     def start(self, wait=False):

@@ -19,6 +19,41 @@ class MenusMixin:
         if self.settings.get("check_updates", True) and not os.environ.get("DUEL_NO_UPDATE_CHECK"):
             self.updater.check()
 
+    def check_updates_now(self):
+        """«Проверить обновления»: спросить GitHub сейчас (и при выключенной автоматической проверке)."""
+        self.updater.recheck()
+
+    def update_status(self):
+        """Итог последней проверки для надписей: (ключ текста, версия, время) — из этой проверки или
+        сохранённой в настройках с прошлого запуска."""
+        u = self.updater
+        if u.state == "checking":
+            return "update.st_checking", None, None
+        if u.checked_at is not None:
+            result = "offline" if u.offline else ("new" if u.available else "latest")
+            saved = {"at": u.checked_at, "result": result, "v": u.latest}
+            if self.settings.get("last_update_check") != saved:
+                self.settings["last_update_check"] = saved
+                settings.save(self.settings)
+        last = self.settings.get("last_update_check")
+        if not isinstance(last, dict) or not isinstance(last.get("at"), (int, float)):
+            return "update.st_never", None, None
+        return "update.st_" + str(last.get("result")), last.get("v"), last["at"]
+
+    def update_status_text(self, short=False):
+        """«у вас последняя версия · сегодня в 14:32» (short — только время проверки)."""
+        import time
+        key, v, at = self.update_status()
+        if at is None:
+            return t(key, v=v or "")
+        now, then = time.localtime(), time.localtime(at)
+        when = time.strftime("%H:%M", then)
+        if (now.tm_year, now.tm_yday) != (then.tm_year, then.tm_yday):
+            when = time.strftime("%d.%m %H:%M", then)
+        if short:
+            return t("update.checked_at", t=when)
+        return f"{t(key, v=v or '')} · {when}"
+
     def refresh_menu(self):
         """Пункт «Обновить» появляется, когда нашлась новая версия и её можно поставить."""
         can = self.updater.available and self.updater.can_install
@@ -150,6 +185,9 @@ class MenusMixin:
                 settings.save(self.settings)
                 if self.settings["check_updates"]:
                     self.start_update_check()
+        elif row == "check_now":
+            if sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
+                self.check_updates_now()
         elif row == "lang":
             step = {K.KSCAN_A: -1, K.KSCAN_LEFT: -1, K.KSCAN_D: 1, K.KSCAN_RIGHT: 1,
                     K.KSCAN_RETURN: 1, K.KSCAN_KP_ENTER: 1, K.KSCAN_SPACE: 1}.get(sc)

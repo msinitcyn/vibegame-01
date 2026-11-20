@@ -89,7 +89,11 @@ def build():
             "--hidden-import", "duel._version"]
     if WINDOWS:
         args += ["--windowed", "--icon", str(make_ico(ICON, WORK / "icon.ico"))]
-    subprocess.check_call(args + [str(ROOT / "main.py")], cwd=ROOT)
+    try:
+        subprocess.check_call(args + [str(ROOT / "main.py")], cwd=ROOT)
+    finally:
+        (ROOT / "duel" / "_version.py").unlink(missing_ok=True)   # нужен только сборке — из исходников
+                                                                  # версия берётся из pyproject.toml
     out = [DIST / (NAME + (".exe" if WINDOWS else ""))]
     if WINDOWS:
         iscc = find_iscc()
