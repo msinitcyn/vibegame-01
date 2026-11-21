@@ -110,3 +110,29 @@ def test_client_menu_rows_and_hold(game):
         game.net, game.me, game.net_hold = None, None, None
         game.state = "menu"
     assert pygame.get_init()
+
+
+def test_p_key_pauses(game):
+    """P: за одним компьютером — пауза и обратно; по сети — пауза для всех / снять, меню не открывается."""
+    game.state, game.net = "play", None
+    game.on_key(pygame.KSCAN_P)
+    assert game.paused
+    game.on_key(pygame.KSCAN_P)
+    assert not game.paused
+    sent = []
+
+    class Fake:
+        def send(self, msg):
+            sent.append(msg)
+
+    game.net, game.me, game.warmup = Fake(), "blue", False
+    game.net_can_hold = {"blue": True}
+    try:
+        game.on_key(pygame.KSCAN_P)
+        assert sent[-1] == {"type": "pause"} and not game.paused
+        game.net_hold = "red"
+        game.on_key(pygame.KSCAN_P)
+        assert sent[-1] == {"type": "resume"}
+    finally:
+        game.net, game.me, game.net_hold = None, None, None
+        game.state = "menu"

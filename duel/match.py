@@ -426,12 +426,13 @@ class Match:
                     p.y += dy / d * step
             self.constrain(p)
             self.update_ice(p)
-            # на опасной земле отнимаются жизни: FOE_LAND_DPS в секунду (щит не помогает)
+            # на опасной земле отнимаются жизни: FOE_LAND_DPS в секунду; щит гасит каждый такой удар зарядом
             if self.in_danger(p):
                 p.foe_land_t += dt
                 while p.foe_land_t >= 1 / FOE_LAND_DPS:
                     p.foe_land_t -= 1 / FOE_LAND_DPS
-                    self.hurt_player(p, 1)
+                    if not p.shield_absorb():
+                        self.hurt_player(p, 1)
             else:
                 p.foe_land_t = 0.0
             # у огненной стены соперника хозяина — FIRE_RING_DPS в секунду

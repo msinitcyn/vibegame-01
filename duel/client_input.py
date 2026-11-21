@@ -75,6 +75,9 @@ class InputMixin:
             return
         if self.chat_key(sc):                 # чат по сети: T — написать; пока пишешь, клавиши — в чат
             return
+        if sc == pygame.KSCAN_P:              # P — пауза: по сети — для всех (снова P — снять), иначе — своя
+            self.pause_key_p()
+            return
         if sc == pygame.KSCAN_ESCAPE:
             if self.snap["winner"] or self.watching or (self.net and self.net_waiting and not self.warmup):
                 self.quit_match()         # партия кончилась, зритель, выбор героя — выходим, как раньше
@@ -142,6 +145,18 @@ class InputMixin:
             self.pause_index = (self.pause_index + 1) % len(self.pause_rows())
         elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
             self.pause_select(self.pause_rows()[self.pause_index])
+
+    def pause_key_p(self):
+        """P: за одним компьютером и в разминке — пауза / продолжить; по сети — «Пауза для всех» или
+        «Снять паузу» (как в меню), меню при этом не открывается."""
+        if self.snap.get("winner") or self.watching or (self.net and self.net_waiting and not self.warmup):
+            return
+        if self.net_match():
+            self.pause_select("hold")
+            return
+        self.paused = not self.paused
+        self.pause_index = 0
+        self.held.clear()
 
     def pause_select(self, row):
         if row == "hold":                 # по сети: общая пауза / снять её (снять может любой)

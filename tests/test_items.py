@@ -487,3 +487,15 @@ def test_mobswap_against_peaceful_foe_calms(match):
     r.apply("mobpeace")
     match.apply_item(b, "mobswap")
     assert all(m.target is None for m in mobs)
+
+
+def test_shield_absorbs_foe_land(match):
+    """На чужой земле щит гасит каждую сгоревшую жизнь зарядом; кончился — жизни уходят."""
+    from duel.config import ARENA, FOE_LAND_DPS, TOP
+    b = match.blue
+    match.give(b, "shield")
+    b.x, b.y = ARENA[0] + 300, TOP + 80                  # земля красного
+    step(match, (SHIELD_HITS - 0.5) / FOE_LAND_DPS)
+    assert b.hp == MAX_HP and "shield" in b.effects
+    step(match, 2.0)
+    assert "shield" not in b.effects and b.hp < MAX_HP
