@@ -312,4 +312,4 @@ CLONE_HP = 2                     # жизней у двойника
 CLONE_SHOT_EVERY = (0.6, 1.5)    # пауза между выстрелами двойника, сек
 CLONE_TURN_EVERY = (0.4, 1.4)    # как часто двойник меняет направление
 # эффекты хозяина, которые действуют и на его двойников
-CLONE_EFFECTS = ("shield", "triple", "wavy", "rapid", "grow2", "shrink", "speed", "nofire")
+CLONE_EFFECTS = ("shield", "triple", "wavy", "rapid", "grow2", "shrink", "speed", "nofire", "invisible")

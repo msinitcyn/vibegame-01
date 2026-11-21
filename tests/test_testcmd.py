@@ -185,3 +185,27 @@ def test_console_stays_open(game):
         assert not game.chat_typing and game.test_bot.shoot
     finally:
         game.start()
+
+
+def test_ammo_to_me_and_bot():
+    m = Match(seed=1)
+    a, b = m.blue.ammo, m.red.ammo
+    assert testcmd.run(m, None, "blue", {"do": "ammo", "n": 50})
+    assert testcmd.run(m, None, "blue", {"do": "ammo", "n": 7, "to": "foe"})
+    assert (m.blue.ammo, m.red.ammo) == (a + 50, b + 7)
+    assert not testcmd.run(m, None, "blue", {"do": "ammo", "n": 0})
+    assert not testcmd.run(m, None, "blue", {"do": "ammo", "n": True})
+
+
+def test_ammo_command(game):
+    set_lang("ru")
+    game.start(config.TEST_HP, {"blue": "fire", "red": "frost"}, bot=True)
+    try:
+        a, b = game.match.blue.ammo, game.match.red.ammo
+        game.chat_command("ammo")
+        game.chat_command("ammo 5 bot")
+        game.chat_command("ammo много")
+        assert game.match.blue.ammo == a + config.AMMO_PACK and game.match.red.ammo == b + 5
+        assert "/ammo" in game.chat_lines[-1][2]
+    finally:
+        game.start()

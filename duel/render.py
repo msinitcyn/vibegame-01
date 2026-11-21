@@ -229,9 +229,26 @@ def mage_image(p, heroes, frame="idle", white=False):
     return sprite(HERO_SPRITE[heroes[p["id"]]], size, facing < 0, white, 255, frame)
 
 
-def draw_invisible(surf, p, heroes, time=0.0, sees=True):
-    """Невидимка. Первые мгновения его видят все: растворяется в мареве, искры летят вверх, кольцо света
-    сжимается. Потом себе и за одним компьютером — дрожащий полупрозрачный силуэт; сопернику — ничего."""
+def body_image(u, heroes, who, time=0.0):
+    """Картинка тела (мага или медведя) и где её центр — для марева невидимости. who — чей герой."""
+    pos = _pos(u)
+    aim = u.get("aim")
+    facing = DIR[who] if aim is None else (1 if math.cos(aim) >= 0 else -1)
+    if "bear" in u.get("effects", {}):          # невидимый медведь — тоже медведь
+        scale = float(fx.params("bear").get("scale", 1.45))
+        r = u["r"] * scale
+        size = max(8, round(r * 2 * SPRITE_TO_HITBOX))
+        img = sprite(f"bear_{heroes[who]}", size, facing < 0, False, 255, bear_frame(u, time))
+        return img, (pos[0], pos[1] - u["r"] * (scale - 1) * 0.4)
+    size = max(8, round(u["r"] * 2 * SPRITE_TO_HITBOX))
+    return sprite(HERO_SPRITE[heroes[who]], size, facing < 0, False, 255, mage_frame(u, time)[0]), pos
+
+
+def draw_invisible(surf, p, heroes, time=0.0, sees=True, who=None):
+    """Невидимка (маг, медведь или двойник). Первые мгновения его видят все: растворяется в мареве, искры
+    летят вверх, кольцо света сжимается. Потом себе и за одним компьютером — дрожащий полупрозрачный
+    силуэт; сопернику — ничего. who — чей герой (у двойника — хозяин)."""
+    who = who or p["id"]
     P = fx.params("invisible")
     pos = _pos(p)
     r = p["r"]
@@ -239,24 +256,27 @@ def draw_invisible(surf, p, heroes, time=0.0, sees=True):
     since = DURATION["invisible"] - p["effects"]["invisible"]
     ghost = float(P.get("ghost_alpha", 105))
     haze = float(P.get("haze", 2.5))
-    img = mage_image(p, heroes, mage_frame(p, time)[0])
+    img, center = body_image(p, heroes, who, time)
     if 0 <= since < T:                            # исчезает
         k = since / T
         alpha = 255 - (255 - (ghost if sees else 0)) * k
-        fx_mage.haze_blit(surf, img, pos, alpha, time, haze * k)
+        fx_mage.haze_blit(surf, img, center, alpha, time, haze * k)
         fx_mage.invis_ring(surf, pos, r, k)
         fx_mage.invis_sparks(surf, pos, r, k, rising=True)
         return
     if not sees:
         return
-    fx_mage.haze_blit(surf, img, pos, ghost + 20 * math.sin(time * 5), time, haze)
-    pygame.draw.circle(surf, side_color(heroes, p["id"]), pos, int(r) + 4, 1)
+    fx_mage.haze_blit(surf, img, center, ghost + 20 * math.sin(time * 5), time, haze)
+    pygame.draw.circle(surf, side_color(heroes, who), pos, int(r) + 4, 1)
 
 
 def draw_clone(surf, c, heroes, owner_p=None, font=None, time=0.0, viewer=None):
     """Двойник — как настоящий маг: тот же рисунок и анимация, мушка, полоска жизней хозяина.
     За одним компьютером и сопернику все одинаковые; хозяину по сети свои двойники — полупрозрачные."""
     owner = c["owner"]
+    if "invisible" in c.get("effects", {}):      # невидимость хозяина — и на двойниках
+        draw_invisible(surf, c, heroes, time, viewer is None or viewer == owner, who=owner)
+        return
     aim = c.get("aim", 0.0 if DIR[owner] > 0 else math.pi)
     facing = 1 if math.cos(aim) >= 0 else -1
     pos = _pos(c)
@@ -264,8 +284,16 @@ def draw_clone(surf, c, heroes, owner_p=None, font=None, time=0.0, viewer=None):
     px = sprite_px(c["r"])
     mine = viewer is not None and viewer == owner
     alpha = int(fx.params("clones").get("own_clone_alpha", 110)) if mine else 255
-    draw_unit(surf, HERO_SPRITE[heroes[owner]], (pos[0], pos[1] - bob * px), c["r"], facing,
-              white=c.get("hit_flash", 0) > 0, alpha=alpha, frame=frame)
+    reveal = c.get("reveal", 0) / REVEAL_TIME if c.get("reveal", 0) > 0 else 0.0
+    if reveal > 0:                                # проявляется после невидимости
+        img = sprite(HERO_SPRITE[heroes[owner]], max(8, round(c["r"] * 2 * SPRITE_TO_HITBOX)), facing < 0,
+                     c.get("hit_flash", 0) > 0, 255, frame)
+        fx_mage.haze_blit(surf, img, (pos[0], pos[1] - bob * px), alpha * (1 - reveal), time,
+                          float(fx.params("invisible").get("haze", 2.5)) * reveal)
+        fx_mage.invis_sparks(surf, pos, c["r"], 1 - reveal, rising=False)
+    else:
+        draw_unit(surf, HERO_SPRITE[heroes[owner]], (pos[0], pos[1] - bob * px), c["r"], facing,
+                  white=c.get("hit_flash", 0) > 0, alpha=alpha, frame=frame)
     shot = c.get("shot", 0) / SHOT_FLASH
     if "triple" in c["effects"]:
         fx_mage.draw_triple(surf, (pos[0], pos[1] - bob * px), c["r"], facing, triple_open(c), shot)

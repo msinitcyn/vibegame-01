@@ -285,10 +285,11 @@ class Match:
             if born:
                 self.clone_cluster(p, born)
                 self.clones.extend(born)
-        elif kind == "invisible":             # мобы, что шли на тебя, теряют тебя из виду
+        elif kind == "invisible":             # мобы, что шли на тебя (и двойников), теряют тебя из виду
             self.give(p, "invisible")
+            mine = [p] + self.clones_of(p)
             for m in self.mobs:
-                if m.target is p:
+                if m.target in mine:
                     m.target = None
         elif kind == "mobpeace":
             self.give(p, "mobpeace")          # мобы, что шли на тебя, успокаиваются
@@ -595,7 +596,7 @@ class Match:
         невидим) или двойника (двойник «принимает удар на себя») — не дальше FIRE_RING_RANGE;
         никого — в случайное место в этом радиусе."""
         foe = self.other(p)
-        heroes = ([] if self.hidden(foe) else [foe]) + self.clones_of(foe)
+        heroes = [u for u in [foe] + self.clones_of(foe) if not self.hidden(u)]
         near = [u for u in heroes if math.hypot(u.x - p.x, u.y - p.y) <= FIRE_RING_RANGE]
         if near:
             u = min(near, key=lambda u: math.hypot(u.x - p.x, u.y - p.y))

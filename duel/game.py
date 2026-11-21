@@ -464,7 +464,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             if "icewalk" in effects:
                 want.add((scope, p["id"], "ice-road"))
         for c in snap.get("clones", []):      # двойники шагают так же — по звуку не отличить
-            if c.get("moving"):
+            if c.get("moving") and "invisible" not in c.get("effects", {}):
                 want.add((scope, f"clone{c.get('id')}", "steps"))
         return want
 

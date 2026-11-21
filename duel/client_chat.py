@@ -12,12 +12,12 @@ import time
 import pygame
 
 from . import testcmd
-from .config import CHAT_BUBBLE, CHAT_KEEP, CHAT_MAX, TOP, BOTTOM, WIDTH
+from .config import AMMO_PACK, CHAT_BUBBLE, CHAT_KEEP, CHAT_MAX, TOP, BOTTOM, WIDTH
 from .i18n import t as tr
 from .items import ITEMS, item_name
 
 CHAT_KEY = pygame.KSCAN_T
-CONSOLE_KEY = pygame.KSCAN_GRAVE      # ~ (перед 1): консоль — история и ввод, после Enter не закрывается
+CONSOLE_KEY = pygame.KSCAN_GRAVE      # ~ (перед 1): консоль внизу — история и ввод, после Enter не закрывается
 CONSOLE_PART = 0.4                    # консоль — такая доля поля сверху
 CONSOLE_SCROLLED = (255, 210, 120)
 KEEP_LINES = 200                      # строк в истории (консоль листается PgUp/PgDn)
@@ -31,6 +31,7 @@ COMMANDS = {
     "give": ("give", "дать", "дай"),                       # тестовые — только в игре с ботом
     "items": ("items", "артефакты", "список"),
     "bot": ("bot", "бот"),
+    "ammo": ("ammo", "патроны", "пт"),
     "drops": ("drops", "drop", "дроп", "выпадение"),
 }
 
@@ -156,6 +157,8 @@ class ChatMixin:
             self.chat_system(line.rstrip(", "))
         elif cmd == "bot":
             self.test_bot_cmd(args)
+        elif cmd == "ammo":
+            self.test_ammo(args)
         elif cmd == "drops":
             on = True if args and args[0] in testcmd.ON_WORDS else False if args and args[0] in testcmd.OFF_WORDS else None
             if on is None:
@@ -181,6 +184,20 @@ class ChatMixin:
             return
         if self.test_send({"do": "give", "kind": kind, "to": to}):
             self.chat_system(tr("cmd.gave_" + to, item=item_name(kind)))
+
+    def test_ammo(self, args):
+        """/ammo [N] [bot]: патроны себе или боту (по умолчанию — пачка)."""
+        to = "me"
+        if args and args[-1] in testcmd.FOE_WORDS:
+            to, args = "foe", args[:-1]
+        elif args and args[-1] in testcmd.ME_WORDS:
+            args = args[:-1]
+        n = args[0] if args else str(AMMO_PACK)
+        if len(args) > 1 or not n.isdigit() or not 1 <= int(n) <= testcmd.AMMO_MAX_GIVE:
+            self.chat_system(tr("cmd.ammo_usage"))
+            return
+        if self.test_send({"do": "ammo", "n": int(n), "to": to}):
+            self.chat_system(tr("cmd.ammo_" + to, n=n))
 
     def test_bot_cmd(self, args):
         """/bot stop | fire | play | use N."""
@@ -277,14 +294,14 @@ class ChatMixin:
         return who, self.small.render(text, True, (240, 240, 240))
 
     def draw_console(self, now):
-        """Консоль (~): сверху на CONSOLE_PART поля — история (чат, команды, ответы), внизу — ввод."""
+        """Консоль (~): внизу на CONSOLE_PART поля — история (чат, команды, ответы), под ней — ввод."""
         s = self.screen
         h = int((BOTTOM - TOP) * CONSOLE_PART)
-        panel = pygame.Rect(0, TOP, WIDTH, h)
+        panel = pygame.Rect(0, BOTTOM - h, WIDTH, h)
         back = pygame.Surface(panel.size, pygame.SRCALPHA)
         back.fill((10, 8, 14, 225))
         s.blit(back, panel)
-        pygame.draw.line(s, (110, 160, 255), panel.bottomleft, panel.bottomright, 2)
+        pygame.draw.line(s, (110, 160, 255), panel.topleft, panel.topright, 2)
         line = "> " + self.chat_text + ("▌" if int(now * 2) % 2 else " ")
         img = self.font.render(line, True, (255, 255, 255))
         s.blit(img, (12, panel.bottom - img.get_height() - 8))

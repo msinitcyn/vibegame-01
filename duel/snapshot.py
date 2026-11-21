@@ -83,7 +83,8 @@ def snapshot(match):
                     "r": _xy(c.radius), "life": _t(c.life), "hit_flash": _t(c.hit_flash),
                     "effects": _effects(c), "shield_hits": c.shield_hits,
                     "moving": bool(c.moving), "shot": _t(c.shot_flash), "melee_flash": 0.0,
-                    "shield_flash": _t(c.shield_flash), "shield_break": _t(c.shield_break)}
+                    "shield_flash": _t(c.shield_flash), "shield_break": _t(c.shield_break),
+                    "reveal": _t(c.reveal)}
                    for c in m.clones],
     }
 

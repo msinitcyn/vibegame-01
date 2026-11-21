@@ -7,10 +7,12 @@
     {"do": "give", "kind": "lasso", "to": "me" | "foe"}
     {"do": "bot", "mode": "play" | "stop" | "fire" | "stand" | "walk" | "noshoot" | "shoot"}
     {"do": "bot", "use": 0..3}
+    {"do": "ammo", "n": 1..999, "to": "me" | "foe"}   патроны
     {"do": "drops", "on": bool}                        мобы роняют артефакты или нет
 """
 from .items import INSTANT_ITEMS, ITEMS, item_name
 
+AMMO_MAX_GIVE = 999                  # /ammo: не больше стольких патронов за раз
 BOT_MODES = ("play", "stop", "fire", "stand", "walk", "noshoot", "shoot")
 
 # слова команд чата (и русские) — разбирает client_chat
@@ -78,6 +80,13 @@ def run(match, bot, pid, msg):
         if mode in BOT_MODES:
             set_bot_mode(bot, mode)
             return True
+    if do == "ammo":
+        n = msg.get("n")
+        if not isinstance(n, int) or isinstance(n, bool) or not 1 <= n <= AMMO_MAX_GIVE:
+            return False
+        me = match.player(pid)
+        (match.other(me) if msg.get("to") == "foe" else me).ammo += n
+        return True
     if do == "drops" and isinstance(msg.get("on"), bool):
         match.drops = msg["on"]
         return True
