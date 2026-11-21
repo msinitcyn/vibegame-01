@@ -363,6 +363,8 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         notes = [tr("pause.hint")]
         if net:
             notes[0:0] = [tr("pause.net_note"), tr("chat.hint")]
+        elif self.can_chat():                  # тестовый режим, разминка: чат — для команд
+            notes[0:0] = [tr("chat.hint")]
         for i, note in enumerate(notes):
             img = self.small.render(note, True, GREY)
             s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 170 + i * 22)))

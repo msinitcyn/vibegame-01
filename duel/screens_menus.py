@@ -253,6 +253,8 @@ class MenuScreensMixin:
         if self.keys_msg:
             img = self.small.render(self.keys_msg, True, AMMO_COLOR)
             s.blit(img, img.get_rect(center=(WIDTH // 2, reset_y + 40)))
+        img = self.small.render(tr("keys.fixed"), True, GREY)       # служебные клавиши — их не назначить
+        s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 48)))
         img = self.small.render(tr("keys.hint_wait" if self.keys_wait else "keys.hint"), True, GREY)
         s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 24)))
         self.back_button()
