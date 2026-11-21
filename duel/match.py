@@ -141,6 +141,7 @@ class Match:
         self.next_wave = MOB_DELAY    # когда придёт следующая (секунды партии)
         self.wave_interval = MOB_EVERY
         self.winner = None
+        self.drops = True             # мобы роняют артефакты (тестовая команда /drops off выключает)
         self.events = []              # копятся до конца шага, step() их отдаёт
 
     # ------------------------------------------------------------------ общее
@@ -647,6 +648,8 @@ class Match:
         на земле игрока — общий или артефакт героя этого игрока, на нейтральной полосе — общий,
         в арене — артефакт мобов (пока тот же набор, что общий). Уровень — по запасу жизней моба."""
         self.emit("mob_dead", mob.x, mob.y)
+        if not self.drops:
+            return
         m = ARTIFACT_R + 4
         x = max(m, min(WIDTH - m, mob.x))
         y = max(TOP + m, min(BOTTOM - m, mob.y))

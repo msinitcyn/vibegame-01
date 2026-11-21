@@ -1,6 +1,7 @@
 """Случайный бот: ходит, стреляет, бьёт, тратит артефакты. Свой генератор — не трогает общий random.
 
-Режимы для тестов (команда чата /bot): play — играет, stop — стоит, fire — стоит и стреляет прямо вперёд."""
+Режимы для тестов (команда чата /bot): play — играет, stop — стоит и ничего не делает, fire — стоит и стреляет
+прямо вперёд. В play можно отдельно запретить ходить (walk) и стрелять (shoot)."""
 import math
 import random
 
@@ -17,6 +18,8 @@ class Bot:
         self.forward = forward        # где соперник: 0 — вправо, π — влево
         self.aim = forward
         self.mode = "play"
+        self.walk = True              # /bot stand — не ходит (остальное — как обычно)
+        self.shoot = True             # /bot noshoot — не стреляет
         self.use_next = None          # /bot use N: применить ячейку на следующем такте
 
     def act(self):
@@ -34,4 +37,5 @@ class Bot:
         melee = rng.random() < 0.04
         if rng.random() < 0.02 and slot is None:
             slot = rng.randrange(4)
-        return self.move, fire, melee, slot, self.aim
+        move = self.move if self.walk else (0, 0)
+        return move, fire and self.shoot, melee, slot, self.aim

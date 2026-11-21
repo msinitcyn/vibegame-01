@@ -15,7 +15,8 @@ DEFAULT_KEYS = {
             "fire": K.KSCAN_RETURN, "melee": K.KSCAN_RSHIFT,
             "item1": K.KSCAN_9, "item2": K.KSCAN_0, "item3": K.KSCAN_MINUS, "item4": K.KSCAN_EQUALS},
 }
-RESERVED = {K.KSCAN_ESCAPE, K.KSCAN_F5, K.KSCAN_F11, K.KSCAN_P, K.KSCAN_T}   # служебные: меню, картинки, экран, пауза, чат
+RESERVED = {K.KSCAN_ESCAPE, K.KSCAN_F5, K.KSCAN_F11, K.KSCAN_P, K.KSCAN_T,
+            K.KSCAN_GRAVE}    # служебные: меню, картинки, экран, пауза, чат, консоль
 
 _SPECIAL = {"SPACE": "Space", "RETURN": "Enter", "KP_ENTER": "Num Enter", "UP": "↑", "DOWN": "↓",
             "LEFT": "←", "RIGHT": "→", "LSHIFT": "Shift", "RSHIFT": "R Shift", "LCTRL": "Ctrl",

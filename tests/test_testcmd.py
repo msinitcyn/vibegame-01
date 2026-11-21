@@ -134,3 +134,54 @@ def test_pick_in_test_mode_needs_only_blue(game):
         assert game.heroes["red"] != game.heroes["blue"]
     finally:
         game.start()
+
+
+def test_bot_stand_and_noshoot_flags():
+    bot = Bot(3)
+    testcmd.set_bot_mode(bot, "stand")
+    testcmd.set_bot_mode(bot, "noshoot")
+    acts = [bot.act() for _ in range(300)]
+    assert all(a[0] == (0, 0) and not a[1] for a in acts)
+    testcmd.set_bot_mode(bot, "walk")
+    assert any(bot.act()[0] != (0, 0) for _ in range(300))
+    assert not bot.shoot                                     # «не стреляет» осталось
+    testcmd.set_bot_mode(bot, "play")
+    assert bot.walk and bot.shoot
+
+
+def test_drops_off():
+    from duel.entities import Mob
+    m = Match(seed=1)
+    assert testcmd.run(m, None, "blue", {"do": "drops", "on": False})
+    m.drop_artifact(Mob(500, 300, 3))
+    assert not m.artifacts
+    testcmd.run(m, None, "blue", {"do": "drops", "on": True})
+    m.drop_artifact(Mob(500, 300, 3))
+    assert m.artifacts
+
+
+def test_console_stays_open(game):
+    set_lang("ru")
+    game.start(config.TEST_HP, {"blue": "fire", "red": "frost"}, bot=True)
+    game.countdown = 0
+    try:
+        game.on_key(pygame.KSCAN_GRAVE)
+        game.on_text("ё")                                    # знак самой клавиши — не печатается
+        assert game.chat_typing and game.console and game.chat_text == ""
+        game.on_text("/drops off")
+        game.on_key(pygame.KSCAN_RETURN)
+        assert game.chat_typing and not game.match.drops     # выполнено, консоль открыта
+        game.on_text("/bot noshoot")
+        game.on_key(pygame.KSCAN_RETURN)
+        assert not game.test_bot.shoot
+        assert [x[0] for x in game.chat_lines[-4:]] == ["cmd", "sys", "cmd", "sys"]
+        game.on_key(pygame.KSCAN_PAGEUP)
+        game.draw()
+        game.on_key(pygame.KSCAN_GRAVE)
+        assert not game.chat_typing and not game.console
+        game.on_key(pygame.KSCAN_T)                         # T — одна строка: после Enter закрыта
+        game.on_text("t/bot shoot")
+        game.on_key(pygame.KSCAN_RETURN)
+        assert not game.chat_typing and game.test_bot.shoot
+    finally:
+        game.start()

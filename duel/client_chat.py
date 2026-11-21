@@ -17,6 +17,10 @@ from .i18n import t as tr
 from .items import ITEMS, item_name
 
 CHAT_KEY = pygame.KSCAN_T
+CONSOLE_KEY = pygame.KSCAN_GRAVE      # ~ (перед 1): консоль — история и ввод, после Enter не закрывается
+CONSOLE_PART = 0.4                    # консоль — такая доля поля сверху
+CONSOLE_SCROLLED = (255, 210, 120)
+KEEP_LINES = 200                      # строк в истории (консоль листается PgUp/PgDn)
 
 # команды чата: /команда (и её русские имена) — выполняются у себя, в чат не уходят
 COMMANDS = {
@@ -27,6 +31,7 @@ COMMANDS = {
     "give": ("give", "дать", "дай"),                       # тестовые — только в игре с ботом
     "items": ("items", "артефакты", "список"),
     "bot": ("bot", "бот"),
+    "drops": ("drops", "drop", "дроп", "выпадение"),
 }
 
 
@@ -35,7 +40,9 @@ class ChatMixin:
         self.chat_typing = False      # открыто поле ввода
         self.chat_text = ""
         self.chat_swallow = False     # первая буква после T — это сама T, её не печатаем
-        self.chat_lines = []          # [(цвет, имя, текст, когда пришло)]
+        self.chat_lines = []          # [(цвет | "sys" | "cmd", имя, текст, когда пришло)]
+        self.console = False          # открыта консоль (~): ввод не закрывается после Enter
+        self.console_scroll = 0       # на сколько строк консоль пролистана назад
 
     def can_chat(self):
         """Писать может игрок сетевой партии (не зритель) — в бою, при выборе героя, после;
@@ -69,35 +76,53 @@ class ChatMixin:
         return None
 
     def chat_key(self, sc):
-        """Клавиша, пока открыт чат. True — клавиша съедена чатом."""
+        """Клавиша, пока открыт чат или консоль. True — клавиша съедена.
+        T — одна строка (Enter — выполнить и закрыть), ~ — консоль (Enter — выполнить, ввод остаётся)."""
         if not self.chat_typing:
-            if sc == CHAT_KEY and self.can_chat() and not self.paused:
+            if sc in (CHAT_KEY, CONSOLE_KEY) and self.can_chat() and not self.paused:
                 self.chat_typing, self.chat_text, self.chat_swallow = True, "", True
+                self.console, self.console_scroll = sc == CONSOLE_KEY, 0
                 self.held.clear()
                 return True
             return False
         if sc in (pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER):
             text = self.chat_text.strip()
-            self.chat_typing, self.chat_text = False, ""
-            if text.startswith("/"):
-                self.chat_command(text[1:])
-            elif text and self.net and not self.warmup:
-                self.net.send({"type": "chat", "text": text[:CHAT_MAX]})
-            elif text:                            # разминка, тестовый режим: только себе
-                pid = self.me or "blue"
-                self.chat_received({"from": pid, "name": self.player_label(pid), "text": text})
-        elif sc == pygame.KSCAN_ESCAPE:
-            self.chat_typing, self.chat_text = False, ""
+            self.chat_text, self.console_scroll = "", 0
+            if not self.console:
+                self.chat_typing = False
+            self.chat_send(text)
+        elif sc == pygame.KSCAN_ESCAPE or (sc == CONSOLE_KEY and self.console):
+            self.chat_typing, self.chat_text, self.console = False, "", False
+            self.chat_swallow = sc == CONSOLE_KEY     # знак самой ~ придёт текстом — не печатаем
+        elif sc == CONSOLE_KEY:                       # из строки T — в консоль, набранное остаётся
+            self.console, self.chat_swallow = True, True
         elif sc == pygame.KSCAN_BACKSPACE:
             self.chat_text = self.chat_text[:-1]
+        elif sc == pygame.KSCAN_PAGEUP and self.console:
+            self.console_scroll = min(len(self.chat_lines) - 1, self.console_scroll + 5)
+        elif sc == pygame.KSCAN_PAGEDOWN and self.console:
+            self.console_scroll = max(0, self.console_scroll - 5)
         self.held.clear()
         return True
 
+    def chat_send(self, text):
+        """Строка из поля ввода: /команда — выполнить у себя, иначе — сообщение в чат."""
+        if text.startswith("/"):
+            self.chat_lines.append(("cmd", "", text, time.monotonic()))     # что ввели — в историю
+            self.chat_command(text[1:])
+        elif text and self.net and not self.warmup:
+            self.net.send({"type": "chat", "text": text[:CHAT_MAX]})
+        elif text:                                # разминка, тестовый режим: только себе
+            pid = self.me or "blue"
+            self.chat_received({"from": pid, "name": self.player_label(pid), "text": text})
+
     def chat_type(self, text):
-        """Набранные буквы — в сообщение (первая после T — сама T, пропускаем)."""
+        """Набранные буквы — в сообщение (первая после T или ~ — сама эта клавиша, пропускаем)."""
         if self.chat_swallow:
             self.chat_swallow = False
             text = text[1:]
+        if not self.chat_typing:
+            return
         chars = "".join(ch for ch in text if ch.isprintable())
         self.chat_text = (self.chat_text + chars)[:CHAT_MAX]
 
@@ -131,6 +156,12 @@ class ChatMixin:
             self.chat_system(line.rstrip(", "))
         elif cmd == "bot":
             self.test_bot_cmd(args)
+        elif cmd == "drops":
+            on = True if args and args[0] in testcmd.ON_WORDS else False if args and args[0] in testcmd.OFF_WORDS else None
+            if on is None:
+                self.chat_system(tr("cmd.drops_usage"))
+            elif self.test_send({"do": "drops", "on": on}):
+                self.chat_system(tr("cmd.drops_on" if on else "cmd.drops_off"))
         else:
             self.chat_system(tr("cmd.unknown", cmd="/" + word))
 
@@ -184,14 +215,14 @@ class ChatMixin:
 
     def chat_system(self, text):
         self.chat_lines.append(("sys", "", text, time.monotonic()))
-        self.chat_lines = self.chat_lines[-20:]
+        self.chat_lines = self.chat_lines[-KEEP_LINES:]
 
     def chat_received(self, msg):
         pid = msg.get("from")
         text = str(msg.get("text") or "")[:CHAT_MAX]
         if pid in ("blue", "red") and text:
             self.chat_lines.append((pid, str(msg.get("name") or ""), text, time.monotonic()))
-            self.chat_lines = self.chat_lines[-20:]
+            self.chat_lines = self.chat_lines[-KEEP_LINES:]
 
     # ------------------------------------------------------------------ рисование
 
@@ -199,21 +230,21 @@ class ChatMixin:
         """Последние сообщения внизу слева (гаснут), пузыри над магами, поле ввода."""
         if not self.chat_shown():
             return
+        now = time.monotonic()
+        if self.console and self.chat_typing:
+            if not self.net_waiting:
+                self.draw_bubbles(now)
+            self.draw_console(now)
+            return
         self.draw_netstats()
         s = self.screen
-        now = time.monotonic()
         y = BOTTOM - 40 if self.chat_typing else BOTTOM - 12
         for pid, name, text, at in reversed(self.chat_lines[-5:]):
             age = now - at
             if age > CHAT_KEEP and not self.chat_typing:
                 continue
             alpha = 255 if self.chat_typing else int(255 * min(1.0, (CHAT_KEEP - age) / 1.5))
-            if pid == "sys":                      # ответ команды — серым, без имени
-                who = self.small.render("• ", True, (170, 170, 180))
-                body = self.small.render(text, True, (190, 190, 200))
-            else:
-                who = self.small.render((name or self.player_label(pid)) + ": ", True, self.side_color(pid))
-                body = self.small.render(text, True, (240, 240, 240))
+            who, body = self.chat_line_images(pid, name, text)
             box = pygame.Rect(8, y - who.get_height() - 4, who.get_width() + body.get_width() + 12,
                               who.get_height() + 4)
             back = pygame.Surface(box.size, pygame.SRCALPHA)
@@ -235,6 +266,42 @@ class ChatMixin:
             s.blit(img, img.get_rect(midleft=(box.x + 10, box.centery)))
             hint = self.tiny_text.render(tr("chat.send_hint"), True, (190, 190, 200))
             s.blit(hint, (box.right + 10, box.centery - hint.get_height() // 2))
+
+    def chat_line_images(self, pid, name, text):
+        """Строка истории: (кто, текст) картинками. sys — ответ команды, cmd — введённая команда."""
+        if pid == "sys":                          # ответ команды — серым, без имени
+            return self.small.render("• ", True, (170, 170, 180)), self.small.render(text, True, (190, 190, 200))
+        if pid == "cmd":
+            return self.small.render("> ", True, (120, 200, 140)), self.small.render(text, True, (150, 220, 160))
+        who = self.small.render((name or self.player_label(pid)) + ": ", True, self.side_color(pid))
+        return who, self.small.render(text, True, (240, 240, 240))
+
+    def draw_console(self, now):
+        """Консоль (~): сверху на CONSOLE_PART поля — история (чат, команды, ответы), внизу — ввод."""
+        s = self.screen
+        h = int((BOTTOM - TOP) * CONSOLE_PART)
+        panel = pygame.Rect(0, TOP, WIDTH, h)
+        back = pygame.Surface(panel.size, pygame.SRCALPHA)
+        back.fill((10, 8, 14, 225))
+        s.blit(back, panel)
+        pygame.draw.line(s, (110, 160, 255), panel.bottomleft, panel.bottomright, 2)
+        line = "> " + self.chat_text + ("▌" if int(now * 2) % 2 else " ")
+        img = self.font.render(line, True, (255, 255, 255))
+        s.blit(img, (12, panel.bottom - img.get_height() - 8))
+        hint = self.tiny_text.render(tr("console.hint"), True, (150, 150, 165))
+        s.blit(hint, hint.get_rect(bottomright=(WIDTH - 10, panel.bottom - 10)))
+        y = panel.bottom - img.get_height() - 14
+        end = len(self.chat_lines) - self.console_scroll
+        for pid, name, text, _ in reversed(self.chat_lines[:max(0, end)]):
+            who, body = self.chat_line_images(pid, name, text)
+            y -= who.get_height() + 2
+            if y < panel.top + 4:
+                break
+            s.blit(who, (12, y))
+            s.blit(body, (12 + who.get_width(), y))
+        if self.console_scroll:
+            more = self.tiny_text.render(tr("console.scrolled", n=self.console_scroll), True, CONSOLE_SCROLLED)
+            s.blit(more, more.get_rect(topright=(WIDTH - 10, panel.top + 6)))
 
     def draw_netstats(self):
         """/net: панель статистики связи под верхней панелью — своя и соперника."""

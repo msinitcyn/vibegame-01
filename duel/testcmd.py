@@ -5,12 +5,13 @@
 
 Сообщение (клиент уже нашёл код артефакта; сервер всё равно проверяет):
     {"do": "give", "kind": "lasso", "to": "me" | "foe"}
-    {"do": "bot", "mode": "play" | "stop" | "fire"}
+    {"do": "bot", "mode": "play" | "stop" | "fire" | "stand" | "walk" | "noshoot" | "shoot"}
     {"do": "bot", "use": 0..3}
+    {"do": "drops", "on": bool}                        мобы роняют артефакты или нет
 """
 from .items import INSTANT_ITEMS, ITEMS, item_name
 
-BOT_MODES = ("play", "stop", "fire")
+BOT_MODES = ("play", "stop", "fire", "stand", "walk", "noshoot", "shoot")
 
 # слова команд чата (и русские) — разбирает client_chat
 ME_WORDS = ("me", "я", "мне", "себе")
@@ -18,8 +19,14 @@ FOE_WORDS = ("bot", "foe", "бот", "боту", "ему", "сопернику")
 MODE_WORDS = {
     "play": ("play", "go", "играй", "играть", "иди"),
     "stop": ("stop", "стоп", "стой", "стоять"),
-    "fire": ("fire", "shoot", "огонь", "стреляй", "стрелять"),
+    "fire": ("fire", "огонь"),
+    "stand": ("stand", "стоит", "неходи"),
+    "walk": ("walk", "ходи", "ходит"),
+    "noshoot": ("noshoot", "nofire", "нестреляй", "нестреляет", "тихо"),
+    "shoot": ("shoot", "стреляй", "стреляет"),
 }
+ON_WORDS = ("on", "yes", "1", "вкл", "да")
+OFF_WORDS = ("off", "no", "0", "выкл", "нет")
 USE_WORDS = ("use", "slot", "ячейка", "применить", "примени")
 
 
@@ -67,7 +74,24 @@ def run(match, bot, pid, msg):
         if isinstance(use, int) and not isinstance(use, bool) and 0 <= use <= 3:
             bot.use_next = use
             return True
-        if msg.get("mode") in BOT_MODES:
-            bot.mode = msg["mode"]
+        mode = msg.get("mode")
+        if mode in BOT_MODES:
+            set_bot_mode(bot, mode)
             return True
+    if do == "drops" and isinstance(msg.get("on"), bool):
+        match.drops = msg["on"]
+        return True
     return False
+
+
+def set_bot_mode(bot, mode):
+    """play / stop / fire — режим целиком; stand, walk, noshoot, shoot — по одному запрету в обычной игре."""
+    if mode in ("play", "stop", "fire"):
+        bot.mode = mode
+        bot.walk = bot.shoot = True
+        return
+    bot.mode = "play"
+    if mode in ("stand", "walk"):
+        bot.walk = mode == "walk"
+    else:
+        bot.shoot = mode == "shoot"

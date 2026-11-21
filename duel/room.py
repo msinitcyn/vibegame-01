@@ -159,7 +159,8 @@ class Room:
         self.pauses = {pid: config.PAUSE_LIMIT for pid in PIDS}
         self.pending = {pid: Command() for pid in PIDS}
         for b in self.bots.values():      # тестовый режим бота (/bot stop) — только на одну партию
-            b.mode, b.use_next = "play", None
+            testcmd.set_bot_mode(b, "play")
+            b.use_next = None
         for s in self.seats.values():
             s.ready = False
         self.log(f"новая партия (зерно {self.match.seed})")
@@ -319,7 +320,7 @@ class Room:
                 foe = next(x for x in PIDS if x != pid)
                 if self.phase == "play" and not self.match.winner and foe in self.bot_seats() \
                         and testcmd.run(self.match, self.bots[foe], pid, msg):
-                    self.log(f"{pid} тест: {msg.get('do')} {msg.get('kind') or msg.get('mode') or msg.get('use')}")
+                    self.log(f"{pid} тест: {msg.get('do')} {msg.get('kind') or msg.get('mode') or msg.get('use') or msg.get('on')}")
             elif kind == "menu":              # открыл/закрыл меню — игра у него идёт
                 s.in_menu = bool(msg.get("open"))
             elif kind == "pause":
