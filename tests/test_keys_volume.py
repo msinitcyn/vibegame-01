@@ -62,7 +62,7 @@ def test_slot_labels_follow_keys(game):
     game.apply_keys()
     assert game.slot_key("blue", 0) == "Z" and game.slot_key("red", 0) == "9"
     game.draw()
-    game.keys_pick(0, len(keys.ACTIONS))          # «Сбросить по умолчанию»
+    game.keys_pick(0, len(keys.ACTIONS) + 1)          # «Сбросить по умолчанию»
     assert game.settings["keys"] == {} and game.slot_key("blue", 0) == "1"
 
 

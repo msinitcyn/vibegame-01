@@ -474,7 +474,7 @@ class LobbyMixin:
         self.match = Match()
         self.match.set_heroes({me: mine, other: next(h for h in HEROES if h != mine)})
         self.warm_bot = Bot(7, forward=0.0 if other == "blue" else math.pi)
-        self.chat_system(t("cmd.test_hello"))
+        self.chat_system(t("cmd.test_hello", **self.hint_keys()))
         self.warmup = True
         self.lobby_notice = None
         self.pending = {pid: Command() for pid in PLAYER_IDS}

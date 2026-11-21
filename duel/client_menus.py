@@ -258,6 +258,7 @@ class MenusMixin:
         """Управление и подписи ячеек — по назначенным клавишам (настройки), остальное — по умолчанию."""
         custom = self.settings.get("keys") or {}
         self.controls = keys.build(custom, Controls)
+        self.common_keys = keys.current(custom)["common"]     # пауза и чат
         self.key_names = {pid: [keys.label(sc) for sc in self.controls[pid].items] for pid in PLAYER_IDS}
 
     def open_keys(self):
@@ -285,16 +286,21 @@ class MenusMixin:
         elif sc in (K.KSCAN_UP, K.KSCAN_W):
             self.keys_row = max(0, self.keys_row - 1)
         elif sc in (K.KSCAN_DOWN, K.KSCAN_S):
-            self.keys_row = min(len(keys.ACTIONS), self.keys_row + 1)
+            self.keys_row = min(len(keys.ACTIONS) + 1, self.keys_row + 1)
         elif sc in (K.KSCAN_LEFT, K.KSCAN_A, K.KSCAN_RIGHT, K.KSCAN_D):
             self.keys_col = 0 if sc in (K.KSCAN_LEFT, K.KSCAN_A) else 1
         elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
             self.keys_pick(self.keys_col, self.keys_row)
 
     def keys_pick(self, col, row):
-        """Выбрать действие (ждём клавишу) или «Сбросить по умолчанию» (последняя строка)."""
+        """Выбрать действие (ждём клавишу): строки игроков, строка общих (пауза | чат),
+        «Сбросить по умолчанию» (последняя строка)."""
         self.keys_col, self.keys_row = col, row
-        if row >= len(keys.ACTIONS):
+        if row == len(keys.ACTIONS):
+            self.keys_wait = ("common", keys.COMMON_ACTIONS[col])
+            self.keys_msg = None
+            return
+        if row > len(keys.ACTIONS):
             self.settings["keys"] = {}
             settings.save(self.settings)
             self.apply_keys()
@@ -323,13 +329,7 @@ class MenusMixin:
         bot = getattr(self, "pick_bot", False)
         if ok and not bot and not self.pads.pads and not self.aim_by_move():
             return
-        if bot and pid == "red":
-            return                    # за бота подтверждать нечего: он готов, как только готов синий
         other = self.pick["red" if pid == "blue" else "blue"]
-        if bot and ok and other["hero"] == self.pick[pid]["hero"]:
-            other["hero"] = next(h for h in HEROES if h != self.pick[pid]["hero"])
-        if bot:
-            other["ok"] = ok
         if ok and other["ok"] and other["hero"] == self.pick[pid]["hero"]:
             return
         self.pick[pid]["ok"] = ok

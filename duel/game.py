@@ -164,7 +164,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.start_hp = hp
         self.test_bot = Bot(7, forward=math.pi) if bot else None
         if bot:
-            self.chat_system(t("cmd.test_hello"))
+            self.chat_system(t("cmd.test_hello", **self.hint_keys()))
         self.heroes = dict(heroes or DEFAULT_HERO)
         self.state = "play"
         self.held.clear()

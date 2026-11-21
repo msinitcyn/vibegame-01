@@ -242,7 +242,7 @@ class NetScreensMixin:
                         lambda: self.send_ready(not self.my_ready()), w=200)
             self.button((WIDTH // 2 + 110, 585), tr("net.btn_leave"), lambda: self.on_key(pygame.KSCAN_ESCAPE),
                         w=200)
-            hint = tr("net.pick_hint")
+            hint = tr("net.pick_hint", **self.hint_keys())
         img = self.small.render(hint, True, GREY)
         s.blit(img, img.get_rect(center=(WIDTH // 2, 640)))
         if self.net_spectators:

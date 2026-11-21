@@ -125,13 +125,26 @@ def test_commands_need_a_bot(game):
     assert "lasso" not in game.match.blue.items and "бот" in game.chat_lines[-1][2]
 
 
-def test_pick_in_test_mode_needs_only_blue(game):
+def test_pick_in_test_mode_bot_row_by_click_and_keys(game):
+    game.pads.pads = []                                     # с ботом геймпад не нужен
     game.open_pick(config.TEST_HP, bot=True)
-    game.pick["red"]["hero"] = game.pick["blue"]["hero"]
     game.pick_confirm("blue", True)
+    assert game.state == "pick" and game.pick["blue"]["ok"]    # героя боту ещё не выбрали
+    blue = game.pick["blue"]["hero"]
+    game.pick_mouse("red", blue, click=True)                # занятого не взять
+    assert game.state == "pick" and not game.pick["red"]["ok"]
+    other = next(h for h in config.HEROES if h != blue)
     try:
+        game.pick_mouse("red", other, click=True)           # щелчок по герою бота — «выбран», и в бой
+        assert game.state == "play" and game.test_bot and game.heroes["red"] == other
+        game.open_pick(config.TEST_HP, bot=True)            # и клавишами красного
+        game.pick_confirm("blue", True)
+        _, right, ok = game.pick_keys("red")
+        game.pick_key(right[0])
+        if game.pick["red"]["hero"] == game.pick["blue"]["hero"]:
+            game.pick_key(right[0])                         # занятого не взять — листаем дальше
+        game.pick_key(ok[0])
         assert game.state == "play" and game.test_bot
-        assert game.heroes["red"] != game.heroes["blue"]
     finally:
         game.start()
 
@@ -208,4 +221,46 @@ def test_ammo_command(game):
         assert game.match.blue.ammo == a + config.AMMO_PACK and game.match.red.ammo == b + 5
         assert "/ammo" in game.chat_lines[-1][2]
     finally:
+        game.start()
+
+
+def test_commands_work_while_paused(game):
+    game.start(config.TEST_HP, {"blue": "fire", "red": "frost"}, bot=True)
+    game.countdown = 0
+    try:
+        game.on_key(pygame.KSCAN_ESCAPE)
+        assert game.paused
+        game.on_key(pygame.KSCAN_GRAVE)
+        game.on_text("`/bot stop")
+        game.on_key(pygame.KSCAN_RETURN)
+        assert game.test_bot.mode == "stop" and game.paused          # выполнено, пауза стоит
+        game.on_key(pygame.KSCAN_ESCAPE)                              # Esc закрывает консоль, не паузу
+        assert not game.chat_typing and game.paused
+    finally:
+        game.paused = False
+        game.start()
+
+
+def test_pause_and_chat_keys_are_reassignable(game):
+    from duel import keys
+    custom = keys.assign({}, "blue", "item1", pygame.KSCAN_T)       # T — под ячейку: чат получает «1»
+    cur = keys.current(custom)
+    assert cur["blue"]["item1"] == pygame.KSCAN_T and cur["common"]["chat"] == pygame.KSCAN_1
+    custom = keys.assign(custom, "common", "pause", pygame.KSCAN_O)
+    game.settings["keys"] = custom
+    game.apply_keys()
+    try:
+        game.start(config.TEST_HP, {"blue": "fire", "red": "frost"}, bot=True)
+        game.countdown = 0
+        game.on_key(pygame.KSCAN_O)
+        assert game.paused
+        game.on_key(pygame.KSCAN_O)
+        game.on_key(pygame.KSCAN_1)                                   # чат теперь на «1»
+        assert game.chat_typing and not game.console
+        game.on_key(pygame.KSCAN_ESCAPE)
+        game.on_key(pygame.KSCAN_P)                                   # P больше не пауза
+        assert not game.paused
+    finally:
+        game.settings["keys"] = {}
+        game.apply_keys()
         game.start()

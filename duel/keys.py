@@ -1,11 +1,13 @@
 """Клавиши игроков за клавиатурой: действия, клавиши по умолчанию, назначение, подписи.
 
 Клавиши хранятся как скан-коды (физическое положение) — работают в любой раскладке.
-В настройках — только изменённые: {"blue": {"fire": скан-код, ...}, "red": {...}}.
+В настройках — только изменённые: {"blue": {"fire": скан-код, ...}, "red": {...}, "common": {"pause": ...}}.
+Общие (common) — пауза и чат: у них одна клавиша на обоих игроков.
 """
 import pygame
 
 ACTIONS = ("up", "down", "left", "right", "fire", "melee", "item1", "item2", "item3", "item4")
+COMMON_ACTIONS = ("pause", "chat")
 K = pygame
 DEFAULT_KEYS = {
     "blue": {"up": K.KSCAN_W, "down": K.KSCAN_S, "left": K.KSCAN_A, "right": K.KSCAN_D,
@@ -14,9 +16,10 @@ DEFAULT_KEYS = {
     "red": {"up": K.KSCAN_UP, "down": K.KSCAN_DOWN, "left": K.KSCAN_LEFT, "right": K.KSCAN_RIGHT,
             "fire": K.KSCAN_RETURN, "melee": K.KSCAN_RSHIFT,
             "item1": K.KSCAN_9, "item2": K.KSCAN_0, "item3": K.KSCAN_MINUS, "item4": K.KSCAN_EQUALS},
+    "common": {"pause": K.KSCAN_P, "chat": K.KSCAN_T},
 }
-RESERVED = {K.KSCAN_ESCAPE, K.KSCAN_F5, K.KSCAN_F11, K.KSCAN_P, K.KSCAN_T,
-            K.KSCAN_GRAVE}    # служебные: меню, картинки, экран, пауза, чат, консоль
+GROUP_ACTIONS = {"blue": ACTIONS, "red": ACTIONS, "common": COMMON_ACTIONS}
+RESERVED = {K.KSCAN_ESCAPE, K.KSCAN_F5, K.KSCAN_F11, K.KSCAN_GRAVE}    # служебные: меню, картинки, экран, консоль
 
 _SPECIAL = {"SPACE": "Space", "RETURN": "Enter", "KP_ENTER": "Num Enter", "UP": "↑", "DOWN": "↓",
             "LEFT": "←", "RIGHT": "→", "LSHIFT": "Shift", "RSHIFT": "R Shift", "LCTRL": "Ctrl",
@@ -44,18 +47,19 @@ def label(sc):
 
 
 def current(custom=None):
-    """Клавиши обоих игроков: по умолчанию + изменённые (только известные действия и скан-коды)."""
+    """Клавиши обоих игроков и общие: по умолчанию + изменённые (только известные действия и скан-коды)."""
     out = {pid: dict(keys) for pid, keys in DEFAULT_KEYS.items()}
     for pid, keys in (custom or {}).items():
         if pid in out and isinstance(keys, dict):
             for action, sc in keys.items():
-                if action in ACTIONS and isinstance(sc, int) and not isinstance(sc, bool) and sc not in RESERVED:
+                if action in GROUP_ACTIONS[pid] and isinstance(sc, int) and not isinstance(sc, bool) and sc not in RESERVED:
                     out[pid][action] = sc
     return out
 
 
 def assign(custom, pid, action, sc):
-    """Назначить клавишу sc действию; если она занята (у любого игрока) — обмен местами.
+    """Назначить клавишу sc действию (pid — игрок или "common"); если она занята (у любого игрока или
+    общей) — обмен местами.
     Возвращает новые изменённые клавиши (для настроек)."""
     keys = current(custom)
     old = keys[pid][action]
@@ -73,6 +77,8 @@ def build(custom, controls_cls):
     keys = current(custom)
     out = {}
     for pid, k in keys.items():
+        if pid == "common":
+            continue
         fire = (k["fire"],)
         if pid == "red" and k["fire"] == K.KSCAN_RETURN:
             fire += (K.KSCAN_KP_ENTER,)               # по умолчанию у правого — оба Enter

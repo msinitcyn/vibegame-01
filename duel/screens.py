@@ -360,11 +360,11 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
             self.button((WIDTH // 2, HEIGHT // 2 - 60 + i * 54), labels[row],
                         lambda row=row: self.pause_select(row), w=300, sel=i == self.pause_index,
                         **({"color": GREY} if row in dim else {}))
-        notes = [tr("pause.hint")]
+        notes = [tr("pause.hint", **self.hint_keys())]
         if net:
-            notes[0:0] = [tr("pause.net_note"), tr("chat.hint")]
+            notes[0:0] = [tr("pause.net_note"), tr("chat.hint", **self.hint_keys())]
         elif self.can_chat():                  # тестовый режим, разминка: чат — для команд
-            notes[0:0] = [tr("chat.hint")]
+            notes[0:0] = [tr("chat.hint", **self.hint_keys())]
         for i, note in enumerate(notes):
             img = self.small.render(note, True, GREY)
             s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 170 + i * 22)))

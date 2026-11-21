@@ -464,12 +464,8 @@ def draw_guardian(surf, g, font, heroes):
         pygame.draw.circle(stone, (150, 150, 160, 170), (int(r + 2),) * 2, int(r + 1))
         surf.blit(stone, stone.get_rect(center=pos))
         return
-    bar = pygame.Rect(0, 0, 36, 5)
-    bar.midbottom = (pos[0], pos[1] - r - 4)
-    pygame.draw.rect(surf, (16, 12, 20), bar.inflate(2, 2))
-    fill = bar.copy()
-    fill.w = max(1, round(bar.w * g["hp"] / g["max_hp"]))
-    pygame.draw.rect(surf, side_color(heroes, g["side"]), fill)
+    fx_mage.draw_hp_bar(surf, pos[0], fx_mage.hp_bar_top(pos[1], r), g["hp"], g["max_hp"], 0,
+                        side_color(heroes, g["side"]), g["flash"] > 0, font)    # как у мобов: секции и число
 
 
 def draw_field(surf, snap, font, viewer=None):

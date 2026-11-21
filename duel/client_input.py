@@ -75,7 +75,7 @@ class InputMixin:
             return
         if self.chat_key(sc):                 # чат по сети: T — написать; пока пишешь, клавиши — в чат
             return
-        if sc == pygame.KSCAN_P:              # P — пауза: по сети — для всех (снова P — снять), иначе — своя
+        if sc == self.common_keys["pause"]:   # P (переназначается) — пауза: по сети — для всех (снова — снять), иначе — своя
             self.pause_key_p()
             return
         if sc == pygame.KSCAN_ESCAPE:

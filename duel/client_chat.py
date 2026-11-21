@@ -11,12 +11,11 @@ import time
 
 import pygame
 
-from . import testcmd
+from . import keys, testcmd
 from .config import AMMO_PACK, CHAT_BUBBLE, CHAT_KEEP, CHAT_MAX, TOP, BOTTOM, WIDTH
 from .i18n import t as tr
 from .items import ITEMS, item_name
 
-CHAT_KEY = pygame.KSCAN_T
 CONSOLE_KEY = pygame.KSCAN_GRAVE      # ~ (перед 1): консоль внизу — история и ввод, после Enter не закрывается
 CONSOLE_PART = 0.4                    # консоль — такая доля поля сверху
 CONSOLE_SCROLLED = (255, 210, 120)
@@ -37,6 +36,14 @@ COMMANDS = {
 
 
 class ChatMixin:
+    def chat_key_code(self):
+        """Клавиша чата (по умолчанию T, переназначается в настройках)."""
+        return self.common_keys["chat"]
+
+    def hint_keys(self):
+        """Подписи клавиш паузы и чата — для подсказок."""
+        return {"pause": keys.label(self.common_keys["pause"]), "chat": keys.label(self.common_keys["chat"])}
+
     def chat_reset(self):
         self.chat_typing = False      # открыто поле ввода
         self.chat_text = ""
@@ -80,7 +87,7 @@ class ChatMixin:
         """Клавиша, пока открыт чат или консоль. True — клавиша съедена.
         T — одна строка (Enter — выполнить и закрыть), ~ — консоль (Enter — выполнить, ввод остаётся)."""
         if not self.chat_typing:
-            if sc in (CHAT_KEY, CONSOLE_KEY) and self.can_chat() and not self.paused:
+            if sc in (self.chat_key_code(), CONSOLE_KEY) and self.can_chat():    # и на паузе — команды
                 self.chat_typing, self.chat_text, self.chat_swallow = True, "", True
                 self.console, self.console_scroll = sc == CONSOLE_KEY, 0
                 self.held.clear()

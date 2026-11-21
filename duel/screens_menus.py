@@ -135,12 +135,14 @@ class MenuScreensMixin:
             me, other = self.pick[pid], self.pick["red" if pid == "blue" else "blue"]
             top = 120 + row * 260
             left, right, ok = self.pick_keys(pid)
-            label = tr("pick.left" if pid == "blue" else "pick.right", left=keys.label(left[0]),
+            bot = pid == "red" and getattr(self, "pick_bot", False)
+            label = tr("pick.bot" if bot else "pick.left" if pid == "blue" else "pick.right", left=keys.label(left[0]),
                        right=keys.label(right[0]), ok=" / ".join(keys.label(k) for k in ok[:1] + ok[-1:]))
             pad = self.pad_of(pid)
             pad_name = self.pads.pads[pad][1].name[:24] if pad is not None else ""
-            label += "   " + (tr("pick.pad", n=pad + 1, name=pad_name) if pad is not None else
-                              tr("pick.mouse") if pid == "blue" else tr("pick.no_pad"))
+            if not bot:
+                label += "   " + (tr("pick.pad", n=pad + 1, name=pad_name) if pad is not None else
+                                  tr("pick.mouse") if pid == "blue" else tr("pick.no_pad"))
             img = self.small.render(label, True, GREY)
             s.blit(img, (x0, top))
             for i, hero in enumerate(HEROES):
@@ -160,7 +162,8 @@ class MenuScreensMixin:
                 if note:
                     img = self.small.render(note, True, AMMO_COLOR if cur else GREY)
                     s.blit(img, img.get_rect(center=(card.centerx, card.top + 170)))
-        if not self.pads.pads and not self.aim_by_move():    # прицел нужен правым стиком хотя бы одному
+        if not self.pads.pads and not self.aim_by_move() and not getattr(self, "pick_bot", False):
+            # прицел нужен правым стиком хотя бы одному (с ботом — не нужен)
             img = self.font.render(tr("pick.need_pad"), True, BAD_TEXT)
             s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 72)))
         img = self.small.render(tr("pick.hint"), True, GREY)
@@ -226,15 +229,18 @@ class MenuScreensMixin:
         img = self.big.render(tr("keys.title"), True, WHITE)
         s.blit(img, img.get_rect(center=(WIDTH // 2, 50)))
         current = K.current(self.settings.get("keys"))
-        col_w, row_h, top = 400, 40, 120
+        col_w, row_h, top = 400, 34, 116
         for col, pid in enumerate(("blue", "red")):
             x = WIDTH // 2 - col_w - 20 + col * (col_w + 40)
             img = self.font.render(tr("keys.left" if pid == "blue" else "keys.right"), True, (200, 205, 220))
             s.blit(img, (x, top - 36))
-            for row, action in enumerate(K.ACTIONS):
-                rect = pygame.Rect(x, top + row * (row_h + 6), col_w, row_h)
+            rows = [(row, pid, action) for row, action in enumerate(K.ACTIONS)]
+            rows.append((len(K.ACTIONS), "common", K.COMMON_ACTIONS[col]))     # общие: пауза | чат
+            for row, group, action in rows:
+                y = top + row * (row_h + 6) + (14 if group == "common" else 0)
+                rect = pygame.Rect(x, y, col_w, row_h)
                 sel = (col, row) == (self.keys_col, self.keys_row)
-                waiting = self.keys_wait == (pid, action)
+                waiting = self.keys_wait == (group, action)
                 self.hit(rect, lambda col=col, row=row: self.keys_pick(col, row),
                          lambda col=col, row=row: (setattr(self, "keys_col", col), setattr(self, "keys_row", row)))
                 on = sel or self.hovered(rect)
@@ -244,12 +250,12 @@ class MenuScreensMixin:
                 name = "keys." + action + ("_" if action in ("left", "right") else "")   # «влево» ≠ «левый игрок»
                 img = self.small.render(tr(name), True, WHITE if on else (200, 205, 220))
                 s.blit(img, img.get_rect(midleft=(rect.left + 12, rect.centery)))
-                key = tr("keys.press") if waiting else K.label(current[pid][action])
+                key = tr("keys.press") if waiting else K.label(current[group][action])
                 img = self.font.render(key, True, AMMO_COLOR if waiting else WHITE)
                 s.blit(img, img.get_rect(midright=(rect.right - 12, rect.centery)))
-        reset_y = top + len(K.ACTIONS) * (row_h + 6) + 30
-        self.button((WIDTH // 2, reset_y), tr("keys.reset"), lambda: self.keys_pick(self.keys_col, len(K.ACTIONS)),
-                    w=320, sel=self.keys_row >= len(K.ACTIONS))
+        reset_y = top + (len(K.ACTIONS) + 1) * (row_h + 6) + 34
+        self.button((WIDTH // 2, reset_y), tr("keys.reset"), lambda: self.keys_pick(self.keys_col, len(K.ACTIONS) + 1),
+                    w=320, sel=self.keys_row > len(K.ACTIONS))
         if self.keys_msg:
             img = self.small.render(self.keys_msg, True, AMMO_COLOR)
             s.blit(img, img.get_rect(center=(WIDTH // 2, reset_y + 40)))
