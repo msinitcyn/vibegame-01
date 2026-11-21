@@ -444,8 +444,8 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
             self.draw_hold()
         if self.paused and not self.snap["winner"]:
             self.draw_pause()
+        self.draw_chat()
         if self.net:
-            self.draw_chat()
             self.draw_net_notice()
             self.draw_watch_banner()
         if getattr(self, "warmup", False):         # разминка против бота — надпись внизу

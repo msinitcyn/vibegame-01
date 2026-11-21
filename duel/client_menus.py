@@ -125,7 +125,7 @@ class MenusMixin:
             self.settings_back = "menu"
             self.settings_index = 0
         elif action == "test":
-            self.open_pick(TEST_HP)
+            self.open_pick(TEST_HP, bot=True)
         elif action == "net":
             self.open_join()
         elif action == "update":
@@ -303,10 +303,12 @@ class MenusMixin:
         self.keys_wait = (PLAYER_IDS[col], keys.ACTIONS[row])
         self.keys_msg = None
 
-    def open_pick(self, hp):
-        """Экран выбора героев перед партией за одним компьютером; последний выбор запоминается."""
+    def open_pick(self, hp, bot=False):
+        """Экран выбора героев перед партией за одним компьютером; последний выбор запоминается.
+        bot — тестовый режим: красным играет бот (его героя листают клавиши красного, подтверждать не нужно)."""
         last = getattr(self, "heroes", None) or DEFAULT_HERO
         self.pick_hp = hp
+        self.pick_bot = bot
         self.pick = {pid: {"hero": last[pid], "ok": False} for pid in PLAYER_IDS}
         self.state = "pick"
 
@@ -318,14 +320,21 @@ class MenusMixin:
     def pick_confirm(self, pid, ok):
         """Подтвердить (или снять) выбор; героя, подтверждённого соперником, взять нельзя.
         Без геймпада играть нельзя: одному из двоих нужен правый стик для прицела."""
-        if ok and not self.pads.pads and not self.aim_by_move():
+        bot = getattr(self, "pick_bot", False)
+        if ok and not bot and not self.pads.pads and not self.aim_by_move():
             return
+        if bot and pid == "red":
+            return                    # за бота подтверждать нечего: он готов, как только готов синий
         other = self.pick["red" if pid == "blue" else "blue"]
+        if bot and ok and other["hero"] == self.pick[pid]["hero"]:
+            other["hero"] = next(h for h in HEROES if h != self.pick[pid]["hero"])
+        if bot:
+            other["ok"] = ok
         if ok and other["ok"] and other["hero"] == self.pick[pid]["hero"]:
             return
         self.pick[pid]["ok"] = ok
         if all(p["ok"] for p in self.pick.values()):
-            self.start(self.pick_hp, {pid: p["hero"] for pid, p in self.pick.items()})
+            self.start(self.pick_hp, {pid: p["hero"] for pid, p in self.pick.items()}, bot=bot)
 
     def pick_keys(self, pid):
         """Клавиши выбора героя игрока — его же клавиши из настроек: влево/вправо — листать,

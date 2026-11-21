@@ -121,7 +121,7 @@ def test_chat_commands(game):
         command("/abracadabra")
         assert game.chat_lines[-1][0] == "sys" and "/abracadabra" in game.chat_lines[-1][2]
         command("/help")
-        assert "/net" in game.chat_lines[-1][2]
+        assert any("/net" in line[2] for line in game.chat_lines[-2:])
         command("/disconnect")
         assert fake.closed                              # связь оборвана — дальше переподключение
     finally:

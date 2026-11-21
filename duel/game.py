@@ -10,11 +10,14 @@
     screens*.py       — отрисовка (ScreensMixin)
 """
 
+import math
+
 import pygame
 
 from . import config
 from . import settings
 from .audio import Audio, MUSIC_END
+from .bot import Bot
 from .commands import Command
 from .client_chat import ChatMixin
 from .demos import has_demo
@@ -97,6 +100,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.notice_until = 0.0
         self.net_room = None
         self.warmup = False           # разминка против бота, пока ждём соперника в лобби комнаты
+        self.test_bot = None          # тестовый режим: бот за красного (за одним компьютером)
         self.countdown = 0.0          # отсчёт перед партией за этим компьютером (хотсит, разминка), сек
         self.net_countdown = 0.0      # отсчёт с сервера (сетевая партия)
         self.go_flash = 0.0           # сколько ещё показывать «В бой!»
@@ -155,9 +159,12 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
     def players(self):
         return self.match.players
 
-    def start(self, hp=MAX_HP, heroes=None):
-        """Новая партия двух игроков (в тестовом режиме — с другим числом жизней) — после отсчёта."""
+    def start(self, hp=MAX_HP, heroes=None, bot=False):
+        """Новая партия двух игроков (тестовый режим — другое число жизней и бот за красного) — после отсчёта."""
         self.start_hp = hp
+        self.test_bot = Bot(7, forward=math.pi) if bot else None
+        if bot:
+            self.chat_system(t("cmd.test_hello"))
         self.heroes = dict(heroes or DEFAULT_HERO)
         self.state = "play"
         self.held.clear()
@@ -187,6 +194,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
     def restart(self, seed=None):
         # без зерна — каждый раз новая партия; герои — выбранные перед партией
         self.match = Match(self.start_hp, seed, getattr(self, "heroes", None))
+        if getattr(self, "test_bot", None):   # новая партия — бот снова играет (/bot stop — на одну партию)
+            self.test_bot = Bot(7, forward=math.pi)
         self.popups = []              # [текст, x, y, время, цвет]
         self.pending = {pid: Command() for pid in PLAYER_IDS}   # нажатия до следующего такта
         self.time_acc = 0.0           # накопленное время кадров для фиксированного такта
@@ -208,6 +217,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             cmd.move = ((c.right in held) - (c.left in held), (c.down in held) - (c.up in held))
             cmd.aim = self.aim_for(pid, cmd.move)
             commands[pid] = cmd
+        if self.test_bot:                     # тестовый режим: красным играет бот
+            commands["red"] = Command(*self.test_bot.act())
         self.pending = {pid: Command() for pid in PLAYER_IDS}
         events = self.match.step(dt, commands)
         self.refresh_snap()
@@ -424,7 +435,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
 
     def player_label(self, pid):
         """Подпись игрока: в сетевой игре — имя или «Бот», иначе (и без имени) — имя героя."""
-        if self.warmup and pid != self.me:
+        if (self.warmup and pid != self.me) or (self.test_bot and not self.net and pid == "red"):
             return t("name.bot")
         if self.net:
             seat = self.net_seats.get(pid) or {}

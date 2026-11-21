@@ -12,6 +12,7 @@
 import math
 import secrets
 
+from . import testcmd
 from .bot import Bot
 from .commands import Command
 from . import config
@@ -157,6 +158,8 @@ class Room:
         self.hold, self.resume, self.pause_cool = None, 0.0, 0.0
         self.pauses = {pid: config.PAUSE_LIMIT for pid in PIDS}
         self.pending = {pid: Command() for pid in PIDS}
+        for b in self.bots.values():      # тестовый режим бота (/bot stop) — только на одну партию
+            b.mode, b.use_next = "play", None
         for s in self.seats.values():
             s.ready = False
         self.log(f"новая партия (зерно {self.match.seed})")
@@ -312,6 +315,11 @@ class Room:
                 s.stats = clean_stats(msg.get("stats"))
             elif kind == "chat":              # чат: пересылаем обоим игрокам и зрителям
                 self.chat(pid, s, msg.get("text"), now)
+            elif kind == "test":              # тестовая команда — только в бою против бота
+                foe = next(x for x in PIDS if x != pid)
+                if self.phase == "play" and not self.match.winner and foe in self.bot_seats() \
+                        and testcmd.run(self.match, self.bots[foe], pid, msg):
+                    self.log(f"{pid} тест: {msg.get('do')} {msg.get('kind') or msg.get('mode') or msg.get('use')}")
             elif kind == "menu":              # открыл/закрыл меню — игра у него идёт
                 s.in_menu = bool(msg.get("open"))
             elif kind == "pause":
