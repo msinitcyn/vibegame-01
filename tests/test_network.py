@@ -48,12 +48,15 @@ class Client:
         self.msgs += self.conn.recv()
         return True
 
-    def settle(self, quiet=0.1, timeout=2.0):
-        """Дочитать всё, что сервер уже отправил: ждать, пока сообщения не перестанут приходить
-        (на Windows локальный TCP доставляет не мгновенно — сразу после шага сервера читать рано)."""
+    def settle(self, srv, quiet=0.1, timeout=3.0):
+        """Дочитать всё, что сервер уже отправил: сервер досылает очередь, клиент читает, пока сообщения не
+        перестанут приходить. На Windows буфер сокета мал: часть снимков ждёт в очереди сервера (outbuf),
+        пока клиент не прочтёт прежние, — без досылки их не будет."""
         end = time.monotonic() + timeout
         last, n = time.monotonic(), len(self.msgs)
         while time.monotonic() < end:
+            for c in srv.all_conns():
+                c.flush()
             self.poll()
             if len(self.msgs) != n:
                 last, n = time.monotonic(), len(self.msgs)
@@ -392,7 +395,7 @@ def test_snapshots_30_per_second_and_no_lost_events(server):
     for _ in range(10):
         b.cmd()
         server.step()
-    a.settle()
+    a.settle(server)
     states = a.states()
     ticks = [s["tick"] for s in states]
     assert all(t % SEND_EVERY == 0 for t in ticks) and ticks == sorted(ticks)

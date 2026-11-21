@@ -241,7 +241,7 @@ class Server:
         if len(self.rooms) >= MAX_ROOMS:
             return None
         room = Room(self.next_room, name=name, bot=self.bot, clock=self.clock, log=self.log,
-                    record=self.record_match if self.records else None)
+                    record=self.record_match if self.records else None, replays=self.dump_dir)
         self.rooms[room.id] = room
         self.next_room += 1
         self.log(f"комната {room.id} создана")
@@ -558,6 +558,8 @@ class Server:
         """Файл ошибки комнаты: зерно, герои, такт, команды последних секунд и текст ошибки."""
         if not self.dump_dir:
             return None
+        if room.recorder:                 # и повтор партии до ошибки — посмотреть, что было
+            room.recorder.save(self.dump_dir, None)
         try:
             path = Path(self.dump_dir) / time.strftime(f"room-error-%Y%m%d-%H%M%S-{room.id}.json")
             path.parent.mkdir(parents=True, exist_ok=True)

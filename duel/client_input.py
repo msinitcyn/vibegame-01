@@ -39,6 +39,9 @@ class InputMixin:
         if sc == pygame.KSCAN_F11:
             pygame.display.toggle_fullscreen()
             self.held.clear()
+        if getattr(self, "replay", None):         # повтор партии: только просмотр
+            self.replay_key(sc)
+            return
         if self.state == "menu":
             self.menu_key(sc)
             return

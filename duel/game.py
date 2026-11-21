@@ -18,6 +18,7 @@ from . import config
 from . import settings
 from .audio import Audio, MUSIC_END
 from .bot import Bot
+from .replay import Player as ReplayPlayer, Recorder
 from . import logs
 from .logs import log
 from .commands import Command
@@ -56,8 +57,9 @@ from .client_net import NetClientMixin
 class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, ChatMixin):
     """Приложение поверх матча: хотсит — оба игрока за одним компьютером."""
 
-    def __init__(self, windowed=False, net=None, pad=0):
-        """net — (соединение, место от сервера, адрес) для сетевого клиента; pad — номер своего геймпада."""
+    def __init__(self, windowed=False, net=None, pad=0, replay=None):
+        """net — (соединение, место от сервера, адрес) для сетевого клиента; pad — номер своего геймпада;
+        replay — данные повтора партии (duel/replay.py): игра только показывает его."""
         pygame.init()
         self.settings = settings.load()
         set_lang(self.settings["lang"])
@@ -154,8 +156,11 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.stick_aim = {}           # плавный прицел стиком: текущий угол игрока
         self.aim_reset = {}           # сброс прицела прямо: игрок -> угол на ближайший такт
         self.restart()
+        self.replay = None
         if net:
             self.enter_net(*net)
+        if replay:
+            self.start_replay(replay)
 
     @property
     def players(self):
@@ -206,10 +211,83 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.stick_aim = {}           # плавный прицел стиком начинается заново с новой партией
         self.refresh_snap()
 
+    # ------------------------------------------------------------------ повтор партии
+
+    REPLAY_SPEEDS = (0.25, 0.5, 1.0, 2.0, 4.0, 8.0)
+
+    def start_replay(self, data):
+        """Показать повтор: свой матч из записи, шагает сам; управление — только просмотр."""
+        self.replay = ReplayPlayer(data)
+        self.replay_speed, self.replay_paused, self.replay_acc = 1.0, False, 0.0
+        self.heroes = dict(data.get("heroes") or DEFAULT_HERO)
+        self.match = self.replay.match
+        self.state, self.countdown, self.popups, self.win_time = "play", 0.0, [], 0
+        self.refresh_snap()
+
+    def replay_frame(self, dt):
+        """Кадр повтора: такты по скорости; события — в звук и надписи, как в игре."""
+        r = self.replay
+        if self.replay_paused or r.done:
+            return
+        self.replay_acc += dt * self.replay_speed
+        steps = 0
+        while self.replay_acc >= STEP and not r.done and steps < 600:
+            self.replay_acc -= STEP
+            steps += 1
+            self.handle_events(r.step())
+        self.match = r.match
+        self.refresh_snap()
+        self.tick_popups(dt)
+
+    def replay_key(self, sc):
+        """Пробел — пауза, ←/→ — скорость, ↑ — вперёд на 10 с, R — сначала, Esc — выход."""
+        K = pygame
+        r = self.replay
+        if sc == K.KSCAN_ESCAPE:
+            pygame.event.post(pygame.event.Event(pygame.QUIT))
+        elif sc == K.KSCAN_SPACE:
+            self.replay_paused = not self.replay_paused
+        elif sc in (K.KSCAN_LEFT, K.KSCAN_RIGHT):
+            i = self.REPLAY_SPEEDS.index(self.replay_speed) + (1 if sc == K.KSCAN_RIGHT else -1)
+            self.replay_speed = self.REPLAY_SPEEDS[max(0, min(len(self.REPLAY_SPEEDS) - 1, i))]
+        elif sc == K.KSCAN_UP:
+            for _ in range(int(10 / STEP)):           # перемотка: без звука и надписей
+                if r.done:
+                    break
+                r.step()
+        elif sc == K.KSCAN_R:
+            r.restart()
+            self.popups, self.win_time = [], 0
+        self.match = r.match
+        self.refresh_snap()
+
+    def replay_banner(self):
+        """Строка повтора внизу: время, скорость, клавиши."""
+        r = self.replay
+        now, total = r.n * STEP, r.length * STEP
+        return t("replay.banner", now=f"{int(now // 60)}:{int(now % 60):02d}",
+                 total=f"{int(total // 60)}:{int(total % 60):02d}", speed=f"{self.replay_speed:g}",
+                 state=t("replay.paused") if self.replay_paused else "")
+
+    def local_mode(self):
+        return "warmup" if self.warmup else "test" if self.test_bot else "hotseat"
+
+    def rec(self):
+        """Запись партии за этим компьютером (повтор): новая — для каждого нового матча."""
+        if getattr(self, "recorder", None) is None or self.rec_match is not self.match:
+            self.recorder, self.rec_match = Recorder(self.match, self.local_mode()), self.match
+        return self.recorder
+
     def record_local(self):
-        """Итог партии за этим компьютером (хотсит, тест с ботом, разминка) — для статистики баланса."""
-        mode = "warmup" if self.warmup else "test" if self.test_bot else "hotseat"
+        """Итог партии за этим компьютером (хотсит, тест с ботом, разминка) — статистика баланса и повтор."""
+        if self.replay:
+            return                            # смотрим повтор — это не новая партия
+        mode = self.local_mode()
         logs.record_match(self.match.summary(), mode)
+        if logs.ready() and getattr(self, "rec_match", None) is self.match:
+            path = self.recorder.save(logs.log_dir(), self.match)
+            if path:
+                log.info("повтор: %s", path)
         log.info("партия окончена (%s): победил %s", mode, self.snap["winner"])
 
     def refresh_snap(self):
@@ -229,6 +307,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         if self.test_bot:                     # тестовый режим: красным играет бот
             commands["red"] = Command(*self.test_bot.act())
         self.pending = {pid: Command() for pid in PLAYER_IDS}
+        self.rec().tick(commands)
         events = self.match.step(dt, commands)
         self.refresh_snap()
         self.handle_events(events)
@@ -349,6 +428,10 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
 
     def play_frame(self, dt):
         """Кадр партии: разминка из лобби, сетевая партия или за одним компьютером (пауза, отсчёт, такты)."""
+        if self.replay:                       # повтор партии: матч шагает по записи
+            self.replay_frame(dt)
+            self.draw()
+            return
         if self.warmup and self.lobby_conn:   # разминка из лобби: лобби слушаем, играем у себя
             self.lobby_frame()
             if self.state == "play" and self.warmup:
@@ -450,6 +533,12 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         """Подпись игрока: в сетевой игре — имя или «Бот», иначе (и без имени) — имя героя."""
         if (self.warmup and pid != self.me) or (self.test_bot and not self.net and pid == "red"):
             return t("name.bot")
+        if self.replay:                       # повтор: имена из записи (сервер пишет имена игроков)
+            name = (self.replay.data.get("players") or {}).get(pid)
+            if name == "bot":
+                return t("name.bot")
+            if name and name != "guest":
+                return name
         if self.net:
             seat = self.net_seats.get(pid) or {}
             if seat.get("who") == "bot":

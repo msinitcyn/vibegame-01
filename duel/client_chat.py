@@ -236,7 +236,8 @@ class ChatMixin:
         if where == "net":
             self.net.send({"type": "test", **msg})
         else:
-            testcmd.run(self.match, bot, pid, msg)
+            if testcmd.run(self.match, bot, pid, msg) and msg.get("do") != "bot":
+                self.rec().action(pid, msg)       # в повтор: бот не нужен — его команды записаны
         return True
 
     def chat_system(self, text):

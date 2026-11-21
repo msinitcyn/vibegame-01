@@ -14,6 +14,7 @@ from collections import deque
 import secrets
 
 from . import testcmd
+from .replay import Recorder
 from .bot import Bot
 from .commands import Command
 from . import config
@@ -81,12 +82,14 @@ class Seat:
 
 
 class Room:
-    def __init__(self, room_id, name="", bot=False, clock=None, log=print, record=None):
+    def __init__(self, room_id, name="", bot=False, clock=None, log=print, record=None, replays=None):
         self.id = room_id
         self.name = clean_name(name)  # имя создателя комнаты
         self.clock = clock
         self.log = lambda text: log(f"[комната {room_id}] {text}")
         self.record = record          # record(итог партии) — в matches.jsonl сервера (None — не писать)
+        self.replays = replays        # папка логов: повторы партий — в её replays/ (None — не писать)
+        self.recorder = None          # запись идущей партии (duel/replay.py)
         self.seats = {pid: Seat() for pid in PIDS}
         self.spectators = []          # соединения зрителей: получают снимки, ничего не меняют
         self.bot = bot
@@ -162,6 +165,7 @@ class Room:
     def new_match(self):
         self.games += 1
         self.recent = deque(maxlen=RECENT_TICKS)
+        self.recorder = None
         self.match = Match()
         self.hold, self.resume, self.pause_cool = None, 0.0, 0.0
         self.pauses = {pid: config.PAUSE_LIMIT for pid in PIDS}
@@ -328,6 +332,7 @@ class Room:
                 foe = next(x for x in PIDS if x != pid)
                 if self.phase == "play" and not self.match.winner and foe in self.bot_seats() \
                         and testcmd.run(self.match, self.bots[foe], pid, msg):
+                    self.rec().action(pid, {k: v for k, v in msg.items() if k != "type"})
                     self.log(f"{pid} тест: {msg.get('do')} {msg.get('kind') or msg.get('mode') or msg.get('use') or msg.get('on')}")
             elif kind == "menu":              # открыл/закрыл меню — игра у него идёт
                 s.in_menu = bool(msg.get("open"))
@@ -460,6 +465,15 @@ class Room:
             for conn in list(self.conns.values()) + self.spectators:
                 conn.send(msg)
 
+    def rec(self):
+        """Запись идущей партии (заводится в первом такте боя)."""
+        if self.recorder is None:
+            bots = self.bot_seats()
+            self.recorder = Recorder(self.match, "net-bot" if bots else "net", room=self.id,
+                                     players={pid: "bot" if pid in bots else (self.seats[pid].name or "guest")
+                                              for pid in PIDS})
+        return self.recorder
+
     def who(self, pid):
         """Кто на месте: «имя (герой)», бот — «бот (герой)»."""
         s = self.seats[pid]
@@ -474,6 +488,10 @@ class Room:
         res = f"победил {self.who(w)}" if w in PIDS else f"итог {w}"
         self.log(f"партия окончена: {res}; {self.who('blue')} против {self.who('red')}, "
                  f"{m.match_time:.0f} с, волна {m.mob_wave}, жизни: {hp}, зерно {m.seed}")
+        if self.replays and self.recorder:
+            path = self.recorder.save(self.replays, m)
+            if path:
+                self.log(f"повтор: {path.name}")
         if self.record:
             bots = self.bot_seats()
             self.record({**m.summary(), "room": self.id,
@@ -519,6 +537,7 @@ class Room:
                 commands[pid] = Command(*self.bots[pid].act())
         # нажатия — один раз; направление и прицел держатся до следующей команды клиента
         self.pending = {pid: Command(move=self.pending[pid].move) for pid in PIDS}
+        self.rec().tick(commands)
         self.recent.append([self.tick_no, round(self.match.match_time, 3),
                             {pid: [list(c.move), c.fire, c.melee, c.use_slot,
                                    None if c.aim is None else round(c.aim, 3)] for pid, c in commands.items()}])

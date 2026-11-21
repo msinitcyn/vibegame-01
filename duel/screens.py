@@ -481,8 +481,10 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         if self.net:
             self.draw_net_notice()
             self.draw_watch_banner()
-        if getattr(self, "warmup", False):         # разминка против бота — надпись внизу
-            img = self.small.render(tr("net.warm_banner"), True, (255, 230, 140))
+        banner = (self.replay_banner() if getattr(self, "replay", None) else
+                  tr("net.warm_banner") if getattr(self, "warmup", False) else None)
+        if banner:                                 # повтор или разминка против бота — надпись внизу
+            img = self.small.render(banner, True, (255, 230, 140))
             box = img.get_rect(midbottom=(WIDTH // 2, HEIGHT - 8)).inflate(20, 8)
             pygame.draw.rect(s, (16, 12, 20), box, border_radius=8)
             s.blit(img, img.get_rect(center=box.center))

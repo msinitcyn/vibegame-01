@@ -522,6 +522,7 @@ class LobbyMixin:
             commands = {self.me: Command(move=move, fire=fire, melee=melee, use_slot=slot,
                                          aim=self.aim_for(self.me, move)),
                         other: Command(*self.warm_bot.act())}
+            self.rec().tick(commands)
             self.handle_events(self.match.step(STEP, commands))
         if steps == MAX_STEPS_PER_FRAME:
             self.warm_acc = 0.0

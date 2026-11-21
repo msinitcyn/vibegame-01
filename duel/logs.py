@@ -5,6 +5,7 @@
     crash-<дата>.txt      — падение: версия, система и полный текст ошибки
     matches.jsonl         — итог каждой партии за этим компьютером (герои, победитель, что подбирали и
                             применяли) — для tools/balance.py; у сервера — свой matches.jsonl
+    replays/*.json.gz     — повторы партий (duel/replay.py): python main.py --replay ФАЙЛ
 
 Падение игры записывается в оба файла; собранная игра на Windows показывает окно с путём к файлу.
 
@@ -26,6 +27,11 @@ from . import settings
 
 log = logging.getLogger("duel")
 _ready = False
+
+
+def ready():
+    """Лог игры настроен (запуск через main.py) — можно писать файлы в logs/."""
+    return _ready
 
 
 def log_dir():
