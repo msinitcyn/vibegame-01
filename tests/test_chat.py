@@ -69,3 +69,62 @@ def test_no_chat_in_hotseat(game):
     game.on_key(pygame.KSCAN_T)
     assert not game.chat_typing
     game.state = "menu"
+
+
+def test_server_pong_and_stats_to_both():
+    srv = make_server()
+    try:
+        a, b = Client(srv), Client(srv)
+        a.conn.send({"type": "ping", "t": 123.5, "stats": {"ping": 23, "rate": 30, "fps": 60, "evil": "x" * 9,
+                                                            "jitter": True}})
+        wait(srv, lambda: a.poll() and a.first("pong"), clients=(a, b))
+        assert a.first("pong")["t"] == 123.5
+        wait(srv, lambda: b.states() and b.last().get("stats", {}).get(a.you), clients=(a, b))
+        assert b.last()["stats"][a.you] == {"ping": 23, "rate": 30, "fps": 60}    # лишнее — отброшено
+    finally:
+        srv.close()
+
+
+def test_chat_commands(game):
+    sent = []
+
+    class Fake:
+        closed = False
+
+        def send(self, msg):
+            sent.append(msg)
+
+        def close(self):
+            self.closed = True
+
+    fake = Fake()
+    game.net, game.me, game.state, game.warmup = fake, "blue", "play", False
+    game.chat_reset()
+    game.net_stats_reset()
+    game.show_netstats = False
+
+    def command(text):
+        game.on_key(pygame.KSCAN_T)
+        game.on_text("t" + text)
+        game.on_key(pygame.KSCAN_RETURN)
+
+    try:
+        command("/net")
+        assert game.show_netstats and not [m for m in sent if m["type"] == "chat"]    # команда — не в чат
+        game.net_stats = {"red": {"ping": 41, "rate": 30, "jitter": 5, "buf": 3, "fps": 59}}
+        game.draw_chat()                                 # панель: своя и соперника
+        command("/сеть")
+        assert not game.show_netstats
+        game.net_can_hold = {"blue": True}
+        command("/пауза")
+        assert sent[-1] == {"type": "pause"}
+        command("/abracadabra")
+        assert game.chat_lines[-1][0] == "sys" and "/abracadabra" in game.chat_lines[-1][2]
+        command("/help")
+        assert "/net" in game.chat_lines[-1][2]
+        command("/disconnect")
+        assert fake.closed                              # связь оборвана — дальше переподключение
+    finally:
+        game.net, game.me = None, None
+        game.chat_reset()
+        game.state = "menu"

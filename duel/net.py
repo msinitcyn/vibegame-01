@@ -33,6 +33,8 @@
     {"type": "menu", "open": bool}                       открыл/закрыл меню (игра идёт, сопернику видно)
     {"type": "pause"}   {"type": "resume"}               общая пауза; снять может любой — потом отсчёт 3-2-1
     {"type": "chat", "text": "…"}                        чат; сервер всем в комнате -> {"type": "chat", "from", "name", "text"}
+    {"type": "ping", "t": время, "stats": {ping, rate, jitter, buf, fps}}
+                                                         пинг -> {"type": "pong", "t"}; статистика — в state "stats": {цвет: {...}}
 """
 import json
 import socket

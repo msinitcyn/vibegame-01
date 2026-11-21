@@ -39,6 +39,17 @@ def parse_move(value):
     return tuple(out)
 
 
+STAT_KEYS = ("ping", "rate", "jitter", "buf", "fps")
+
+
+def clean_stats(stats):
+    """Статистика связи от клиента: только известные поля-числа (чужое — не пересылаем)."""
+    if not isinstance(stats, dict):
+        return {}
+    return {k: round(float(v), 1) for k, v in stats.items()
+            if k in STAT_KEYS and isinstance(v, (int, float)) and not isinstance(v, bool) and abs(v) < 1e6}
+
+
 def clean_name(text):
     return "".join(ch for ch in str(text or "") if ch.isprintable()).strip()[:NAME_MAX]
 
@@ -56,6 +67,7 @@ class Seat:
         self.hero = None              # герой игрока на этом месте (только вид)
         self.in_menu = False          # игрок открыл меню (игра у него идёт; сопернику видно «в меню»)
         self.last_chat = -1e9         # когда писал в чат (не чаще CHAT_GAP)
+        self.stats = {}               # статистика связи, присланная игроком (пинг, снимков/с, …)
 
     @property
     def free(self):
@@ -294,6 +306,10 @@ class Room:
                     self.bot = True
                     s.ready = True
                     self.log(f"{pid} позвал бота")
+            elif kind == "ping":              # пинг: сразу ответ; статистика связи игрока — в снимки обоим
+                if isinstance(msg.get("t"), (int, float)):
+                    s.conn.send({"type": "pong", "t": msg["t"]})
+                s.stats = clean_stats(msg.get("stats"))
             elif kind == "chat":              # чат: пересылаем обоим игрокам и зрителям
                 self.chat(pid, s, msg.get("text"), now)
             elif kind == "menu":              # открыл/закрыл меню — игра у него идёт
@@ -421,6 +437,7 @@ class Room:
                    "countdown": round(self.countdown if self.phase == "countdown" else self.resume, 2),
                    "hold": self.hold, "menus": {pid: s.in_menu for pid, s in self.seats.items() if s.conn},
                    "pauses": dict(self.pauses), "can_hold": {pid: self.can_hold(pid) for pid in PIDS},
+                   "stats": {pid: s.stats for pid, s in self.seats.items() if s.conn and s.stats},
                    "seats": self.seats_info(), "spectators": len(self.spectators),
                    "snap": snapshot(self.match), "events": self.events}
             self.events = []

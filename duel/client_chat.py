@@ -13,6 +13,14 @@ from .i18n import t as tr
 
 CHAT_KEY = pygame.KSCAN_T
 
+# команды чата: /команда (и её русские имена) — выполняются у себя, в чат не уходят
+COMMANDS = {
+    "net": ("net", "сеть", "stats", "стат"),               # статистика связи — своя и соперника
+    "pause": ("pause", "пауза"),                           # пауза для всех / снять (как P)
+    "disconnect": ("disconnect", "дисконнект", "отключиться"),   # оборвать связь (проверить переподключение)
+    "help": ("help", "помощь", "?"),
+}
+
 
 class ChatMixin:
     def chat_reset(self):
@@ -35,9 +43,11 @@ class ChatMixin:
             return False
         if sc in (pygame.KSCAN_RETURN, pygame.KSCAN_KP_ENTER):
             text = self.chat_text.strip()
-            if text and self.net:
-                self.net.send({"type": "chat", "text": text[:CHAT_MAX]})
             self.chat_typing, self.chat_text = False, ""
+            if text.startswith("/"):
+                self.chat_command(text[1:])
+            elif text and self.net:
+                self.net.send({"type": "chat", "text": text[:CHAT_MAX]})
         elif sc == pygame.KSCAN_ESCAPE:
             self.chat_typing, self.chat_text = False, ""
         elif sc == pygame.KSCAN_BACKSPACE:
@@ -53,6 +63,28 @@ class ChatMixin:
         chars = "".join(ch for ch in text if ch.isprintable())
         self.chat_text = (self.chat_text + chars)[:CHAT_MAX]
 
+    def chat_command(self, line):
+        """/команда в чате: выполняется у себя; ответ — серой строкой в чате."""
+        word = (line.split() or [""])[0].lower()
+        cmd = next((c for c, names in COMMANDS.items() if word in names), None)
+        if cmd == "net":
+            self.show_netstats = not self.show_netstats
+            self.chat_system(tr("cmd.net_on" if self.show_netstats else "cmd.net_off"))
+        elif cmd == "pause":
+            self.pause_key_p()
+        elif cmd == "disconnect":
+            self.chat_system(tr("cmd.disconnect"))
+            if self.net:
+                self.net.close()                  # как пропала сеть: дальше — переподключение
+        elif cmd == "help":
+            self.chat_system(tr("cmd.help"))
+        else:
+            self.chat_system(tr("cmd.unknown", cmd="/" + word))
+
+    def chat_system(self, text):
+        self.chat_lines.append(("sys", "", text, time.monotonic()))
+        self.chat_lines = self.chat_lines[-20:]
+
     def chat_received(self, msg):
         pid = msg.get("from")
         text = str(msg.get("text") or "")[:CHAT_MAX]
@@ -66,6 +98,7 @@ class ChatMixin:
         """Последние сообщения внизу слева (гаснут), пузыри над магами, поле ввода."""
         if not self.net or self.warmup:
             return
+        self.draw_netstats()
         s = self.screen
         now = time.monotonic()
         y = BOTTOM - 40 if self.chat_typing else BOTTOM - 12
@@ -74,8 +107,12 @@ class ChatMixin:
             if age > CHAT_KEEP and not self.chat_typing:
                 continue
             alpha = 255 if self.chat_typing else int(255 * min(1.0, (CHAT_KEEP - age) / 1.5))
-            who = self.small.render((name or self.player_label(pid)) + ": ", True, self.side_color(pid))
-            body = self.small.render(text, True, (240, 240, 240))
+            if pid == "sys":                      # ответ команды — серым, без имени
+                who = self.small.render("• ", True, (170, 170, 180))
+                body = self.small.render(text, True, (190, 190, 200))
+            else:
+                who = self.small.render((name or self.player_label(pid)) + ": ", True, self.side_color(pid))
+                body = self.small.render(text, True, (240, 240, 240))
             box = pygame.Rect(8, y - who.get_height() - 4, who.get_width() + body.get_width() + 12,
                               who.get_height() + 4)
             back = pygame.Surface(box.size, pygame.SRCALPHA)
@@ -97,6 +134,33 @@ class ChatMixin:
             s.blit(img, img.get_rect(midleft=(box.x + 10, box.centery)))
             hint = self.tiny_text.render(tr("chat.send_hint"), True, (190, 190, 200))
             s.blit(hint, (box.right + 10, box.centery - hint.get_height() // 2))
+
+    def draw_netstats(self):
+        """/net: панель статистики связи под верхней панелью — своя и соперника."""
+        if not self.show_netstats or not self.net or self.warmup:
+            return
+        mine = self.my_net_stats()
+        rows = []
+        for pid in ("blue", "red"):
+            st = mine if pid == self.me else (self.net_stats.get(pid) or {})
+            name = self.player_label(pid)
+            if not st:
+                rows.append((pid, tr("stats.none", name=name)))
+                continue
+            ping = st.get("ping")
+            rows.append((pid, tr("stats.line", name=name, ping="—" if ping is None else f"{ping:.0f}",
+                                 rate=f"{st.get('rate', 0):.0f}", jitter=f"{st.get('jitter', 0):.0f}",
+                                 buf=f"{st.get('buf', 0):.0f}", fps=f"{st.get('fps', 0):.0f}")))
+        imgs = [(pid, self.tiny_text.render(text, True, self.side_color(pid))) for pid, text in rows]
+        w = max(i.get_width() for _, i in imgs) + 16
+        h = sum(i.get_height() + 2 for _, i in imgs) + 8
+        back = pygame.Surface((w, h), pygame.SRCALPHA)
+        back.fill((16, 12, 20, 200))
+        self.screen.blit(back, (8, TOP + 6))
+        y = TOP + 10
+        for _, img in imgs:
+            self.screen.blit(img, (16, y))
+            y += img.get_height() + 2
 
     def draw_bubbles(self, now):
         """Пузырь над магом, который недавно написал (у невидимки — только себе)."""

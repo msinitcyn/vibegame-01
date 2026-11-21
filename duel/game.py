@@ -134,6 +134,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.net_can_hold = {}        # можно ли сейчас поставить паузу
         self.menu_sent = False        # что последним сказали серверу про своё меню
         self.chat_reset()
+        self.net_stats_reset()
+        self.show_netstats = False    # /net в чате — панель статистики связи
         self.sound_demo = None        # чья сценка звучит в справке (сменилась — звуки обрываем)
         self.demo_snap = None         # снимок идущей сценки — для звуков-циклов
         self.net_addr = self.net_token = None    # куда и с каким ключом возвращаться после обрыва

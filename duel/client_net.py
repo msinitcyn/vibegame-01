@@ -7,7 +7,7 @@ import time
 import pygame
 
 from .commands import Command
-from .config import HEROES
+from .config import HEROES, PING_EVERY
 from .i18n import t
 from .interp import Playback
 from .match import STEP
@@ -55,9 +55,22 @@ class NetClientMixin:
                            "aim": self.aim_for(self.me, move)})
         if steps == MAX_STEPS_PER_FRAME:
             self.time_acc = 0.0
+        if now >= self.ping_next:                 # пинг и своя статистика связи — серверу (раздаст обоим)
+            self.ping_next = now + PING_EVERY
+            self.net.send({"type": "ping", "t": now, "stats": self.my_net_stats(now)})
         for msg in self.net.recv():
             self.net_heard = now
+            if msg.get("type") == "pong":
+                sent = msg.get("t")
+                if isinstance(sent, (int, float)) and not isinstance(sent, bool) and sent <= now:
+                    rtt = (now - sent) * 1000
+                    self.net_ping = rtt if self.net_ping is None else self.net_ping * 0.7 + rtt * 0.3
+                continue
             if msg.get("type") == "state":
+                self.net_arrivals.append(now)
+                self.net_arrivals = self.net_arrivals[-90:]
+                stats = msg.get("stats")
+                self.net_stats = stats if isinstance(stats, dict) else {}
                 self.net_seats = msg.get("seats") or {}
                 self.net_spectators = int(msg.get("spectators") or 0)
                 left = msg.get("countdown") or 0
@@ -94,6 +107,24 @@ class NetClientMixin:
             self.reconnect_until = now + RECONNECT_FOR
             self.next_try = now
         return True
+
+    def net_stats_reset(self):
+        self.net_ping = None          # пинг до сервера, мс (сглаженный)
+        self.net_arrivals = []        # когда пришли последние снимки
+        self.net_stats = {}           # статистика связи игроков от сервера: {цвет: {...}}
+        self.ping_next = 0.0
+
+    def my_net_stats(self, now=None):
+        """Своя статистика связи: пинг, снимков в секунду, джиттер (разброс прихода снимков), буфер, FPS."""
+        now = time.monotonic() if now is None else now
+        recent = [a for a in self.net_arrivals if now - a <= 2.0]
+        rate = len(recent) / 2.0 if recent else 0.0
+        gaps = [b - a for a, b in zip(self.net_arrivals[-31:], self.net_arrivals[-30:])]
+        mean = sum(gaps) / len(gaps) if gaps else 0.0
+        jitter = (sum(abs(g - mean) for g in gaps) / len(gaps) * 1000) if gaps else 0.0
+        return {"ping": round(self.net_ping) if self.net_ping is not None else None, "rate": round(rate, 1),
+                "jitter": round(jitter, 1), "buf": len(self.playback.buf) if getattr(self, "playback", None) else 0,
+                "fps": round(self.clock.get_fps())}
 
     def show_playback(self, dt):
         snap, events, waiting = self.playback.advance(dt)
@@ -182,6 +213,7 @@ class NetClientMixin:
         self.net_hold, self.net_menus, self.net_pauses, self.net_can_hold = None, {}, {}, {}
         self.menu_sent = False
         self.chat_reset()
+        self.net_stats_reset()
         self.net_spectators = 0
         self.reconnect_until = None
         self.net_heard = time.monotonic()
