@@ -5,6 +5,11 @@
     crash-<дата>.txt      — падение: версия, система и полный текст ошибки
 
 Падение игры записывается в оба файла; собранная игра на Windows показывает окно с путём к файлу.
+
+Сервер (python -m duel.server) пишет в свою папку (--logs, по умолчанию та же logs/):
+    server.log                — время, уровень, комната: входы, партии и их итоги, связь, ошибки (5 × 5 МБ)
+    room-error-<дата>-<N>.json — ошибка в комнате: зерно, герои, такт и команды игроков за последние секунды
+Свой сервер внутри игры пишет в game.log с пометкой [сервер].
 """
 import logging
 import logging.handlers
@@ -83,3 +88,36 @@ def report_crash(exc):
             pass
     if sys.stderr:
         print(text, file=sys.stderr)
+
+
+def to_logger(logger, prefix=""):
+    """Функция log(текст) для сервера и комнат поверх logging: текст с трассировкой — уровень ERROR."""
+    def log(text):
+        level = logging.ERROR if ("Traceback" in text or "ошибка" in text) else logging.INFO
+        logger.log(level, prefix + text)
+    return log
+
+
+def setup_server(folder=None):
+    """Лог отдельного сервера: logs/server.log (ротация) и консоль, у обоих — время. Возвращает log(текст)."""
+    logger = logging.getLogger("duel.server")
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    fmt = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+    folder = folder or log_dir()
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        handler = logging.handlers.RotatingFileHandler(folder / "server.log", maxBytes=5_000_000,
+                                                       backupCount=4, encoding="utf-8")
+        handler.setFormatter(fmt)
+        logger.addHandler(handler)
+    except OSError as e:
+        print(f"лог сервера не пишется в {folder}: {e}", file=sys.stderr)
+    console = logging.StreamHandler(sys.stdout)
+    console.setFormatter(fmt)
+    logger.addHandler(console)
+    threading.excepthook = lambda a: logger.error("ошибка в потоке %s:\n%s", getattr(a.thread, "name", "?"),
+                                                  "".join(traceback.format_exception(a.exc_type, a.exc_value,
+                                                                                     a.exc_traceback)))
+    logger.info("сервер: версия %s, %s, Python %s", version(), platform.platform(), platform.python_version())
+    return to_logger(logger)

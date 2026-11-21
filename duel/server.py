@@ -13,11 +13,13 @@
 пустые комнаты убирает. Свой сервер внутри игры («Создать свой сервер») — тот же класс в потоке.
 """
 import argparse
+import json
 import select
 import socket
 import threading
 import time
 import traceback
+from pathlib import Path
 
 from . import discovery
 from .accounts import AuthError, Accounts, default_path
@@ -37,8 +39,10 @@ FAIL_WINDOW = 300.0               # … за столько секунд — д�
 
 class Server:
     def __init__(self, port=PORT, bot=False, host="0.0.0.0", proto=PROTO, log=print,
-                 discovery_port=discovery.DISCOVERY_PORT, clock=time.monotonic, name=None, db=":memory:"):
+                 discovery_port=discovery.DISCOVERY_PORT, clock=time.monotonic, name=None, db=":memory:",
+                 dump_dir=None):
         self.log = log
+        self.dump_dir = dump_dir      # куда писать файлы ошибок комнат (None — не писать)
         self.clock = clock            # часы (тесты подменяют, чтобы не ждать секунды)
         self.listener = socket.create_server((host, port))
         self.listener.setblocking(False)
@@ -483,7 +487,9 @@ class Server:
                 if not room.empty:
                     room.tick()
             except Exception:             # ошибка одной комнаты не роняет остальные
-                self.log(f"ошибка в комнате {room.id}:\n" + traceback.format_exc())
+                text = traceback.format_exc()
+                where = self.dump_room(room, text)
+                self.log(f"ошибка в комнате {room.id}" + (f" (состояние — {where})" if where else "") + ":\n" + text)
                 for conn in room.all_conns():
                     conn.close()
                 room.seats = {pid: Seat() for pid in PIDS}
@@ -542,6 +548,18 @@ class Server:
             except OSError:
                 pass
 
+    def dump_room(self, room, text):
+        """Файл ошибки комнаты: зерно, герои, такт, команды последних секунд и текст ошибки."""
+        if not self.dump_dir:
+            return None
+        try:
+            path = Path(self.dump_dir) / time.strftime(f"room-error-%Y%m%d-%H%M%S-{room.id}.json")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({**room.dump(), "error": text}, ensure_ascii=False), encoding="utf-8")
+            return path
+        except Exception:                 # файл не записался — ошибка всё равно будет в логе
+            return None
+
     def run(self):
         self.log(f"сервер «{self.name}» ждёт игроков на порту {self.port}"
                  + (" (в новых комнатах — бот)" if self.bot else ""))
@@ -579,8 +597,11 @@ def start_in_thread(port=PORT, bot=False, log=None, discovery_port=discovery.DIS
                     db=":memory:"):
     """Сервер в фоновом потоке («Создать свой сервер»). Порт занят — OSError сразу.
     Остановить: server.stop(); server.thread.join()."""
-    srv = Server(port, bot, log=log or (lambda text: print("[сервер]", text, flush=True)),
-                 discovery_port=discovery_port, name=name, db=db)
+    dump_dir = None
+    if log is None:                   # свой сервер в игре — в game.log с пометкой, ошибки комнат — в logs/
+        from .logs import log as game_log, log_dir, to_logger
+        log, dump_dir = to_logger(game_log, "[сервер] "), log_dir()
+    srv = Server(port, bot, log=log, discovery_port=discovery_port, name=name, db=db, dump_dir=dump_dir)
     srv.thread = threading.Thread(target=srv.run, name="duel-server", daemon=True)
     srv.thread.start()
     return srv
@@ -630,10 +651,13 @@ def main(argv=None):
     ap.add_argument("--name", default=None, help="имя сервера в списке (иначе — имя компьютера)")
     ap.add_argument("--bot", action="store_true", help="в новых комнатах пустое место занимает бот")
     ap.add_argument("--db", default=str(default_path()), help="файл базы аккаунтов")
+    ap.add_argument("--logs", default=None, help="папка логов (по умолчанию — logs рядом с настройками)")
     args = ap.parse_args(argv)
+    from . import logs
+    folder = Path(args.logs) if args.logs else logs.log_dir()
+    log = logs.setup_server(folder)
     try:
-        srv = Server(args.port, args.bot, log=lambda text: print(text, flush=True), name=args.name,
-                     db=args.db)
+        srv = Server(args.port, args.bot, log=log, name=args.name, db=args.db, dump_dir=folder)
     except OSError as e:
         raise SystemExit(f"не удалось запустить сервер на порту {args.port}: {e.strerror or e}.\n"
                          f"Порт занят — уже работает другой сервер или игра со своим сервером; "
@@ -641,7 +665,7 @@ def main(argv=None):
     try:
         srv.run()
     except KeyboardInterrupt:
-        print("сервер остановлен")
+        log("сервер остановлен (Ctrl+C)")
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@
 и забирает ушедших из комнаты (read() их возвращает).
 """
 import math
+from collections import deque
 import secrets
 
 from . import testcmd
@@ -19,6 +20,10 @@ from . import config
 from .config import DEFAULT_HERO, HEROES
 from .match import STEP, Match
 from .snapshot import snapshot
+
+RECENT_TICKS = 300                # команд скольких тактов помнить для файла ошибки (5 с)
+STATS_LOG_EVERY = 3600            # связь игроков в лог — раз в столько тактов боя (минута)
+
 
 PIDS = ("blue", "red")
 SEND_EVERY = 2                    # снимок раз в 2 такта — 30 в секунду
@@ -96,6 +101,7 @@ class Room:
         self.pauses = {pid: config.PAUSE_LIMIT for pid in PIDS}
         self.duel = False             # партия из лобби (вызов, подбор, бот): ушёл один — закрыть для всех
         self.closing = None           # причина закрыть партию: "left" / "lost" (сервер вернёт всех в лобби)
+        self.recent = deque(maxlen=RECENT_TICKS)    # команды последних тактов — для файла ошибки комнаты
         self.new_match()
 
     # ------------------------------------------------------------------ места
@@ -154,6 +160,7 @@ class Room:
 
     def new_match(self):
         self.games += 1
+        self.recent = deque(maxlen=RECENT_TICKS)
         self.match = Match()
         self.hold, self.resume, self.pause_cool = None, 0.0, 0.0
         self.pauses = {pid: config.PAUSE_LIMIT for pid in PIDS}
@@ -436,6 +443,9 @@ class Room:
             self.play_tick()
             if self.match.winner:
                 self.phase = "over"
+                self.log_result()
+            elif self.tick_no % STATS_LOG_EVERY == 0:
+                self.log_stats()
         if self.tick_no % SEND_EVERY == 0:
             msg = {"type": "state", "room": self.id, "tick": self.tick_no, "game": self.games,
                    "phase": self.phase, "waiting": self.phase == "lobby", "paused": paused,
@@ -448,6 +458,44 @@ class Room:
             self.events = []
             for conn in list(self.conns.values()) + self.spectators:
                 conn.send(msg)
+
+    def who(self, pid):
+        """Кто на месте: «имя (герой)», бот — «бот (герой)»."""
+        s = self.seats[pid]
+        name = s.name or ("бот" if pid in self.bot_seats() else "гость")
+        return f"{name} ({self.match.player(pid).hero})"
+
+    def log_result(self):
+        """Итог партии в лог: кто кого, кем, сколько шла, с какими жизнями."""
+        m = self.match
+        w = getattr(m.winner, "id", m.winner)
+        hp = ", ".join(f"{pid} {m.player(pid).hp}" for pid in PIDS)
+        res = f"победил {self.who(w)}" if w in PIDS else f"итог {w}"
+        self.log(f"партия окончена: {res}; {self.who('blue')} против {self.who('red')}, "
+                 f"{m.match_time:.0f} с, волна {m.mob_wave}, жизни: {hp}, зерно {m.seed}")
+
+    def log_stats(self):
+        """Раз в минуту боя — связь игроков (что они сами меряют и шлют, см. /net)."""
+        parts = []
+        for pid, s in self.seats.items():
+            if s.conn and s.stats:
+                st = s.stats
+                parts.append(f"{pid} пинг {st.get('ping', '—')} мс, снимков {st.get('rate', '—')}/с, "
+                             f"джиттер {st.get('jitter', '—')}, fps {st.get('fps', '—')}")
+        if parts:
+            self.log("связь: " + "; ".join(parts))
+
+    def dump(self):
+        """Состояние для файла ошибки: чтобы повторить партию у себя (зерно, герои, команды)."""
+        m = self.match
+        return {"room": self.id, "phase": self.phase, "tick": self.tick_no, "game": self.games,
+                "seed": m.seed, "time": round(m.match_time, 3),
+                "heroes": {p.id: p.hero for p in m.players},
+                "seats": {pid: {"name": s.name, "who": "human" if s.conn else "bot" if pid in self.bot_seats()
+                                else None} for pid, s in self.seats.items()},
+                "players": {p.id: {"hp": p.hp, "ammo": p.ammo, "items": list(p.items), "gear": list(p.gear),
+                                   "effects": {k: round(v, 3) for k, v in p.effects.items()}} for p in m.players},
+                "recent": list(self.recent)}
 
     def start_countdown(self):
         """Все готовы: герои по местам, отсчёт перед партией (0 — сразу в бой)."""
@@ -465,6 +513,9 @@ class Room:
                 commands[pid] = Command(*self.bots[pid].act())
         # нажатия — один раз; направление и прицел держатся до следующей команды клиента
         self.pending = {pid: Command(move=self.pending[pid].move) for pid in PIDS}
+        self.recent.append([self.tick_no, round(self.match.match_time, 3),
+                            {pid: [list(c.move), c.fire, c.melee, c.use_slot,
+                                   None if c.aim is None else round(c.aim, 3)] for pid, c in commands.items()}])
         self.events += [list(e) for e in self.match.step(STEP, commands)]
 
     def all_conns(self):

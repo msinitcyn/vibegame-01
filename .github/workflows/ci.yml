@@ -33,13 +33,14 @@ jobs:
           python-version: "3.12"
 
       - name: Зависимости
-        run: python -m pip install pygame==2.6.1 pytest pyflakes
+        run: python -m pip install pygame==2.6.1 pytest pyflakes pytest-github-actions-annotate-failures
 
       - name: Код (pyflakes)
         run: python -m pyflakes main.py duel tests tools
 
       - name: Тесты
-        run: python -m pytest -q
+        # упавшие тесты — ещё и аннотациями (их видно без входа: API check-runs/…/annotations)
+        run: python -m pytest -q -rf
 
       - name: Самопроверка из исходников
         run: python main.py --selftest
