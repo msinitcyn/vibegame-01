@@ -39,7 +39,7 @@ def test_boots_gun_sword_armor():
 def test_gear_drops_only_in_arena():
     m = Match(seed=2)
     arena = [m.artifact_kind("arena", 6) for _ in range(400)]
-    assert set(GEAR_ITEMS) <= set(arena) and 0.15 < sum(k in GEAR_ITEMS for k in arena) / 400 < 0.45
+    assert set(arena) == set(GEAR_ITEMS)                    # в арене — только снаряжение
     for zone in ("blue", "red", "neutral"):
         assert not [k for k in (m.artifact_kind(zone, 6) for _ in range(300)) if k in GEAR_ITEMS]
     assert ARENA

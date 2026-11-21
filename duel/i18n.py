@@ -348,7 +348,7 @@ TEXTS = {
         "basic.melee": "Удар мечом",
         "basic.melee_help": "E или правая кнопка мыши (у правого — правый Shift), L1/L2: удар мечом по всем рядом — {melee} урона, без патронов, раз в {melee_cd} с.",
         "basic.foe_land": "Чужая земля",
-        "basic.foe_land_help": "На земле соперника маг горит стихией хозяина земли: у Огня — огнём, у Холода — морозом, у Природы — ядом, у Тьмы — тьмой, у Света — святым светом. Это {dps} жизни в секунду; щит гасит этот урон (каждая жизнь — один заряд), а «Ледяная тропа» спасает совсем.",
+        "basic.foe_land_help": "На земле соперника маг горит стихией хозяина земли: у Огня — огнём, у Холода — морозом, у Природы — ядом, у Тьмы — тьмой, у Света — святым светом. Это {dps} жизни в секунду; в арене мобов маг так же горит сиреневым огнём — {arena_dps} жизнь в секунду. Щит гасит этот урон (каждая жизнь — один заряд), а «Ледяная тропа» спасает совсем.",
         "help.tab_common": "Общие",
         "help.more": "Подробнее",
         "help.no_demo": "сценки пока нет",
@@ -364,7 +364,7 @@ TEXTS = {
         "sec.debuff": "Дебаффы на соперника",
         "note.1": "Рамка: зелёная — защита, синяя — атака, оранжевая — по сопернику.",
         "note.2": "Статус под именем игрока — всё, что действует сейчас, с таймерами.",
-        "note.3": "Артефакт выпадает там, где погиб моб, и зависит от места: на земле игрока — общий или артефакт его героя, на нейтральной полосе и в арене — общий. Лежит, пока не подберёшь; ячейки заняты — в очередь (видно {queue} следующих).",
+        "note.3": "Артефакт выпадает там, где погиб моб, и зависит от места: на земле игрока — только артефакт стихии его героя, на нейтральной полосе — общий, в арене мобов — только снаряжение. Лежит, пока не подберёшь; ячейки заняты — в очередь (видно {queue} следующих).",
         "note.4": "Оружие: на {weapon} с, разных не больше {wmax} — новое вытесняет старое.",
         "note.5": "Повтор любого эффекта добавляет время (щиту — и удары). Двойникам передаются щит, "
                   "оружие, размер, скорость, «не стреляет».",
@@ -377,7 +377,7 @@ TEXTS = {
         "note.8": "Дебаффы снимает только время или очищение.",
         "note.9": "Ближний удар (E / правый Shift / L1, L2) — только по мобам рядом: {melee} урона, "
                   "без патронов, раз в {melee_cd} с.",
-        "note.10": "Поле: на чужой земле жжёт и идёшь медленнее; нейтральная полоса над и под ареной не жжёт; в арену можно зайти (медленнее), но там проснутся твои стражи — бьют и стреляют, ранить их можно только изнутри арены, убитый вернётся через минуту.",
+        "note.10": "Поле: на чужой земле жжёт и идёшь медленнее; нейтральная полоса над и под ареной не жжёт; в арену можно зайти (медленнее, она жжёт), но там проснутся твои стражи — бьют и стреляют, ранить их можно только изнутри арены, убитый вернётся через минуту.",
 
         "wave.title": "волна {n}",
         "wave.in": "через {s} с",
@@ -800,7 +800,7 @@ TEXTS = {
         "basic.melee": "Sword strike",
         "basic.melee_help": "E or the right mouse button (right Shift for the right player), L1/L2: a sword strike at everyone nearby — {melee} damage, no ammo, once per {melee_cd} s.",
         "basic.foe_land": "Enemy land",
-        "basic.foe_land_help": "On the opponent's land the mage burns with the land owner's element: fire for Fire, frost for Frost, poison for Nature, darkness for Dark, holy light for Light. That is {dps} lives per second; a shield absorbs it (one charge per life), and the Ice path saves you completely.",
+        "basic.foe_land_help": "On the opponent's land the mage burns with the land owner's element: fire for Fire, frost for Frost, poison for Nature, darkness for Dark, holy light for Light. That is {dps} lives per second; in the mob arena the mage burns with violet fire too — {arena_dps} life per second. A shield absorbs it (one charge per life), and the Ice path saves you completely.",
         "help.tab_common": "Common",
         "help.more": "More",
         "help.no_demo": "no scene yet",
@@ -816,7 +816,7 @@ TEXTS = {
         "sec.debuff": "Debuffs on the opponent",
         "note.1": "Frame: green — defense, blue — attack, orange — against the opponent.",
         "note.2": "The status under a player's name shows everything active right now, with timers.",
-        "note.3": "An artifact drops where the mob died and depends on the place: on a player's land — a common one or that player's hero artifact, on the neutral strip and in the arena — a common one. It stays until picked up; slots full — into the queue (the next {queue} are shown).",
+        "note.3": "An artifact drops where the mob died and depends on the place: on a player's land — only an artifact of that hero's element, on the neutral strip — a common one, in the mob arena — only gear. It stays until picked up; slots full — into the queue (the next {queue} are shown).",
         "note.4": "Weapons: {weapon} s, at most {wmax} different at once — a new one replaces the oldest.",
         "note.5": "Repeating any effect adds time (and hits for the shield). Clones get the shield, "
                   "weapons, size, speed and \"can't shoot\".",
@@ -828,7 +828,7 @@ TEXTS = {
         "note.8": "Debuffs are removed only by time or cleanse.",
         "note.9": "Melee (E / right Shift / L1, L2) hits only nearby mobs: {melee} damage, "
                   "no ammo, once every {melee_cd} s.",
-        "note.10": "Field: the enemy land burns and slows you; the neutral strip above and below the arena is safe; you can enter the arena (slower), but your guardians wake up there — they hit and shoot, can be hurt only from inside the arena, and a killed one returns in a minute.",
+        "note.10": "Field: the enemy land burns and slows you; the neutral strip above and below the arena is safe; you can enter the arena (slower, and it burns), but your guardians wake up there — they hit and shoot, can be hurt only from inside the arena, and a killed one returns in a minute.",
 
         "wave.title": "wave {n}",
         "wave.in": "in {s} s",
@@ -1251,7 +1251,7 @@ TEXTS = {
         "basic.melee": "Miekanisku",
         "basic.melee_help": "E tai hiiren oikea (oikealla oikea Shift), L1/L2: miekanisku kaikkiin lähellä oleviin — {melee} vahinkoa, ilman panoksia, kerran {melee_cd} s:ssa.",
         "basic.foe_land": "Vieras alue",
-        "basic.foe_land_help": "Vastustajan alueella velho palaa alueen omistajan elementillä: Tulen alueella tulella, Pakkasen pakkasella, Luonnon myrkyllä, Pimeyden pimeydellä, Valon pyhällä valolla. Se vie {dps} elämää sekunnissa; kilpi imee sen (yksi lataus per elämä), ja Jääpolku suojaa kokonaan.",
+        "basic.foe_land_help": "Vastustajan alueella velho palaa alueen omistajan elementillä: Tulen alueella tulella, Pakkasen pakkasella, Luonnon myrkyllä, Pimeyden pimeydellä, Valon pyhällä valolla. Se vie {dps} elämää sekunnissa; hirviöareenalla velho palaa samoin violetilla tulella — {arena_dps} elämä sekunnissa. Kilpi imee sen (yksi lataus per elämä), ja Jääpolku suojaa kokonaan.",
         "help.tab_common": "Yleiset",
         "help.more": "Lisää",
         "help.no_demo": "ei vielä kohtausta",
@@ -1267,7 +1267,7 @@ TEXTS = {
         "sec.debuff": "Heikennykset vastustajalle",
         "note.1": "Kehys: vihreä — puolustus, sininen — hyökkäys, oranssi — vastustajaa vastaan.",
         "note.2": "Pelaajan nimen alla näkyy kaikki voimassa oleva ajastimineen.",
-        "note.3": "Artefakti putoaa hirviön kaatumispaikkaan ja riippuu paikasta: pelaajan alueella — yleinen tai hänen sankarinsa artefakti, neutraalilla kaistalla ja areenalla — yleinen. Se odottaa poimimista; paikat täynnä — jonoon ({queue} seuraavaa näkyy).",
+        "note.3": "Artefakti putoaa hirviön kaatumispaikkaan ja riippuu paikasta: pelaajan alueella — vain hänen sankarinsa elementin artefakti, neutraalilla kaistalla — yleinen, hirviöareenalla — vain varusteita. Se odottaa poimimista; paikat täynnä — jonoon ({queue} seuraavaa näkyy).",
         "note.4": "Aseet: {weapon} s, enintään {wmax} erilaista kerralla — uusi korvaa vanhimman.",
         "note.5": "Saman vaikutuksen toisto lisää aikaa (kilvelle myös osumia). Kloonit saavat kilven, "
                   "aseet, koon, nopeuden ja \"ei voi ampua\".",
@@ -1280,7 +1280,7 @@ TEXTS = {
         "note.8": "Heikennykset poistuvat vain ajan kanssa tai puhdistuksella.",
         "note.9": "Lähilyönti (E / oikea Shift / L1, L2) osuu vain lähellä oleviin hirviöihin: "
                   "{melee} vahinkoa, ilman ammuksia, kerran {melee_cd} s välein.",
-        "note.10": "Kenttä: vihollisen alue polttaa ja hidastaa; neutraali kaista areenan ylä- ja alapuolella on turvallinen; areenalle voi mennä (hitaammin), mutta siellä vartijasi heräävät — ne lyövät ja ampuvat, niitä voi vahingoittaa vain areenalta, kaatunut palaa minuutissa.",
+        "note.10": "Kenttä: vihollisen alue polttaa ja hidastaa; neutraali kaista areenan ylä- ja alapuolella on turvallinen; areenalle voi mennä (hitaammin, ja se polttaa), mutta siellä vartijasi heräävät — ne lyövät ja ampuvat, niitä voi vahingoittaa vain areenalta, kaatunut palaa minuutissa.",
 
         "wave.title": "aalto {n}",
         "wave.in": "{s} s päästä",

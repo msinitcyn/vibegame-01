@@ -182,9 +182,10 @@ def draw_hit(surf, x, y, hero, on, age):
 
 
 def draw_burn(surf, pos, r, land_hero, time):
-    """Маг горит на чужой земле: языки «пламени» стихии хозяина земли (огонь, мороз, яд, тьма, свет)."""
+    """Маг горит на чужой земле: языки «пламени» стихии хозяина земли (огонь, мороз, яд, тьма, свет);
+    в арене мобов — сиреневые (стиль "arena")."""
     B = params("bullets").get("burn") or {}
-    st = B.get(land_hero if land_hero in STYLES else "fire") or {}
+    st = B.get(land_hero) or B.get("fire") or {}         # стихия хозяина земли или "arena" (мобы)
     outer = rgb(st.get("outer"), (232, 64, 28))
     inner = rgb(st.get("inner"), (255, 200, 64))
     spark = rgb(st.get("spark"), (255, 240, 160))

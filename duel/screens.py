@@ -10,14 +10,12 @@ from .config import (
     NEUTRAL_HALF,
     AMMO_COLOR,
     GEAR_ITEMS,
-    GEAR_RING,
     ARENA,
     ARENA_R,
     BAD_TEXT,
     BLUE,
     BOTTOM,
     GREY,
-    HEARTS_SHOWN,
     HEIGHT,
     HERO_EDGE,
     HERO_LAND,
@@ -134,68 +132,8 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         size, gap = 40, 4
         width = INVENTORY_SIZE * size + (INVENTORY_SIZE - 1) * gap
         x0 = WIDTH // 2 - HUD_CENTER - width if left else WIDTH // 2 + HUD_CENTER
-        return [pygame.Rect(x0 + i * (size + gap), 4, size, size) for i in range(INVENTORY_SIZE)], x0, width
-
-    def draw_queue(self, p, left, x0, inv_w, pad):
-        """Очередь: следующие QUEUE_SHOWN артефактов в ряд, «+N» — если больше.
-
-        С клавиатурой — под ячейками, с геймпадом — снаружи от ромба.
-        Возвращает, сколько ширины она заняла сбоку от ячеек.
-        """
-        s = self.screen
-        size, gap = 22, 3
-        row_w = QUEUE_SHOWN * size + (QUEUE_SHOWN - 1) * gap
-        if pad:
-            side = 6
-            x = x0 - side - row_w if left else x0 + inv_w + side
-            y = (HUD_H - size) // 2
-            used = row_w + side
-        else:
-            x = x0 if left else x0 + inv_w - row_w
-            y = HUD_H - size - 6
-            used = 0
-        for i in range(QUEUE_SHOWN):
-            rect = pygame.Rect(x + i * (size + gap), y, size, size)
-            pygame.draw.rect(s, (22, 24, 34), rect, border_radius=4)
-            pygame.draw.rect(s, (70, 72, 86), rect, 1, border_radius=4)
-            if i < len(p["queue"]):
-                draw_icon(s, p["queue"][i], rect.center, size // 2 - 2)
-        extra = len(p["queue"]) - QUEUE_SHOWN
-        if extra > 0:
-            txt = self.tiny.render(f"+{extra}", True, WHITE)
-            last = pygame.Rect(x + (QUEUE_SHOWN - 1) * (size + gap), y, size, size)
-            back = txt.get_rect(bottomright=(last.right + 2, last.bottom + 3)).inflate(2, 0)
-            pygame.draw.rect(s, (22, 24, 34), back)
-            s.blit(txt, txt.get_rect(center=back.center))
-        return used
-
-    def draw_gear(self, p, left, x0, inv_w, pad, q_used):
-        """Снаряжение: 4 маленькие ячейки (ботинки, броня, автомат, меч). Пустая — бледный силуэт.
-        С клавиатурой — под ячейками с другого края, чем очередь; с геймпадом — снаружи за очередью.
-        Возвращает, сколько ширины заняло сбоку от ячеек."""
-        s = self.screen
-        size, gap = 22, 3
-        row_w = len(GEAR_ITEMS) * size + (len(GEAR_ITEMS) - 1) * gap
-        if pad:
-            side = 8
-            x = x0 - q_used - side - row_w if left else x0 + inv_w + q_used + side
-            y, used = (HUD_H - size) // 2, row_w + side
-        else:
-            x = x0 + inv_w - row_w if left else x0
-            y, used = HUD_H - size - 6, 0
-        have = p.get("gear", [])
-        for i, kind in enumerate(GEAR_ITEMS):
-            rect = pygame.Rect(x + i * (size + gap), y, size, size)
-            pygame.draw.rect(s, (22, 24, 34), rect, border_radius=4)
-            pygame.draw.rect(s, GEAR_RING if kind in have else (70, 72, 86), rect, 1, border_radius=4)
-            if kind in have:
-                draw_icon(s, kind, rect.center, size // 2 - 2, level=False)
-            else:                                 # пустая ячейка: бледный силуэт — что сюда встанет
-                ghost = pygame.Surface(rect.size, pygame.SRCALPHA)
-                draw_icon(ghost, kind, (size // 2, size // 2), size // 2 - 2, level=False)
-                ghost.set_alpha(45)
-                s.blit(ghost, rect)
-        return used
+        y = (HUD_H - size) // 2                   # ячейки — по центру полосы (очередь и снаряжение — в строках слева)
+        return [pygame.Rect(x0 + i * (size + gap), y, size, size) for i in range(INVENTORY_SIZE)], x0, width
 
     def draw_wave_timer(self):
         """В центре статуса: номер волны мобов и сколько секунд до следующей."""
@@ -246,16 +184,10 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
                     if label:
                         key = self.tiny.render(label, True, WHITE)
                         s.blit(key, (rect.right - key.get_width() - 3, rect.bottom - key.get_height() - 1))
-            q_w = self.draw_queue(p, left, x0, inv_w, has_pad)
-            q_w += self.draw_gear(p, left, x0, inv_w, has_pad, q_w)
-
-            # имя и жизни; ниже — патроны и всё, что действует, с таймерами
-            avail = WIDTH // 2 - HUD_CENTER - inv_w - q_w - 20
-            hp = p["hp"]
-            hearts = '♥' * min(hp, HEARTS_SHOWN)
-            if hp > HEARTS_SHOWN:
-                hearts += f" +{hp - HEARTS_SHOWN}"
-            line1 = self.font.render(f"{self.player_label(pid)}  {hearts}", True, color)
+            # имя и снаряжение; ниже — патроны, всё, что действует (с таймерами), и очередь артефактов.
+            # Жизни — только полоской над магом.
+            avail = WIDTH // 2 - HUD_CENTER - inv_w - 20
+            line1 = self.name_line(p, color)
             line2 = self.status_chips(p, self.snap)
             for img, cy in ((line1, HUD_H // 2 - 14), (line2, HUD_H // 2 + 14)):
                 if img.get_width() > avail:
@@ -323,10 +255,28 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
             self._field_bg = cached = (heroes, bg)
         return cached[1]
 
+    def name_line(self, p, color):
+        """Первая строка статуса: имя и снаряжение (4 значка: надетое — ярко в золотой рамке, нет — бледно)."""
+        name = self.font.render(self.player_label(p["id"]), True, color)
+        r, gap = 10, 4
+        have = p.get("gear", [])
+        width = name.get_width() + 12 + len(GEAR_ITEMS) * (2 * r + gap)
+        surf = pygame.Surface((width, max(name.get_height(), 2 * r + 2)), pygame.SRCALPHA)
+        surf.blit(name, (0, (surf.get_height() - name.get_height()) // 2))
+        x, cy = name.get_width() + 12, surf.get_height() // 2
+        for kind in GEAR_ITEMS:
+            icon = pygame.Surface((2 * r + 2, 2 * r + 2), pygame.SRCALPHA)
+            draw_icon(icon, kind, (r + 1, r + 1), r, level=False)
+            if kind not in have:
+                icon.set_alpha(50)                # пустое место — бледный силуэт: что сюда встанет
+            surf.blit(icon, (x, cy - r - 1))
+            x += 2 * r + gap
+        return surf
+
     def status_chips(self, p, snap):
-        """Вторая строка статуса: патроны и значки всех действующих на игрока артефактов
-        с таймерами. Сначала патроны, потом оружие, остальные эффекты, стены, двойники.
-        p — маг из снимка snap."""
+        """Вторая строка статуса: патроны, значки всех действующих на игрока артефактов
+        с таймерами (сначала оружие, потом остальное, стены, двойники) и очередь подобранных
+        артефактов (после «│», до QUEUE_SHOWN и «+N»). p — маг из снимка snap."""
         ammo = p["ammo"]
         chips = [("ammo", str(ammo), AMMO_COLOR if ammo > 0 else BAD_TEXT)]
         effects = sorted(p["effects"].items(), key=lambda e: (e[0] not in WEAPON_ITEMS, -e[1]))
@@ -342,18 +292,40 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         if clones:
             chips.append(("clones", f"×{clones}", ITEMS["clones"][1]))
 
+        queue = p.get("queue", [])
+        if queue:                                 # очередь: что встанет в ячейки следующим
+            chips.append(("|", "", GREY))
+            for kind in queue[:QUEUE_SHOWN]:
+                chips.append(("queue:" + kind, "", WHITE))
+            if len(queue) > QUEUE_SHOWN:
+                chips.append(("+", f"+{len(queue) - QUEUE_SHOWN}", WHITE))
+
         r, gap = 9, 10
         rendered = [(kind, self.small.render(label, True, color)) for kind, label, color in chips]
-        width = sum(2 * r + 3 + t.get_width() for _, t in rendered) + gap * max(0, len(rendered) - 1)
+        def chip_w(kind, txt):
+            if kind == "|":
+                return 2
+            if kind == "+" or kind.startswith("queue:"):
+                return txt.get_width() if kind == "+" else 2 * r
+            return 2 * r + 3 + txt.get_width()
+
+        width = sum(chip_w(k, txt) for k, txt in rendered) + gap * max(0, len(rendered) - 1)
         surf = pygame.Surface((max(1, width), 2 * r + 2), pygame.SRCALPHA)
         x = 0
         for kind, txt in rendered:
             if kind == "ammo":
                 draw_ammo_icon(surf, (x + r, r + 1), r)
+            elif kind == "|":
+                pygame.draw.line(surf, GREY, (x, 2), (x, 2 * r), 2)
+            elif kind == "+":
+                surf.blit(txt, (x, r + 1 - txt.get_height() // 2))
+            elif kind.startswith("queue:"):
+                draw_icon(surf, kind[6:], (x + r, r + 1), r, level=False)
             else:
                 draw_icon(surf, kind, (x + r, r + 1), r, level=False)   # статус эффектов — без уровня
-            surf.blit(txt, (x + 2 * r + 3, r + 1 - txt.get_height() // 2))
-            x += 2 * r + 3 + txt.get_width() + gap
+            if kind not in ("|", "+") and not kind.startswith("queue:"):
+                surf.blit(txt, (x + 2 * r + 3, r + 1 - txt.get_height() // 2))
+            x += chip_w(kind, txt) + gap
         return surf
 
     def draw_pause(self):

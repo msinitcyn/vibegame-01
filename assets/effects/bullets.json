@@ -12,7 +12,7 @@
   "goo_zombie": "#96ff78",
   "shield_color": "#aadcff",
   "burn": {
-    "_about": "Горение на чужой земле — цвет по хозяину земли: огонь, мороз, яд, тьма, святой свет.",
+    "_about": "Горение на чужой земле — цвет по хозяину земли: огонь, мороз, яд, тьма, святой свет; arena — в арене мобов.",
     "tongues": 7,
     "height": 1.5,
     "alpha": 200,
@@ -20,6 +20,7 @@
     "frost":  {"outer": "#4a9cff", "inner": "#dcf4ff", "spark": "#ffffff"},
     "nature": {"outer": "#3c9a28", "inner": "#c8ff5a", "spark": "#e6ff96"},
     "dark":   {"outer": "#5a1e9a", "inner": "#c878ff", "spark": "#140c1c"},
-    "light":  {"outer": "#e6b428", "inner": "#fffbe0", "spark": "#ffffff"}
+    "light":  {"outer": "#e6b428", "inner": "#fffbe0", "spark": "#ffffff"},
+    "arena":  {"outer": "#7a5cb4", "inner": "#d2c4ff", "spark": "#f0e8ff"}
   }
 }

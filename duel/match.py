@@ -51,7 +51,6 @@ from .config import (
     ZOMBIE_MAX,
     ZOMBIE_RADIUS,
     BEAM_DAMAGE,
-    HERO_DROP_BOOST,
     FIRE_RING_R,
     FIRE_RING_RANGE,
     CLONE_SCATTER,
@@ -70,6 +69,7 @@ from .config import (
     CLONE_EFFECTS,
     CLONE_TIME,
     FAST_BULLET_FACTOR,
+    ARENA_DPS,
     FOE_LAND_DPS,
     HEAL_AMOUNT,
     MAX_CLONES,
@@ -80,7 +80,6 @@ from .config import (
     MELEE_RANGE,
     EXPOSE_CAST,
     EXPOSE_SHOT,
-    GEAR_DROP_SHARE,
     GEAR_HP,
     GEAR_ITEMS,
     GEAR_REACH,
@@ -411,12 +410,23 @@ class Match:
         """Маг p стоит на ледяном следе хозяина owner."""
         return any(t.owner is owner and t.under(p.x, p.y) for t in self.ice)
 
-    def in_danger(self, p):
-        """Опасная земля: чужая (если нет «Ледяной тропы» и не стоит на своём следе) или след соперника."""
+    def danger(self, p):
+        """Опасная земля под магом: (жизней в секунду, чья стихия жжёт — герой или "arena") или (0, None).
+        Чужая земля и след соперника — FOE_LAND_DPS, арена мобов — ARENA_DPS; «Ледяная тропа» и свой
+        след спасают от чужой земли и арены (не от следа соперника)."""
         foe = self.other(p)
         if self.on_trail(p, foe):
-            return True
-        return p.on_foe_land() and "icewalk" not in p.effects and not self.on_trail(p, p)
+            return FOE_LAND_DPS, foe.hero
+        if "icewalk" in p.effects or self.on_trail(p, p):
+            return 0, None
+        if p.on_foe_land():
+            return FOE_LAND_DPS, foe.hero
+        if in_arena(p.x, p.y):
+            return ARENA_DPS, "arena"
+        return 0, None
+
+    def in_danger(self, p):
+        return self.danger(p)[0] > 0
 
     def ring_stops(self, x0, y0, x1, y1):
         return any(r.stops(x0, y0, x1, y1) for r in self.rings)
@@ -491,11 +501,12 @@ class Match:
                 p.y += dy / d * step
         self.constrain(p)
         self.update_ice(p)
-        # на опасной земле отнимаются жизни: FOE_LAND_DPS в секунду; щит гасит каждый такой удар зарядом
-        if self.in_danger(p):
+        # на опасной земле отнимаются жизни: столько-то в секунду; щит гасит каждый такой удар зарядом
+        dps = self.danger(p)[0]
+        if dps:
             p.foe_land_t += dt
-            while p.foe_land_t >= 1 / FOE_LAND_DPS:
-                p.foe_land_t -= 1 / FOE_LAND_DPS
+            while p.foe_land_t >= 1 / dps:
+                p.foe_land_t -= 1 / dps
                 if not p.shield_absorb():
                     self.hurt_player(p, 1)
         else:
@@ -689,9 +700,8 @@ class Match:
         a.taken = True
 
     def drop_artifact(self, mob):
-        """Погибший моб роняет артефакт в месте гибели; какой — зависит только от места:
-        на земле игрока — общий или артефакт героя этого игрока, на нейтральной полосе — общий,
-        в арене — артефакт мобов (пока тот же набор, что общий). Уровень — по запасу жизней моба."""
+        """Погибший моб роняет артефакт в месте гибели; какой — зависит только от места (artifact_kind):
+        арена — снаряжение, полоса — общий, земля героя — артефакт его стихии. Уровень — по жизням моба."""
         self.emit("mob_dead", mob.x, mob.y)
         if not self.drops:
             return
@@ -701,14 +711,17 @@ class Match:
         self.artifacts.append(Artifact(x, self.artifact_kind(zone_at(mob.x, mob.y), mob.max_hp), y))
 
     def artifact_kind(self, zone, max_hp):
-        """Случайный артефакт зоны (земля игрока, полоса, арена) с уровнем по жизням моба."""
-        if zone == "arena" and self.rng.random() < GEAR_DROP_SHARE:
-            return self.rng.choice(GEAR_ITEMS)     # снаряжение — только из мобов арены
+        """Случайный артефакт зоны с уровнем по жизням моба: в арене мобов — только снаряжение;
+        на нейтральной полосе — общие артефакты; на земле героя — только артефакты его стихии."""
+        if zone == "arena":
+            return self.rng.choice(GEAR_ITEMS)
         owner = self.player(zone) if zone in ("blue", "red") else None
-        hero = owner.hero if owner else None
-        kinds = [k for k in ITEMS if HERO_ONLY_ITEMS.get(k, hero) == hero and k not in GEAR_ITEMS
-                 and max_hp >= LEVEL_MIN_MOB_HP[item_level(k)]]
-        weights = [LEVEL_WEIGHT[item_level(k)] * (HERO_DROP_BOOST if k in HERO_ONLY_ITEMS else 1.0) for k in kinds]
+        if owner:
+            pool = [k for k in ITEMS if HERO_ONLY_ITEMS.get(k) == owner.hero]
+        else:
+            pool = [k for k in ITEMS if k not in HERO_ONLY_ITEMS and k not in GEAR_ITEMS]
+        kinds = [k for k in pool if max_hp >= LEVEL_MIN_MOB_HP[item_level(k)]] or pool
+        weights = [LEVEL_WEIGHT[item_level(k)] for k in kinds]
         return self.rng.choices(kinds, weights)[0]
 
     def bullet_speed(self, owner):

@@ -2,7 +2,7 @@
 import math
 
 from duel.commands import Command
-from duel.config import (ARENA, ARENA_R, BULLET_SPEED, FOE_LAND_DPS, GUARDIAN_HP, GUARDIAN_RESPAWN, MAX_HP,
+from duel.config import (ARENA, ARENA_DPS, ARENA_R, BULLET_SPEED, FOE_LAND_DPS, GUARDIAN_HP, GUARDIAN_RESPAWN, MAX_HP,
                          TOP)
 from duel.entities import Bullet, zone_at
 from tests.conftest import DT, new_match, step
@@ -14,14 +14,14 @@ def test_zones():
     assert zone_at(100, 300) == "blue" and zone_at(900, 300) == "red"
 
 
-def test_neutral_strip_and_arena_do_not_burn():
+def test_neutral_strip_does_not_burn_arena_does():
     m = new_match()
     b = m.blue
     b.x, b.y = ARENA[0] + 60, TOP + 30
     step(m, 3.0)
     assert b.hp == MAX_HP                            # нейтральная полоса
     b.x, b.y = ARENA
-    assert not m.in_danger(b)                        # арена не жжёт (там свои опасности — стражи)
+    assert m.danger(b) == (ARENA_DPS, "arena")       # арена жжёт, как чужая земля, но слабее
     b.x, b.y = 900, TOP + 30                         # земля красного жжёт по-прежнему
     step(m, 1.1)
     assert b.hp <= MAX_HP - FOE_LAND_DPS

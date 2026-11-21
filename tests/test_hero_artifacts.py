@@ -20,7 +20,7 @@ def test_icewalk_no_burn_and_trail():
     b = m.blue
     b.x, b.y = 300, TOP + 40
     m.apply_item(b, "icewalk")
-    walk(m, "blue", (1, 0), 1.5)                         # уходит на землю красного
+    walk(m, "blue", (1, 0), 2.6)                         # уходит на землю красного (через полосу)
     assert b.on_foe_land() and b.hp == MAX_HP
     assert len(m.ice) > 10 and all(t.owner is b for t in m.ice)
 
@@ -345,7 +345,7 @@ def test_nature_walks_through_own_trees():
     t = nature(m, aim=0.0)
     b = m.blue
     b.x, b.y = 400, t.y - 60
-    walk(m, "blue", (0, 1), 0.5)
+    walk(m, "blue", (0, 1), 0.8)
     assert b.y > t.y + 20                                # прошёл насквозь
 
 
@@ -473,7 +473,7 @@ def test_level_by_mob_hp():
 def test_heavy_items_are_rarer():
     fat = drops("fire", 6, 3000)
     assert fat["firering"] < fat["lasso"] < fat["fastshots"]       # личные: чем тяжелее, тем реже
-    assert fat["fastshots"] > 2 * fat["heal"]                       # личные — чаще общих (HERO_DROP_BOOST)
+    assert fat["heal"] == 0                                         # на земле героя — только артефакты его стихии
 
 
 def test_zombie_stands_still_while_rising():

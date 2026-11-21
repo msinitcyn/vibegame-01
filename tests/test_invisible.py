@@ -27,6 +27,7 @@ def test_guardians_stay_statues_for_invisible():
     b = m.blue
     b.x, b.y, b.hp = ARENA[0] - 40, ARENA[1], 1000
     b.apply("invisible")
+    b.apply("icewalk")                               # арена жжёт — ледяная тропа спасает (тут проверяем стражей)
     step(m, 1.0)
     assert not any(g.awake for g in m.guardians)
     hp = b.hp
