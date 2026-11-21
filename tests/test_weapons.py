@@ -48,17 +48,6 @@ def test_weapon_expires(match):
     assert "rapid" not in b.effects
 
 
-def test_fourth_weapon_replaces_oldest(match):
-    b = match.blue
-    for kind in ("triple", "wavy", "rapid"):
-        match.apply_item(b, kind)
-        step(match, WEAPON_TIME / 6)
-    match.apply_item(b, "breaker")
-    active = {n for n in b.effects if n in WEAPON_ITEMS}
-    assert active == {"wavy", "rapid", "breaker"}      # веер — у него меньше всего времени — вытеснен
-    assert len(active) == WEAPON_MAX
-
-
 def test_clones_also_capped(match):
     b = match.blue
     match.apply_item(b, "clones")
@@ -72,7 +61,7 @@ def test_status_draws_weapons(game):
     m = game.match
     for kind in WEAPON_ITEMS[:3]:
         m.apply_item(m.blue, kind)
-    m.apply_item(m.red, "breaker")
+    m.apply_item(m.red, "fastshots")
     game.refresh_snap()
     game.draw()
 

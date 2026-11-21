@@ -34,7 +34,7 @@ ARENA_SLOW = 0.6                 # в арене мобов — тоже
 BEAM_LENGTH = 260                # длина летящего луча, пикс
 BEAM_WIDTH = 12                  # толщина (попадание — по ней)
 BEAM_SPEED = 900                 # скорость полёта, пикс/сек (пуля — 520)
-BEAM_DAMAGE = 3                  # урон луча: каждому, кого коснулся, — один раз за луч
+BEAM_DAMAGE = 4                  # урон луча: каждому, кого коснулся, — один раз за луч
 HERO_FADE = 0.8                  # стена деревьев исчезает столько секунд — от мага к концу
 # «Ледяная тропа» (Холод)
 ICE_STEP = 14                    # кусок следа каждые столько пикселей пути
@@ -63,6 +63,7 @@ BEAR_REACH = 45                  # на сколько дальше ближни
 BEAR_MELEE_DAMAGE = 3            # сила ближнего удара медведя
 # «Огненный круг» (Огонь)
 FIRE_RING_R = 95                 # радиус кольца вокруг соперника, пикс
+FIRE_RING_RANGE = 380            # кольцо ставится на ближайшего героя (соперник или его двойник) не дальше этого
 FIRE_RING_TIME = 6.0             # сколько горит
 FIRE_RING_HEAT = 25              # ближе этого к стене — жжёт, пикс
 FIRE_RING_DPS = 4                # жизней в секунду у стены
@@ -78,16 +79,17 @@ ITEM_LEVEL = {
     "bear": 4, "firering": 4,
     "lasso": 3, "zombies": 3, "icewalk": 3, "sentries": 3, "trees": 3, "immune": 3, "clones": 3,
     "cleanse": 2, "foe_nofire": 2, "foe_noitems": 2, "foe_freeze": 2, "shield": 2, "slowfoe": 2,
-    "rapid": 2, "breaker": 2, "mobswap": 2, "wall": 2, "beam": 2, "invisible": 2,
+    "rapid": 2, "mobswap": 2, "wall": 2, "beam": 2, "invisible": 2,
 }                                # остальные — уровень 1
 LEVEL_WEIGHT = {1: 1.0, 2: 0.7, 3: 0.4, 4: 0.2}      # относительная частота выпадения
 LEVEL_MIN_MOB_HP = {1: 0, 2: 0, 3: 5, 4: 6}         # из моба с меньшим запасом жизней — не выпадает
+HERO_DROP_BOOST = 3.0            # артефакты героя выпадают во столько раз чаще (временно — пока не подобрали рейты)
 # справка: страницы артефактов героев (герои по порядку) и всего страниц
 HELP_TABS = ("mages", "common", "fire", "frost", "nature", "dark", "light", "rules")   # вкладки справки
 HELP_BASICS = ("walk", "shoot", "melee", "foe_land")    # вкладка «Маги»: что умеет любой маг (сценки — assets/demos/)
 HELP_PAGES = len(HELP_TABS)
 # артефакт -> герой: выпадает только ему (подобрать может любой)
-HERO_ONLY_ITEMS = {"beam": "light", "clearfoe": "light", "breaker": "light", "mobpeace": "light", "invisible": "light",
+HERO_ONLY_ITEMS = {"beam": "light", "clearfoe": "light", "mobpeace": "light", "invisible": "light",
                    "icewalk": "frost", "foe_freeze": "frost", "shield": "frost", "slowfoe": "frost",
                    "trees": "nature", "bear": "nature", "immune": "nature", "sentries": "nature",
                    "lasso": "fire", "firering": "fire", "fastshots": "fire", "rapid": "fire",
@@ -167,7 +169,7 @@ MUSIC_FADE_MS = 800
 SHOOT_VOLUME = 0.6
 # звуки артефактов героев: артефакт -> (файл в assets/sounds, громкость; файлы разной громкости)
 ITEM_SOUNDS = {"beam": ("sun-ray.mp3", 0.9), "firering": ("fire-ring.mp3", 0.45), "bear": ("bear.mp3", 0.75),
-               "zombies": ("zombie.mp3", 0.55), "clones": ("clones.mp3", 0.6), "lasso": ("lasso.mp3", 0.6),
+               "zombies": ("zombie.mp3", 0.55), "clones": ("clone.mp3", 0.6), "lasso": ("lasso.mp3", 0.6),
                "foe_freeze": ("frost.mp3", 0.6), "shield": ("ice-shield.mp3", 0.6), "wall": ("mirror.mp3", 0.6),
                "trees": ("tree-wall.mp3", 0.6)}
 # звуки-циклы: играют, пока это происходит (шаги — маг идёт; чужая земля — горит; ледяная тропа — действует)
@@ -283,12 +285,13 @@ DURATION = {"grow2": 7, "shrink": 7, "freeze": 2.5, "speed": 7, "nofire": 4, "sl
             "bear": 10,                   # «Медведь»: сколько маг — медведь
             "immune": 6,                  # «Дубовая кора»: артефакты соперника на Природу не действуют
             # улучшения оружия
-            "triple": WEAPON_TIME, "wavy": WEAPON_TIME, "rapid": WEAPON_TIME, "breaker": WEAPON_TIME}
+            "triple": WEAPON_TIME, "wavy": WEAPON_TIME, "rapid": WEAPON_TIME}
 RAPID_FACTOR = 0.4               # пауза между выстрелами x0.4
 SLOW_BULLET_FACTOR = 0.45        # «пули соперника замирают»: мобы, идущие на тебя, и их снаряды медленнее
 STOP_BULLET_FACTOR = 0.0         # …а пули соперника стоят на месте
 FAST_BULLET_FACTOR = 1.6         # «быстрые пули»: твои пули и мобы, идущие на соперника
 SHIELD_GAP = 10                  # щит на столько пикселей шире шарика
+REVEAL_TIME = 0.5                # сколько невидимка проявляется после конца невидимости (только картинка)
 SHIELD_FLASH = 0.25               # сколько видна рябь щита после погашенного удара (только картинка)
 SHIELD_HITS = 5                  # щит гасит столько пуль (или исчезает по времени)
 WAVE_AMP = (25, 55)              # размах волны пули, пикс (случайно для каждой пули)
@@ -304,4 +307,4 @@ CLONE_HP = 2                     # жизней у двойника
 CLONE_SHOT_EVERY = (0.6, 1.5)    # пауза между выстрелами двойника, сек
 CLONE_TURN_EVERY = (0.4, 1.4)    # как часто двойник меняет направление
 # эффекты хозяина, которые действуют и на его двойников
-CLONE_EFFECTS = ("shield", "triple", "wavy", "rapid", "grow2", "shrink", "breaker", "speed", "nofire")
+CLONE_EFFECTS = ("shield", "triple", "wavy", "rapid", "grow2", "shrink", "speed", "nofire")

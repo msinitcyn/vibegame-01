@@ -119,3 +119,19 @@ def test_beam_draws(game):
     game.refresh_snap()
     assert len(game.snap["beams"][0]["pts"]) > 2
     game.draw()
+
+
+def test_beam_knocks_down_enemy_bullets(light):
+    from duel.entities import Bullet
+    m = light
+    b, r = m.blue, m.red
+    r.hp = 50
+    foe_bullet = Bullet(300, b.y, -520, 0, r)             # летит навстречу лучу
+    m.bullets = [foe_bullet]
+    m.apply_item(b, "beam")
+    step(m, 0.2)
+    assert not foe_bullet.alive and foe_bullet not in m.bullets
+    assert any(h[3] == "knock" for h in m.hits)          # вспышка сбитой пули
+    step(m, 0.8)
+    assert b.hp == MAX_HP                                 # сбитая пуля никого не ранила
+    assert r.hp == 50 - BEAM_DAMAGE == 46

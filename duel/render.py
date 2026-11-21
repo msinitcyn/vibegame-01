@@ -40,6 +40,7 @@ from .config import (
     MOB_WINDUP,
     SHIELD_GAP,
     SHIELD_FLASH,
+    REVEAL_TIME,
     WALL_W,
     WALL_TIME,
     FIRE_RING_TIME,
@@ -48,7 +49,7 @@ from .config import (
 from . import vfx, vfx_bullets, vfx_units
 from .icons import draw_icon
 from .items import ITEMS
-from .sprites import draw_unit
+from .sprites import SPRITE_TO_HITBOX, draw_unit, sprite
 
 DIR = {"blue": 1, "red": -1}              # +1 стреляет вправо, -1 влево (стороны поля)
 
@@ -163,8 +164,8 @@ def draw_player(surf, p, heroes, viewer=None, time=0.0, font=None):
     """Маг. Невидимый: за одним компьютером (viewer None) и себе по сети — полупрозрачный,
     сопернику и зрителям по сети — не виден совсем."""
     if "invisible" in p.get("effects", {}):
-        if viewer is None or viewer == p["id"]:
-            draw_invisible(surf, p, heroes)
+        sees = viewer is None or viewer == p["id"]
+        draw_invisible(surf, p, heroes, time, sees)
         return
     pos = _pos(p)
     pid = p["id"]
@@ -189,8 +190,15 @@ def draw_player(surf, p, heroes, viewer=None, time=0.0, font=None):
     else:
         frame, bob = mage_frame(p, time)
         px = p["r"] * 2 * 1.15 / 32
-        draw_unit(surf, HERO_SPRITE[heroes[pid]], (pos[0], pos[1] - bob * px), p["r"], facing,
-                  white=p["hit_flash"] > 0, frame=frame)
+        reveal = p.get("reveal", 0) / REVEAL_TIME if p.get("reveal", 0) > 0 else 0.0
+        if reveal > 0:                            # проявляется после невидимости: из марева и искр
+            img = mage_image(p, heroes, frame, p["hit_flash"] > 0)
+            vfx_units.haze_blit(surf, img, (pos[0], pos[1] - bob * px), 255 * (1 - reveal),
+                                time, float(vfx.params("invisible").get("haze", 2.5)) * reveal)
+            vfx_units.invis_sparks(surf, pos, p["r"], 1 - reveal, rising=False)
+        else:
+            draw_unit(surf, HERO_SPRITE[heroes[pid]], (pos[0], pos[1] - bob * px), p["r"], facing,
+                      white=p["hit_flash"] > 0, frame=frame)
         if p["melee_flash"] > 0:                   # меч
             vfx.draw_sword(surf, pos, p["r"], facing, aim, 1 - p["melee_flash"] / MELEE_FLASH)
         else:
@@ -212,17 +220,35 @@ def draw_player(surf, p, heroes, viewer=None, time=0.0, font=None):
             scale=float(vfx.params("bear").get("scale", 1.1)) if bear else 1.0)
 
 
-def draw_invisible(surf, p, heroes):
-    """Невидимка, каким его видит он сам: полупрозрачный, без метки прицела и подписей эффектов."""
-    pos = _pos(p)
-    r = p["r"]
-    size = int(4 * r + 8)
-    ghost = pygame.Surface((size, size), pygame.SRCALPHA)
+def mage_image(p, heroes, frame="idle", white=False):
+    """Спрайт мага нужного размера и стороны (для марева невидимости)."""
     aim = p.get("aim")
     facing = DIR[p["id"]] if aim is None else (1 if math.cos(aim) >= 0 else -1)
-    draw_unit(ghost, HERO_SPRITE[heroes[p["id"]]], (size // 2, size // 2), r, facing)
-    ghost.set_alpha(110)
-    surf.blit(ghost, ghost.get_rect(center=pos))
+    size = max(8, round(p["r"] * 2 * SPRITE_TO_HITBOX))
+    return sprite(HERO_SPRITE[heroes[p["id"]]], size, facing < 0, white, 255, frame)
+
+
+def draw_invisible(surf, p, heroes, time=0.0, sees=True):
+    """Невидимка. Первые мгновения его видят все: растворяется в мареве, искры летят вверх, кольцо света
+    сжимается. Потом себе и за одним компьютером — дрожащий полупрозрачный силуэт; сопернику — ничего."""
+    P = vfx.params("invisible")
+    pos = _pos(p)
+    r = p["r"]
+    T = float(P.get("vanish_time", 0.6))
+    since = DURATION["invisible"] - p["effects"]["invisible"]
+    ghost = float(P.get("ghost_alpha", 105))
+    haze = float(P.get("haze", 2.5))
+    img = mage_image(p, heroes, mage_frame(p, time)[0])
+    if 0 <= since < T:                            # исчезает
+        k = since / T
+        alpha = 255 - (255 - (ghost if sees else 0)) * k
+        vfx_units.haze_blit(surf, img, pos, alpha, time, haze * k)
+        vfx_units.invis_ring(surf, pos, r, k)
+        vfx_units.invis_sparks(surf, pos, r, k, rising=True)
+        return
+    if not sees:
+        return
+    vfx_units.haze_blit(surf, img, pos, ghost + 20 * math.sin(time * 5), time, haze)
     pygame.draw.circle(surf, side_color(heroes, p["id"]), pos, int(r) + 4, 1)
 
 

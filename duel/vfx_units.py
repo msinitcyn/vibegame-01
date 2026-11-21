@@ -376,3 +376,44 @@ def draw_clone_noise(surf, pos, r, k, time, seed=0):
         col = colors[h % len(colors)]
         layer.fill((*col, int(255 * fade)), (int(c + px * r * 1.7), int(c + py * r * 1.7), s, s))
     surf.blit(layer, (int(pos[0] - c), int(pos[1] - c)))
+
+
+# --- невидимость ----------------------------------------------------------------------------
+
+def haze_blit(surf, img, center, alpha, time, amp):
+    """Картинка дрожит, как воздух в жару: полоски по 2 пикселя сдвинуты синусом."""
+    w, h = img.get_size()
+    x0, y0 = int(center[0] - w / 2), int(center[1] - h / 2)
+    img = img.copy()
+    img.set_alpha(max(0, min(255, int(alpha))))
+    for y in range(0, h, 2):
+        dx = int(round(amp * math.sin(time * 14 + y * 0.45)))
+        surf.blit(img, (x0 + dx, y0 + y), (0, y, w, 2))
+
+
+def invis_sparks(surf, pos, r, k, rising=True):
+    """Золотые искры: при исчезновении летят вверх и гаснут, при проявлении — слетаются к магу. k — 0..1."""
+    P = params("invisible")
+    col = rgb(P.get("spark_color"), (255, 240, 160))
+    n = int(P.get("sparkles", 14))
+    for i in range(n):
+        a = i * 2.39996
+        q = k if rising else 1 - k
+        d = r * (0.4 + 1.2 * q)
+        x = pos[0] + math.cos(a) * d
+        y = pos[1] + math.sin(a) * d * 0.6 - (r * 1.4 * q if rising else 0)
+        s = 2 if i % 3 else 3
+        if (i + int(k * 20)) % 4:
+            pygame.draw.line(surf, col, (x - s, y), (x + s, y))
+            pygame.draw.line(surf, col, (x, y - s), (x, y + s))
+
+
+def invis_ring(surf, pos, r, k):
+    """Кольцо света сжимается к магу (исчезает) — k 0..1."""
+    P = params("invisible")
+    col = rgb(P.get("ring_color"), (255, 251, 224))
+    rr = int(r * (2.2 - 1.6 * k))
+    if rr > 2:
+        layer = pygame.Surface((2 * rr + 6, 2 * rr + 6), pygame.SRCALPHA)
+        pygame.draw.circle(layer, (*col, int(230 * (1 - k))), (rr + 3, rr + 3), rr, 2)
+        surf.blit(layer, (int(pos[0] - rr - 3), int(pos[1] - rr - 3)))

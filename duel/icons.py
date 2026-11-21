@@ -84,11 +84,6 @@ def _draw_icon(surf, kind, center, r):
     elif kind == "clones":
         pygame.draw.circle(surf, color, P(-0.2, -0.12), r * 0.32, 2)
         pygame.draw.circle(surf, color, P(0.2, 0.15), r * 0.32)
-    elif kind == "breaker":                       # вспышка столкновения
-        for i in range(8):
-            a = i * math.pi / 4
-            ln = 0.6 if i % 2 == 0 else 0.35
-            pygame.draw.line(surf, color, center, P(ln * math.cos(a), ln * math.sin(a)), w)
     elif kind == "wavy":
         pts = [P(-0.6 + i * 0.1, 0.3 * math.sin(i * 0.1 * 2 * math.pi / 0.6)) for i in range(13)]
         pygame.draw.lines(surf, color, False, pts, w)

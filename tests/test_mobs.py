@@ -385,18 +385,6 @@ def test_mob_shot_speed_follows_slow_and_fast(match):
     assert flown() == pytest.approx(normal * FAST_BULLET_FACTOR, rel=0.05)
 
 
-def test_mob_shots_ignore_breaker(match):
-    from duel.entities import Bullet, MobShot
-    from duel.config import BULLET_SPEED
-    b = match.blue
-    b.x, b.y = 100, 300
-    match.give(b, "breaker")
-    match.mob_shots = [MobShot(350, 300, b)]
-    match.bullets = [Bullet(150, 300, BULLET_SPEED, 0, b)]   # пуля синего навстречу
-    step(match, 1.5)
-    assert b.hp == MAX_HP - 1                    # снаряд прошёл сквозь встречную пулю
-
-
 def test_wall_reflects_mob_shot_into_owner_bullet(match):
     from duel.entities import Mob, MobShot
     b = match.blue

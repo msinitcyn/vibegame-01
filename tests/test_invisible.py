@@ -52,5 +52,19 @@ def test_draw_invisible():
         blank.fill((0, 0, 0))
         return pygame.image.tobytes(surf, "RGB") != pygame.image.tobytes(blank, "RGB")
 
+    assert painted("red") and painted("")              # растворяется — это видят все
+    from duel.config import DURATION
+    p["effects"]["invisible"] = DURATION["invisible"] - 1.0
     assert painted(None) and painted("blue")
     assert not painted("red") and not painted("")
+
+
+def test_reveal_after_invisibility():
+    """Невидимость кончилась — маг проявляется (таймер reveal в снимке)."""
+    from duel.config import DURATION, REVEAL_TIME
+    from duel.snapshot import snapshot
+    m = new_match()
+    m.blue.apply("invisible")
+    m.blue.tick_effects(DURATION["invisible"] + 0.01)
+    p = next(x for x in snapshot(m)["players"] if x["id"] == "blue")
+    assert "invisible" not in p["effects"] and 0 < p["reveal"] <= REVEAL_TIME

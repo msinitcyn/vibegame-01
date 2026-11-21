@@ -67,6 +67,7 @@ from .config import (
     RAPID_FACTOR,
     SHIELD_GAP,
     SHIELD_FLASH,
+    REVEAL_TIME,
     SHIELD_HITS,
     SHOT_COOLDOWN,
     START_AMMO,
@@ -137,6 +138,7 @@ class Unit:
         self.shield_hits = 0
         self.shield_flash = 0.0       # для анимации: щит только что погасил удар
         self.shield_break = 0.0       # для анимации: щит только что лопнул
+        self.reveal = 0.0             # для анимации: невидимка только что проявился
 
     @property
     def radius(self):
@@ -179,10 +181,13 @@ class Unit:
     def tick_effects(self, dt):
         self.shield_flash = max(0.0, getattr(self, "shield_flash", 0.0) - dt)
         self.shield_break = max(0.0, getattr(self, "shield_break", 0.0) - dt)
+        self.reveal = max(0.0, getattr(self, "reveal", 0.0) - dt)
         for name in list(self.effects):
             self.effects[name] -= dt
             if self.effects[name] <= 0:
                 del self.effects[name]
+                if name == "invisible":
+                    self.reveal = REVEAL_TIME     # для анимации: невидимость кончилась — проявляется
         if "shield" not in self.effects:
             self.shield_hits = 0
 
@@ -400,13 +405,13 @@ class Guardian:
 
 
 class FireRing:
-    """«Огненный круг»: кольцо радиусом FIRE_RING_R вокруг соперника. Стену не пересекает ни
+    """«Огненный круг»: кольцо радиусом FIRE_RING_R вокруг точки at (см. Match.ring_spot). Стену не пересекает ни
     один маг; сопернику хозяина у стены больно; пули изнутри наружу гаснут."""
 
-    def __init__(self, owner, foe, players):
+    def __init__(self, owner, at, players):
         self.id = None
         self.owner = owner
-        self.x, self.y = foe.x, foe.y
+        self.x, self.y = at
         self.life = FIRE_RING_TIME
         self.inside = {p for p in players if math.hypot(p.x - self.x, p.y - self.y) < FIRE_RING_R}
 
@@ -694,7 +699,7 @@ class Mob:
 
 class MobShot:
     """Снаряд дальнобойного моба: летит прямо в точку, где была цель в момент выстрела,
-    исчезает, пролетев MOB_RANGE или у края поля. Стены и «сбиваешь пули» на него не действуют."""
+    исчезает, пролетев MOB_RANGE или у края поля. Стены на него не действуют."""
 
     def __init__(self, x, y, target, owner=None):
         self.id = None

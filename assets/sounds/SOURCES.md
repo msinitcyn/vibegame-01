@@ -4,7 +4,7 @@
 
 | Файл в игре | Оригинальное имя | Номер |
 |---|---|---|
-| clones.mp3 | yodguard-dark-spell-chant-3-533018.mp3 | 533018 |
+| clone.mp3 | yodguard-dark-magic-1-378650.mp3 | 378650 |
 | enemy-land.mp3 | freesound_community-burning-fire-steam-87118.mp3 | 87118 |
 | frost.mp3 | dragon-studio-frost-spell-impact-499662.mp3 | 499662 |
 | hit-into-body.mp3 | u_68csiaifb5-bulletimpact4-442720.mp3 | 442720 |

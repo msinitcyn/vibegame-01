@@ -12,6 +12,7 @@ from .config import (
     SENTRY_TIME,
     FIRE_RING_DPS,
     FIRE_RING_R,
+    FIRE_RING_RANGE,
     FIRE_RING_TIME,
     ZOMBIE_MAX,
     ZOMBIE_RADIUS,
@@ -48,7 +49,6 @@ ITEMS = {
     "shield": ("self", (120, 200, 255)),
     "heal": ("self", (255, 90, 120)),
     "clones": ("self", (200, 200, 210)),
-    "breaker": ("self", (255, 240, 150)),
     "wavy": ("self", (255, 140, 255)),
     "clearfoe": ("self", (150, 255, 200)),
     "cleanse": ("self", (210, 255, 230)),
@@ -77,7 +77,7 @@ HELP_SECTIONS = [
     ("weapon", ["triple", "wavy"]),
     ("debuff", ["foe_grow", "foe_nofire", "foe_invert", "foe_noitems"]),
     # артефакты героев — свои страницы справки, по героям
-    ("hero", ["beam", "clearfoe", "breaker", "mobpeace", "invisible", "icewalk", "foe_freeze", "shield", "slowfoe",
+    ("hero", ["beam", "clearfoe", "mobpeace", "invisible", "icewalk", "foe_freeze", "shield", "slowfoe",
               "trees", "bear", "immune", "sentries", "lasso", "firering", "fastshots", "rapid",
               "zombies", "mobswap", "clones", "wall"]),
 ]
@@ -105,18 +105,18 @@ def item_help(kind):
         invert=f"{d['invert']:g}", noitems=f"{d['noitems']:g}", triple=f"{d['triple']:.0f}",
         rapid_cd=f"{SHOT_COOLDOWN * RAPID_FACTOR:.1f}", cd=f"{SHOT_COOLDOWN:g}",
         rapid=f"{d['rapid']:.0f}", wavy=f"{d['wavy']:.0f}", clones=CLONE_COUNT,
-        clone_time=f"{CLONE_TIME:.0f}", clone_hp=CLONE_HP, breaker=f"{d['breaker']:.0f}", wall_time=f"{WALL_TIME:.0f}",
+        clone_time=f"{CLONE_TIME:.0f}", clone_hp=CLONE_HP, wall_time=f"{WALL_TIME:.0f}",
         fastshots=f"{d['fastshots']:g}", mobpeace=f"{d['mobpeace']:g}", invisible=f"{d['invisible']:g}",
         beam_len=BEAM_LENGTH, beam_dmg=BEAM_DAMAGE,
         icewalk=f"{d['icewalk']:g}", ice_life=f"{ICE_LIFE:g}", trees=f"{TREE_TIME:g}", tree_len=TREE_LENGTH,
         lasso=f"{d['lassoed']:g}", bear=f"{d['bear']:g}", bear_hp=BEAR_HP, immune=f"{d['immune']:g}",
         sentries=SENTRY_COUNT, sentry_time=f"{SENTRY_TIME:g}", sentry_range=SENTRY_RANGE, sentry_hp=SENTRY_HP,
-        ring_r=FIRE_RING_R, ring_time=f"{FIRE_RING_TIME:g}", ring_dps=FIRE_RING_DPS, zmax=ZOMBIE_MAX, zr=ZOMBIE_RADIUS, ztime=f"{ZOMBIE_TIME:g}", fast=f"{FAST_BULLET_FACTOR:g}".replace(".", t("decimal")),
+        ring_r=FIRE_RING_R, ring_range=FIRE_RING_RANGE, ring_time=f"{FIRE_RING_TIME:g}", ring_dps=FIRE_RING_DPS, zmax=ZOMBIE_MAX, zr=ZOMBIE_RADIUS, ztime=f"{ZOMBIE_TIME:g}", fast=f"{FAST_BULLET_FACTOR:g}".replace(".", t("decimal")),
     )
     return t(f"help.{kind}", **numbers)
 
 
-WEAPON_ITEMS = ("triple", "wavy", "rapid", "breaker")      # улучшения оружия: на WEAPON_TIME
+WEAPON_ITEMS = ("triple", "wavy", "rapid")      # улучшения оружия: на WEAPON_TIME
 ATTACK_ITEMS = WEAPON_ITEMS + ("clones", "wall", "fastshots", "beam", "trees", "zombies", "bear", "mobswap",
                               "sentries")
 # эффект на игроке -> артефакт, чей значок показывать в статусе (если имена различаются)

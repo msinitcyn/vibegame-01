@@ -44,6 +44,7 @@ def main():
         shutil.copyfile(f, OUT / target)
         rows[target] = [target, original, number]
         print(f"{f.name} -> assets/sounds/{target}")
+    rows = {k: r for k, r in rows.items() if (OUT / k).exists()}    # файл удалили — и строку
     SOURCES.write_text(HEAD + "".join(f"| {' | '.join(r)} |\n" for _, r in sorted(rows.items())), encoding="utf-8")
     print("источники:", SOURCES.relative_to(ROOT))
 

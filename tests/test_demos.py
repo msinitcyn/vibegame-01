@@ -65,7 +65,7 @@ def test_frost_and_light_demos():
                         ("icewalk", lambda m: "icewalk" in m.blue.effects),
                         ("foe_freeze", lambda m: "freeze" in m.red.effects)):
         d = demos.Demo(demos.load(kind))
-        while d.t < 0.75:
+        while d.t < 0.9:
             d.update(1 / 60)
         assert check(d.match), kind
 

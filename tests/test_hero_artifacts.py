@@ -249,7 +249,7 @@ def ring_match():
     from duel.config import FIRE_RING_R
     m = new_match()
     b, r = m.blue, m.red
-    b.x, b.y, r.x, r.y = 150, TOP + 200, 800, TOP + 300
+    b.x, b.y, r.x, r.y = 150, TOP + 200, 450, TOP + 300      # соперник в радиусе кольца
     r.hp = 1000
     m.apply_item(b, "firering")
     ring = m.rings[0]
@@ -293,7 +293,7 @@ def test_ring_keeps_outsiders_out():
 def test_former_common_items_belong_to_heroes():
     from duel.match import Match
     owners = {"shield": "frost", "foe_freeze": "frost", "slowfoe": "frost",
-              "clearfoe": "light", "breaker": "light", "mobpeace": "light",
+              "clearfoe": "light", "mobpeace": "light",
               "fastshots": "fire", "rapid": "fire",
               "mobswap": "dark", "clones": "dark", "wall": "dark"}
     for hero in ("fire", "frost", "nature", "dark", "light"):
@@ -472,7 +472,8 @@ def test_level_by_mob_hp():
 
 def test_heavy_items_are_rarer():
     fat = drops("fire", 6, 3000)
-    assert fat["firering"] < fat["lasso"] < fat["heal"]
+    assert fat["firering"] < fat["lasso"] < fat["fastshots"]       # личные: чем тяжелее, тем реже
+    assert fat["fastshots"] > 2 * fat["heal"]                       # личные — чаще общих (HERO_DROP_BOOST)
 
 
 def test_zombie_stands_still_while_rising():
@@ -519,3 +520,24 @@ def test_mirror_reflection_is_shown():
     m.bullets = [Bullet(r.x - 60, r.y, -520, 0, r)]
     step(m, 0.4)
     assert any(h[3] == "mirror" for h in m.hits) or m.bullets and m.bullets[0].owner is b
+
+
+def test_ring_goes_to_nearest_hero_in_range_or_random_spot():
+    from duel.config import FIRE_RING_RANGE
+    m = new_match()
+    m.set_heroes({"blue": "fire", "red": "dark"})
+    b, r = m.blue, m.red
+    b.x, b.y = 150, TOP + 200
+    r.x, r.y = 450, TOP + 300
+    m.apply_item(r, "clones")
+    c = m.clones_of(r)[0]
+    c.x, c.y = 260, TOP + 220                            # двойник ближе — кольцо на него
+    m.apply_item(b, "firering")
+    assert (m.rings[-1].x, m.rings[-1].y) == (c.x, c.y)
+    m2 = new_match()
+    b2, r2 = m2.blue, m2.red
+    b2.x, b2.y, r2.x, r2.y = 150, TOP + 200, 900, TOP + 300   # никого в радиусе — куда попало рядом
+    m2.apply_item(b2, "firering")
+    ring = m2.rings[-1]
+    assert math.hypot(ring.x - b2.x, ring.y - b2.y) <= FIRE_RING_RANGE + 1
+    assert (ring.x, ring.y) != (r2.x, r2.y)

@@ -312,12 +312,12 @@ def test_clones_copy_and_receive_effects(match):
     match.apply_item(b, "clones")
     c = match.clones_of(b)[0]
     assert {"shield", "rapid"} <= set(c.effects) and c.shield_hits == SHIELD_HITS
-    for e in ("wavy", "grow2", "breaker", "speed"):
+    for e in ("wavy", "grow2", "speed"):
         match.give(b, e)
     match.apply_item(b, "triple")
     match.apply_item(match.red, "foe_nofire")
     match.apply_item(match.red, "foe_freeze")
-    assert {"wavy", "grow2", "breaker", "speed", "nofire"} <= set(c.effects)
+    assert {"wavy", "grow2", "speed", "nofire"} <= set(c.effects)
     assert "freeze" not in c.effects          # заморозка на двойников не переходит
     assert "triple" in c.effects
 

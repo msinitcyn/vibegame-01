@@ -51,6 +51,9 @@ from .config import (
     ZOMBIE_MAX,
     ZOMBIE_RADIUS,
     BEAM_DAMAGE,
+    HERO_DROP_BOOST,
+    FIRE_RING_R,
+    FIRE_RING_RANGE,
     CLONE_SCATTER,
     HIT_SHOW,
     ZOMBIE_RISE,
@@ -308,8 +311,8 @@ class Match:
         elif kind == "sentries":              # деревья-стрелки на земле соперника
             for _ in range(SENTRY_COUNT):
                 self.sentries.append(Sentry(p, *foe.random_spot(SENTRY_R + 6)))
-        elif kind == "firering":              # огненное кольцо вокруг соперника
-            self.rings.append(FireRing(p, foe, self.players))
+        elif kind == "firering":              # огненное кольцо — на ближайшего героя в радиусе, иначе куда попало
+            self.rings.append(FireRing(p, self.ring_spot(p), self.players))
         elif kind == "zombies":               # мобы рядом — зомби мага
             self.raise_zombies(p)
         elif kind == "icewalk":               # чужая земля не жжёт, за магом — ледяной след
@@ -486,6 +489,8 @@ class Match:
             h[4] += dt
         self.hits = [h for h in self.hits if h[4] < HIT_SHOW]
         for b in self.bullets:
+            if not b.alive:
+                continue                      # сбита (лучом) — уже не летит
             prev_x = b.x
             # если у цели «пули соперника медленнее» — эта пуля тормозит
             b.update(dt * self.bullet_speed(b.owner))
@@ -548,12 +553,27 @@ class Match:
                 else:
                     self.emit("mob_dead", m.x, m.y)   # зомби артефакт не роняет
         self.mobs = [m for m in self.mobs if m.alive]
-        self.collide_bullets()
         self.bullets = [b for b in self.bullets if b.alive]
 
         for p in self.players:
             if p.hp <= 0:
                 self.winner = self.other(p)
+
+    def ring_spot(self, p):
+        """Куда встанет огненное кольцо мага p: на ближайшего героя соперника — его самого (если не
+        невидим) или двойника (двойник «принимает удар на себя») — не дальше FIRE_RING_RANGE;
+        никого — в случайное место в этом радиусе."""
+        foe = self.other(p)
+        heroes = ([] if self.hidden(foe) else [foe]) + self.clones_of(foe)
+        near = [u for u in heroes if math.hypot(u.x - p.x, u.y - p.y) <= FIRE_RING_RANGE]
+        if near:
+            u = min(near, key=lambda u: math.hypot(u.x - p.x, u.y - p.y))
+            return u.x, u.y
+        a = self.rng.uniform(0, 2 * math.pi)
+        d = FIRE_RING_RANGE * math.sqrt(self.rng.random())
+        x = max(FIRE_RING_R, min(WIDTH - FIRE_RING_R, p.x + math.cos(a) * d))
+        y = max(TOP + FIRE_RING_R, min(BOTTOM - FIRE_RING_R, p.y + math.sin(a) * d))
+        return x, y
 
     def clone_cluster(self, p, born):
         """Двойники появляются кучкой там, где маг, — в магическом шуме; маг встаёт на случайное место
@@ -608,7 +628,7 @@ class Match:
         hero = owner.hero if owner else None
         kinds = [k for k in ITEMS if HERO_ONLY_ITEMS.get(k, hero) == hero
                  and max_hp >= LEVEL_MIN_MOB_HP[item_level(k)]]
-        weights = [LEVEL_WEIGHT[item_level(k)] for k in kinds]
+        weights = [LEVEL_WEIGHT[item_level(k)] * (HERO_DROP_BOOST if k in HERO_ONLY_ITEMS else 1.0) for k in kinds]
         return self.rng.choices(kinds, weights)[0]
 
     def bullet_speed(self, owner):
@@ -820,11 +840,20 @@ class Match:
 
     def update_beams(self, dt):
         """Лучи: летят насквозь; соперник, его двойники, мобы и стражи от касания теряют BEAM_DAMAGE
-        жизней (по разу на луч). Щит гасит луч целиком одним зарядом."""
+        жизней (по разу на луч). Щит гасит луч целиком одним зарядом. Чужие пули и снаряды мобов,
+        которых луч коснулся, сбиты."""
         for beam in self.beams:
             beam.update(dt)
             owner = beam.owner
             foe = self.other(owner)
+            for b in self.bullets:
+                if b.alive and b.owner is not owner and beam.touches(b.x, b.y, BULLET_R):
+                    b.alive = False
+                    self.hit_at(b, "knock", None, owner)
+            for s in self.mob_shots:
+                if s.alive and s.owner is not owner and beam.touches(s.x, s.y, MOB_SHOT_R):
+                    s.alive = False
+                    self.hit_at(s, "knock", None, owner)
             if beam.tick(foe, beam.touches(foe.x, foe.y, foe.radius), dt):
                 if foe.shield_absorb():
                     self.hit_at(beam.head(), "shield", foe, owner)
@@ -850,6 +879,8 @@ class Match:
     def update_mob_shots(self, dt):
         """Снаряды мобов: скорость — как у движения мобов на эту цель; попадают в любого мага."""
         for s in self.mob_shots:
+            if not s.alive:
+                continue                      # сбит (лучом)
             prev_x, prev_y = s.x, s.y
             s.update(dt, self.chaser_speed(s.target))
             if s.alive and (self.blocked(s.x, s.y, MOB_SHOT_R) or self.ring_stops(prev_x, prev_y, s.x, s.y)):
@@ -898,26 +929,3 @@ class Match:
             if all(math.hypot(x - m.x, y - m.y) > 2 * r + 6 for m in self.mobs):
                 return x, y
         return x, y
-
-    def collide_bullets(self):
-        """Пули игрока с «сбиваешь пули» уничтожают пули соперника (обе пропадают)."""
-        breakers = [p for p in self.players if "breaker" in p.effects]
-        if not breakers:
-            return
-        hit_r = 2 * BULLET_R + 2
-        for p in breakers:
-            mine = [b for b in self.bullets if b.alive and b.owner is p]
-            theirs = [b for b in self.bullets if b.alive and b.owner is not p]
-            for a in mine:
-                for b in theirs:
-                    if not b.alive:
-                        continue
-                    # ближайшее сближение за такт, чтобы быстрые пули не проскакивали
-                    dx0, dy0 = a.px - b.px, a.py - b.py
-                    vx = (a.x - a.px) - (b.x - b.px)
-                    vy = (a.y - a.py) - (b.y - b.py)
-                    vv = vx * vx + vy * vy
-                    t = 0.0 if vv == 0 else max(0.0, min(1.0, -(dx0 * vx + dy0 * vy) / vv))
-                    if math.hypot(dx0 + vx * t, dy0 + vy * t) < hit_r:
-                        a.alive = b.alive = False
-                        break
