@@ -1,5 +1,6 @@
 # Проверки на каждый push в master и на pull request: код, тесты (Linux и Windows), самопроверка,
 # спецификации OpenSpec. Красный значок — что-то сломалось ещё до выпуска версии.
+# Их же вызывает «Сборка и выпуск» (workflow_call): без зелёных проверок сборки и выпуска нет.
 name: Проверки
 
 on:
@@ -7,9 +8,10 @@ on:
     branches: [master]
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 concurrency:                         # новый push отменяет недоделанную проверку прошлого
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

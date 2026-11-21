@@ -1,5 +1,7 @@
 # Сборка игры для Linux и Windows и выпуск версии.
 #   git tag v0.2.0 && git push origin v0.2.0   — собрать и выложить на страницу выпуска
+# Сначала — «Проверки» (ci.yml: тесты на Linux и Windows, OpenSpec) и сверка метки с версией;
+# сборка начинается, только если всё зелёное.
 #   Actions → «Сборка и выпуск» → Run workflow  — просто собрать (файлы — в результатах запуска)
 name: Сборка и выпуск
 
@@ -12,8 +14,12 @@ permissions:
   contents: write
 
 jobs:
+  ci:
+    # те же проверки, что на каждый push (тесты Linux и Windows, самопроверка, OpenSpec)
+    uses: ./.github/workflows/ci.yml
+
   checks:
-    # до сборки: тег совпадает с версией в pyproject.toml и спецификации в порядке
+    # до сборки: тег совпадает с версией в pyproject.toml
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -26,15 +32,8 @@ jobs:
             echo "тег ${{ github.ref_name }}, а в pyproject.toml версия $v — сначала коммит «Версия …»"; exit 1
           fi
 
-      - uses: actions/setup-node@v5
-        with:
-          node-version: "22"
-
-      - name: Спецификации OpenSpec
-        run: npx -y @fission-ai/openspec@2.1.0 validate --specs --strict
-
   build:
-    needs: checks
+    needs: [ci, checks]
     strategy:
       fail-fast: false
       matrix:
@@ -54,13 +53,7 @@ jobs:
           python-version: "3.12"
 
       - name: Зависимости
-        run: python -m pip install pygame==2.6.1 pyinstaller pillow pytest pyflakes
-
-      - name: Тесты
-        if: runner.os == 'Linux'
-        run: |
-          python -m pyflakes main.py duel tests tools
-          python -m pytest -q
+        run: python -m pip install pygame==2.6.1 pyinstaller pillow
 
       - name: Inno Setup (установщик Windows)
         if: runner.os == 'Windows'
