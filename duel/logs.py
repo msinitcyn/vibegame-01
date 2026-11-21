@@ -147,3 +147,41 @@ def record_match(summary, mode, path=None, **extra):
         return path
     except OSError:
         return None
+
+
+# ------------------------------------------------------------------ отчёты о падениях серверу
+
+REPORT_MAX = 20_000               # длина отчёта, который уходит серверу
+REPORTS_PER_CONNECT = 3           # сколько неотправленных отчётов слать за одно подключение
+
+
+def unsent_crashes():
+    """Файлы падений, ещё не отправленные серверу (отправленные переименованы в sent-crash-…)."""
+    try:
+        return sorted(log_dir().glob("crash-*.txt"))
+    except OSError:
+        return []
+
+
+def mark_sent(path):
+    try:
+        path.rename(path.with_name("sent-" + path.name))
+    except OSError:
+        pass
+
+
+def clean_report(text):
+    """Отчёт без личного: путь к домашней папке и имя пользователя заменены, длина ограничена."""
+    import getpass
+    from pathlib import Path
+    home = str(Path.home())
+    for s in (home, home.replace("\\", "/")):
+        if len(s) > 3:
+            text = text.replace(s, "~")
+    try:
+        user = getpass.getuser()
+        if len(user) > 2:
+            text = text.replace(user, "<user>")
+    except Exception:
+        pass
+    return text[:REPORT_MAX]

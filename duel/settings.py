@@ -16,6 +16,7 @@ DEFAULTS = {"lang": "ru", "name": "", "last_address": "localhost",
             "recent_servers": [],                 # последние адреса серверов — их поиск спрашивает напрямую
             "music_volume": 5, "sfx_volume": 5,  # громкость 0–10 (5 — обычная, 0 — тишина)
             "keys": {},                           # изменённые клавиши: {"blue": {"fire": скан-код}, ...}
+            "crash_reports": "ask",               # отчёты о падениях серверу: "ask" — спросить, "yes", "no"
             "last_update_check": None}            # {"at": время, "result": "latest"|"new"|"offline", "v"}
 VOLUME_LEVELS = (0, 10)
 AIM_MODES = ("move", "stick")

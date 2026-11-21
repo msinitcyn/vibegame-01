@@ -42,6 +42,9 @@ class InputMixin:
         if getattr(self, "replay", None):         # повтор партии: только просмотр
             self.replay_key(sc)
             return
+        if self.state == "crash_ask":
+            self.crash_ask_key(sc)
+            return
         if self.state == "menu":
             self.menu_key(sc)
             return

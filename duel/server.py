@@ -25,6 +25,7 @@ from . import discovery
 from .accounts import AuthError, Accounts, default_path
 from .net import FEATURES, PORT, PROTO, Conn, version_tuple
 from .room import PIDS, Room, Seat, clean_name
+from .status import Health, serve as serve_status
 from .match import STEP
 
 JOIN_WAIT = 5.0                   # новичок без запроса столько секунд — закрываем
@@ -35,15 +36,18 @@ LIST_EVERY = 30                   # список игроков и партий 
 CHALLENGE_TIME = 20.0             # секунд на ответ на вызов
 MAX_FAILS = 10                    # неудачных входов с одного адреса …
 FAIL_WINDOW = 300.0               # … за столько секунд — дальше вход с адреса отклоняется
+CRASH_REPORTS = 3                 # отчётов о падениях с одного соединения
+CRASH_MAX = 20_000                # и длина каждого
 
 
 class Server:
     def __init__(self, port=PORT, bot=False, host="0.0.0.0", proto=PROTO, log=print,
                  discovery_port=discovery.DISCOVERY_PORT, clock=time.monotonic, name=None, db=":memory:",
                  dump_dir=None, records=None):
-        self.log = log
         from .logs import version
         self.version = version()      # версия игры сервера — клиентам в hello и в ответ на поиск
+        self.health = Health(self.version)    # для страницы состояния (--status-port, duel/status.py)
+        self.log = self.health.watch(log)     # ошибки и итоги партий — ещё и в счётчики здоровья
         self.dump_dir = dump_dir      # куда писать файлы ошибок комнат (None — не писать)
         self.records = records        # matches.jsonl — итоги партий для баланса (None — не писать)
         self.clock = clock            # часы (тесты подменяют, чтобы не ждать секунды)
@@ -319,6 +323,8 @@ class Server:
             if kind == "rooms":
                 where = "lobby"
                 self.send_rooms([conn])
+            elif kind == "crash":                 # отчёт о падении игры (игрок разрешил отправлять)
+                self.save_crash_report(conn, msg)
             elif kind == "lobby":
                 where = "lobby"
                 v = msg.get("version")
@@ -562,6 +568,30 @@ class Server:
         from .logs import record_match
         record_match(summary, mode, path=Path(self.records), server=self.name)
 
+    def save_crash_report(self, conn, msg):
+        """Отчёт о падении от игры: не больше CRASH_REPORTS с соединения, текст до CRASH_MAX знаков —
+        в logs/client-crashes/ (без папки логов — только строка в лог)."""
+        text, ver = msg.get("text"), msg.get("version")
+        n = getattr(conn, "crash_reports", 0)
+        if not isinstance(text, str) or not text.strip() or n >= CRASH_REPORTS:
+            return
+        conn.crash_reports = n + 1
+        ver = ver[:20] if isinstance(ver, str) else "?"
+        ip = conn.addr[0]
+        first = text.strip().splitlines()[-1][:200]
+        where = ""
+        if self.dump_dir:
+            try:
+                folder = Path(self.dump_dir) / "client-crashes"
+                folder.mkdir(parents=True, exist_ok=True)
+                path = folder / time.strftime(f"%Y%m%d-%H%M%S-{ip.replace(':', '_')}-{n + 1}.txt")
+                path.write_text(f"от {ip}, игра v{ver}, сервер v{self.version}\n\n{text[:CRASH_MAX]}",
+                                encoding="utf-8")
+                where = f" → {path.name}"
+            except OSError:
+                pass
+        self.log(f"{ip}: отчёт о падении игры v{ver}: {first}{where}")
+
     def dump_room(self, room, text):
         """Файл ошибки комнаты: зерно, герои, такт, команды последних секунд и текст ошибки."""
         if not self.dump_dir:
@@ -575,6 +605,13 @@ class Server:
             return path
         except Exception:                 # файл не записался — ошибка всё равно будет в логе
             return None
+
+    def collect_health(self):
+        """Раз в секунду: сводка для страницы состояния (из главного потока — комнаты не трогает чужой поток)."""
+        playing = sum(1 for r in self.rooms.values() if r.phase in ("countdown", "play"))
+        self.health.collect(name=self.name, rooms=len(self.rooms), playing_rooms=playing,
+                            players=self.players(), lobby=len(self.lobby),
+                            spectators=sum(len(r.spectators) for r in self.rooms.values()))
 
     def run(self):
         self.log(f"сервер «{self.name}» ждёт игроков на порту {self.port}"
@@ -592,13 +629,18 @@ class Server:
             if self.finder_sock:
                 socks.append(self.finder_sock)
             select.select(socks, [], [], wait)
+            self.health.beat()
             try:
                 self.answer_finders()
                 self.accept()
                 self.read_lobby()
                 now = time.monotonic()
                 while now >= next_tick:
+                    t0 = time.perf_counter()
                     self.tick()
+                    self.health.tick_took(time.perf_counter() - t0)
+                    if self.tick_no % 60 == 0:
+                        self.collect_health()
                     next_tick += STEP
                     if now - next_tick > 0.25:  # после долгой паузы не догоняем
                         next_tick = now
@@ -670,6 +712,10 @@ def main(argv=None):
     ap.add_argument("--bot", action="store_true", help="в новых комнатах пустое место занимает бот")
     ap.add_argument("--db", default=str(default_path()), help="файл базы аккаунтов")
     ap.add_argument("--logs", default=None, help="папка логов (по умолчанию — logs рядом с настройками)")
+    ap.add_argument("--status-port", type=int, default=0,
+                    help="страница состояния по HTTP на этом порту (/ — сводка JSON, /health — жив ли); 0 — нет")
+    ap.add_argument("--status-host", default="127.0.0.1",
+                    help="на каком адресе страница состояния (по умолчанию только этот компьютер)")
     args = ap.parse_args(argv)
     from . import logs
     folder = Path(args.logs) if args.logs else logs.log_dir()
@@ -681,6 +727,12 @@ def main(argv=None):
         raise SystemExit(f"не удалось запустить сервер на порту {args.port}: {e.strerror or e}.\n"
                          f"Порт занят — уже работает другой сервер или игра со своим сервером; "
                          f"остановите его или запустите на другом порту: --port {args.port + 10}")
+    if args.status_port:
+        try:
+            serve_status(srv.health, args.status_host, args.status_port)
+            log(f"страница состояния: http://{args.status_host}:{args.status_port}/ (и /health)")
+        except OSError as e:
+            log(f"страница состояния не запустилась (порт {args.status_port}): ошибка {e}")
     try:
         srv.run()
     except KeyboardInterrupt:

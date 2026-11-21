@@ -191,11 +191,13 @@ class MenuScreensMixin:
                   "keys": tr("settings.keys"),
                   "updates": f"◀  {tr('settings.updates', v=tr('yes' if self.settings.get('check_updates', True) else 'no'))}  ▶",
                   "check_now": tr("settings.check_now"),
+                  "crash_reports": f"◀  {tr('settings.crash', v=tr('yes' if self.settings.get('crash_reports') == 'yes' else 'no'))}  ▶",
                   "back": tr("settings.back")}
+        step = min(46, (HEIGHT - 230) // len(self.settings_rows))     # строк много — плотнее
         for i, line in enumerate(self.settings_rows):
             sel = i == self.settings_index
-            rect = pygame.Rect(0, 0, 460, 40)
-            rect.center = (WIDTH // 2, 170 + i * 46)
+            rect = pygame.Rect(0, 0, 460, step - 6)
+            rect.center = (WIDTH // 2, 170 + i * step)
             pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=10)
             pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
             txt = self.font.render(labels[line], True, WHITE if sel else GREY)
@@ -205,9 +207,26 @@ class MenuScreensMixin:
         self.back_button()
         if row in ("updates", "check_now"):                # итог последней проверки обновлений
             img = self.small.render(self.update_status_text(), True, AMMO_COLOR)
-            s.blit(img, img.get_rect(center=(WIDTH // 2, 170 + len(self.settings_rows) * 46 + 24)))
-        img = self.small.render(tr("settings.name_hint" if row == "name" else "settings.hint"), True, GREY)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 170 + len(self.settings_rows) * 46)))
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 170 + len(self.settings_rows) * step + 24)))
+        hint = ("settings.name_hint" if row == "name" else "settings.crash_hint" if row == "crash_reports"
+                else "settings.hint")
+        img = self.small.render(tr(hint), True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 170 + len(self.settings_rows) * step)))
+        pygame.display.flip()
+
+    def draw_crash_ask(self):
+        """В прошлый раз игра упала: можно ли отправлять отчёты о падениях серверу."""
+        s = self.screen
+        s.fill(BG)
+        img = self.big.render(tr("crash.title"), True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 170)))
+        for i, line in enumerate(self.wrap(tr("crash.text"), 720, self.font)):
+            img = self.font.render(line, True, (200, 205, 220))
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 250 + i * 30)))
+        self.button((WIDTH // 2 - 170, 440), tr("crash.yes"), lambda: self.crash_answer(True), w=300)
+        self.button((WIDTH // 2 + 170, 440), tr("crash.no"), lambda: self.crash_answer(False), w=300)
+        img = self.small.render(tr("crash.hint"), True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 510)))
         pygame.display.flip()
 
     def settings_click(self, i, rect):

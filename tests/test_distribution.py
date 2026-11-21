@@ -43,7 +43,7 @@ def test_settings_defaults_have_address(monkeypatch, tmp_path):
     assert settings.load() == {"lang": "ru", "name": "", "last_address": "localhost",
                                "aim_stick": 6, "aim_mouse": 5, "aim_mode": "move", "check_updates": True,
                                "accounts": {}, "recent_servers": [], "music_volume": 5, "sfx_volume": 5,
-                               "keys": {}, "last_update_check": None}
+                               "keys": {}, "crash_reports": "ask", "last_update_check": None}
 
 
 def test_icon():

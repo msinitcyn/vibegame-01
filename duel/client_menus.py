@@ -177,6 +177,19 @@ class MenusMixin:
         elif sc in (K.KSCAN_A, K.KSCAN_LEFT, K.KSCAN_D, K.KSCAN_RIGHT):
             self.help_tab(self.help_page + (-1 if sc in (K.KSCAN_A, K.KSCAN_LEFT) else 1))
 
+    def crash_answer(self, yes):
+        """Ответ на «Отправлять отчёты о падениях?» — запомнить и в меню."""
+        self.settings["crash_reports"] = "yes" if yes else "no"
+        settings.save(self.settings)
+        self.state = "menu"
+
+    def crash_ask_key(self, sc):
+        K = pygame
+        if sc in (K.KSCAN_Y, K.KSCAN_RETURN, K.KSCAN_KP_ENTER):
+            self.crash_answer(True)
+        elif sc in (K.KSCAN_N, K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE):
+            self.crash_answer(False)
+
     def settings_key(self, sc):
         """Экран настроек: W/S — строка, A/D или Enter — изменить, Esc — назад.
         На строке «Имя» буквы набирают имя (on_text), строки листаются только стрелками."""
@@ -226,6 +239,11 @@ class MenusMixin:
         elif row == "keys":
             if sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE, K.KSCAN_D, K.KSCAN_RIGHT):
                 self.open_keys()
+        elif row == "crash_reports":
+            if sc in (K.KSCAN_A, K.KSCAN_LEFT, K.KSCAN_D, K.KSCAN_RIGHT, K.KSCAN_RETURN, K.KSCAN_KP_ENTER,
+                      K.KSCAN_SPACE):
+                self.settings["crash_reports"] = "no" if self.settings.get("crash_reports") == "yes" else "yes"
+                settings.save(self.settings)
         elif row == "updates":
             if sc in (K.KSCAN_A, K.KSCAN_LEFT, K.KSCAN_D, K.KSCAN_RIGHT, K.KSCAN_RETURN, K.KSCAN_KP_ENTER,
                       K.KSCAN_SPACE):

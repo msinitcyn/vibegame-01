@@ -7,6 +7,7 @@ import time
 
 import pygame
 
+from .logs import log
 from . import logs
 from .net import FEATURES, server_features, version_tuple
 from . import config
@@ -126,6 +127,20 @@ class LobbyMixin:
         self.server_info = {"version": hello.get("version") if isinstance(hello.get("version"), str) else None,
                             "features": server_features(hello)}
         self.show_lobby(conn, address, hello.get("server") or address, hello.get("id"))
+        self.send_crash_reports(conn)
+
+    def send_crash_reports(self, conn):
+        """Игрок разрешил — неотправленные отчёты о падениях уходят серверу (без личного, см. logs.clean_report)."""
+        if self.settings.get("crash_reports") != "yes" or not self.server_can("crash"):
+            return
+        for path in logs.unsent_crashes()[:logs.REPORTS_PER_CONNECT]:
+            try:
+                text = logs.clean_report(path.read_text(encoding="utf-8"))
+            except OSError:
+                continue
+            conn.send({"type": "crash", "version": logs.version(), "text": text})
+            logs.mark_sent(path)
+            log.info("отчёт о падении отправлен серверу: %s", path.name)
 
     def server_compat(self):
         """Совместим ли сервер с этой игрой: None — всё в порядке; иначе строка-предупреждение."""

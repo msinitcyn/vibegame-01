@@ -119,7 +119,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.entry_name, self.entry_row = "", 1
         self.menu_index = 0
         self.settings_rows = ["lang", "name", "aim_mode", "aim_stick", "aim_mouse", "music", "sfx", "keys",
-                              "updates", "check_now", "back"]
+                              "updates", "check_now", "crash_reports", "back"]
         self.keys_col, self.keys_row, self.keys_wait, self.keys_msg = 0, 0, None, None
         self.updater = Updater()          # новая версия: проверка — в run(), по настройке
         self.help_page = self.help_index = 0      # справка: вкладка и артефакт в ней
@@ -161,6 +161,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             self.enter_net(*net)
         if replay:
             self.start_replay(replay)
+        elif logs.ready() and logs.unsent_crashes() and self.settings.get("crash_reports", "ask") == "ask":
+            self.state = "crash_ask"          # в прошлый раз игра упала — спросить, можно ли отправлять отчёты
 
     @property
     def players(self):
@@ -422,6 +424,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
                 self.draw_entering()
             elif self.state == "account":
                 self.draw_account()
+        elif self.state == "crash_ask":
+            self.draw_crash_ask()
         else:
             return False
         return True
