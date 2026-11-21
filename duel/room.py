@@ -54,6 +54,7 @@ class Seat:
         self.away_until = None        # момент (monotonic), до которого место держится за отошедшим
         self.last_seen = 0.0
         self.hero = None              # герой игрока на этом месте (только вид)
+        self.in_menu = False          # игрок открыл меню (игра у него идёт; сопернику видно «в меню»)
 
     @property
     def free(self):
@@ -75,6 +76,10 @@ class Room:
         self.events = []              # события с прошлого снимка
         self.games = 0                # номер партии: клиент не сглаживает между партиями
         self.countdown = 0.0          # фаза countdown: секунд до начала партии
+        self.hold = None              # кто поставил общую паузу (цвет) — партия стоит
+        self.resume = 0.0             # паузу сняли: секунд отсчёта до продолжения
+        self.pause_cool = 0.0         # после отсчёта: секунд, пока новую паузу ставить нельзя
+        self.pauses = {pid: config.PAUSE_LIMIT for pid in PIDS}
         self.duel = False             # партия из лобби (вызов, подбор, бот): ушёл один — закрыть для всех
         self.closing = None           # причина закрыть партию: "left" / "lost" (сервер вернёт всех в лобби)
         self.new_match()
@@ -136,6 +141,8 @@ class Room:
     def new_match(self):
         self.games += 1
         self.match = Match()
+        self.hold, self.resume, self.pause_cool = None, 0.0, 0.0
+        self.pauses = {pid: config.PAUSE_LIMIT for pid in PIDS}
         self.pending = {pid: Command() for pid in PIDS}
         for s in self.seats.values():
             s.ready = False
@@ -286,9 +293,37 @@ class Room:
                     self.bot = True
                     s.ready = True
                     self.log(f"{pid} позвал бота")
+            elif kind == "menu":              # открыл/закрыл меню — игра у него идёт
+                s.in_menu = bool(msg.get("open"))
+            elif kind == "pause":
+                self.set_hold(pid)
+            elif kind == "resume":
+                self.release_hold(pid)
             elif kind == "leave":
                 return self.free_seat(pid, "вышел", close=False)
         return None
+
+    # ------------------------------------------------------------------ общая пауза
+
+    def can_hold(self, pid):
+        """Можно ли игроку pid поставить общую паузу: идёт бой, паузы нет, остались паузы, не сразу после."""
+        return (self.phase == "play" and not self.match.winner and self.hold is None and self.resume <= 0
+                and self.pause_cool <= 0 and self.pauses.get(pid, 0) > 0)
+
+    def set_hold(self, pid):
+        if self.can_hold(pid):
+            self.hold = pid
+            self.pauses[pid] -= 1
+            self.events.append(["hold", pid])
+            self.log(f"{pid} поставил паузу (осталось {self.pauses[pid]})")
+
+    def release_hold(self, pid):
+        """Снять паузу может любой игрок; игра продолжится после отсчёта."""
+        if self.hold is not None:
+            self.hold = None
+            self.resume = config.PAUSE_RESUME
+            self.events.append(["unhold", pid])
+            self.log(f"{pid} снял паузу — отсчёт")
 
     # ------------------------------------------------------------------ такт
 
@@ -340,20 +375,34 @@ class Room:
             self.phase = "lobby"
             self.log("реванш — выбор героя")
         paused = any(s.away_until is not None for s in self.seats.values())
+        if self.phase != "play":
+            self.hold, self.resume = None, 0.0
+        if self.hold is None and self.resume > 0 and not paused:     # отсчёт после паузы
+            self.resume = max(0.0, self.resume - STEP)
+            if self.resume <= 0:
+                self.pause_cool = config.PAUSE_COOLDOWN
+                self.log("пауза кончилась — играем")
+        held = self.hold is not None or self.resume > 0
+        if held:                              # стоим: нажатия за паузу не копим
+            self.pending = {pid: Command(move=(0, 0)) for pid in PIDS}
+        elif self.phase == "play" and not paused:
+            self.pause_cool = max(0.0, self.pause_cool - STEP)
         if self.phase == "countdown" and not paused:
             self.countdown -= STEP
             if self.countdown <= 1e-9:
                 self.countdown = 0.0
                 self.phase = "play"
                 self.log("партия началась")
-        if self.phase == "play" and not paused:
+        if self.phase == "play" and not paused and not held:
             self.play_tick()
             if self.match.winner:
                 self.phase = "over"
         if self.tick_no % SEND_EVERY == 0:
             msg = {"type": "state", "room": self.id, "tick": self.tick_no, "game": self.games,
                    "phase": self.phase, "waiting": self.phase == "lobby", "paused": paused,
-                   "countdown": round(self.countdown, 2) if self.phase == "countdown" else 0,
+                   "countdown": round(self.countdown if self.phase == "countdown" else self.resume, 2),
+                   "hold": self.hold, "menus": {pid: s.in_menu for pid, s in self.seats.items() if s.conn},
+                   "pauses": dict(self.pauses), "can_hold": {pid: self.can_hold(pid) for pid in PIDS},
                    "seats": self.seats_info(), "spectators": len(self.spectators),
                    "snap": snapshot(self.match), "events": self.events}
             self.events = []

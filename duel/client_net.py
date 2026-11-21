@@ -31,6 +31,9 @@ class NetClientMixin:
             if self.watching:             # зритель ничего не шлёт
                 self.pending = {pid: Command() for pid in PLAYER_IDS}
                 continue
+            if not self.warmup and self.paused != self.menu_sent:    # открыл/закрыл меню — серверу (сопернику видно)
+                self.menu_sent = self.paused
+                self.net.send({"type": "menu", "open": self.paused})
             if self.warmup or self.paused:   # разминка или пауза: серверу — пустые команды (связь жива)
                 if self.paused:
                     self.pending = {pid: Command() for pid in PLAYER_IDS}
@@ -64,6 +67,11 @@ class NetClientMixin:
                 self.net_countdown = left
                 self.net_phase = msg.get("phase", "play")
                 self.net_paused = bool(msg.get("paused"))
+                hold = msg.get("hold")
+                self.net_hold = hold if hold in PLAYER_IDS else None
+                self.net_menus = msg.get("menus") if isinstance(msg.get("menus"), dict) else {}
+                self.net_pauses = msg.get("pauses") if isinstance(msg.get("pauses"), dict) else {}
+                self.net_can_hold = msg.get("can_hold") if isinstance(msg.get("can_hold"), dict) else {}
                 self.playback.push(msg["tick"], msg["snap"], msg["events"], msg.get("waiting", False),
                                    msg.get("game", 0))
             elif msg.get("type") == "bye":
@@ -169,6 +177,8 @@ class NetClientMixin:
         self.net, self.me = conn, seat["you"]
         self.net_addr, self.net_token, self.net_room = address, seat.get("token"), seat.get("room")
         self.net_seats, self.net_phase, self.net_paused = {}, "lobby", False
+        self.net_hold, self.net_menus, self.net_pauses, self.net_can_hold = None, {}, {}, {}
+        self.menu_sent = False
         self.net_spectators = 0
         self.reconnect_until = None
         self.net_heard = time.monotonic()

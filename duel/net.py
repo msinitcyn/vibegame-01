@@ -21,13 +21,17 @@
 В комнате, сервер -> клиент, 30 раз в секунду:
     {"type": "state", "room": 3, "tick": N, "game": K, "phase": "lobby" | "play" | "over", "waiting": bool,
      "paused": bool, "seats": {"blue": {"who": "human"|"bot"|"away"|null, "name", "ready", "hero", "away_left"}},
-     "spectators": N, "snap": {...}, "events": [[...], ...]}
+     "spectators": N, "snap": {...}, "events": [[...], ...],
+     "countdown": сек (перед партией или после снятия паузы), "hold": "blue"|"red"|null (кто поставил паузу),
+     "menus": {"blue": bool}, "pauses": {"blue": осталось}, "can_hold": {"blue": bool}}
     {"type": "bye"}                                      сервер закрывается
 В комнате, клиент -> сервер:
     {"type": "cmd", "move": [dx, dy], "fire": bool, "melee": bool, "slot": int|null, "aim": float}
     {"type": "ready", "ready": bool}   {"type": "name", "name"}   {"type": "hero", "hero"}
     {"type": "bot"}                                      бот на свободное место (в лобби комнаты)
     {"type": "leave"}                                    вышел из комнаты — снова в лобби сервера
+    {"type": "menu", "open": bool}                       открыл/закрыл меню (игра идёт, сопернику видно)
+    {"type": "pause"}   {"type": "resume"}               общая пауза; снять может любой — потом отсчёт 3-2-1
 """
 import json
 import socket

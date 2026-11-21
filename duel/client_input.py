@@ -122,19 +122,32 @@ class InputMixin:
             self.state = "menu"
 
     PAUSE_ROWS = ("resume", "settings", "quit")
+    NET_PAUSE_ROWS = ("resume", "hold", "settings", "quit")
+
+    def net_match(self):
+        """Партия по сети за игрока (не разминка, не зритель) — есть общая пауза."""
+        return bool(self.net) and not self.warmup and not self.watching
+
+    def pause_rows(self):
+        return self.NET_PAUSE_ROWS if self.net_match() else self.PAUSE_ROWS
 
     def pause_key(self, sc):
         """Пауза: ↑/↓ — строка, Enter — выбрать (Esc — продолжить, см. on_key)."""
         K = pygame
         if sc in (K.KSCAN_W, K.KSCAN_UP):
-            self.pause_index = (self.pause_index - 1) % len(self.PAUSE_ROWS)
+            self.pause_index = (self.pause_index - 1) % len(self.pause_rows())
         elif sc in (K.KSCAN_S, K.KSCAN_DOWN):
-            self.pause_index = (self.pause_index + 1) % len(self.PAUSE_ROWS)
+            self.pause_index = (self.pause_index + 1) % len(self.pause_rows())
         elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
-            self.pause_select(self.PAUSE_ROWS[self.pause_index])
+            self.pause_select(self.pause_rows()[self.pause_index])
 
     def pause_select(self, row):
-        if row == "resume":
+        if row == "hold":                 # по сети: общая пауза / снять её (снять может любой)
+            if self.net_hold:
+                self.net.send({"type": "resume"})
+            elif self.net_can_hold.get(self.me):
+                self.net.send({"type": "pause"})
+        elif row == "resume":
             self.paused = False
             self.held.clear()
         elif row == "settings":

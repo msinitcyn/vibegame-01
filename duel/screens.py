@@ -326,25 +326,66 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         return surf
 
     def draw_pause(self):
-        """Пауза поверх поля: «Продолжить», «Настройки», «Выйти»."""
+        """Меню поверх поля: «Продолжить», (по сети — «Пауза для всех» / «Снять паузу»), «Настройки», «Выйти».
+        По сети меню своё: игра идёт, пока паузу для всех не поставили."""
         s = self.screen
+        net = self.net_match()
         shade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
         shade.fill((0, 0, 0, 160))
         s.blit(shade, (0, 0))
-        t = self.big.render(tr("pause.title"), True, WHITE)
-        s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 120)))
+        title, color = tr("pause.title"), WHITE
+        if net:
+            if self.net_hold:
+                title = tr("pause.title_hold", name=self.player_label(self.net_hold))
+            elif self.net_countdown > 0:
+                title, color = tr("pause.title_resume", s=math.ceil(self.net_countdown - 1e-9)), (255, 200, 90)
+            else:
+                title, color = tr("pause.title_running"), (255, 120, 100)
+        t = self.big.render(title, True, color)
+        s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 140)))
         quit_label = ("pause.quit_warm" if getattr(self, "warmup", False) else
                       "pause.quit_net" if self.net else "pause.quit")
-        labels = {"resume": tr("pause.resume"), "settings": tr("pause.settings"), "quit": tr(quit_label)}
-        for i, row in enumerate(self.PAUSE_ROWS):
-            self.button((WIDTH // 2, HEIGHT // 2 - 30 + i * 54), labels[row],
-                        lambda row=row: self.pause_select(row), w=300, sel=i == self.pause_index)
+        labels = {"resume": tr("pause.resume_net" if net else "pause.resume"), "settings": tr("pause.settings"),
+                  "quit": tr(quit_label)}
+        dim = set()
+        if net:
+            left = self.net_pauses.get(self.me, 0)
+            if self.net_hold:
+                labels["hold"] = tr("pause.unhold")
+            else:
+                labels["hold"] = tr("pause.hold", n=left) if left else tr("pause.hold_none")
+                if not self.net_can_hold.get(self.me):
+                    dim.add("hold")
+        for i, row in enumerate(self.pause_rows()):
+            self.button((WIDTH // 2, HEIGHT // 2 - 60 + i * 54), labels[row],
+                        lambda row=row: self.pause_select(row), w=300, sel=i == self.pause_index,
+                        **({"color": GREY} if row in dim else {}))
         notes = [tr("pause.hint")]
-        if self.net and not getattr(self, "warmup", False):
+        if net:
             notes.insert(0, tr("pause.net_note"))
         for i, note in enumerate(notes):
             img = self.small.render(note, True, GREY)
-            s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 150 + i * 22)))
+            s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 170 + i * 22)))
+
+    def draw_hold(self):
+        """По сети, не в меню: общая пауза — надпись, кто поставил; соперник в меню — подпись."""
+        if not self.net_match():
+            return
+        s = self.screen
+        if self.net_hold and not self.paused:
+            shade = pygame.Surface((WIDTH, 120), pygame.SRCALPHA)
+            shade.fill((0, 0, 0, 180))
+            s.blit(shade, (0, HEIGHT // 2 - 60))
+            for i, (text, font) in enumerate(((tr("pause.title_hold", name=self.player_label(self.net_hold)), self.big),
+                                              (tr("net.hold_hint"), self.small))):
+                img = font.render(text, True, WHITE)
+                s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 18 + i * 44)))
+        other = "red" if self.me == "blue" else "blue"
+        if self.net_menus.get(other):
+            img = self.small.render(tr("net.in_menu", name=self.player_label(other)), True, (255, 230, 140))
+            box = img.get_rect(midtop=(WIDTH // 2, TOP + 6)).inflate(18, 6)
+            pygame.draw.rect(s, (16, 12, 20), box, border_radius=8)
+            s.blit(img, img.get_rect(center=box.center))
 
     def draw(self):
         s = self.screen
@@ -399,6 +440,8 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
                 # щелчок по экрану победы — «ещё раз» (через секунду, чтобы случайный щелчок не перезапустил)
                 self.hit((0, 0, WIDTH, HEIGHT), lambda: self.win_time and
                          pygame.time.get_ticks() - self.win_time > 1000 and self.on_key(pygame.KSCAN_R))
+        if not self.snap["winner"]:
+            self.draw_hold()
         if self.paused and not self.snap["winner"]:
             self.draw_pause()
         if self.net:

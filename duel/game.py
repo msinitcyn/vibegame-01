@@ -126,6 +126,11 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin):
         self.net_seats = {}           # места из сообщений сервера: кто сидит, имя, готовность
         self.net_phase = "lobby"      # lobby / play / over
         self.net_paused = False       # кто-то потерял связь — партия на паузе
+        self.net_hold = None          # кто поставил общую паузу (сетевая игра)
+        self.net_menus = {}           # кто из игроков в меню
+        self.net_pauses = {}          # сколько общих пауз осталось у каждого
+        self.net_can_hold = {}        # можно ли сейчас поставить паузу
+        self.menu_sent = False        # что последним сказали серверу про своё меню
         self.net_addr = self.net_token = None    # куда и с каким ключом возвращаться после обрыва
         self.reconnect_until = None   # пока не None — связь потеряна, пытаемся вернуться
         self.net_end = "net.lost"     # почему закончилась сетевая игра (текст для меню)
