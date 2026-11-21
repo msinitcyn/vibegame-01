@@ -1,7 +1,7 @@
 {
   "heroes": {"blue": "dark", "red": "fire"},
   "view": [340, 90, 320, 160],
-  "length": 4.6,
+  "length": 5.4,
   "setup": {
     "blue": {"x": 400, "y": 170},
     "red": {"x": 620, "y": 170}
@@ -10,6 +10,7 @@
     {"t": 0.0, "who": "blue", "aim_at": "red"},
     {"t": 0.0, "who": "red", "aim_at": "blue"},
     {"t": 0.4, "who": "blue", "item": "wall"},
-    {"t": [1.0, 3.6], "every": 0.55, "who": "red", "fire": true}
+    {"t": [1.0, 2.7], "every": 0.55, "who": "red", "fire": true},
+    {"t": [3.0, 4.8], "every": 0.45, "who": "blue", "fire": true}
   ]
 }
