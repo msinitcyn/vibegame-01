@@ -179,7 +179,7 @@ HIT_SOUND = ("hit-into-body.mp3", 0.6)   # пуля попала в мага
 # правки звуков (обрезка, склейка шагов, усиление) — assets/sounds/edits.json; источники — assets/sounds/SOURCES.md
 
 BASE_RADIUS = unit(18)
-BASE_SPEED = 210                 # пикс/сек
+BASE_SPEED = 170                 # пикс/сек
 BULLET_SPEED = 520
 BULLET_R = unit(5)
 SHOT_COOLDOWN = 0.25             # минимальная пауза между выстрелами

@@ -118,7 +118,9 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.acc_register = False
         self.entry_name, self.entry_row = "", 1
         self.menu_index = 0
-        self.settings_rows = ["lang", "name", "aim_mode", "aim_stick", "aim_mouse", "music", "sfx", "keys",
+        self.walk_to = None           # ходьба мышью (эксперимент): куда идёт маг; walk_hold — правая зажата
+        self.walk_hold = False
+        self.settings_rows = ["lang", "name", "aim_mode", "aim_stick", "aim_mouse", "mouse_move", "music", "sfx", "keys",
                               "updates", "check_now", "crash_reports", "back"]
         self.keys_col, self.keys_row, self.keys_wait, self.keys_msg = 0, 0, None, None
         self.updater = Updater()          # новая версия: проверка — в run(), по настройке
@@ -303,7 +305,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         for pid in PLAYER_IDS:
             c = self.controls[pid]
             cmd = self.pending[pid]
-            cmd.move = ((c.right in held) - (c.left in held), (c.down in held) - (c.up in held))
+            cmd.move = self.walk_move(pid, ((c.right in held) - (c.left in held), (c.down in held) - (c.up in held)))
             cmd.aim = self.aim_for(pid, cmd.move)
             commands[pid] = cmd
         if self.test_bot:                     # тестовый режим: красным играет бот
@@ -379,6 +381,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             if not self.mouse_captured:
                 self.on_mouse_move(e.pos)
             self.on_mouse_button(e.button)
+        elif e.type == pygame.MOUSEBUTTONUP:
+            self.on_mouse_up(e.button)
         elif e.type == pygame.TEXTINPUT:
             self.on_text(e.text)
         elif e.type == MUSIC_END:

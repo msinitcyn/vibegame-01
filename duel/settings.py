@@ -10,7 +10,8 @@ from pathlib import Path
 
 DEFAULTS = {"lang": "ru", "name": "", "last_address": "localhost",
             "aim_stick": 6, "aim_mouse": 5,       # чувствительность прицела, 1–10
-            "aim_mode": "move",                   # прицел: "move" — по движению, "stick" — стик и мышь
+            "aim_mode": "move",
+            "mouse_move": False,                  # эксперимент: правая кнопка — идти к курсору, пробел — удар                   # прицел: "move" — по движению, "stick" — стик и мышь
             "check_updates": True,                # при запуске спрашивать GitHub о новой версии
             "accounts": {},                       # номер сервера -> {"user", "token"}: вход запоминается
             "recent_servers": [],                 # последние адреса серверов — их поиск спрашивает напрямую

@@ -239,6 +239,12 @@ class MenusMixin:
         elif row == "keys":
             if sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE, K.KSCAN_D, K.KSCAN_RIGHT):
                 self.open_keys()
+        elif row == "mouse_move":
+            if sc in (K.KSCAN_A, K.KSCAN_LEFT, K.KSCAN_D, K.KSCAN_RIGHT, K.KSCAN_RETURN, K.KSCAN_KP_ENTER,
+                      K.KSCAN_SPACE):
+                self.settings["mouse_move"] = not self.settings.get("mouse_move", False)
+                self.walk_to, self.walk_hold = None, False
+                settings.save(self.settings)
         elif row == "crash_reports":
             if sc in (K.KSCAN_A, K.KSCAN_LEFT, K.KSCAN_D, K.KSCAN_RIGHT, K.KSCAN_RETURN, K.KSCAN_KP_ENTER,
                       K.KSCAN_SPACE):

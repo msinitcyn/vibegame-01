@@ -192,6 +192,7 @@ class MenuScreensMixin:
                   "keys": tr("settings.keys"),
                   "updates": f"◀  {tr('settings.updates', v=tr('yes' if self.settings.get('check_updates', True) else 'no'))}  ▶",
                   "check_now": tr("settings.check_now"),
+                  "mouse_move": f"◀  {tr('settings.mouse_move', v=tr('yes' if self.settings.get('mouse_move') else 'no'))}  ▶",
                   "crash_reports": f"◀  {tr('settings.crash', v=tr('yes' if self.settings.get('crash_reports') == 'yes' else 'no'))}  ▶",
                   "back": tr("settings.back")}
         step = min(46, (HEIGHT - 230) // len(self.settings_rows))     # строк много — плотнее
@@ -210,7 +211,7 @@ class MenuScreensMixin:
             img = self.small.render(self.update_status_text(), True, AMMO_COLOR)
             s.blit(img, img.get_rect(center=(WIDTH // 2, 170 + len(self.settings_rows) * step + 24)))
         hint = ("settings.name_hint" if row == "name" else "settings.crash_hint" if row == "crash_reports"
-                else "settings.hint")
+                else "settings.mouse_move_hint" if row == "mouse_move" else "settings.hint")
         img = self.small.render(tr(hint), True, GREY)
         s.blit(img, img.get_rect(center=(WIDTH // 2, 170 + len(self.settings_rows) * step)))
         pygame.display.flip()

@@ -69,7 +69,7 @@ def test_settings_menu_changes_and_saves_language(game, lang_restore):
     game.on_key(pygame.KSCAN_S)                 # «Имя»
     game.on_key(pygame.KSCAN_S)                 # на строке имени S — буква, не листает
     assert game.settings_rows[game.settings_index] == "name"
-    for _ in range(10):                         # прицел ×3, музыка, звуки, клавиши, обновления ×2, отчёты, «Назад»
+    for _ in range(11):                         # прицел ×3, ходьба мышью, музыка, звуки, клавиши, обновления ×2, отчёты, «Назад»
         game.on_key(pygame.KSCAN_DOWN)
     assert game.settings_rows[game.settings_index] == "back"
     game.on_key(pygame.KSCAN_RETURN)

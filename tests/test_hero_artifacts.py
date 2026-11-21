@@ -337,6 +337,8 @@ def test_zombie_stays_near_owner():
     for _ in range(int(3 / DT)):
         m.step(DT, {"blue": Command(move=(0, 1))})       # Тьма уходит — зомби за ней
         assert math.hypot(z.x - b.x, z.y - b.y) <= ZOMBIE_LEASH + 0.01
+    for _ in range(int(1 / DT)):                         # Тьма встала — зомби подтягивается
+        m.step(DT, {"blue": Command()})
     assert math.hypot(z.x - b.x, z.y - b.y) < 120 and r.hp == MAX_HP
 
 

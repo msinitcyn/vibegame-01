@@ -75,7 +75,7 @@ class NetClientMixin:
             fire, melee = fire or p.fire, melee or p.melee
             slot = p.use_slot if p.use_slot is not None else slot
         self.pending = {pid: Command() for pid in PLAYER_IDS}
-        move = (max(-1, min(1, dx)), max(-1, min(1, dy)))
+        move = self.walk_move(self.me, (max(-1, min(1, dx)), max(-1, min(1, dy))))
         return {"type": "cmd", "move": list(move), "fire": fire, "melee": melee, "slot": slot,
                 "aim": self.aim_for(self.me, move)}
 
