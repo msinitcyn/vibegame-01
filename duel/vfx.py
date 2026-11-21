@@ -356,3 +356,216 @@ def zombie_mist(surf, pos, r, k):
         a = int(150 * math.sin(math.pi * q) * (1 - k * 0.6))
         pygame.draw.circle(layer, (*mist, max(0, a)), (int(x), int(y)), max(2, int(r * 0.35 * (0.6 + q))))
     surf.blit(layer, layer.get_rect(center=pos))
+
+
+def _glow(color, a):
+    """Цвет для слоя-свечения (складывается с полем): яркость вместо прозрачности."""
+    k = max(0, min(255, a)) / 255
+    return tuple(int(v * k) for v in color[:3])
+
+
+def _star(surf, center, rays, length, inner, color, turn=0.0, width=2):
+    cx, cy = center
+    for i in range(rays):
+        a = turn + i * 2 * math.pi / rays
+        ln = length * (1.0 if i % 2 == 0 else 0.55)
+        pygame.draw.line(surf, color, (cx + math.cos(a) * inner, cy + math.sin(a) * inner),
+                         (cx + math.cos(a) * ln, cy + math.sin(a) * ln), width)
+
+
+def beam_cast(surf, caster, aim, k, color):
+    """Каст «Луча света», k — 0..1 от выпуска луча: над магом вспыхивает нимб, у руки — вертящаяся звезда
+    из лучей, расходятся кольца цвета героя, по прицелу летят искры света."""
+    P = params("beam")
+    r = caster["r"]
+    pos = (caster["x"], caster["y"])
+    cos, sin = math.cos(aim), math.sin(aim)
+    hand_at = (pos[0] + cos * (r + 4), pos[1] + sin * (r + 4))
+    core = rgb(P.get("core_color"), (255, 255, 235))
+    flash = rgb(P.get("flash_color"), (255, 255, 255))
+    halo = rgb(P.get("halo_color"), (255, 246, 180))
+    size = int(r * 8)
+    layer = pygame.Surface((size, size))                    # чёрный фон + сложение = свечение
+    c = size // 2
+    ox, oy = pos[0] - c, pos[1] - c
+
+    def L(x, y):
+        return x - ox, y - oy
+
+    fade = 1 - k
+    if k < 0.25:                                              # вспышка вокруг мага
+        q = k / 0.25
+        pygame.draw.circle(layer, _glow(flash, int(200 * (1 - q))), L(*hand_at), int(r * (0.6 + 1.2 * q)))
+    for i in range(int(P.get("rings", 2))):                    # расходящиеся кольца
+        q = k * 1.4 - i * 0.25
+        if 0 < q < 1:
+            pygame.draw.circle(layer, _glow(color, int(230 * (1 - q))), L(*hand_at), int(r * (0.5 + 2.2 * q)), 3)
+    hx, hy = pos[0], pos[1] - r * 1.25                         # нимб над головой
+    rect = pygame.Rect(0, 0, int(r * 1.5), int(r * 0.5))
+    rect.center = (int(L(hx, hy)[0]), int(L(hx, hy)[1]))
+    pygame.draw.ellipse(layer, _glow(halo, int(255 * fade)), rect, 3)
+    star_len = r * float(P.get("star_length", 2.6)) * (0.4 + 0.6 * math.sin(math.pi * min(1.0, k * 1.6)))
+    _star(layer, L(*hand_at), int(P.get("star_rays", 8)), star_len, r * 0.3, _glow(halo, int(255 * fade)), k * 4, 3)
+    _star(layer, L(*hand_at), int(P.get("star_rays", 8)), star_len * 0.6, 0, _glow(core, int(255 * fade)), k * 4 + 0.2, 1)
+    pygame.draw.circle(layer, _glow(core, int(255 * fade)), L(*hand_at), max(2, int(r * 0.45 * fade)))
+    n = int(P.get("motes", 12))
+    for i in range(n):                                        # искры света летят по прицелу веером
+        spread = ((i * 37) % 11 - 5) / 5 * 0.6
+        d = r * (0.5 + 3.2 * k * (0.6 + 0.4 * ((i * 13) % 7) / 6))
+        a = aim + spread
+        x, y = hand_at[0] + math.cos(a) * d, hand_at[1] + math.sin(a) * d
+        pygame.draw.circle(layer, _glow(core if i % 2 else color, int(255 * fade)), L(x, y), 2 if i % 3 else 3)
+    surf.blit(layer, (int(ox), int(oy)), special_flags=pygame.BLEND_RGB_ADD)
+
+
+def draw_beam(surf, pts, color, age, time, width):
+    """Сам луч: тёмный контур, мерцающее свечение цвета героя, белая сердцевина, искры вдоль и звезда на голове."""
+    P = params("beam")
+    if len(pts) < 2:
+        return
+    core = rgb(P.get("core_color"), (255, 255, 235))
+    shimmer = float(P.get("beam_shimmer", 3)) * math.sin(time * 40)
+    grow = min(1.0, age / 0.08)                                # в первый миг луч «вспыхивает» толще
+    w = int(width + 2 + shimmer + 6 * (1 - grow))
+    pygame.draw.lines(surf, (16, 12, 20), False, pts, w + 4)
+    pygame.draw.lines(surf, color, False, pts, w)
+    pygame.draw.lines(surf, core, False, pts, max(1, w // 3))
+    total = sum(math.hypot(x1 - x0, y1 - y0) for (x0, y0), (x1, y1) in zip(pts, pts[1:])) or 1.0
+    n = int(P.get("beam_sparkles", 10))
+    for i in range(n):                                        # искры бегут вдоль луча
+        f = (i / n + time * 1.7) % 1.0
+        d, at = f * total, pts[0]
+        for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+            seg = math.hypot(x1 - x0, y1 - y0)
+            if d <= seg and seg:
+                at = (x0 + (x1 - x0) * d / seg, y0 + (y1 - y0) * d / seg)
+                break
+            d -= seg
+        off = math.sin(i * 2.3 + time * 20) * (w / 2 + 3)
+        pygame.draw.circle(surf, (255, 255, 255), (int(at[0]), int(at[1] + off)), 1 + (i % 2))
+    head = (int(pts[-1][0]), int(pts[-1][1]))
+    flare = float(P.get("head_flare", 14)) * (0.8 + 0.2 * math.sin(time * 30))
+    _star(surf, head, 4, flare, 0, core, time * 6, 2)
+    pygame.draw.circle(surf, core, head, width // 2 + 2)
+
+
+def draw_ice_piece(surf, x, y, life, seed, color, max_life, radius):
+    """Кусок ледяной тропы: льдинка-многоугольник с трещинами и бликом; появляется — растёт с хрустом
+    из точки, тает — бледнеет и сжимается. Форма — по номеру куска, одинаковая у всех."""
+    P = params("ice")
+    since = max_life - life
+    grow = min(1.0, since / max(0.01, float(P.get("piece_grow", 0.25))))
+    melt = min(1.0, life / max(0.01, float(P.get("piece_melt", 1.5))))
+    ice = rgb(P.get("ice_color"), (168, 220, 255))
+    light = rgb(P.get("ice_light"), (234, 248, 255))
+    dark = rgb(P.get("ice_dark"), (90, 156, 210))
+    crack = rgb(P.get("crack_color"), (255, 255, 255))
+    alpha = int(float(P.get("piece_alpha", 150)) * melt)
+    r = radius * (0.3 + 0.7 * grow) * (0.85 + 0.15 * melt)
+    size = int(2 * radius + 8)
+    layer = pygame.Surface((size, size), pygame.SRCALPHA)
+    c = size / 2
+    n = 7
+    pts = []
+    for i in range(n):
+        a = i * 2 * math.pi / n + (seed % 5) * 0.3
+        rr = r * (0.75 + 0.25 * (((seed * 7 + i * 13) % 9) / 8))
+        pts.append((c + math.cos(a) * rr, c + math.sin(a) * rr * 0.8))
+    pygame.draw.polygon(layer, (*ice, alpha), pts)
+    pygame.draw.polygon(layer, (*dark, min(255, alpha + 40)), pts, 1)
+    for i in (0, 2, 4):                                       # трещины от центра
+        pygame.draw.line(layer, (*crack, int(alpha * 0.8)), (c, c), pts[(i + seed) % n], 1)
+    pygame.draw.circle(layer, (*light, int(alpha * 0.9)), (int(c - r * 0.3), int(c - r * 0.25)), max(1, int(r * 0.2)))
+    if grow < 1:                                              # хруст — кристаллы торчат во все стороны
+        _star(layer, (c, c), 6, r * 1.3, r * 0.7, (*light, int(220 * (1 - grow))), seed, 1)
+    surf.blit(layer, (int(x - c), int(y - c)))
+
+
+def icewalk_cast(surf, pos, r, k):
+    """Каст «Ледяной тропы», k — 0..1: из-под ног кругом вырастают ледяные шипы и тают; иней расходится кольцом."""
+    P = params("ice")
+    light = rgb(P.get("ice_light"), (234, 248, 255))
+    ice = rgb(P.get("ice_color"), (168, 220, 255))
+    dark = rgb(P.get("ice_dark"), (90, 156, 210))
+    size = int(r * 7)
+    layer = pygame.Surface((size, size), pygame.SRCALPHA)
+    c = size // 2
+    fade = 1 - k
+    pygame.draw.ellipse(layer, (*ice, int(120 * fade)),
+                        pygame.Rect(0, 0, int(r * (1 + 3 * k)), int(r * (0.5 + 1.5 * k))).move(
+                            c - int(r * (1 + 3 * k)) // 2, c + int(r * 0.7) - int(r * (0.5 + 1.5 * k)) // 2), 3)
+    n = int(P.get("walk_spikes", 10))
+    h = r * 1.1 * math.sin(math.pi * min(1.0, k * 1.3))      # шипы растут и уходят обратно
+    for i in range(n):
+        a = i * 2 * math.pi / n
+        bx, by = c + math.cos(a) * r * 1.1, c + r * 0.6 + math.sin(a) * r * 0.5
+        tip = (bx + math.cos(a) * h * 0.3, by - h * (0.7 + 0.3 * (i % 2)))
+        spike = [(bx - 3, by), tip, (bx + 3, by)]
+        pygame.draw.polygon(layer, (*ice, int(230 * fade)), spike)
+        pygame.draw.polygon(layer, (*dark, int(255 * fade)), spike, 1)
+        pygame.draw.line(layer, (*light, int(255 * fade)), (bx - 1, by), tip, 1)
+    surf.blit(layer, (int(pos[0] - c), int(pos[1] - c)))
+
+
+def snow_at_feet(surf, pos, r, time):
+    """Пока действует «Ледяная тропа» — у ног кружатся снежинки."""
+    P = params("ice")
+    light = rgb(P.get("ice_light"), (234, 248, 255))
+    for i in range(int(P.get("flakes", 4))):
+        q = (time * 1.3 + i / 4) % 1.0
+        a = time * 3 + i * 1.7
+        x = pos[0] + math.cos(a) * r * 0.9
+        y = pos[1] + r * 0.8 - q * r * 0.8
+        s = 2 if q < 0.6 else 1
+        pygame.draw.line(surf, light, (x - s, y), (x + s, y))
+        pygame.draw.line(surf, light, (x, y - s), (x, y + s))
+
+
+def draw_freeze(surf, pos, r, since, left, time):
+    """Заморозка: лёд нарастает от земли и запирает мага в глыбу (полупрозрачная, с бликами и инеем),
+    в конце глыба трескается и разлетается осколками."""
+    P = params("ice")
+    ice = rgb(P.get("ice_color"), (168, 220, 255))
+    light = rgb(P.get("ice_light"), (234, 248, 255))
+    dark = rgb(P.get("ice_dark"), (90, 156, 210))
+    crack = rgb(P.get("crack_color"), (255, 255, 255))
+    grow = min(1.0, since / max(0.01, float(P.get("freeze_grow", 0.35))))
+    shatter_t = float(P.get("freeze_shatter", 0.35))
+    w, h = r * 2.4, r * 2.6
+    size = int(r * 7)
+    layer = pygame.Surface((size, size), pygame.SRCALPHA)
+    c = size / 2
+    bottom = c + h / 2
+    if left > shatter_t:                                       # глыба (растёт снизу вверх)
+        top = bottom - h * grow
+        block = [(c - w / 2, bottom), (c - w / 2 + 3, top + 4), (c - w / 4, top), (c + w / 3, top + 2),
+                 (c + w / 2, top + 6), (c + w / 2 - 2, bottom)]
+        a = int(float(P.get("block_alpha", 120)))
+        pygame.draw.polygon(layer, (*ice, a), block)
+        pygame.draw.polygon(layer, (*light, 230), block, 2)
+        pygame.draw.line(layer, (*light, 200), (c - w / 2 + 5, bottom - 4), (c - w / 2 + 7, top + 8), 2)  # блик
+        pygame.draw.line(layer, (*light, 140), (c - w / 2 + 10, bottom - 8), (c - w / 2 + 11, top + 14), 1)
+        for i in range(3):                                     # иней сверху мерцает
+            x = c - w / 3 + i * w / 3
+            if int(time * 6 + i) % 3 == 0:
+                _star(layer, (x, top + 3), 4, 3, 0, (255, 255, 255, 230), 0, 1)
+        if grow < 1:                                            # растущий край — острые кристаллы
+            for i in range(5):
+                x = c - w / 2 + (i + 0.5) * w / 5
+                pygame.draw.polygon(layer, (*light, 230), [(x - 3, top + 3), (x, top - 5), (x + 3, top + 3)])
+        if left < shatter_t + 0.4:                              # вот-вот треснет: трещины
+            pygame.draw.lines(layer, (*crack, 255), False,
+                              [(c - 2, top + 6), (c + 3, c - 4), (c - 3, c + 4), (c + 4, bottom - 4)], 1)
+            pygame.draw.lines(layer, (*dark, 255), False, [(c + 3, c - 4), (c + w / 3, c - 2)], 1)
+    else:                                                       # раскол: осколки летят во все стороны
+        q = 1 - left / max(0.01, shatter_t)
+        n = int(P.get("shards", 10))
+        for i in range(n):
+            a = i * 2 * math.pi / n + 0.4
+            d = r * (0.6 + 2.0 * q)
+            x, y = c + math.cos(a) * d, c + math.sin(a) * d + 10 * q * q
+            s = 4 * (1 - q) + 2
+            sh = [(x - s, y + s * 0.4), (x + math.cos(a * 3) * s, y - s), (x + s, y + s * 0.6)]
+            pygame.draw.polygon(layer, (*ice, int(230 * (1 - q))), sh)
+            pygame.draw.polygon(layer, (*light, int(255 * (1 - q))), sh, 1)
+    surf.blit(layer, (int(pos[0] - c), int(pos[1] - c)))

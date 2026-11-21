@@ -782,8 +782,10 @@ class Beam:
         self.path = [(self.hx, self.hy)]      # от хвоста к голове
         self.touching = {}            # цель -> сколько секунд касается с последнего удара
         self.alive = True
+        self.age = 0.0                # для анимации каста
 
     def update(self, dt):
+        self.age += dt
         self.hx += self.vx * dt
         self.hy += self.vy * dt
         if self.hy < TOP:                     # отскок, как у пули

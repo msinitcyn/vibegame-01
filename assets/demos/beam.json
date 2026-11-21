@@ -1,0 +1,15 @@
+{
+  "heroes": {"blue": "light", "red": "fire"},
+  "view": [60, 110, 320, 160],
+  "length": 3.2,
+  "speed": 0.5,
+  "setup": {
+    "blue": {"x": 120, "y": 190},
+    "red": {"x": 330, "y": 190}
+  },
+  "script": [
+    {"t": 0.0, "who": "blue", "aim_at": "red"},
+    {"t": 0.0, "who": "red", "aim_at": [100, 190]},
+    {"t": 0.6, "who": "blue", "item": "beam"}
+  ]
+}

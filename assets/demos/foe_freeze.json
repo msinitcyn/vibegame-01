@@ -1,0 +1,15 @@
+{
+  "heroes": {"blue": "frost", "red": "fire"},
+  "view": [60, 110, 320, 160],
+  "length": 4.8,
+  "setup": {
+    "blue": {"x": 110, "y": 190},
+    "red": {"x": 250, "y": 160}
+  },
+  "script": [
+    {"t": 0.0, "who": "blue", "aim_at": "red"},
+    {"t": 0.0, "who": "red", "aim_at": [100, 190]},
+    {"t": [0.7, 4.6], "who": "red", "move": [1, 0]},
+    {"t": 0.6, "who": "blue", "item": "foe_freeze"}
+  ]
+}

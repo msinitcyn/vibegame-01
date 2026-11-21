@@ -69,3 +69,25 @@ def test_player_bear_triple_and_zombie_mob_render():
     for life in (ZOMBIE_TIME - 0.1, ZOMBIE_TIME - 0.6, 5.0):
         assert _drew(lambda s: draw_mob(s, {**m, "zombie_life": life}, None, heroes))
     assert _drew(lambda s: draw_mob(s, {**m, "zombie": None}, None, heroes))
+
+
+def test_beam_ice_freeze_draw():
+    from duel.config import ICE_LIFE
+    caster = {"x": 200, "y": 150, "r": 14}
+    for k in (0.0, 0.4, 0.9):
+        assert _drew(lambda s: vfx.beam_cast(s, caster, 0.0, k, (255, 230, 120)))
+        assert _drew(lambda s: vfx.icewalk_cast(s, (200, 150), 14, k))
+    assert _drew(lambda s: vfx.draw_beam(s, [(50, 150), (300, 150)], (255, 230, 120), 0.02, 1.0, 12))
+    for life in (ICE_LIFE - 0.05, 3.0, 0.5):
+        assert _drew(lambda s: vfx.draw_ice_piece(s, 200, 150, life, 7, (215, 238, 255), ICE_LIFE, 22))
+    for since, left in ((0.1, 2.4), (1.0, 1.5), (2.3, 0.2)):     # нарастает, глыба, раскол
+        assert _drew(lambda s: vfx.draw_freeze(s, (200, 150), 14, since, left, 1.0))
+
+
+def test_beam_snapshot_has_age():
+    from duel.match import Match
+    from duel.snapshot import snapshot
+    m = Match(seed=1, heroes={"blue": "light", "red": "fire"})
+    m.apply_item(m.blue, "beam")
+    m.step(1 / 60, {})
+    assert 0 < snapshot(m)["beams"][0]["age"] < 0.1

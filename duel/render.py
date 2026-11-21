@@ -16,6 +16,7 @@ from .config import (
     WALK_FPS,
     AMMO_COLOR,
     BEAM_WIDTH,
+    ICE_LIFE,
     ICE_R,
     BEAR_REACH,
     SENTRY_R,
@@ -63,13 +64,13 @@ def _pos(o):
     return int(o["x"]), int(o["y"])
 
 
-def draw_effects(surf, u):
+def draw_effects(surf, u, time=0.0):
     """Кольца и значки эффектов на маге или двойнике. Таймеры — в статусе, не на поле."""
     r = int(u["r"])
     pos = _pos(u)
     effects = u["effects"]
-    if "freeze" in effects:
-        pygame.draw.circle(surf, ITEMS["foe_freeze"][1], pos, r + 4, 3)
+    if "freeze" in effects:                       # ледяная глыба: нарастает, держит, трескается
+        vfx.draw_freeze(surf, pos, u["r"], DURATION["freeze"] - effects["freeze"], effects["freeze"], time)
     if "speed" in effects:
         pygame.draw.circle(surf, ITEMS["speed"][1], pos, r + 8, 1)
     if "immune" in effects:                       # дубовая кора — золотисто-бурое кольцо
@@ -163,6 +164,10 @@ def draw_player(surf, p, heroes, viewer=None, time=0.0):
     aim = p.get("aim")
     facing = DIR[pid] if aim is None else (1 if math.cos(aim) >= 0 else -1)   # лицом к прицелу
     bear = "bear" in p.get("effects", {})
+    since = DURATION["icewalk"] - p["effects"].get("icewalk", -9)
+    T = float(vfx.params("ice").get("walk_cast_time", 0.5))
+    if 0 <= since < T:                             # каст ледяной тропы — шипы льда из-под ног
+        vfx.icewalk_cast(surf, pos, p["r"], since / T)
     if p["melee_flash"] > 0:                       # докуда достаёт удар — бледное кольцо
         k = min(1.0, p["melee_flash"] / MELEE_FLASH)
         radius = int(p["r"])
@@ -187,9 +192,11 @@ def draw_player(surf, p, heroes, viewer=None, time=0.0):
                 vfx.draw_triple(surf, (pos[0], pos[1] - bob * px), p["r"], facing, triple_open(p), shot)
             if shot > 0:                           # вспышка из ствола
                 vfx.draw_muzzle(surf, pos, p["r"], facing, shot)
+    if "icewalk" in p["effects"]:                 # «Ледяная тропа»: снежинки у ног
+        vfx.snow_at_feet(surf, pos, p["r"], time)
     if aim is not None:
         draw_aim(surf, p, side_color(heroes, pid))
-    draw_effects(surf, p)
+    draw_effects(surf, p, time)
 
 
 def draw_invisible(surf, p, heroes):
@@ -326,28 +333,16 @@ def draw_wall(surf, w, heroes):
     pygame.draw.rect(surf, side_color(heroes, w["owner"]), (mirror_x, y1, half, h), 1)
 
 
-def draw_beam(surf, b, heroes):
-    """Летящий луч: ломаная (на отскоках) — свечение цвета героя и белая сердцевина."""
+def draw_beam(surf, b, heroes, time=0.0):
+    """Летящий луч: ломаная (на отскоках) — мерцающее свечение цвета героя, сердцевина, искры."""
     pts = [tuple(p) for p in b["pts"]]
-    if len(pts) < 2:
-        return
-    glow = side_color(heroes, b["owner"])
-    pygame.draw.lines(surf, (16, 12, 20), False, pts, BEAM_WIDTH + 6)
-    pygame.draw.lines(surf, glow, False, pts, BEAM_WIDTH + 2)
-    pygame.draw.lines(surf, (255, 255, 235), False, pts, max(1, BEAM_WIDTH // 3))
-    pygame.draw.circle(surf, (255, 255, 235), (int(pts[-1][0]), int(pts[-1][1])), BEAM_WIDTH // 2 + 1)
+    vfx.draw_beam(surf, pts, side_color(heroes, b["owner"]), b.get("age", 1.0), time, BEAM_WIDTH)
 
 
-def draw_ice(surf, t, heroes):
-    """Кусок ледяного следа: полупрозрачный круг цвета героя, тает к концу жизни."""
-    k = max(0.0, min(1.0, t["life"] / 1.5))
-    r = int(ICE_R)
-    spot = pygame.Surface((2 * r + 4,) * 2, pygame.SRCALPHA)
-    c = r + 2
-    color = side_color(heroes, t["owner"])
-    pygame.draw.circle(spot, (*color, int(70 * k)), (c, c), r)
-    pygame.draw.circle(spot, (255, 255, 255, int(60 * k)), (c - 5, c - 5), r // 3)
-    surf.blit(spot, (int(t["x"]) - c, int(t["y"]) - c))
+def draw_ice(surf, t, heroes, time=0.0):
+    """Кусок ледяного следа: льдинка с трещинами; растёт с хрустом, тает к концу жизни."""
+    vfx.draw_ice_piece(surf, t["x"], t["y"], t["life"], int(t.get("id") or 0), side_color(heroes, t["owner"]),
+                       ICE_LIFE, ICE_R)
 
 
 def draw_trees(surf, t):
@@ -443,7 +438,7 @@ def draw_field(surf, snap, font, viewer=None):
     снаряды, пули, маги. Цвета и маги — по героям сторон."""
     heroes = heroes_of(snap)
     for t in snap.get("ice", []):
-        draw_ice(surf, t, heroes)
+        draw_ice(surf, t, heroes, snap.get("time", 0))
     for w in snap["walls"]:
         draw_wall(surf, w, heroes)
     for a in snap["artifacts"]:
@@ -480,8 +475,16 @@ def draw_field(surf, snap, font, viewer=None):
             puller = by_id["red" if p["id"] == "blue" else "blue"]
             vfx.draw_lasso(surf, p, puller, side_color(heroes, puller["id"]), snap.get("time", 0))
     for b in snap.get("beams", []):
-        draw_beam(surf, b, heroes)
+        draw_beam(surf, b, heroes, snap.get("time", 0))
     for p in snap["players"]:
         draw_player(surf, p, heroes, viewer, snap.get("time", 0))
+    cast = float(vfx.params("beam").get("cast_time", 0.55))
+    for b in snap.get("beams", []):               # каст луча — поверх мага
+        owner = by_id.get(b["owner"])
+        if owner and b.get("age", 9) < cast and len(b["pts"]) > 1 and not (
+                "invisible" in owner.get("effects", {}) and viewer not in (None, owner["id"])):
+            (x0, y0), (x1, y1) = b["pts"][0], b["pts"][1]
+            aim = owner.get("aim") if owner.get("aim") is not None else math.atan2(y1 - y0, x1 - x0)
+            vfx.beam_cast(surf, owner, aim, b["age"] / cast, side_color(heroes, b["owner"]))
     for m in snap["mobs"]:                # замахи и удары мобов — поверх магов, чтобы были видны
         draw_mob_attack(surf, m, font)

@@ -1,0 +1,14 @@
+{
+  "_about": "Луч света: каст (вспышка-звезда у руки, кольца, нимб, искры по прицелу) и сам луч. Времена — секунды.",
+  "cast_time": 0.55,
+  "star_rays": 8,
+  "star_length": 2.6,
+  "rings": 2,
+  "halo_color": "#fff6b4",
+  "core_color": "#ffffeb",
+  "flash_color": "#ffffff",
+  "motes": 12,
+  "beam_shimmer": 3,
+  "beam_sparkles": 10,
+  "head_flare": 14
+}

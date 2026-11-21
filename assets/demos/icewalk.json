@@ -1,0 +1,16 @@
+{
+  "heroes": {"blue": "frost", "red": "fire"},
+  "view": [60, 110, 320, 160],
+  "length": 4.6,
+  "speed": 0.7,
+  "setup": {
+    "blue": {"x": 110, "y": 150},
+    "red": {"x": 900, "y": 600}
+  },
+  "script": [
+    {"t": 0.4, "who": "blue", "item": "icewalk"},
+    {"t": [1.0, 1.7], "who": "blue", "move": [1, 0]},
+    {"t": [1.7, 2.1], "who": "blue", "move": [1, 1]},
+    {"t": [2.1, 2.8], "who": "blue", "move": [1, 0]}
+  ]
+}

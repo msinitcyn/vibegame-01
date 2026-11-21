@@ -1,0 +1,17 @@
+{
+  "_about": "Лёд Холода: ледяная тропа (куски льда, каст тропы, снежинки у ног) и заморозка (лёд нарастает, глыба, трескается и разлетается). Времена — секунды.",
+  "ice_color": "#a8dcff",
+  "ice_light": "#eaf8ff",
+  "ice_dark": "#5a9cd2",
+  "crack_color": "#ffffff",
+  "piece_grow": 0.25,
+  "piece_melt": 1.5,
+  "piece_alpha": 150,
+  "walk_cast_time": 0.5,
+  "walk_spikes": 10,
+  "flakes": 4,
+  "freeze_grow": 0.35,
+  "freeze_shatter": 0.35,
+  "block_alpha": 120,
+  "shards": 10
+}
