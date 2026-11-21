@@ -1,0 +1,16 @@
+# Источники звуков
+
+Все звуки — с [Pixabay](https://pixabay.com/sound-effects/) по Pixabay Content License (можно в игре, указывать автора не обязательно). Оригинальное имя файла содержит автора и номер звука.
+
+| Файл в игре | Оригинальное имя | Номер |
+|---|---|---|
+| clones.mp3 | yodguard-dark-spell-chant-3-533018.mp3 | 533018 |
+| enemy-land.mp3 | freesound_community-burning-fire-steam-87118.mp3 | 87118 |
+| frost.mp3 | dragon-studio-frost-spell-impact-499662.mp3 | 499662 |
+| hit-into-body.mp3 | u_68csiaifb5-bulletimpact4-442720.mp3 | 442720 |
+| ice-road.mp3 | freesound_community-water-freezing-29329.mp3 | 29329 |
+| ice-shield.mp3 | daviddumaisaudio-magical-spell-cast-190272.mp3 | 190272 |
+| lasso.mp3 | dragon-studio-fire-spell-impact-393921.mp3 | 393921 |
+| mirror.mp3 | vadim_makes_sound-dark-magic-curse-light-impact-1-546566.mp3 | 546566 |
+| steps.mp3 | freesound_community-footsteps_grass_1-6810.mp3 | 6810 |
+| tree-wall.mp3 | mollyroselee-falling-tree-ai-generated-431321.mp3 | 431321 |

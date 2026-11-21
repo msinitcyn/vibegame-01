@@ -418,6 +418,7 @@ class MenuScreensMixin:
         demo.clock = now
         self.event_sounds(demo.take_events())     # сценка звучит: выстрелы, удары, артефакты
         snap = snapshot(demo.match)
+        self.demo_snap = snap                     # для звуков-циклов сценки (шаги, огонь)
         heroes = (demo.match.blue.hero, demo.match.red.hero)
         field = self.__dict__.get("_demo_surface")
         if field is None:

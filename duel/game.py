@@ -132,6 +132,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin):
         self.net_pauses = {}          # сколько общих пауз осталось у каждого
         self.net_can_hold = {}        # можно ли сейчас поставить паузу
         self.menu_sent = False        # что последним сказали серверу про своё меню
+        self.sound_demo = None        # чья сценка звучит в справке (сменилась — звуки обрываем)
+        self.demo_snap = None         # снимок идущей сценки — для звуков-циклов
         self.net_addr = self.net_token = None    # куда и с каким ключом возвращаться после обрыва
         self.reconnect_until = None   # пока не None — связь потеряна, пытаемся вернуться
         self.net_end = "net.lost"     # почему закончилась сетевая игра (текст для меню)
@@ -268,6 +270,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin):
             if self.snap["winner"] and not self.win_time:
                 self.win_time = pygame.time.get_ticks()
             self.update_music()
+            self.update_sounds()
             self.sync_mouse_capture()
             if self.state not in ("play", "settings", "keys"):
                 self.paused = False           # вышли из партии — паузы нет
@@ -362,6 +365,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin):
                 self.audio.shoot(ev[1])
             elif kind in ("melee", "mob_swing"):  # удар мага или моба (попал или мимо) — слышно
                 self.audio.melee()
+            elif kind == "hit_mage":              # пуля попала в мага
+                self.audio.hit()
             elif kind == "used":
                 self.audio.item(ev[2])
 
@@ -419,6 +424,40 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin):
     def player_name(self):
         """Своё имя для сетевой игры ('' — называть по цвету)."""
         return self.settings.get("name", "").strip()[:settings.NAME_MAX]
+
+    def loop_keys(self, snap, scope):
+        """Какие звуки-циклы нужны по снимку: шаги идущих магов и двойников, огонь чужой земли,
+        ледяная тропа. scope отделяет партию от сценки в справке."""
+        want = set()
+        for p in snap.get("players", []):
+            effects = p.get("effects", {})
+            if "invisible" in effects:
+                continue                      # невидимку не слышно
+            if p.get("moving") and "freeze" not in effects:
+                want.add((scope, p["id"], "steps"))
+            if p.get("burn"):
+                want.add((scope, p["id"], "enemy-land"))
+            if "icewalk" in effects:
+                want.add((scope, p["id"], "ice-road"))
+        for c in snap.get("clones", []):      # двойники шагают так же — по звуку не отличить
+            if c.get("moving"):
+                want.add((scope, f"clone{c.get('id')}", "steps"))
+        return want
+
+    def update_sounds(self):
+        """Звуки-циклы этого кадра: в партии — по её снимку, в справке — по сценке, иначе тишина.
+        Сменилась сценка или ушли из справки — всё, что звучало, обрываем."""
+        demo = self.help_kind() if self.state == "help" else None
+        if demo != self.sound_demo:
+            self.audio.stop_sounds()
+            self.sound_demo, self.demo_snap = demo, None
+        if self.state == "play" and not self.snap.get("winner") and not (self.paused and not self.net):
+            want = self.loop_keys(self.snap, "play")
+        elif demo and has_demo(demo) and self.demo_snap is not None:
+            want = self.loop_keys(self.demo_snap, "demo")
+        else:
+            want = set()
+        self.audio.set_loops(want)
 
     def update_music(self):
         in_menu = self.state in MENU_STATES or self.net_waiting

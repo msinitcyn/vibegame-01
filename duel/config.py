@@ -167,7 +167,14 @@ MUSIC_FADE_MS = 800
 SHOOT_VOLUME = 0.6
 # звуки артефактов героев: артефакт -> (файл в assets/sounds, громкость; файлы разной громкости)
 ITEM_SOUNDS = {"beam": ("sun-ray.mp3", 0.9), "firering": ("fire-ring.mp3", 0.45), "bear": ("bear.mp3", 0.75),
-               "zombies": ("zombie.mp3", 0.55)}
+               "zombies": ("zombie.mp3", 0.55), "clones": ("clones.mp3", 0.6), "lasso": ("lasso.mp3", 0.6),
+               "foe_freeze": ("frost.mp3", 0.6), "shield": ("ice-shield.mp3", 0.6), "wall": ("mirror.mp3", 0.6),
+               "trees": ("tree-wall.mp3", 0.6)}
+# звуки-циклы: играют, пока это происходит (шаги — маг идёт; чужая земля — горит; ледяная тропа — действует)
+LOOP_SOUNDS = {"steps": ("steps.mp3", 0.5), "enemy-land": ("enemy-land.mp3", 0.35), "ice-road": ("ice-road.mp3", 0.5)}
+LOOP_FADE_MS = 150
+HIT_SOUND = ("hit-into-body.mp3", 0.6)   # пуля попала в мага
+# правки звуков (обрезка, склейка шагов, усиление) — assets/sounds/edits.json; источники — assets/sounds/SOURCES.md
 
 BASE_RADIUS = unit(18)
 BASE_SPEED = 300                 # пикс/сек
