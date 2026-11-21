@@ -416,6 +416,7 @@ class MenuScreensMixin:
         now = pygame.time.get_ticks()
         demo.update(min(0.1, (now - demo.clock) / 1000))
         demo.clock = now
+        self.event_sounds(demo.take_events())     # сценка звучит: выстрелы, удары, артефакты
         snap = snapshot(demo.match)
         heroes = (demo.match.blue.hero, demo.match.red.hero)
         field = self.__dict__.get("_demo_surface")

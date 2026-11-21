@@ -91,6 +91,7 @@ class Demo:
         self.t = 0.0
         self.acc = 0.0
         self.done = set()                     # разовые действия, уже сделанные в этом круге
+        self.events = []                      # события партии сценки (для звуков) — забирает take_events
 
     def commands(self):
         """Команды магов на этот такт по сценарию."""
@@ -129,6 +130,11 @@ class Demo:
                 self.done.add((i, n))
         return out
 
+    def take_events(self):
+        """События с прошлого раза (выстрелы, удары, артефакты) — чтобы сценка звучала."""
+        out, self.events = self.events, []
+        return out
+
     def update(self, dt):
         dt *= self.speed                              # замедленная сценка — время партии идёт медленнее
         self.t += dt
@@ -138,7 +144,7 @@ class Demo:
         self.acc += min(dt, 0.1)
         while self.acc >= STEP:
             self.acc -= STEP
-            self.match.step(STEP, self.commands())
+            self.events += self.match.step(STEP, self.commands())
             for unit in self.calm:                    # спокойные мобы не идут и не бьют
                 unit.target = None
             for unit in self.match.mobs:              # мобы сценки тоже не погибают (зомби — живут своё)

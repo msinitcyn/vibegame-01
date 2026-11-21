@@ -16,6 +16,7 @@ from . import config
 from . import settings
 from .audio import Audio, MUSIC_END
 from .commands import Command
+from .demos import has_demo
 from .config import (
     AMMO_COLOR,
     BAD_TEXT,
@@ -353,17 +354,23 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin):
             pp[3] -= dt
         self.popups = [pp for pp in self.popups if pp[3] > 0]
 
-    def handle_events(self, events):
-        """События матча → звук и надписи на языке этого игрока."""
+    def event_sounds(self, events):
+        """Звуки событий матча (в партии и в сценках справки)."""
         for ev in events:
             kind = ev[0]
             if kind == "shot":
                 self.audio.shoot(ev[1])
-            elif kind == "melee":
+            elif kind in ("melee", "mob_swing"):  # удар мага или моба (попал или мимо) — слышно
                 self.audio.melee()
-            elif kind == "mob_swing":             # удар моба (попал или мимо) — слышно
-                self.audio.melee()
-            elif kind == "no_ammo":
+            elif kind == "used":
+                self.audio.item(ev[2])
+
+    def handle_events(self, events):
+        """События матча → звук и надписи на языке этого игрока."""
+        self.event_sounds(events)
+        for ev in events:
+            kind = ev[0]
+            if kind == "no_ammo":
                 self.popup(t("popup.noammo"), ev[1], BAD_TEXT)
             elif kind == "pickup":
                 self.popup(item_name(ev[2]), ev[1], ring_color(ev[2]))
@@ -374,7 +381,6 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin):
                 self.popups.append([item_name(kind), x + DIR[pid] * 90, y, POPUP_TIME, ring_color(kind)])
             elif kind == "used":
                 self.popup(item_name(ev[2]) + "!", ev[1], ITEMS[ev[2]][1])
-                self.audio.item(ev[2])
             elif kind == "ammo":
                 self.popup(t("popup.ammo", n=ev[2]), ev[1], AMMO_COLOR)
             elif kind == "mob_dead":
@@ -416,4 +422,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin):
 
     def update_music(self):
         in_menu = self.state in MENU_STATES or self.net_waiting
+        if self.state == "help" and has_demo(self.help_kind() or ""):
+            self.audio.music("quiet")         # идёт сценка — музыки нет, слышны её звуки
+            return
         self.audio.music("menu" if in_menu else "game")

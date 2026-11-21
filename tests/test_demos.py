@@ -90,3 +90,29 @@ def test_shield_demo_keeps_hp_until_shield_breaks():
     while d.t < 5.5:
         d.update(1 / 60)
     assert "shield" not in d.match.blue.effects and d.match.blue.hp < d.match.blue.max_hp
+
+
+def test_demo_events_sound_and_music_goes_quiet(game, monkeypatch):
+    """Сценка звучит (выстрелы, удары, артефакт), а музыка меню на это время затихает."""
+    d = demos.Demo(demos.load("bear"))
+    kinds = []
+    while d.t < 3.0:
+        d.update(1 / 60)
+        kinds += [e[0] for e in d.take_events()]
+    assert "used" in kinds and "melee" in kinds
+    played = []
+    monkeypatch.setattr(game.audio, "item", lambda k: played.append(("item", k)))
+    monkeypatch.setattr(game.audio, "melee", lambda: played.append(("melee",)))
+    game.event_sounds([("used", "blue", "bear"), ("melee", "blue")])
+    assert played == [("item", "bear"), ("melee",)]
+    music = []
+    monkeypatch.setattr(game.audio, "music", music.append)
+    game.state = "help"
+    game.help_page, game.help_index = 0, 0               # «Маги» → «Ходьба» — есть сценка
+    game.update_music()
+    from duel.config import HELP_TABS
+    game.help_page = HELP_TABS.index("rules")            # «Правила» — сценки нет
+    game.update_music()
+    game.state = "menu"
+    game.update_music()
+    assert music == ["quiet", "menu", "menu"]

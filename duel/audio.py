@@ -71,7 +71,7 @@ class Audio:
             snd.set_volume(min(1.0, base * self.sfx_level / 5))
 
     def music(self, kind):
-        """Включить музыку нужного вида; если она уже играет — ничего не делать."""
+        """Включить музыку нужного вида (menu / game; quiet — плавно выключить); если она уже играет — ничего не делать."""
         if not self.enabled or kind == self.kind:
             return
         self.kind = kind
@@ -79,6 +79,9 @@ class Audio:
         self.play_next()
 
     def play_next(self):
+        if self.kind == "quiet":              # тишина (сценки в справке — слышны их звуки): плавно гасим
+            pygame.mixer.music.fadeout(MUSIC_FADE_MS)
+            return
         files = self.tracks.get(self.kind) or []
         if not files:
             pygame.mixer.music.stop()
