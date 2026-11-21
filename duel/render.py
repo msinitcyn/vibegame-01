@@ -162,10 +162,15 @@ def triple_open(u):
     return max(0.0, min(1.0, since / max(0.01, float(fx.params("triple").get("open_time", 0.35)))))
 
 
+def hidden_now(u):
+    """Невидим сейчас: невидимость есть и он не выдал себя выстрелом, ударом или кастом."""
+    return "invisible" in u.get("effects", {}) and not u.get("exposed", 0) > 0
+
+
 def draw_player(surf, p, heroes, viewer=None, time=0.0, font=None):
     """Маг. Невидимый: за одним компьютером (viewer None) и себе по сети — полупрозрачный,
     сопернику и зрителям по сети — не виден совсем."""
-    if "invisible" in p.get("effects", {}):
+    if hidden_now(p):
         sees = viewer is None or viewer == p["id"]
         draw_invisible(surf, p, heroes, time, sees)
         return
@@ -275,7 +280,7 @@ def draw_clone(surf, c, heroes, owner_p=None, font=None, time=0.0, viewer=None):
     """Двойник — как настоящий маг: тот же рисунок и анимация, мушка, полоска жизней хозяина.
     За одним компьютером и сопернику все одинаковые; хозяину по сети свои двойники — полупрозрачные."""
     owner = c["owner"]
-    if "invisible" in c.get("effects", {}):      # невидимость хозяина — и на двойниках
+    if hidden_now(c):                             # невидимость хозяина — и на двойниках
         draw_invisible(surf, c, heroes, time, viewer is None or viewer == owner, who=owner)
         return
     aim = c.get("aim", 0.0 if DIR[owner] > 0 else math.pi)
@@ -519,7 +524,7 @@ def draw_field(surf, snap, font, viewer=None):
     for b in snap.get("beams", []):               # каст луча — поверх мага
         owner = by_id.get(b["owner"])
         if owner and b.get("age", 9) < cast and len(b["pts"]) > 1 and not (
-                "invisible" in owner.get("effects", {}) and viewer not in (None, owner["id"])):
+                hidden_now(owner) and viewer not in (None, owner["id"])):
             (x0, y0), (x1, y1) = b["pts"][0], b["pts"][1]
             aim = owner.get("aim") if owner.get("aim") is not None else math.atan2(y1 - y0, x1 - x0)
             fx_spells.beam_cast(surf, owner, aim, b["age"] / cast, side_color(heroes, b["owner"]))

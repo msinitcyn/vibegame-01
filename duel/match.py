@@ -78,6 +78,8 @@ from .config import (
     MELEE_DAMAGE,
     MELEE_FLASH,
     MELEE_RANGE,
+    EXPOSE_CAST,
+    EXPOSE_SHOT,
     GEAR_DROP_SHARE,
     GEAR_HP,
     GEAR_ITEMS,
@@ -212,6 +214,7 @@ class Match:
             return
         shots = p.shoot()
         if shots:
+            p.expose(EXPOSE_SHOT)             # невидимку выдаёт выстрел — ненадолго
             self.emit("shot", p.id)
             self.bullets.extend(shots)
 
@@ -223,6 +226,7 @@ class Match:
             return
         p.melee_cd = MELEE_COOLDOWN
         p.melee_flash = MELEE_FLASH
+        p.expose(EXPOSE_SHOT)
         self.emit("melee", p.id)
         bear = "bear" in p.effects            # медведь бьёт дальше и сильнее
         reach = MELEE_RANGE + (BEAR_REACH if bear else 0) + (GEAR_REACH if "sword" in p.gear else 0)
@@ -254,6 +258,8 @@ class Match:
         if "noitems" in p.effects and kind != "cleanse":
             return                            # запрет артефактов: ячейка не тратится
         self.apply_item(p, p.take_item(slot))
+        if kind != "invisible":
+            p.expose(EXPOSE_CAST)             # каст выдаёт невидимку, пока колдует
 
     # ------------------------------------------------------------------ артефакты
 
@@ -311,13 +317,15 @@ class Match:
                 if m.target in mine:
                     m.target = None
         elif kind == "mobpeace":
-            self.give(p, "mobpeace")          # мобы, что шли на тебя, успокаиваются
+            self.give(p, "mobpeace")          # мобы, что шли на тебя (и двойников), успокаиваются
+            mine = [p] + self.clones_of(p)
             for m in self.mobs:
-                if m.target is p:
+                if m.target in mine:
                     m.target = None
-        elif kind == "mobswap":               # мобы, что шли на тебя, — на соперника
+        elif kind == "mobswap":               # мобы, что шли на тебя (и двойников), — на соперника
+            mine = [p] + self.clones_of(p)
             for m in self.mobs:
-                if m.target is p:
+                if m.target in mine:
                     m.target = None if "mobpeace" in foe.effects else foe
         elif kind == "bear":                  # маг — медведь; жизни мага сохраняются
             if p.bear_saved is None:
@@ -557,7 +565,7 @@ class Match:
                 continue                      # свои пули сквозь своих зомби
             if b.alive and m.alive and math.hypot(b.x - m.x, b.y - m.y) < m.radius + BULLET_R:
                 b.alive = False
-                m.hurt(b.owner)           # моб злится на того, чья пуля
+                m.hurt(b.shooter)         # моб злится на того, кто выстрелил (маг или двойник)
                 self.hit_at(b, "zombie" if m.zombie_of else "mob", m)
         for st in self.sentries:          # пули соперника рубят стражей
             if b.alive and st.owner is not b.owner and st.alive and \
@@ -692,10 +700,22 @@ class Match:
             return STOP_BULLET_FACTOR
         return FAST_BULLET_FACTOR if "fastshots" in owner.effects else 1.0
 
+    def hurt_unit(self, u, n):
+        """Урон магу или двойнику (двойник теряет свои жизни)."""
+        if isinstance(u, Clone):
+            u.hurt(n)
+        else:
+            self.hurt_player(u, n)
+
+    @staticmethod
+    def hero_of(u):
+        """Маг двойника (или сам маг)."""
+        return u.owner if isinstance(u, Clone) else u
+
     def chaser_speed(self, target):
         """Множитель скорости моба (и его снаряда), идущего на target: быстрее, если у соперника
         target «быстрые пули»; вдвое медленнее, если у target «пули соперника замирают»."""
-        k = FAST_BULLET_FACTOR if "fastshots" in self.other(target).effects else 1.0
+        k = FAST_BULLET_FACTOR if "fastshots" in self.other(self.hero_of(target)).effects else 1.0
         if "slowfoe" in target.effects:
             k *= SLOW_BULLET_FACTOR
         return k
@@ -720,8 +740,8 @@ class Match:
                     self.leash(m)
                 p = None
             else:
-                if m.target is not None and self.hidden(m.target):
-                    m.target = None           # невидимку не видно — моб теряет цель
+                if m.target is not None and (self.hidden(m.target) or not getattr(m.target, "alive", True)):
+                    m.target = None           # невидимку не видно, двойник исчез — моб теряет цель
                 p = m.update(dt, self.chaser_speed(m.target) if m.target else 1.0, self.walls)
             if self.blocked(m.x, m.y, m.radius):      # сквозь деревья не пройти: шаг по одной оси или стоять
                 nx, ny = m.x, m.y
@@ -734,7 +754,7 @@ class Match:
             if m.swing == MOB_SWING_TIME:     # удар только что случился (попал или мимо) — звук
                 self.emit("mob_swing", m.x, m.y, m.swing_hit)
             if p and not p.shield_absorb():   # щит гасит и удар моба
-                self.hurt_player(p, MOB_DAMAGE)
+                self.hurt_unit(p, MOB_DAMAGE)
             shot = m.shoot(dt) if m.zombie_of is None else None
             if shot:
                 self.mob_shots.append(shot)
@@ -946,14 +966,14 @@ class Match:
                     self.bullets.append(b)
             if not s.alive:
                 continue
-            for p in self.players:
-                if p is s.owner:
-                    continue                  # семя стража не ранит Природу
+            for p in list(self.players) + self.clones:     # и двойников: моб мог злиться на двойника
+                if self.hero_of(p) is s.owner or not getattr(p, "alive", True):
+                    continue                  # семя стража не ранит Природу и её двойников
                 guard = SHIELD_GAP if "shield" in p.effects else 0
                 if math.hypot(s.x - p.x, s.y - p.y) < p.radius + guard + MOB_SHOT_R:
                     s.alive = False
                     if not p.shield_absorb():
-                        self.hurt_player(p, MOB_DAMAGE)
+                        self.hurt_unit(p, MOB_DAMAGE)
                     break
         self.mob_shots = [s for s in self.mob_shots if s.alive]
 

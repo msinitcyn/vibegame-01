@@ -60,3 +60,43 @@ def test_invisible_clones_are_silent(game):
     for c in snap["clones"]:
         c["moving"] = True
     assert not [k for k in game.loop_keys(snap, "match") if k[1].startswith("clone")]
+
+
+def test_mob_chases_the_clone_that_hit_it():
+    from duel.entities import Bullet, Mob
+    m = Match(seed=3, heroes={"blue": "dark", "red": "fire"})
+    m.apply_item(m.blue, "clones")
+    c = m.clones[0]
+    mob = Mob(500, 300, 5)
+    m.mobs = [mob]
+    b = Bullet(mob.x, mob.y, 0, 0, m.blue)
+    b.shooter = c
+    m.bullets = [b]
+    m.bullet_hits_units(b)
+    assert mob.target is c                                       # злится на двойника, не на мага
+    assert snapshot(m)["mobs"][0]["target"] == "blue"            # цвет злости — хозяина
+    c.alive = False
+    m.update_mobs(1 / 60)
+    assert mob.target is None                                    # двойник исчез — цель потеряна
+
+
+def test_invisible_mob_ignores_and_shots_expose_briefly():
+    from duel import config
+    m = Match(seed=3, heroes={"blue": "light", "red": "fire"})
+    m.apply_item(m.blue, "invisible")
+    run(m, 1.0)
+    p = m.blue
+    p.cooldown = 0
+    m.fire(p)
+    snap = snapshot(m)
+    me = next(x for x in snap["players"] if x["id"] == "blue")
+    assert me["exposed"] > 0 and not render.hidden_now(me)       # выстрел выдал
+    heroes = {"blue": "light", "red": "fire"}
+    assert not blank_after(lambda s: render.draw_player(s, me, heroes, viewer="red"))
+    assert m.hidden(p)                                           # мобы всё равно не видят
+    run(m, config.EXPOSE_SHOT + 0.1)
+    me = next(x for x in snapshot(m)["players"] if x["id"] == "blue")
+    assert "invisible" in me["effects"] and render.hidden_now(me)    # снова невидим
+    p.add_item("speed")
+    m.use_item(p, 0)
+    assert p.exposed == config.EXPOSE_CAST                      # каст выдаёт на время каста

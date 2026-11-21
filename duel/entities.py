@@ -58,6 +58,7 @@ from .config import (
     CLONE_EFFECTS,
     CLONE_RADIUS,
     CLONE_SHOT_EVERY,
+    EXPOSE_SHOT,
     GEAR_FIRE,
     GEAR_SPEED,
     CLONE_SPEED,
@@ -141,6 +142,12 @@ class Unit:
         self.shield_flash = 0.0       # для анимации: щит только что погасил удар
         self.shield_break = 0.0       # для анимации: щит только что лопнул
         self.reveal = 0.0             # для анимации: невидимка только что проявился
+        self.exposed = 0.0            # невидимка выстрелил или колдует — сколько ещё его видно
+
+    def expose(self, seconds):
+        """Выстрел, удар или каст выдают невидимку на время (невидимость не кончается)."""
+        if "invisible" in self.effects:
+            self.exposed = max(self.exposed, seconds)
 
     @property
     def radius(self):
@@ -184,6 +191,7 @@ class Unit:
         self.shield_flash = max(0.0, getattr(self, "shield_flash", 0.0) - dt)
         self.shield_break = max(0.0, getattr(self, "shield_break", 0.0) - dt)
         self.reveal = max(0.0, getattr(self, "reveal", 0.0) - dt)
+        self.exposed = max(0.0, getattr(self, "exposed", 0.0) - dt)
         for name in list(self.effects):
             self.effects[name] -= dt
             if self.effects[name] <= 0:
@@ -447,6 +455,7 @@ class Bullet:
         self.id = None
         self.x, self.y, self.vx, self.vy = x, y, vx, vy
         self.owner = owner
+        self.shooter = owner          # кто выстрелил: маг или его двойник (на него злится моб)
         self.alive = True
         self.px, self.py = x, y
         self.t = 0.0
@@ -554,9 +563,17 @@ class Clone(Unit):
             self.shot_timer = pause * (RAPID_FACTOR if "rapid" in self.effects else 1)
             if self.can_fire:
                 self.shot_flash = SHOT_FLASH
-                return make_bullets(self.owner, self.x, self.y, self.aim, r,
-                                    self.shot_offsets(), "wavy" in self.effects)
+                self.expose(EXPOSE_SHOT)
+                shots = make_bullets(self.owner, self.x, self.y, self.aim, r,
+                                     self.shot_offsets(), "wavy" in self.effects)
+                for b in shots:
+                    b.shooter = self          # попал в моба — моб идёт на двойника
+                return shots
         return []
+
+    @property
+    def dir(self):
+        return self.owner.dir
 
 
 class Artifact:
@@ -603,9 +620,10 @@ class Mob:
         self.zombie_life = 0.0
 
     def hurt(self, attacker, damage=1):
+        """Попадание: моб злится на того, кто ударил (маг или двойник)."""
         self.hp -= damage
         self.flash = 0.12
-        if "mobpeace" in attacker.effects:    # «Мир с мобами»: попадание не злит
+        if "mobpeace" in getattr(attacker, "owner", attacker).effects:    # «Мир с мобами» хозяина: не злит
             if self.target is attacker:
                 self.target = None
         else:

@@ -40,6 +40,7 @@ def snapshot(match):
             "hp": p.hp, "max_hp": BEAR_HP if "bear" in p.effects else p.max_hp,
             "ammo": p.ammo, "effects": _effects(p), "shield_hits": p.shield_hits,
             "shield_flash": _t(p.shield_flash), "shield_break": _t(p.shield_break), "reveal": _t(p.reveal),
+            "exposed": _t(p.exposed),
             "items": list(p.items), "queue": list(p.queue), "gear": list(p.gear),
             "hit_flash": _t(p.hit_flash), "melee_flash": _t(p.melee_flash),
             "moving": bool(p.moving or p.moving_x), "shot": _t(p.shot_flash),
@@ -54,7 +55,7 @@ def snapshot(match):
             "max_hp": x.max_hp, "ranged": x.ranged, "facing": x.facing, "flash": _t(x.flash),
             "windup": _t(x.windup), "swing": _t(x.swing), "swing_dir": _t(x.swing_dir), "swing_hit": x.swing_hit,
             "zombie": _pid(x.zombie_of), "zombie_life": _t(x.zombie_life),
-            "target": _pid(x.target),
+            "target": _pid(getattr(x.target, "owner", x.target)),     # на двойника — цвет хозяина
         } for x in m.mobs],
         "mob_shots": [{"id": s.id, "x": _xy(s.x), "y": _xy(s.y), "owner": _pid(s.owner)} for s in m.mob_shots],
         "sentries": [{"id": st.id, "owner": st.owner.id, "x": _xy(st.x), "y": _xy(st.y), "hp": st.hp,
@@ -84,7 +85,7 @@ def snapshot(match):
                     "effects": _effects(c), "shield_hits": c.shield_hits,
                     "moving": bool(c.moving), "shot": _t(c.shot_flash), "melee_flash": 0.0,
                     "shield_flash": _t(c.shield_flash), "shield_break": _t(c.shield_break),
-                    "reveal": _t(c.reveal)}
+                    "reveal": _t(c.reveal), "exposed": _t(c.exposed)}
                    for c in m.clones],
     }
 
