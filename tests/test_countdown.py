@@ -68,6 +68,7 @@ def test_server_countdown_phase(three):
             b.cmd()
             srv.step()
         assert srv.room.phase == "play" and srv.room.match.match_time > 0
+        a.settle()
         assert a.last()["countdown"] == 0
     finally:
         srv.close()

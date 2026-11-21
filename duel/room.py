@@ -81,11 +81,12 @@ class Seat:
 
 
 class Room:
-    def __init__(self, room_id, name="", bot=False, clock=None, log=print):
+    def __init__(self, room_id, name="", bot=False, clock=None, log=print, record=None):
         self.id = room_id
         self.name = clean_name(name)  # имя создателя комнаты
         self.clock = clock
         self.log = lambda text: log(f"[комната {room_id}] {text}")
+        self.record = record          # record(итог партии) — в matches.jsonl сервера (None — не писать)
         self.seats = {pid: Seat() for pid in PIDS}
         self.spectators = []          # соединения зрителей: получают снимки, ничего не меняют
         self.bot = bot
@@ -473,6 +474,11 @@ class Room:
         res = f"победил {self.who(w)}" if w in PIDS else f"итог {w}"
         self.log(f"партия окончена: {res}; {self.who('blue')} против {self.who('red')}, "
                  f"{m.match_time:.0f} с, волна {m.mob_wave}, жизни: {hp}, зерно {m.seed}")
+        if self.record:
+            bots = self.bot_seats()
+            self.record({**m.summary(), "room": self.id,
+                         "players": {pid: "bot" if pid in bots else (self.seats[pid].name or "guest") for pid in PIDS}},
+                        "net-bot" if bots else "net")
 
     def log_stats(self):
         """Раз в минуту боя — связь игроков (что они сами меряют и шлют, см. /net)."""

@@ -148,6 +148,8 @@ class Match:
         self.wave_interval = MOB_EVERY
         self.winner = None
         self.drops = True             # мобы роняют артефакты (тестовая команда /drops off выключает)
+        # статистика партии для баланса (logs/matches.jsonl, tools/balance.py): только счётчики, без случайностей
+        self.stats = {p.id: {"picked": {}, "used": {}, "shots": 0, "damage_taken": 0} for p in self.players}
         self.events = []              # копятся до конца шага, step() их отдаёт
 
     # ------------------------------------------------------------------ общее
@@ -214,6 +216,7 @@ class Match:
             return
         shots = p.shoot()
         if shots:
+            self.stats[p.id]["shots"] += 1
             p.expose(EXPOSE_SHOT)             # невидимку выдаёт выстрел — ненадолго
             self.emit("shot", p.id)
             self.bullets.extend(shots)
@@ -258,6 +261,8 @@ class Match:
         if "noitems" in p.effects and kind != "cleanse":
             return                            # запрет артефактов: ячейка не тратится
         self.apply_item(p, p.take_item(slot))
+        used = self.stats[p.id]["used"]
+        used[kind] = used.get(kind, 0) + 1
         if kind != "invisible":
             p.expose(EXPOSE_CAST)             # каст выдаёт невидимку, пока колдует
 
@@ -370,6 +375,15 @@ class Match:
     def zombies_of(self, p):
         return [m for m in self.mobs if m.alive and m.zombie_of is p]
 
+    def summary(self):
+        """Итог партии для статистики баланса: герои, победитель, длительность, жизни, снаряжение, счётчики."""
+        w = self.winner
+        return {"seed": self.seed, "time": round(self.match_time, 1), "wave": self.mob_wave,
+                "heroes": {p.id: p.hero for p in self.players},
+                "winner": getattr(w, "id", w),
+                "hp": {p.id: p.hp for p in self.players}, "max_hp": {p.id: p.max_hp for p in self.players},
+                "gear": {p.id: list(p.gear) for p in self.players}, "stats": self.stats}
+
     def hurt_player(self, p, n):
         """Маг теряет n жизней (щит проверяется до этого). Пока у него есть зомби — урон
         получает зомби («Восставшие мертвецы»)."""
@@ -383,6 +397,7 @@ class Match:
             return
         p.hp -= n
         p.hit_flash = 0.12
+        self.stats[p.id]["damage_taken"] += n
         if p.bear_saved is not None and p.hp <= 0:
             self.end_bear(p)                  # медведя победили — снова маг, партия идёт
 
@@ -665,6 +680,8 @@ class Match:
 
     def take_artifact(self, p, a):
         """Артефакт — магу p: мгновенный сразу применяется, остальные — в ячейку или очередь."""
+        picked = self.stats[p.id]["picked"]
+        picked[a.kind] = picked.get(a.kind, 0) + 1
         if a.kind in INSTANT_ITEMS or a.kind in GEAR_ITEMS:
             self.apply_item(p, a.kind)
         else:

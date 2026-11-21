@@ -3,6 +3,8 @@
 Папка — рядом с настройками (~/.config/duel/logs, на Windows — %APPDATA%\\duel\\logs):
     game.log              — запуски, партии, применённые артефакты, команды, ошибки (до 3 файлов по 1 МБ)
     crash-<дата>.txt      — падение: версия, система и полный текст ошибки
+    matches.jsonl         — итог каждой партии за этим компьютером (герои, победитель, что подбирали и
+                            применяли) — для tools/balance.py; у сервера — свой matches.jsonl
 
 Падение игры записывается в оба файла; собранная игра на Windows показывает окно с путём к файлу.
 
@@ -11,6 +13,7 @@
     room-error-<дата>-<N>.json — ошибка в комнате: зерно, герои, такт и команды игроков за последние секунды
 Свой сервер внутри игры пишет в game.log с пометкой [сервер].
 """
+import json
 import logging
 import logging.handlers
 import platform
@@ -121,3 +124,20 @@ def setup_server(folder=None):
                                                                                      a.exc_traceback)))
     logger.info("сервер: версия %s, %s, Python %s", version(), platform.platform(), platform.python_version())
     return to_logger(logger)
+
+
+def record_match(summary, mode, path=None, **extra):
+    """Итог партии — строкой JSON в matches.jsonl (для tools/balance.py). mode: hotseat, test, warmup, net.
+    Без path пишет в logs/ игры, и только если лог настроен (запуск через main.py, не тесты)."""
+    if path is None:
+        if not _ready:
+            return None
+        path = log_dir() / "matches.jsonl"
+    row = {"at": time.strftime("%Y-%m-%d %H:%M:%S"), "version": version(), "mode": mode, **summary, **extra}
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        return path
+    except OSError:
+        return None

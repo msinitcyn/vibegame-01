@@ -528,3 +528,4 @@ class LobbyMixin:
         self.snap = snapshot(self.match)
         if self.snap["winner"] and not self.win_time:
             self.win_time = pygame.time.get_ticks()
+            self.record_local()

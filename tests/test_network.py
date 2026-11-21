@@ -48,6 +48,19 @@ class Client:
         self.msgs += self.conn.recv()
         return True
 
+    def settle(self, quiet=0.1, timeout=2.0):
+        """Дочитать всё, что сервер уже отправил: ждать, пока сообщения не перестанут приходить
+        (на Windows локальный TCP доставляет не мгновенно — сразу после шага сервера читать рано)."""
+        end = time.monotonic() + timeout
+        last, n = time.monotonic(), len(self.msgs)
+        while time.monotonic() < end:
+            self.poll()
+            if len(self.msgs) != n:
+                last, n = time.monotonic(), len(self.msgs)
+            elif time.monotonic() - last >= quiet:
+                return
+            time.sleep(0.005)
+
     def states(self):
         self.poll()
         return [m for m in self.msgs if m["type"] == "state"]
@@ -379,6 +392,7 @@ def test_snapshots_30_per_second_and_no_lost_events(server):
     for _ in range(10):
         b.cmd()
         server.step()
+    a.settle()
     states = a.states()
     ticks = [s["tick"] for s in states]
     assert all(t % SEND_EVERY == 0 for t in ticks) and ticks == sorted(ticks)

@@ -18,6 +18,7 @@ from . import config
 from . import settings
 from .audio import Audio, MUSIC_END
 from .bot import Bot
+from . import logs
 from .logs import log
 from .commands import Command
 from .client_chat import ChatMixin
@@ -205,6 +206,12 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.stick_aim = {}           # плавный прицел стиком начинается заново с новой партией
         self.refresh_snap()
 
+    def record_local(self):
+        """Итог партии за этим компьютером (хотсит, тест с ботом, разминка) — для статистики баланса."""
+        mode = "warmup" if self.warmup else "test" if self.test_bot else "hotseat"
+        logs.record_match(self.match.summary(), mode)
+        log.info("партия окончена (%s): победил %s", mode, self.snap["winner"])
+
     def refresh_snap(self):
         """Снимок матча — экран и надписи читают только его (как будет у клиента в сети)."""
         self.snap = snapshot(self.match)
@@ -257,6 +264,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
                 self.on_event(e)
             if self.snap["winner"] and not self.win_time:
                 self.win_time = pygame.time.get_ticks()
+                if not self.net:
+                    self.record_local()       # итог партии за этим компьютером — в matches.jsonl
             self.update_music()
             self.update_sounds()
             self.sync_mouse_capture()

@@ -40,9 +40,10 @@ FAIL_WINDOW = 300.0               # … за столько секунд — д�
 class Server:
     def __init__(self, port=PORT, bot=False, host="0.0.0.0", proto=PROTO, log=print,
                  discovery_port=discovery.DISCOVERY_PORT, clock=time.monotonic, name=None, db=":memory:",
-                 dump_dir=None):
+                 dump_dir=None, records=None):
         self.log = log
         self.dump_dir = dump_dir      # куда писать файлы ошибок комнат (None — не писать)
+        self.records = records        # matches.jsonl — итоги партий для баланса (None — не писать)
         self.clock = clock            # часы (тесты подменяют, чтобы не ждать секунды)
         self.listener = socket.create_server((host, port))
         self.listener.setblocking(False)
@@ -239,7 +240,8 @@ class Server:
     def create_room(self, name=""):
         if len(self.rooms) >= MAX_ROOMS:
             return None
-        room = Room(self.next_room, name=name, bot=self.bot, clock=self.clock, log=self.log)
+        room = Room(self.next_room, name=name, bot=self.bot, clock=self.clock, log=self.log,
+                    record=self.record_match if self.records else None)
         self.rooms[room.id] = room
         self.next_room += 1
         self.log(f"комната {room.id} создана")
@@ -548,6 +550,10 @@ class Server:
             except OSError:
                 pass
 
+    def record_match(self, summary, mode):
+        from .logs import record_match
+        record_match(summary, mode, path=Path(self.records), server=self.name)
+
     def dump_room(self, room, text):
         """Файл ошибки комнаты: зерно, герои, такт, команды последних секунд и текст ошибки."""
         if not self.dump_dir:
@@ -601,7 +607,9 @@ def start_in_thread(port=PORT, bot=False, log=None, discovery_port=discovery.DIS
     if log is None:                   # свой сервер в игре — в game.log с пометкой, ошибки комнат — в logs/
         from .logs import log as game_log, log_dir, to_logger
         log, dump_dir = to_logger(game_log, "[сервер] "), log_dir()
-    srv = Server(port, bot, log=log, discovery_port=discovery_port, name=name, db=db, dump_dir=dump_dir)
+    records = dump_dir / "matches.jsonl" if dump_dir else None
+    srv = Server(port, bot, log=log, discovery_port=discovery_port, name=name, db=db, dump_dir=dump_dir,
+                 records=records)
     srv.thread = threading.Thread(target=srv.run, name="duel-server", daemon=True)
     srv.thread.start()
     return srv
@@ -657,7 +665,8 @@ def main(argv=None):
     folder = Path(args.logs) if args.logs else logs.log_dir()
     log = logs.setup_server(folder)
     try:
-        srv = Server(args.port, args.bot, log=log, name=args.name, db=args.db, dump_dir=folder)
+        srv = Server(args.port, args.bot, log=log, name=args.name, db=args.db, dump_dir=folder,
+                     records=folder / "matches.jsonl")
     except OSError as e:
         raise SystemExit(f"не удалось запустить сервер на порту {args.port}: {e.strerror or e}.\n"
                          f"Порт занят — уже работает другой сервер или игра со своим сервером; "
