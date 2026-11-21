@@ -464,7 +464,10 @@ class InputMixin:
         if self.state != "play" or side is None or (self.net and self.net_waiting and not self.warmup):
             return
         c = self.controls[side]
-        if button == 1:
+        if button == 1 and self.mouse_walk():     # пробел тут — удар, поэтому выстрел — напрямую, не «клавишей»
+            if not self.snap["winner"]:
+                self.pending[side].fire = True
+        elif button == 1:
             self.on_key(c.fire[0])
         elif button == 2:                     # средняя кнопка — прицел прямо
             self.reset_aim(side)

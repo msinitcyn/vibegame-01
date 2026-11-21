@@ -52,3 +52,15 @@ def test_off_by_default_right_is_melee(game):
     game.mouse_pos = (500, 300)
     game.on_mouse_button(3)
     assert game.walk_to is None and game.pending["blue"].melee
+
+
+def test_left_click_shoots_with_mouse_walk(game):
+    game.settings["mouse_move"] = True
+    try:
+        game.start()
+        game.countdown = 0
+        game.on_mouse_button(1)
+        assert game.pending["blue"].fire and not game.pending["blue"].melee
+    finally:
+        game.settings["mouse_move"] = False
+        game.start()

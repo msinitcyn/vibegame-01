@@ -278,16 +278,34 @@ class MenusMixin:
         self.settings["name"] = name
         settings.save(self.settings)
 
+    def net_keys_mode(self):
+        """Какой набор клавиш действует: сетевой (сеть, лобби сервера, разминка) или за одним компьютером."""
+        return bool(getattr(self, "net", None) or getattr(self, "warmup", False) or getattr(self, "lobby_conn", None))
+
+    def sync_keys_mode(self):
+        """Вошли в сеть или вышли — переключить набор клавиш (зовётся каждый кадр, дёшево)."""
+        if self.net_keys_mode() != getattr(self, "keys_net", None):
+            self.apply_keys()
+
     def apply_keys(self):
-        """Управление и подписи ячеек — по назначенным клавишам (настройки), остальное — по умолчанию."""
+        """Управление и подписи ячеек — по назначенным клавишам (настройки), остальное — по умолчанию.
+        По сети — свой набор (keys «net»), за одним компьютером — левый и правый игрок."""
         custom = self.settings.get("keys") or {}
-        self.controls = keys.build(custom, Controls)
+        self.keys_net = self.net_keys_mode()
+        self.controls = keys.build(custom, Controls, net=self.keys_net)
         self.common_keys = keys.current(custom)["common"]     # пауза и чат
         self.key_names = {pid: [keys.label(sc) for sc in self.controls[pid].items] for pid in PLAYER_IDS}
 
     def open_keys(self):
         self.keys_col, self.keys_row, self.keys_wait, self.keys_msg = 0, 0, None, None
+        self.keys_tab = "net" if self.net_keys_mode() else "hotseat"     # открыть тот набор, что действует
         self.state = "keys"
+
+    def keys_tab_switch(self, tab=None):
+        self.keys_tab = tab or ("net" if getattr(self, "keys_tab", "hotseat") == "hotseat" else "hotseat")
+        self.keys_wait, self.keys_msg = None, None
+        if self.keys_tab == "net" and self.keys_row < len(keys.ACTIONS):
+            self.keys_col = 0
 
     def keys_key(self, sc):
         """Экран клавиш: ↑/↓ — действие, ←/→ — игрок, Enter — назначить (дальше — нажать клавишу),
@@ -307,12 +325,16 @@ class MenusMixin:
             return
         if sc in (K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE):
             self.state = "settings"
+        elif sc == K.KSCAN_TAB:
+            self.keys_tab_switch()
         elif sc in (K.KSCAN_UP, K.KSCAN_W):
             self.keys_row = max(0, self.keys_row - 1)
         elif sc in (K.KSCAN_DOWN, K.KSCAN_S):
             self.keys_row = min(len(keys.ACTIONS) + 1, self.keys_row + 1)
         elif sc in (K.KSCAN_LEFT, K.KSCAN_A, K.KSCAN_RIGHT, K.KSCAN_D):
             self.keys_col = 0 if sc in (K.KSCAN_LEFT, K.KSCAN_A) else 1
+            if getattr(self, "keys_tab", "hotseat") == "net" and self.keys_row < len(keys.ACTIONS):
+                self.keys_col = 0                 # по сети — одна колонка (две — только у паузы и чата)
         elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
             self.keys_pick(self.keys_col, self.keys_row)
 
@@ -324,13 +346,15 @@ class MenusMixin:
             self.keys_wait = ("common", keys.COMMON_ACTIONS[col])
             self.keys_msg = None
             return
-        if row > len(keys.ACTIONS):
-            self.settings["keys"] = {}
+        net = getattr(self, "keys_tab", "hotseat") == "net"
+        if row > len(keys.ACTIONS):               # сброс — только своей вкладки (общие пауза и чат — тоже)
+            drop = ("net", "common") if net else ("blue", "red", "common")
+            self.settings["keys"] = {k: v for k, v in (self.settings.get("keys") or {}).items() if k not in drop}
             settings.save(self.settings)
             self.apply_keys()
             self.keys_msg = t("keys.reset_done")
             return
-        self.keys_wait = (PLAYER_IDS[col], keys.ACTIONS[row])
+        self.keys_wait = ("net" if net else PLAYER_IDS[col], keys.ACTIONS[row])
         self.keys_msg = None
 
     def open_pick(self, hp, bot=False):

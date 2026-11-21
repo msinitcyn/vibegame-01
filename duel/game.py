@@ -349,6 +349,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
                 self.win_time = pygame.time.get_ticks()
                 if not self.net:
                     self.record_local()       # итог партии за этим компьютером — в matches.jsonl
+            self.sync_keys_mode()             # сеть или за одним компьютером — свой набор клавиш
             self.update_music()
             self.update_sounds()
             self.sync_mouse_capture()

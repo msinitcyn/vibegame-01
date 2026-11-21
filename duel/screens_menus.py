@@ -243,23 +243,36 @@ class MenuScreensMixin:
             self.on_key(pygame.KSCAN_LEFT if left else pygame.KSCAN_RIGHT)
 
     def draw_keys(self):
-        """Экран клавиш: левый и правый игрок, действия и их клавиши; «Сбросить по умолчанию»."""
+        """Экран клавиш: вкладки «За одним компьютером» (левый и правый игрок) и «По сети» (свой маг);
+        общие пауза и чат — в обеих; «Сбросить по умолчанию» — для вкладки."""
         from . import keys as K
         s = self.screen
         s.fill(BG)
         img = self.big.render(tr("keys.title"), True, WHITE)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 50)))
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 44)))
+        tab = getattr(self, "keys_tab", "hotseat")
+        for i, name in enumerate(("hotseat", "net")):            # вкладки (Tab — переключить)
+            self.button((WIDTH // 2 - 160 + i * 320, 96), tr("keys.tab_" + name),
+                        lambda name=name: self.keys_tab_switch(name), w=300, sel=tab == name)
         current = K.current(self.settings.get("keys"))
-        col_w, row_h, top = 400, 34, 116
-        for col, pid in enumerate(("blue", "red")):
+        col_w, row_h, top = 400, 31, 160
+        columns = [("blue", "keys.left"), ("red", "keys.right")] if tab == "hotseat" else [("net", "keys.net")]
+        for col in range(2):
             x = WIDTH // 2 - col_w - 20 + col * (col_w + 40)
-            img = self.font.render(tr("keys.left" if pid == "blue" else "keys.right"), True, (200, 205, 220))
-            s.blit(img, (x, top - 36))
-            rows = [(row, pid, action) for row, action in enumerate(K.ACTIONS)]
+            rows = []
+            if col < len(columns):
+                group, title = columns[col]
+                if tab == "net":
+                    x = WIDTH // 2 - col_w // 2       # по сети — одна колонка по центру
+                img = self.small.render(tr(title), True, (200, 205, 220))
+                s.blit(img, (x, top - 24))
+                rows = [(row, group, action) for row, action in enumerate(K.ACTIONS)]
+            cx = WIDTH // 2 - col_w - 20 + col * (col_w + 40)
             rows.append((len(K.ACTIONS), "common", K.COMMON_ACTIONS[col]))     # общие: пауза | чат
             for row, group, action in rows:
-                y = top + row * (row_h + 6) + (14 if group == "common" else 0)
-                rect = pygame.Rect(x, y, col_w, row_h)
+                rx = cx if group == "common" else x
+                y = top + row * (row_h + 5) + (12 if group == "common" else 0)
+                rect = pygame.Rect(rx, y, col_w, row_h)
                 sel = (col, row) == (self.keys_col, self.keys_row)
                 waiting = self.keys_wait == (group, action)
                 self.hit(rect, lambda col=col, row=row: self.keys_pick(col, row),
@@ -274,7 +287,7 @@ class MenuScreensMixin:
                 key = tr("keys.press") if waiting else K.label(current[group][action])
                 img = self.font.render(key, True, AMMO_COLOR if waiting else WHITE)
                 s.blit(img, img.get_rect(midright=(rect.right - 12, rect.centery)))
-        reset_y = top + (len(K.ACTIONS) + 1) * (row_h + 6) + 34
+        reset_y = top + (len(K.ACTIONS) + 1) * (row_h + 5) + 30
         self.button((WIDTH // 2, reset_y), tr("keys.reset"), lambda: self.keys_pick(self.keys_col, len(K.ACTIONS) + 1),
                     w=320, sel=self.keys_row > len(K.ACTIONS))
         if self.keys_msg:

@@ -1,8 +1,9 @@
 """Клавиши игроков за клавиатурой: действия, клавиши по умолчанию, назначение, подписи.
 
 Клавиши хранятся как скан-коды (физическое положение) — работают в любой раскладке.
-В настройках — только изменённые: {"blue": {"fire": скан-код, ...}, "red": {...}, "common": {"pause": ...}}.
-Общие (common) — пауза и чат: у них одна клавиша на обоих игроков.
+В настройках — только изменённые: {"blue": {"fire": скан-код, ...}, "red": {...}, "net": {...}, "common": {"pause": ...}}.
+Два набора: за одним компьютером — blue и red (левый и правый игрок), по сети (и в разминке) — net (свой маг).
+Общие (common) — пауза и чат: одни и те же в обоих наборах.
 """
 import pygame
 
@@ -18,7 +19,11 @@ DEFAULT_KEYS = {
             "item1": K.KSCAN_9, "item2": K.KSCAN_0, "item3": K.KSCAN_MINUS, "item4": K.KSCAN_EQUALS},
     "common": {"pause": K.KSCAN_P, "chat": K.KSCAN_T},
 }
-GROUP_ACTIONS = {"blue": ACTIONS, "red": ACTIONS, "common": COMMON_ACTIONS}
+DEFAULT_KEYS["net"] = dict(DEFAULT_KEYS["blue"])      # по сети — как у левого игрока, но настраивается отдельно
+GROUP_ACTIONS = {"blue": ACTIONS, "red": ACTIONS, "net": ACTIONS, "common": COMMON_ACTIONS}
+# в каком наборе клавиши не должны повторяться (занятая — меняется местами)
+DOMAINS = {"blue": ("blue", "red", "common"), "red": ("blue", "red", "common"), "net": ("net", "common"),
+           "common": ("blue", "red", "net", "common")}
 RESERVED = {K.KSCAN_ESCAPE, K.KSCAN_F5, K.KSCAN_F11, K.KSCAN_GRAVE}    # служебные: меню, картинки, экран, консоль
 
 _SPECIAL = {"SPACE": "Space", "RETURN": "Enter", "KP_ENTER": "Num Enter", "UP": "↑", "DOWN": "↓",
@@ -58,26 +63,29 @@ def current(custom=None):
 
 
 def assign(custom, pid, action, sc):
-    """Назначить клавишу sc действию (pid — игрок или "common"); если она занята (у любого игрока или
-    общей) — обмен местами.
+    """Назначить клавишу sc действию (pid — "blue", "red", "net" или "common"); если она занята в том же
+    наборе (за одним компьютером или по сети; общие — в обоих) — обмен местами.
     Возвращает новые изменённые клавиши (для настроек)."""
     keys = current(custom)
     old = keys[pid][action]
-    for other_pid, other in keys.items():
-        for other_action, other_sc in other.items():
+    for other_pid in DOMAINS[pid]:
+        for other_action, other_sc in keys[other_pid].items():
             if other_sc == sc and (other_pid, other_action) != (pid, action):
-                other[other_action] = old
+                keys[other_pid][other_action] = old
     keys[pid][action] = sc
     return {p: {a: s for a, s in keys[p].items() if DEFAULT_KEYS[p][a] != s} for p in keys if
             any(DEFAULT_KEYS[p][a] != s for a, s in keys[p].items())}
 
 
-def build(custom, controls_cls):
-    """Управление игроков (Controls) по назначенным клавишам."""
+def build(custom, controls_cls, net=False):
+    """Управление игроков (Controls) по назначенным клавишам. net — сетевой набор: им управляется свой маг
+    (оба места получают его — какой цвет «мой», решает сервер)."""
     keys = current(custom)
+    if net:
+        keys = {"blue": keys["net"], "red": keys["net"]}
     out = {}
     for pid, k in keys.items():
-        if pid == "common":
+        if pid not in ("blue", "red"):
             continue
         fire = (k["fire"],)
         if pid == "red" and k["fire"] == K.KSCAN_RETURN:
