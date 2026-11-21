@@ -362,7 +362,7 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
                         **({"color": GREY} if row in dim else {}))
         notes = [tr("pause.hint")]
         if net:
-            notes.insert(0, tr("pause.net_note"))
+            notes[0:0] = [tr("pause.net_note"), tr("chat.hint")]
         for i, note in enumerate(notes):
             img = self.small.render(note, True, GREY)
             s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 170 + i * 22)))
@@ -445,6 +445,7 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         if self.paused and not self.snap["winner"]:
             self.draw_pause()
         if self.net:
+            self.draw_chat()
             self.draw_net_notice()
             self.draw_watch_banner()
         if getattr(self, "warmup", False):         # разминка против бота — надпись внизу

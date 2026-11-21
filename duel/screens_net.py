@@ -249,6 +249,7 @@ class NetScreensMixin:
             img = self.small.render(tr("net.spectators", n=self.net_spectators), True, GREY)
             s.blit(img, img.get_rect(center=(WIDTH // 2, 665)))
         self.draw_watch_banner()
+        self.draw_chat()
         self.draw_net_notice()
         pygame.display.flip()
 

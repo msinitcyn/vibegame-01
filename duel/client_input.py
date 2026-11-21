@@ -73,6 +73,8 @@ class InputMixin:
         if self.state == "account":
             self.account_key(sc)
             return
+        if self.chat_key(sc):                 # чат по сети: T — написать; пока пишешь, клавиши — в чат
+            return
         if sc == pygame.KSCAN_ESCAPE:
             if self.snap["winner"] or self.watching or (self.net and self.net_waiting and not self.warmup):
                 self.quit_match()         # партия кончилась, зритель, выбор героя — выходим, как раньше
@@ -162,6 +164,9 @@ class InputMixin:
         на экране входа — в имя или пароль."""
         if self.state == "account":
             self.account_text(text)
+            return
+        if self.chat_typing:
+            self.chat_type(text)
             return
         if self.state == "entry" and self.entry_row == 0:
             chars = "".join(ch for ch in text if ch.isprintable())

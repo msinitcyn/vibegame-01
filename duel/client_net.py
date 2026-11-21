@@ -34,7 +34,7 @@ class NetClientMixin:
             if not self.warmup and self.paused != self.menu_sent:    # открыл/закрыл меню — серверу (сопернику видно)
                 self.menu_sent = self.paused
                 self.net.send({"type": "menu", "open": self.paused})
-            if self.warmup or self.paused:   # разминка или пауза: серверу — пустые команды (связь жива)
+            if self.warmup or self.paused or self.chat_typing:   # разминка, меню, чат: пустые команды (связь жива)
                 if self.paused:
                     self.pending = {pid: Command() for pid in PLAYER_IDS}
                 self.net.send({"type": "cmd", "move": [0, 0]})
@@ -74,6 +74,8 @@ class NetClientMixin:
                 self.net_can_hold = msg.get("can_hold") if isinstance(msg.get("can_hold"), dict) else {}
                 self.playback.push(msg["tick"], msg["snap"], msg["events"], msg.get("waiting", False),
                                    msg.get("game", 0))
+            elif msg.get("type") == "chat":
+                self.chat_received(msg)
             elif msg.get("type") == "bye":
                 self.net_end = "net.host_left"
                 return False
@@ -179,6 +181,7 @@ class NetClientMixin:
         self.net_seats, self.net_phase, self.net_paused = {}, "lobby", False
         self.net_hold, self.net_menus, self.net_pauses, self.net_can_hold = None, {}, {}, {}
         self.menu_sent = False
+        self.chat_reset()
         self.net_spectators = 0
         self.reconnect_until = None
         self.net_heard = time.monotonic()

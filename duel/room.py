@@ -55,6 +55,7 @@ class Seat:
         self.last_seen = 0.0
         self.hero = None              # герой игрока на этом месте (только вид)
         self.in_menu = False          # игрок открыл меню (игра у него идёт; сопернику видно «в меню»)
+        self.last_chat = -1e9         # когда писал в чат (не чаще CHAT_GAP)
 
     @property
     def free(self):
@@ -293,6 +294,8 @@ class Room:
                     self.bot = True
                     s.ready = True
                     self.log(f"{pid} позвал бота")
+            elif kind == "chat":              # чат: пересылаем обоим игрокам и зрителям
+                self.chat(pid, s, msg.get("text"), now)
             elif kind == "menu":              # открыл/закрыл меню — игра у него идёт
                 s.in_menu = bool(msg.get("open"))
             elif kind == "pause":
@@ -302,6 +305,21 @@ class Room:
             elif kind == "leave":
                 return self.free_seat(pid, "вышел", close=False)
         return None
+
+    # ------------------------------------------------------------------ чат
+
+    def chat(self, pid, s, text, now):
+        """Сообщение игрока: только печатные знаки, не длиннее CHAT_MAX, не чаще CHAT_GAP — всем в комнате."""
+        if not isinstance(text, str) or now - s.last_chat < config.CHAT_GAP:
+            return
+        text = "".join(ch for ch in text if ch.isprintable()).strip()[:config.CHAT_MAX]
+        if not text:
+            return
+        s.last_chat = now
+        msg = {"type": "chat", "from": pid, "name": s.name, "text": text}
+        for conn in self.all_conns():
+            conn.send(msg)
+        self.log(f"чат {pid}: {text}")
 
     # ------------------------------------------------------------------ общая пауза
 

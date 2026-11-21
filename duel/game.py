@@ -16,6 +16,7 @@ from . import config
 from . import settings
 from .audio import Audio, MUSIC_END
 from .commands import Command
+from .client_chat import ChatMixin
 from .demos import has_demo
 from .config import (
     AMMO_COLOR,
@@ -47,7 +48,7 @@ from .client_menus import MenusMixin
 from .client_net import NetClientMixin
 
 
-class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin):
+class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, ChatMixin):
     """Приложение поверх матча: хотсит — оба игрока за одним компьютером."""
 
     def __init__(self, windowed=False, net=None, pad=0):
@@ -132,6 +133,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin):
         self.net_pauses = {}          # сколько общих пауз осталось у каждого
         self.net_can_hold = {}        # можно ли сейчас поставить паузу
         self.menu_sent = False        # что последним сказали серверу про своё меню
+        self.chat_reset()
         self.sound_demo = None        # чья сценка звучит в справке (сменилась — звуки обрываем)
         self.demo_snap = None         # снимок идущей сценки — для звуков-циклов
         self.net_addr = self.net_token = None    # куда и с каким ключом возвращаться после обрыва
