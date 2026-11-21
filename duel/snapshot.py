@@ -9,6 +9,8 @@
 """
 import math
 
+from .config import BEAR_HP
+
 
 def _xy(v):
     return round(float(v), 1)
@@ -35,7 +37,9 @@ def snapshot(match):
         "winner": _pid(m.winner),
         "players": [{
             "id": p.id, "hero": p.hero, "x": _xy(p.x), "y": _xy(p.y), "r": _xy(p.radius), "aim": _t(p.aim),
-            "hp": p.hp, "ammo": p.ammo, "effects": _effects(p), "shield_hits": p.shield_hits,
+            "hp": p.hp, "max_hp": BEAR_HP if "bear" in p.effects else p.max_hp,
+            "ammo": p.ammo, "effects": _effects(p), "shield_hits": p.shield_hits,
+            "shield_flash": _t(p.shield_flash), "shield_break": _t(p.shield_break),
             "items": list(p.items), "queue": list(p.queue),
             "hit_flash": _t(p.hit_flash), "melee_flash": _t(p.melee_flash),
             "moving": bool(p.moving or p.moving_x), "shot": _t(p.shot_flash),
@@ -66,6 +70,7 @@ def snapshot(match):
         "ice": [{"id": t.id, "owner": t.owner.id, "x": _xy(t.x), "y": _xy(t.y), "life": _t(t.life)}
                 for t in m.ice],
         "trees": [{"id": t.id, "owner": t.owner.id, "x": _xy(t.x), "y": _xy(t.y), "angle": _t(t.angle),
+                   "life": _t(t.life),
                    "start": _xy(t.start), "len": _xy(t.length)} for t in m.trees],
         "guardians": [{"id": g.id, "side": g.side, "kind": g.kind, "x": _xy(g.x), "y": _xy(g.y),
                        "r": _xy(g.radius), "hp": g.hp, "max_hp": g.max_hp, "awake": g.awake,
@@ -76,7 +81,8 @@ def snapshot(match):
                   for r in m.rings],
         "clones": [{"id": c.id, "owner": c.owner.id, "x": _xy(c.x), "y": _xy(c.y), "aim": _t(c.aim),
                     "r": _xy(c.radius), "life": _t(c.life), "hit_flash": _t(c.hit_flash),
-                    "effects": _effects(c)}
+                    "effects": _effects(c), "shield_hits": c.shield_hits,
+                    "shield_flash": _t(c.shield_flash), "shield_break": _t(c.shield_break)}
                    for c in m.clones],
     }
 

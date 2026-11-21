@@ -1,10 +1,10 @@
 {
   "heroes": {"blue": "fire", "red": "frost"},
-  "view": [330, 110, 320, 160],
+  "view": [340, 90, 320, 160],
   "length": 4.8,
   "setup": {
-    "blue": {"x": 380, "y": 190},
-    "red": {"x": 610, "y": 190}
+    "blue": {"x": 390, "y": 170},
+    "red": {"x": 600, "y": 170}
   },
   "script": [
     {"t": 0.0, "who": "blue", "aim_at": "red"},

@@ -67,6 +67,7 @@ from .config import (
     MAX_HP,
     RAPID_FACTOR,
     SHIELD_GAP,
+    SHIELD_FLASH,
     SHIELD_HITS,
     SHOT_COOLDOWN,
     START_AMMO,
@@ -135,6 +136,8 @@ class Unit:
     def reset_effects(self):
         self.effects = {}             # имя эффекта -> оставшееся время
         self.shield_hits = 0
+        self.shield_flash = 0.0       # для анимации: щит только что погасил удар
+        self.shield_break = 0.0       # для анимации: щит только что лопнул
 
     @property
     def radius(self):
@@ -175,6 +178,8 @@ class Unit:
             self.shield_hits += SHIELD_HITS
 
     def tick_effects(self, dt):
+        self.shield_flash = max(0.0, getattr(self, "shield_flash", 0.0) - dt)
+        self.shield_break = max(0.0, getattr(self, "shield_break", 0.0) - dt)
         for name in list(self.effects):
             self.effects[name] -= dt
             if self.effects[name] <= 0:
@@ -201,9 +206,11 @@ class Unit:
         if "shield" not in self.effects:
             return False
         self.shield_hits -= 1
+        self.shield_flash = SHIELD_FLASH
         if self.shield_hits <= 0:
             del self.effects["shield"]
             self.shield_hits = 0
+            self.shield_break = SHIELD_FLASH * 1.5
         return True
 
 

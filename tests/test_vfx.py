@@ -120,3 +120,29 @@ def test_hits_and_burn_in_snapshot():
     m.blue.x, m.blue.y = 800, 200                        # синий на земле красного (Холода) — мёрзнет
     assert {p["id"]: p["burn"] for p in snapshot(m)["players"]}["blue"] == "frost"
     assert {p["id"]: p["burn"] for p in snapshot(m)["players"]}["red"] is None
+
+
+def test_hp_bar_sight_shield_thorns_draw():
+    from duel import vfx_units as U
+    from duel.config import TREE_SPEED, TREE_TIME, TREE_W
+    font = pygame.font.Font(None, 14)
+    for hp, mx, sh in ((10, 10, 0), (3, 10, 5), (0, 15, 0), (57, 100, 2)):
+        assert _drew(lambda s: U.draw_hp_bar(s, 200, 100, hp, mx, sh, (255, 90, 80), hp % 2 == 0, font))
+    assert _drew(lambda s: U.draw_sight(s, 200, 150, 14, 0.3, (255, 90, 80)))
+    for left, since, flash in ((6.0, 0.05, 0.0), (4.0, 2.0, 1.0), (3.0, 3.0, 0.5)):
+        assert _drew(lambda s: U.draw_shield(s, (200, 150), 14, 10, left, since, 3, flash, 1.0))
+    assert _drew(lambda s: U.draw_shield_break(s, (200, 150), 14, 10, 0.4))
+    for life, start, length in ((TREE_TIME - 0.05, 0, 100), (4.0, 0, 750), (0.3, 300, 750)):
+        t = {"id": 3, "x": 50, "y": 150, "angle": 0.0, "life": life, "start": start, "len": length}
+        assert _drew(lambda s: U.draw_thorns(s, t, TREE_W, TREE_SPEED, TREE_TIME))
+
+
+def test_shield_absorb_flashes_and_breaks():
+    from duel.match import Match
+    m = Match(seed=1)
+    p = m.blue
+    p.apply("shield")
+    assert p.shield_absorb() and p.shield_flash > 0 and p.shield_break == 0
+    while "shield" in p.effects:
+        p.shield_absorb()
+    assert p.shield_break > 0                            # последний заряд — щит лопнул

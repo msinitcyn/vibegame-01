@@ -18,7 +18,8 @@
     }
 
 В "setup" можно поставить и мобов: "mobs": [{"x": 500, "y": 200, "hp": 6, "ranged": false}] —
-они спокойные: их можно бить, но они не нападают (чтобы сценка была чистой); "angry": true — злятся, как в игре.
+они спокойные: их можно бить, но они не нападают (чтобы сценка была чистой); "angry": true — злятся, как в игре
+("target": "blue" — сразу идут на этого мага). Ни маги, ни мобы в сценке не погибают — жизни восстанавливаются.
 
 Мобов, волн, пачек патронов и стражей арены в сценке нет — только то, что в сценарии.
 """
@@ -77,13 +78,15 @@ class Demo:
             spot = (d.get("setup") or {}).get(p.id) or {}
             p.x = float(spot.get("x", p.x))
             p.y = float(spot.get("y", p.y))
-            p.hp = p.max_hp = int(spot.get("hp", MAX_HP * 10))       # в сценке никто не погибает
+            p.hp = p.max_hp = int(spot.get("hp", MAX_HP))     # в сценке никто не погибает (см. update)
         self.calm = []
         for mob in (d.get("setup") or {}).get("mobs") or []:
             unit = Mob(float(mob["x"]), float(mob["y"]), int(mob.get("hp", 3)), ranged=bool(mob.get("ranged", False)))
             m.mobs.append(unit)
             if not mob.get("angry"):
                 self.calm.append(unit)
+            elif mob.get("target"):
+                unit.target = m.player(mob["target"])
         self.match = m
         self.t = 0.0
         self.acc = 0.0
@@ -138,3 +141,10 @@ class Demo:
             self.match.step(STEP, self.commands())
             for unit in self.calm:                    # спокойные мобы не идут и не бьют
                 unit.target = None
+            for unit in self.match.mobs:              # мобы сценки тоже не погибают (зомби — живут своё)
+                if unit.hp <= 1 and unit.zombie_of is None:
+                    unit.hp = unit.max_hp
+            for p in self.match.players:              # никто не погибает: кончились жизни — снова полные
+                if p.hp <= 0:
+                    p.hp = p.max_hp
+            self.match.winner = None

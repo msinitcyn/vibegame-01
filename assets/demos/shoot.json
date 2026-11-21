@@ -1,66 +1,19 @@
 {
-  "heroes": {
-    "blue": "fire",
-    "red": "frost"
-  },
-  "view": [
-    60,
-    110,
-    320,
-    160
-  ],
-  "length": 3.6,
+  "heroes": {"blue": "fire", "red": "frost"},
+  "view": [340, 90, 320, 160],
+  "length": 4.2,
   "setup": {
-    "blue": {
-      "x": 110,
-      "y": 190
-    },
-    "red": {
-      "x": 900,
-      "y": 600
-    },
-    "mobs": [
-      {
-        "x": 300,
-        "y": 190,
-        "hp": 60
-      }
-    ]
+    "blue": {"x": 390, "y": 170},
+    "red": {"x": 600, "y": 215},
+    "mobs": [{"x": 570, "y": 125, "hp": 6}]
   },
   "script": [
-    {
-      "t": 0.0,
-      "who": "blue",
-      "aim_at": [
-        400,
-        190
-      ]
-    },
-    {
-      "t": [
-        0.4,
-        1.6
-      ],
-      "every": 0.4,
-      "who": "blue",
-      "fire": true
-    },
-    {
-      "t": 1.7,
-      "who": "blue",
-      "aim_at": [
-        400,
-        130
-      ]
-    },
-    {
-      "t": [
-        1.9,
-        3.0
-      ],
-      "every": 0.4,
-      "who": "blue",
-      "fire": true
-    }
+    {"t": 0.0, "who": "blue", "aim_at": [570, 125]},
+    {"t": 0.0, "who": "red", "aim_at": "blue"},
+    {"t": [0.4, 1.3], "every": 0.45, "who": "blue", "fire": true},
+    {"t": 1.5, "who": "blue", "aim_at": "red"},
+    {"t": [1.7, 2.6], "every": 0.45, "who": "blue", "fire": true},
+    {"t": 2.8, "who": "blue", "aim_at": [700, 168]},
+    {"t": [3.0, 3.6], "every": 0.45, "who": "blue", "fire": true}
   ]
 }

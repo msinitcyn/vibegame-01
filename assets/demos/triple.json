@@ -1,14 +1,47 @@
 {
-  "heroes": {"blue": "frost", "red": "fire"},
-  "view": [60, 110, 320, 160],
+  "heroes": {
+    "blue": "frost",
+    "red": "fire"
+  },
+  "view": [
+    340,
+    90,
+    320,
+    160
+  ],
   "length": 4.0,
   "setup": {
-    "blue": {"x": 130, "y": 190},
-    "red": {"x": 900, "y": 600}
+    "blue": {
+      "x": 410,
+      "y": 170
+    },
+    "red": {
+      "x": 900,
+      "y": 600
+    }
   },
   "script": [
-    {"t": 0.0, "who": "blue", "aim_at": [400, 190]},
-    {"t": 0.5, "who": "blue", "item": "triple"},
-    {"t": [1.3, 3.6], "every": 0.55, "who": "blue", "fire": true}
+    {
+      "t": 0.0,
+      "who": "blue",
+      "aim_at": [
+        680,
+        170
+      ]
+    },
+    {
+      "t": 0.5,
+      "who": "blue",
+      "item": "triple"
+    },
+    {
+      "t": [
+        1.3,
+        3.6
+      ],
+      "every": 0.55,
+      "who": "blue",
+      "fire": true
+    }
   ]
 }

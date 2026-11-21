@@ -1,17 +1,66 @@
 {
-  "heroes": {"blue": "nature", "red": "fire"},
-  "view": [60, 110, 320, 160],
+  "heroes": {
+    "blue": "nature",
+    "red": "fire"
+  },
+  "view": [
+    340,
+    90,
+    320,
+    160
+  ],
   "length": 4.4,
   "speed": 0.6,
   "setup": {
-    "blue": {"x": 130, "y": 190},
-    "red": {"x": 900, "y": 600},
-    "mobs": [{"x": 300, "y": 190, "hp": 60}]
+    "blue": {
+      "x": 410,
+      "y": 170
+    },
+    "red": {
+      "x": 900,
+      "y": 600
+    },
+    "mobs": [
+      {
+        "x": 580,
+        "y": 170,
+        "hp": 6
+      }
+    ]
   },
   "script": [
-    {"t": 0.0, "who": "blue", "aim_at": [300, 190]},
-    {"t": 0.6, "who": "blue", "item": "bear"},
-    {"t": [1.6, 1.95], "who": "blue", "move": [1, 0]},
-    {"t": [2.1, 4.1], "every": 0.6, "who": "blue", "melee": true}
+    {
+      "t": 0.0,
+      "who": "blue",
+      "aim_at": [
+        580,
+        170
+      ]
+    },
+    {
+      "t": 0.6,
+      "who": "blue",
+      "item": "bear"
+    },
+    {
+      "t": [
+        1.6,
+        1.95
+      ],
+      "who": "blue",
+      "move": [
+        1,
+        0
+      ]
+    },
+    {
+      "t": [
+        2.1,
+        4.1
+      ],
+      "every": 0.6,
+      "who": "blue",
+      "melee": true
+    }
   ]
 }

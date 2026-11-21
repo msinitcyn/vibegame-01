@@ -24,6 +24,8 @@ from .config import (
     FIRE_RING_R,
     ZOMBIE_RADIUS,
     TREE_W,
+    TREE_SPEED,
+    TREE_TIME,
     AMMO_PACK,
     ARTIFACT_R,
     BULLET_R,
@@ -37,9 +39,10 @@ from .config import (
     MOB_SHOT_R,
     MOB_WINDUP,
     SHIELD_GAP,
+    SHIELD_FLASH,
     WALL_W,
 )
-from . import vfx, vfx_bullets
+from . import vfx, vfx_bullets, vfx_units
 from .icons import draw_icon
 from .items import ITEMS
 from .sprites import draw_unit
@@ -76,10 +79,11 @@ def draw_effects(surf, u, time=0.0):
     if "immune" in effects:                       # дубовая кора — золотисто-бурое кольцо
         pygame.draw.circle(surf, (16, 12, 20), pos, r + 12, 6)
         pygame.draw.circle(surf, ITEMS["immune"][1], pos, r + 12, 4)
-    if "shield" in effects:
-        t = effects["shield"]
-        if t > 1.5 or int(t * 8) % 2:
-            pygame.draw.circle(surf, ITEMS["shield"][1], pos, r + SHIELD_GAP, 3)
+    if "shield" in effects:                       # пузырь щита: соты, блик, заряды, рябь от удара
+        vfx_units.draw_shield(surf, pos, u["r"], SHIELD_GAP, effects["shield"], DURATION["shield"] - effects["shield"],
+                              u.get("shield_hits", 0), u.get("shield_flash", 0) / SHIELD_FLASH, time)
+    if u.get("shield_break", 0) > 0:              # щит лопнул — осколки
+        vfx_units.draw_shield_break(surf, pos, u["r"], SHIELD_GAP, 1 - u["shield_break"] / (SHIELD_FLASH * 1.5))
     if "nofire" in effects:
         d = int(r * 0.7)
         cx, cy = pos
@@ -88,17 +92,17 @@ def draw_effects(surf, u, time=0.0):
 
 
 def draw_aim(surf, p, color):
-    """Метка прицела: треугольник цвета героя рядом с магом, остриём по направлению прицела."""
-    a = p["aim"]
-    cos, sin = math.cos(a), math.sin(a)
-    cx, cy = p["x"], p["y"]
-    near, far, half = p["r"] + 8, p["r"] + 30, 5     # узкий и длинный — читается как стрелка
-    tip = (cx + cos * far, cy + sin * far)
-    base = (cx + cos * near, cy + sin * near)
-    left = (base[0] - sin * half, base[1] + cos * half)
-    right = (base[0] + sin * half, base[1] - cos * half)
-    pygame.draw.polygon(surf, (16, 12, 20), [tip, left, right], 3)
-    pygame.draw.polygon(surf, color, [tip, left, right])
+    """Мушка прицела: точка цвета героя на линии прицела."""
+    vfx_units.draw_sight(surf, p["x"], p["y"], p["r"], p["aim"], color)
+
+
+def draw_hp(surf, u, color, font, hp=None, max_hp=None, shield=None, scale=1.0):
+    """Полоска жизней над головой (двойник показывает жизни хозяина — чтобы не выдать себя)."""
+    hp = u.get("hp", 0) if hp is None else hp
+    max_hp = u.get("max_hp") or max(hp, 1) if max_hp is None else max_hp
+    shield = u.get("shield_hits", 0) if shield is None else shield
+    vfx_units.draw_hp_bar(surf, u["x"], vfx_units.hp_bar_top(u["y"], u["r"] * scale), hp, max_hp, shield,
+                          color, u.get("hit_flash", 0) > 0, font)
 
 
 def bear_frame(p, time):
@@ -152,7 +156,7 @@ def triple_open(u):
     return max(0.0, min(1.0, since / max(0.01, float(vfx.params("triple").get("open_time", 0.35)))))
 
 
-def draw_player(surf, p, heroes, viewer=None, time=0.0):
+def draw_player(surf, p, heroes, viewer=None, time=0.0, font=None):
     """Маг. Невидимый: за одним компьютером (viewer None) и себе по сети — полупрозрачный,
     сопернику и зрителям по сети — не виден совсем."""
     if "invisible" in p.get("effects", {}):
@@ -199,6 +203,8 @@ def draw_player(surf, p, heroes, viewer=None, time=0.0):
     if aim is not None:
         draw_aim(surf, p, side_color(heroes, pid))
     draw_effects(surf, p, time)
+    draw_hp(surf, p, side_color(heroes, pid), font,
+            scale=float(vfx.params("bear").get("scale", 1.1)) if bear else 1.0)
 
 
 def draw_invisible(surf, p, heroes):
@@ -215,7 +221,7 @@ def draw_invisible(surf, p, heroes):
     pygame.draw.circle(surf, side_color(heroes, p["id"]), pos, int(r) + 4, 1)
 
 
-def draw_clone(surf, c, heroes):
+def draw_clone(surf, c, heroes, owner_p=None, font=None, time=0.0):
     """Двойник — как настоящий маг: тот же рисунок, метка прицела, вспышка от попадания."""
     owner = c["owner"]
     aim = c.get("aim", 0.0 if DIR[owner] > 0 else math.pi)
@@ -224,7 +230,10 @@ def draw_clone(surf, c, heroes):
     if "triple" in c["effects"]:
         vfx.draw_triple(surf, _pos(c), c["r"], facing, triple_open(c))
     draw_aim(surf, {**c, "aim": aim}, side_color(heroes, owner))
-    draw_effects(surf, c)
+    draw_effects(surf, c, time)
+    if owner_p is not None:
+        draw_hp(surf, c, side_color(heroes, owner), font, owner_p["hp"], owner_p.get("max_hp") or 10,
+                owner_p.get("shield_hits", 0))
 
 
 def draw_bullet(surf, b, heroes, time=0.0):
@@ -303,15 +312,8 @@ def draw_mob(surf, m, font=None, heroes=DEFAULT_HERO):
         draw_unit(surf, name + ("_zombie" if zombie else ""), pos, m["r"], m["facing"], white=m["flash"] > 0)
     color = (side_color(heroes, zombie) if zombie else
              side_color(heroes, m["target"]) if m["target"] else MOB_IDLE_COLOR)
-    bar = pygame.Rect(0, 0, 28, 5)
-    bar.midbottom = (pos[0], pos[1] - m["r"] - 2)
-    pygame.draw.rect(surf, (16, 12, 20), bar.inflate(2, 2))
-    fill = bar.copy()
-    fill.w = max(1, round(bar.w * m["hp"] / m["max_hp"]))
-    pygame.draw.rect(surf, color, fill)
-    if font:
-        txt = font.render(str(m["hp"]), True, color)
-        surf.blit(txt, txt.get_rect(midbottom=(pos[0], bar.top - 1)))
+    vfx_units.draw_hp_bar(surf, pos[0], vfx_units.hp_bar_top(pos[1], m["r"]), m["hp"], m["max_hp"], 0,
+                          color, m["flash"] > 0, font)
 
 
 def draw_mob_shot(surf, s):
@@ -347,21 +349,8 @@ def draw_ice(surf, t, heroes, time=0.0):
 
 
 def draw_trees(surf, t):
-    """Стена деревьев: ряд деревьев (ствол и крона) от start до len вдоль отрезка."""
-    a = t["angle"]
-    cos, sin = math.cos(a), math.sin(a)
-    d = t["start"]
-    while d <= t["len"]:
-        x, y = t["x"] + cos * d, t["y"] + sin * d
-        h = TREE_W * 0.75                         # ёлка: ствол и два яруса хвои
-        pygame.draw.rect(surf, (16, 12, 20), (x - 4, y + h * 0.3, 8, h * 0.6))
-        pygame.draw.rect(surf, (120, 80, 45), (x - 2, y + h * 0.3, 4, h * 0.55))
-        for top, half, color in ((y - h, h * 0.55, (40, 120, 50)), (y - h * 0.45, h * 0.7, (52, 150, 60))):
-            pts = [(x, top), (x + half, top + h * 0.8), (x - half, top + h * 0.8)]
-            pygame.draw.polygon(surf, (16, 12, 20), pts, 0)
-            pygame.draw.polygon(surf, color, [(x, top + 2), (x + half - 2, top + h * 0.8 - 1),
-                                              (x - half + 2, top + h * 0.8 - 1)])
-        d += TREE_W * 0.85
+    """Стена деревьев — терновник: кривые тёмные колючие кусты; вырастают из земли и вянут."""
+    vfx_units.draw_thorns(surf, t, TREE_W, TREE_SPEED, TREE_TIME)
 
 
 SEED_COLOR = (150, 230, 90)          # семя лесного стража
@@ -446,8 +435,9 @@ def draw_field(surf, snap, font, viewer=None):
         draw_artifact(surf, a)
     for a in snap["ammo_packs"]:
         draw_ammo_pack(surf, a, font)
+    owners = {p["id"]: p for p in snap["players"]}
     for c in snap["clones"]:
-        draw_clone(surf, c, heroes)
+        draw_clone(surf, c, heroes, owners.get(c["owner"]), font, snap.get("time", 0))
     for g in snap.get("guardians", []):
         draw_guardian(surf, g, font, heroes)
     for m in snap["mobs"]:
@@ -478,7 +468,7 @@ def draw_field(surf, snap, font, viewer=None):
     for b in snap.get("beams", []):
         draw_beam(surf, b, heroes, snap.get("time", 0))
     for p in snap["players"]:
-        draw_player(surf, p, heroes, viewer, snap.get("time", 0))
+        draw_player(surf, p, heroes, viewer, snap.get("time", 0), font)
     cast = float(vfx.params("beam").get("cast_time", 0.55))
     for b in snap.get("beams", []):               # каст луча — поверх мага
         owner = by_id.get(b["owner"])

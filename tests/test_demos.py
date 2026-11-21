@@ -68,3 +68,25 @@ def test_frost_and_light_demos():
         while d.t < 0.75:
             d.update(1 / 60)
         assert check(d.match), kind
+
+
+def test_demos_on_neutral_strip_except_foe_land():
+    from duel.entities import zone_at
+    for f in sorted(demos.DEMO_DIR.glob("*.json")):
+        if f.stem == "foe_land":
+            continue
+        data = json.loads(f.read_text(encoding="utf-8"))
+        for side in ("blue", "red"):
+            s = data["setup"][side]
+            if (s["x"], s["y"]) != (900, 600):           # «сосед где-то далеко» — не на виду
+                assert zone_at(s["x"], s["y"]) == "neutral", (f.name, side)
+
+
+def test_shield_demo_keeps_hp_until_shield_breaks():
+    d = demos.Demo(demos.load("shield"))
+    while d.t < 2.0:
+        d.update(1 / 60)
+    assert d.match.blue.hp == d.match.blue.max_hp and "shield" in d.match.blue.effects
+    while d.t < 5.5:
+        d.update(1 / 60)
+    assert "shield" not in d.match.blue.effects and d.match.blue.hp < d.match.blue.max_hp
