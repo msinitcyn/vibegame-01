@@ -8,6 +8,10 @@ import math
 import pygame
 
 from .config import (
+    DURATION,
+    WEAPON_TIME,
+    ZOMBIE_RISE,
+    ZOMBIE_TIME,
     SHOT_FLASH,
     WALK_FPS,
     AMMO_COLOR,
@@ -75,8 +79,6 @@ def draw_effects(surf, u):
         t = effects["shield"]
         if t > 1.5 or int(t * 8) % 2:
             pygame.draw.circle(surf, ITEMS["shield"][1], pos, r + SHIELD_GAP, 3)
-    if "triple" in effects:
-        pygame.draw.circle(surf, ITEMS["triple"][1], pos, max(3, r // 3))
     if "nofire" in effects:
         d = int(r * 0.7)
         cx, cy = pos
@@ -98,25 +100,36 @@ def draw_aim(surf, p, color):
     pygame.draw.polygon(surf, color, [tip, left, right])
 
 
-def draw_bear(surf, pos, r, facing, white, color):
-    """Медведь: бурое тело, уши, светлая морда в сторону взгляда, ошейник цвета героя."""
-    x, y = pos
-    fur = (255, 255, 255) if white else (120, 78, 44)
-    light = (255, 255, 255) if white else (190, 140, 90)
-    ink = (16, 12, 20)
-    for ex in (-0.6, 0.6):                                  # уши
-        c = (int(x + ex * r), int(y - 0.75 * r))
-        pygame.draw.circle(surf, ink, c, int(r * 0.32) + 2)
-        pygame.draw.circle(surf, fur, c, int(r * 0.32))
-        pygame.draw.circle(surf, light, c, int(r * 0.15))
-    pygame.draw.circle(surf, ink, (int(x), int(y)), int(r) + 2)
-    pygame.draw.circle(surf, fur, (int(x), int(y)), int(r))
-    pygame.draw.arc(surf, color, (x - r * 0.8, y - r * 0.2, r * 1.6, r * 1.1), math.pi * 1.15, math.pi * 1.85, 4)
-    sx = x + facing * r * 0.38                              # морда
-    pygame.draw.ellipse(surf, light, (sx - r * 0.34, y - r * 0.05, r * 0.68, r * 0.5))
-    pygame.draw.circle(surf, ink, (int(sx + facing * r * 0.12), int(y + r * 0.08)), max(3, int(r * 0.1)))
-    for ex in (-0.2, 0.25):                                 # глаза
-        pygame.draw.circle(surf, ink, (int(x + facing * (ex + 0.2) * r), int(y - r * 0.28)), max(2, int(r * 0.08)))
+def bear_frame(p, time):
+    """Кадр медведя: удар лапой, бег или стоит."""
+    if p.get("melee_flash", 0) > 0:
+        return "swipe_wind" if 1 - p["melee_flash"] / MELEE_FLASH < 0.3 else "swipe"
+    if p.get("moving"):
+        return f"run{int(time * float(vfx.params('bear').get('run_fps', 11))) % 4 + 1}"
+    return "idle"
+
+
+def draw_bear(surf, p, heroes, pos, facing, time):
+    """Медведь Природы; первые мгновения — превращение из мага."""
+    r = p["r"]
+    hero = heroes[p["id"]]
+    scale = float(vfx.params("bear").get("scale", 1.45))
+    white = p["hit_flash"] > 0
+    frame = bear_frame(p, time)
+
+    def bear(k=1.0, flash=False):
+        draw_unit(surf, f"bear_{hero}", (pos[0], pos[1] - r * (scale - 1) * 0.4), r * scale * k, facing,
+                  white=white or flash, frame=frame)
+
+    def mage(k=1.0, flash=False):
+        draw_unit(surf, HERO_SPRITE[hero], pos, r * k, facing, white=white or flash)
+
+    since = DURATION["bear"] - p["effects"]["bear"]
+    T = float(vfx.params("bear").get("transform_time", 0.8))
+    if 0 <= since < T:
+        vfx.bear_transform(surf, pos, r, since / T, mage, bear)
+    else:
+        bear()
 
 
 def mage_frame(p, time):
@@ -130,6 +143,12 @@ def mage_frame(p, time):
         n = int(time * WALK_FPS) % 4 + 1
         return f"walk{n}", (1 if n in (1, 3) else 0)
     return "idle", 0
+
+
+def triple_open(u):
+    """Насколько раскрылись стволы тройного выстрела (0..1) — по времени с начала эффекта."""
+    since = WEAPON_TIME - u["effects"].get("triple", 0)
+    return max(0.0, min(1.0, since / max(0.01, float(vfx.params("triple").get("open_time", 0.35)))))
 
 
 def draw_player(surf, p, heroes, viewer=None, time=0.0):
@@ -154,7 +173,7 @@ def draw_player(surf, p, heroes, viewer=None, time=0.0):
         pygame.draw.circle(ring, (*side_color(heroes, pid), int(a * k)), (c, c), radius + reach, 3)
         surf.blit(ring, ring.get_rect(center=pos))
     if bear:
-        draw_bear(surf, pos, p["r"], facing, p["hit_flash"] > 0, side_color(heroes, pid))
+        draw_bear(surf, p, heroes, pos, facing, time)
     else:
         frame, bob = mage_frame(p, time)
         px = p["r"] * 2 * 1.15 / 32
@@ -162,8 +181,12 @@ def draw_player(surf, p, heroes, viewer=None, time=0.0):
                   white=p["hit_flash"] > 0, frame=frame)
         if p["melee_flash"] > 0:                   # меч
             vfx.draw_sword(surf, pos, p["r"], facing, aim, 1 - p["melee_flash"] / MELEE_FLASH)
-        elif p.get("shot", 0) > 0:                 # вспышка из ствола
-            vfx.draw_muzzle(surf, pos, p["r"], facing, p["shot"] / SHOT_FLASH)
+        else:
+            shot = p.get("shot", 0) / SHOT_FLASH
+            if "triple" in p["effects"]:           # три ствола веером
+                vfx.draw_triple(surf, (pos[0], pos[1] - bob * px), p["r"], facing, triple_open(p), shot)
+            if shot > 0:                           # вспышка из ствола
+                vfx.draw_muzzle(surf, pos, p["r"], facing, shot)
     if aim is not None:
         draw_aim(surf, p, side_color(heroes, pid))
     draw_effects(surf, p)
@@ -189,6 +212,8 @@ def draw_clone(surf, c, heroes):
     aim = c.get("aim", 0.0 if DIR[owner] > 0 else math.pi)
     facing = 1 if math.cos(aim) >= 0 else -1
     draw_unit(surf, HERO_SPRITE[heroes[owner]], _pos(c), c["r"], facing, white=c.get("hit_flash", 0) > 0)
+    if "triple" in c["effects"]:
+        vfx.draw_triple(surf, _pos(c), c["r"], facing, triple_open(c))
     draw_aim(surf, {**c, "aim": aim}, side_color(heroes, owner))
     draw_effects(surf, c)
 
@@ -248,19 +273,26 @@ def draw_mob_attack(surf, m, font):
 def draw_mob(surf, m, font=None, heroes=DEFAULT_HERO):
     pos = _pos(m)
     zombie = m.get("zombie")
-    if zombie:                                    # зомби Тьмы: трупно-зелёное облако и кольцо хозяина
-        r = int(m["r"])
-        aura = pygame.Surface((4 * r,) * 2, pygame.SRCALPHA)
-        c = 2 * r
-        pygame.draw.circle(aura, (120, 220, 90, 70), (c, c), r + 8)
-        pygame.draw.circle(aura, (*side_color(heroes, zombie), 220), (c, c), r + 8, 3)
-        surf.blit(aura, aura.get_rect(center=pos))
-    draw_unit(surf, "mob_ranged" if m["ranged"] else "mob", pos, m["r"], m["facing"],
-              white=m["flash"] > 0)
-    if zombie:                                    # зелёный оттенок поверх спрайта
-        tint = pygame.Surface((int(2 * m["r"]),) * 2, pygame.SRCALPHA)
-        pygame.draw.circle(tint, (110, 230, 80, 90), (int(m["r"]),) * 2, int(m["r"]))
-        surf.blit(tint, tint.get_rect(center=pos))
+    name = "mob_ranged" if m["ranged"] else "mob"
+    since = ZOMBIE_TIME - m.get("zombie_life", 0) if zombie else 99.0
+    T = ZOMBIE_RISE
+    if zombie and since < T:                      # превращение в зомби: руны, туман, корчится и зеленеет
+        k = max(0.0, since / T)
+        vfx.zombie_rise(surf, pos, m["r"], k, side_color(heroes, zombie))
+        tw = int(float(vfx.params("zombie").get("twitch", 2)) * math.sin(since * 40) * (1 - k))
+        at = (pos[0] + tw, pos[1])
+        draw_unit(surf, name, at, m["r"], m["facing"], white=m["flash"] > 0)
+        draw_unit(surf, name + "_zombie", at, m["r"], m["facing"], alpha=int(255 * k))
+        vfx.zombie_mist(surf, pos, m["r"], k)
+    else:
+        if zombie:                                # зомби Тьмы: слабое облако и кольцо хозяина
+            r = int(m["r"])
+            aura = pygame.Surface((4 * r,) * 2, pygame.SRCALPHA)
+            c = 2 * r
+            pygame.draw.circle(aura, (120, 220, 90, int(vfx.params("zombie").get("aura_alpha", 60))), (c, c), r + 8)
+            pygame.draw.circle(aura, (*side_color(heroes, zombie), 220), (c, c), r + 8, 3)
+            surf.blit(aura, aura.get_rect(center=pos))
+        draw_unit(surf, name + ("_zombie" if zombie else ""), pos, m["r"], m["facing"], white=m["flash"] > 0)
     color = (side_color(heroes, zombie) if zombie else
              side_color(heroes, m["target"]) if m["target"] else MOB_IDLE_COLOR)
     bar = pygame.Rect(0, 0, 28, 5)

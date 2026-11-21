@@ -1,0 +1,11 @@
+{
+  "_about": "Тройной выстрел: ещё два ствола веером. Углы — градусы, длины — в пикселях спрайта мага (32×32).",
+  "spread": 45,
+  "open_time": 0.35,
+  "barrel_length": 13,
+  "barrel_width": 2,
+  "dark_color": "#2e303a",
+  "mid_color": "#525664",
+  "light_color": "#8c92a0",
+  "spark_color": "#ffe66e"
+}

@@ -121,3 +121,31 @@ def test_sprite_text_roundtrip(tmp_path, monkeypatch):
     from duel.spritefile import SpriteError
     with pytest.raises(SpriteError):
         tool.main(["import", "mage", "idle", str(tmp_path / "bad.png")])
+
+
+def test_bear_sprite_frames_and_collar_in_hero_color():
+    from duel.config import HERO_COLOR
+    from duel.render import bear_frame
+    for f in ("idle", "run1", "run2", "run3", "run4", "swipe_wind", "swipe"):
+        assert f in sprites.frame_names("bear_nature")
+    fire = sprites._base("bear_fire", "idle")
+    colors = {tuple(fire.get_at((x, y)))[:3] for x in range(32) for y in range(32)}
+    assert HERO_COLOR["fire"] in colors                      # ошейник — цвета героя
+    base = {"melee_flash": 0, "moving": False}
+    assert bear_frame(base, 0) == "idle"
+    assert bear_frame({**base, "moving": True}, 0.3).startswith("run")
+    assert bear_frame({**base, "melee_flash": 0.05}, 0) == "swipe"
+
+
+def test_melee_frames_have_no_gun():
+    gun = {(46, 48, 58), (82, 86, 100)}                     # тёмный и средний цвет автомата
+    for f in ("melee_wind", "melee_hit"):
+        img = sprites._base("mage_blue", f)
+        assert not any(tuple(img.get_at((x, y)))[:3] in gun for x in range(32) for y in range(32)), f
+    img = sprites._base("mage_blue", "idle")
+    assert any(tuple(img.get_at((x, y)))[:3] in gun for x in range(32) for y in range(32))
+
+
+def test_zombie_mob_recolored():
+    a, b = sprites._base("mob"), sprites._base("mob_zombie")
+    assert pygame.image.tobytes(a, "RGBA") != pygame.image.tobytes(b, "RGBA")

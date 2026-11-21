@@ -1,0 +1,15 @@
+{
+  "heroes": {"blue": "dark", "red": "fire"},
+  "view": [60, 110, 320, 160],
+  "length": 4.5,
+  "setup": {
+    "blue": {"x": 140, "y": 190},
+    "red": {"x": 900, "y": 600},
+    "mobs": [{"x": 240, "y": 160, "hp": 6}, {"x": 250, "y": 225, "hp": 6, "ranged": true}]
+  },
+  "script": [
+    {"t": 0.0, "who": "blue", "aim_at": [300, 190]},
+    {"t": 0.8, "who": "blue", "item": "zombies"},
+    {"t": [2.6, 3.4], "who": "blue", "move": [1, 0]}
+  ]
+}

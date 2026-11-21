@@ -50,6 +50,7 @@ from .config import (
     SENTRY_R,
     ZOMBIE_MAX,
     ZOMBIE_RADIUS,
+    ZOMBIE_RISE,
     ZOMBIE_TIME,
     ARENA,
     ARENA_R,
@@ -737,6 +738,8 @@ class Match:
         m.swing = max(0.0, m.swing - dt)
         if m.zombie_life <= 0:
             m.alive = False
+            return
+        if ZOMBIE_TIME - m.zombie_life < ZOMBIE_RISE:   # ещё встаёт из-под земли
             return
         owner = m.zombie_of
         near = lambda u: math.hypot(u.x - owner.x, u.y - owner.y) <= ZOMBIE_LEASH     # noqa: E731

@@ -473,3 +473,16 @@ def test_level_by_mob_hp():
 def test_heavy_items_are_rarer():
     fat = drops("fire", 6, 3000)
     assert fat["firering"] < fat["lasso"] < fat["heal"]
+
+
+def test_zombie_stands_still_while_rising():
+    from duel.config import ZOMBIE_RISE
+    m = dark_with_mobs(n=1)
+    b = m.blue
+    m.apply_item(b, "zombies")
+    z = m.mobs[0]
+    x0, y0 = z.x, z.y
+    step(m, ZOMBIE_RISE * 0.8)
+    assert (z.x, z.y) == (x0, y0)                        # встаёт из-под земли — на месте
+    step(m, 1.5)
+    assert (z.x, z.y) != (x0, y0)                        # встал — идёт к хозяину

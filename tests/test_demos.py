@@ -38,3 +38,23 @@ def test_help_page_with_demo_draws(game):
     game.help_full = True                       # во весь экран
     game.draw_help()
     game.help_full = False
+
+
+def test_speed_slows_demo():
+    """"speed": 0.5 — за секунду настоящего времени сценка проходит полсекунды."""
+    walk = demos.load("walk")
+    assert 0 < walk.get("speed", 1) < 1                    # ходьба показывается замедленно
+    d = demos.Demo({**walk, "speed": 0.5})
+    for _ in range(60):
+        d.update(1 / 60)
+    assert abs(d.t - 0.5) < 0.02
+
+
+def test_new_demos_show_their_artifact():
+    for kind, check in (("bear", lambda m: "bear" in m.blue.effects),
+                        ("triple", lambda m: "triple" in m.blue.effects),
+                        ("zombies", lambda m: any(x.zombie_of is m.blue for x in m.mobs))):
+        d = demos.Demo(demos.load(kind))
+        while d.t < 1.2:
+            d.update(1 / 60)
+        assert check(d.match), kind

@@ -6,6 +6,7 @@
       "heroes": {"blue": "fire", "red": "frost"},     // герои сторон
       "view": [x, y, w, h],                            // какой кусок поля показывать (координаты поля)
       "length": 4.5,                                   // через сколько секунд сценка начинается заново
+      "speed": 0.5,                                    // замедление (0.5 — вдвое медленнее; по умолчанию 1)
       "setup": {"blue": {"x": 340, "y": 160}, "red": {"x": 660, "y": 160}},
       "script": [                                      // что делают маги и когда (t — секунды)
         {"t": 0.8, "who": "blue", "item": "lasso"},          // применить артефакт
@@ -62,6 +63,7 @@ class Demo:
     def __init__(self, data):
         self.data = data
         self.length = float(data.get("length", 4.0))
+        self.speed = max(0.05, float(data.get("speed", 1.0) or 1.0))
         self.reset()
 
     def reset(self):
@@ -125,6 +127,7 @@ class Demo:
         return out
 
     def update(self, dt):
+        dt *= self.speed                              # замедленная сценка — время партии идёт медленнее
         self.t += dt
         if self.t > self.length:
             self.reset()

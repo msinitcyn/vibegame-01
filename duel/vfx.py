@@ -232,17 +232,127 @@ def draw_sword(surf, pos, r, facing, aim, k):
 
 def draw_muzzle(surf, pos, r, facing, k):
     """Вспышка из ствола автомата (у кончика ствола на спрайте); k — 1 в момент выстрела, гаснет к 0."""
-    P = params("shot")
-    size = r * float(P.get("size", 0.9)) * (0.5 + 0.5 * k)
+    size = r * float(params("shot").get("size", 0.9)) * (0.5 + 0.5 * k)
     px = r * 2 * 1.15 / 32                           # пиксель спрайта
-    tx, ty = pos[0] + facing * 16 * px, pos[1] + 4 * px
+    _flash(surf, (pos[0] + facing * 16 * px, pos[1] + 4 * px), 0 if facing > 0 else math.pi, size)
+
+
+def _flash(surf, tip, angle, size):
+    """Вспышка выстрела у кончика ствола tip; angle — куда смотрит ствол."""
+    P = params("shot")
     rays = int(P.get("rays", 5))
     outer = rgb(P.get("outer_color"), (255, 154, 48))
     flash = rgb(P.get("flash_color"), (255, 242, 160))
     core = rgb(P.get("core_color"), (255, 255, 255))
+    tx, ty = tip
     for i in range(rays):
-        a = (i - (rays - 1) / 2) * 0.45 + (0 if facing > 0 else math.pi)
+        a = (i - (rays - 1) / 2) * 0.45 + angle
         ln = size * (1.0 if i == (rays - 1) // 2 else 0.6)
         pygame.draw.line(surf, outer, (tx, ty), (tx + math.cos(a) * ln, ty + math.sin(a) * ln), 3)
     pygame.draw.circle(surf, flash, (int(tx), int(ty)), max(2, int(size * 0.45)))
     pygame.draw.circle(surf, core, (int(tx), int(ty)), max(1, int(size * 0.22)))
+
+
+def draw_triple(surf, pos, r, facing, opened, shot=0.0):
+    """Тройной выстрел: из автомата веером раскрываются ещё два ствола (вверх и вниз под углом).
+    opened — 0..1, насколько раскрылись; shot — 1 в момент выстрела, гаснет к 0 (вспышки из боковых стволов)."""
+    P = params("triple")
+    px = r * 2 * 1.15 / 32                                    # пиксель спрайта
+    pivot = (pos[0] + facing * 7 * px, pos[1] + 3.5 * px)       # где у автомата ствольная коробка
+    spread = math.radians(float(P.get("spread", 45))) * max(0.0, min(1.0, opened))
+    length = float(P.get("barrel_length", 13)) * px
+    w = max(1, round(float(P.get("barrel_width", 2)) * px))
+    dark = rgb(P.get("dark_color"), (46, 48, 58))
+    mid = rgb(P.get("mid_color"), (82, 86, 100))
+    light = rgb(P.get("light_color"), (140, 146, 160))
+    base = 0.0 if facing > 0 else math.pi
+    tips = []
+    for side in (-1, 1):
+        a = base + side * spread * facing
+        tip = (pivot[0] + math.cos(a) * length, pivot[1] + math.sin(a) * length)
+        pygame.draw.line(surf, (24, 20, 32), pivot, tip, w + 2)
+        pygame.draw.line(surf, mid, pivot, tip, w)
+        pygame.draw.line(surf, light, pivot, (pivot[0] + math.cos(a) * length * 0.8,
+                                              pivot[1] + math.sin(a) * length * 0.8 - 1), 1)
+        pygame.draw.circle(surf, dark, (int(tip[0]), int(tip[1])), max(1, int(w * 0.8)))
+        tips.append((tip, a))
+    pygame.draw.circle(surf, dark, (int(pivot[0]), int(pivot[1])), max(2, int(1.6 * px)))
+    if opened < 1:                                            # раскрываются — искра на коробке
+        spark = rgb(P.get("spark_color"), (255, 230, 110))
+        s = (1 - opened) * 3 * px
+        for k in range(4):
+            a = k * math.pi / 2 + opened * 3
+            pygame.draw.line(surf, spark, pivot, (pivot[0] + math.cos(a) * s, pivot[1] + math.sin(a) * s), 2)
+    if shot > 0:
+        size = r * float(params("shot").get("size", 0.9)) * (0.5 + 0.5 * shot) * 0.8
+        for tip, a in tips:
+            _flash(surf, tip, a, size)
+
+
+def bear_transform(surf, pos, r, k, draw_mage, draw_bear):
+    """Превращение мага в медведя, k — 0..1. Маг белеет и раздувается, вспышка, клочья шерсти разлетаются,
+    медведь вырастает из вспышки. draw_mage(scale, white) и draw_bear(scale, white) рисуют сами фигуры."""
+    P = params("bear")
+    swell = float(P.get("swell", 0.35))
+    if k < 0.45:
+        q = k / 0.45
+        draw_mage(1 + swell * q, q > 0.35)
+    else:
+        q = (k - 0.45) / 0.55
+        draw_bear(0.6 + 0.4 * min(1.0, q * 1.4), q < 0.3)
+    ring = rgb(P.get("ring_color"), (110, 225, 100))
+    if 0.3 < k < 0.9:                                         # кольцо силы Природы
+        q = (k - 0.3) / 0.6
+        layer = pygame.Surface((int(6 * r),) * 2, pygame.SRCALPHA)
+        c = layer.get_width() // 2
+        pygame.draw.circle(layer, (*ring, int(220 * (1 - q))), (c, c), int(r * (0.8 + 1.6 * q)), 3)
+        flash = rgb(P.get("flash_color"), (255, 255, 255))
+        if q < 0.35:
+            pygame.draw.circle(layer, (*flash, int(200 * (1 - q / 0.35))), (c, c), int(r * (1.2 - q)))
+        surf.blit(layer, layer.get_rect(center=pos))
+    if k > 0.4:                                               # клочья шерсти
+        q = (k - 0.4) / 0.6
+        colors = [rgb(c, (74, 46, 28)) for c in P.get("fur_colors", ["#4a2e1c"])] or [(74, 46, 28)]
+        n = int(P.get("tufts", 14))
+        fly = float(P.get("tuft_fly", 2.2))
+        for i in range(n):
+            a = i * 2.39996 + 0.3                             # золотой угол — ровно по кругу
+            d = r * (0.5 + fly * q * (0.7 + 0.3 * ((i * 7) % 5) / 4))
+            x, y = pos[0] + math.cos(a) * d, pos[1] + math.sin(a) * d + 8 * q * q
+            size = max(1, int(4 * (1 - q)))
+            pygame.draw.rect(surf, colors[i % len(colors)], (x - size, y - size, 2 * size, 2 * size))
+
+
+def zombie_rise(surf, pos, r, k, owner_color):
+    """Превращение в зомби, k — 0..1: руны цвета хозяина вспыхивают кругом на земле, из-под моба
+    поднимается зелёный туман. Рисуется под мобом (руны) — вызывать до спрайта; туман — zombie_mist после."""
+    P = params("zombie")
+    n = int(P.get("rune_count", 6))
+    rr = r * float(P.get("rune_radius", 1.3))
+    alpha = int(255 * min(1.0, k * 4) * (1 - max(0.0, k - 0.7) / 0.3))
+    layer = pygame.Surface((int(4 * rr + 8),) * 2, pygame.SRCALPHA)
+    c = layer.get_width() // 2
+    turn = k * 2.0
+    pygame.draw.ellipse(layer, (*owner_color, alpha // 2), (c - rr, c - rr * 0.5 + rr * 0.6, 2 * rr, rr), 2)
+    for i in range(n):                                        # руны — короткие черты-закорючки по кругу
+        a = turn + i * 2 * math.pi / n
+        x, y = c + math.cos(a) * rr, c + rr * 0.6 + math.sin(a) * rr * 0.5
+        pygame.draw.line(layer, (*owner_color, alpha), (x - 3, y - 3), (x + 3, y - 3), 2)
+        pygame.draw.line(layer, (*owner_color, alpha), (x, y - 3), (x + (2 if i % 2 else -2), y + 3), 2)
+    surf.blit(layer, layer.get_rect(center=pos))
+
+
+def zombie_mist(surf, pos, r, k):
+    """Зелёный туман, поднимающийся из-под моба (поверх спрайта)."""
+    P = params("zombie")
+    mist = rgb(P.get("mist_color"), (120, 220, 90))
+    n = int(P.get("mist_puffs", 10))
+    layer = pygame.Surface((int(4 * r),) * 2, pygame.SRCALPHA)
+    c = layer.get_width() // 2
+    for i in range(n):
+        q = (k * 1.6 + i / n) % 1.0                           # каждый клубок поднимается снизу вверх
+        x = c + math.sin(i * 2.1 + k * 6) * r * 0.7
+        y = c + r * (1.0 - 2.0 * q)
+        a = int(150 * math.sin(math.pi * q) * (1 - k * 0.6))
+        pygame.draw.circle(layer, (*mist, max(0, a)), (int(x), int(y)), max(2, int(r * 0.35 * (0.6 + q))))
+    surf.blit(layer, layer.get_rect(center=pos))

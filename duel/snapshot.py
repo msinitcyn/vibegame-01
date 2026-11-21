@@ -45,7 +45,7 @@ def snapshot(match):
             "id": x.id, "x": _xy(x.x), "y": _xy(x.y), "r": _xy(x.radius), "hp": x.hp,
             "max_hp": x.max_hp, "ranged": x.ranged, "facing": x.facing, "flash": _t(x.flash),
             "windup": _t(x.windup), "swing": _t(x.swing), "swing_dir": _t(x.swing_dir), "swing_hit": x.swing_hit,
-            "zombie": _pid(x.zombie_of),
+            "zombie": _pid(x.zombie_of), "zombie_life": _t(x.zombie_life),
             "target": _pid(x.target),
         } for x in m.mobs],
         "mob_shots": [{"id": s.id, "x": _xy(s.x), "y": _xy(s.y), "owner": _pid(s.owner)} for s in m.mob_shots],

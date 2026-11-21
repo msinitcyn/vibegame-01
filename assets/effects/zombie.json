@@ -1,0 +1,9 @@
+{
+  "_about": "Превращение моба в зомби Тьмы. Длительность — ZOMBIE_RISE в config.py (столько зомби встаёт), размеры — в радиусах моба.",
+  "mist_color": "#78dc5a",
+  "mist_puffs": 10,
+  "rune_count": 6,
+  "rune_radius": 1.3,
+  "twitch": 2,
+  "aura_alpha": 60
+}

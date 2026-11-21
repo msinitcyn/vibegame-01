@@ -10,7 +10,8 @@ import pygame
 
 from . import spritefile
 
-from .config import MAGE_BLACK_PALETTE, MAGE_GREEN_PALETTE, MAGE_RED_PALETTE, MAGE_YELLOW_PALETTE, SPRITES_DIR
+from .config import (HERO_COLOR, MAGE_BLACK_PALETTE, MAGE_GREEN_PALETTE, MAGE_RED_PALETTE, MAGE_YELLOW_PALETTE,
+                     MOB_RANGED_ZOMBIE_PALETTE, MOB_ZOMBIE_PALETTE, SPRITES_DIR)
 
 # во сколько раз спрайт больше диаметра круга попадания (у спрайта есть прозрачные поля)
 SPRITE_TO_HITBOX = 1.15
@@ -22,7 +23,13 @@ VARIANTS = {
     "mage_green": ("mage", MAGE_GREEN_PALETTE),
     "mage_black": ("mage", MAGE_BLACK_PALETTE),
     "mage_yellow": ("mage", MAGE_YELLOW_PALETTE),
+    "mob_zombie": ("mob", MOB_ZOMBIE_PALETTE),
+    "mob_ranged_zombie": ("mob_ranged", MOB_RANGED_ZOMBIE_PALETTE),
 }
+# медведь: ошейник (#d7eeff в bear.sprite) — цвета героя
+BEAR_COLLAR = "#d7eeff"
+for _hero, _c in HERO_COLOR.items():
+    VARIANTS[f"bear_{_hero}"] = ("bear", {BEAR_COLLAR: "#%02x%02x%02x" % _c})
 
 
 def hex_rgb(h):
