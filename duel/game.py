@@ -118,9 +118,9 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.acc_register = False
         self.entry_name, self.entry_row = "", 1
         self.menu_index = 0
-        self.walk_to = None           # ходьба мышью (эксперимент): куда идёт маг; walk_hold — правая зажата
-        self.walk_hold = False
-        self.settings_rows = ["lang", "name", "aim_mode", "aim_stick", "aim_mouse", "mouse_move", "music", "sfx", "keys",
+        self.walk_to = None           # кнопка мыши «идти»: куда идёт маг; walk_hold — кнопка зажата
+        self.walk_hold, self.walk_button = False, None
+        self.settings_rows = ["lang", "name", "aim_mode", "aim_stick", "aim_mouse", "music", "sfx", "keys",
                               "updates", "check_now", "crash_reports", "back"]
         self.keys_col, self.keys_row, self.keys_wait, self.keys_msg = 0, 0, None, None
         self.updater = Updater()          # новая версия: проверка — в run(), по настройке

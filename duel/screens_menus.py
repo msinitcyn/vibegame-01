@@ -192,7 +192,6 @@ class MenuScreensMixin:
                   "keys": tr("settings.keys"),
                   "updates": f"◀  {tr('settings.updates', v=tr('yes' if self.settings.get('check_updates', True) else 'no'))}  ▶",
                   "check_now": tr("settings.check_now"),
-                  "mouse_move": f"◀  {tr('settings.mouse_move', v=tr('yes' if self.settings.get('mouse_move') else 'no'))}  ▶",
                   "crash_reports": f"◀  {tr('settings.crash', v=tr('yes' if self.settings.get('crash_reports') == 'yes' else 'no'))}  ▶",
                   "back": tr("settings.back")}
         step = min(46, (HEIGHT - 230) // len(self.settings_rows))     # строк много — плотнее
@@ -211,7 +210,7 @@ class MenuScreensMixin:
             img = self.small.render(self.update_status_text(), True, AMMO_COLOR)
             s.blit(img, img.get_rect(center=(WIDTH // 2, 170 + len(self.settings_rows) * step + 24)))
         hint = ("settings.name_hint" if row == "name" else "settings.crash_hint" if row == "crash_reports"
-                else "settings.mouse_move_hint" if row == "mouse_move" else "settings.hint")
+                else "settings.hint")
         img = self.small.render(tr(hint), True, GREY)
         s.blit(img, img.get_rect(center=(WIDTH // 2, 170 + len(self.settings_rows) * step)))
         pygame.display.flip()
@@ -255,7 +254,9 @@ class MenuScreensMixin:
             self.button((WIDTH // 2 - 160 + i * 320, 96), tr("keys.tab_" + name),
                         lambda name=name: self.keys_tab_switch(name), w=300, sel=tab == name)
         current = K.current(self.settings.get("keys"))
-        col_w, row_h, top = 400, 31, 160
+        mouse = K.mouse(self.settings.get("keys"), net=tab == "net")
+        col_w, row_h, top, step = 400, 26, 160, 30
+        n_keys = len(K.ACTIONS) + len(K.MOUSE_BUTTONS)
         columns = [("blue", "keys.left"), ("red", "keys.right")] if tab == "hotseat" else [("net", "keys.net")]
         for col in range(2):
             x = WIDTH // 2 - col_w - 20 + col * (col_w + 40)
@@ -267,11 +268,13 @@ class MenuScreensMixin:
                 img = self.small.render(tr(title), True, (200, 205, 220))
                 s.blit(img, (x, top - 24))
                 rows = [(row, group, action) for row, action in enumerate(K.ACTIONS)]
+                if col == 0:                      # мышь — у левого игрока (по сети — у своего мага)
+                    rows += [(len(K.ACTIONS) + i, "mouse", b) for i, b in enumerate(K.MOUSE_BUTTONS)]
             cx = WIDTH // 2 - col_w - 20 + col * (col_w + 40)
-            rows.append((len(K.ACTIONS), "common", K.COMMON_ACTIONS[col]))     # общие: пауза | чат
+            rows.append((n_keys, "common", K.COMMON_ACTIONS[col]))     # общие: пауза | чат
             for row, group, action in rows:
                 rx = cx if group == "common" else x
-                y = top + row * (row_h + 5) + (12 if group == "common" else 0)
+                y = top + row * step + (12 if group == "common" else 6 if group == "mouse" else 0)
                 rect = pygame.Rect(rx, y, col_w, row_h)
                 sel = (col, row) == (self.keys_col, self.keys_row)
                 waiting = self.keys_wait == (group, action)
@@ -281,15 +284,20 @@ class MenuScreensMixin:
                 pygame.draw.rect(s, (40, 46, 66) if on else (26, 29, 40), rect, border_radius=8)
                 pygame.draw.rect(s, AMMO_COLOR if waiting else (BLUE if on else (60, 64, 80)), rect,
                                  2, border_radius=8)
-                name = "keys." + action + ("_" if action in ("left", "right") else "")   # «влево» ≠ «левый игрок»
+                if group == "mouse":
+                    name = "keys.mouse_" + action
+                    key = "◀ " + tr("mouse." + (mouse[action] or "none")) + " ▶"
+                else:
+                    name = "keys." + action + ("_" if action in ("left", "right") else "")   # «влево» ≠ «левый игрок»
+                    key = tr("keys.press") if waiting else K.label(current[group][action])
                 img = self.small.render(tr(name), True, WHITE if on else (200, 205, 220))
                 s.blit(img, img.get_rect(midleft=(rect.left + 12, rect.centery)))
-                key = tr("keys.press") if waiting else K.label(current[group][action])
-                img = self.font.render(key, True, AMMO_COLOR if waiting else WHITE)
+                font = self.small if group == "mouse" else self.font
+                img = font.render(key, True, AMMO_COLOR if waiting else WHITE)
                 s.blit(img, img.get_rect(midright=(rect.right - 12, rect.centery)))
-        reset_y = top + (len(K.ACTIONS) + 1) * (row_h + 5) + 30
-        self.button((WIDTH // 2, reset_y), tr("keys.reset"), lambda: self.keys_pick(self.keys_col, len(K.ACTIONS) + 1),
-                    w=320, sel=self.keys_row > len(K.ACTIONS))
+        reset_y = top + (n_keys + 1) * step + 28
+        self.button((WIDTH // 2, reset_y), tr("keys.reset"), lambda: self.keys_pick(self.keys_col, n_keys + 1),
+                    w=320, sel=self.keys_row > n_keys)
         if self.keys_msg:
             img = self.small.render(self.keys_msg, True, AMMO_COLOR)
             s.blit(img, img.get_rect(center=(WIDTH // 2, reset_y + 40)))

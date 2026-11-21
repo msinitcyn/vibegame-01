@@ -4,11 +4,20 @@
 В настройках — только изменённые: {"blue": {"fire": скан-код, ...}, "red": {...}, "net": {...}, "common": {"pause": ...}}.
 Два набора: за одним компьютером — blue и red (левый и правый игрок), по сети (и в разминке) — net (свой маг).
 Общие (common) — пауза и чат: одни и те же в обоих наборах.
+Клавишу можно снять (None — действие без клавиши; в настройках — null).
+
+Кнопки мыши — отдельно, у каждого набора свои: {"mouse_hotseat": {"left": "fire", ...}, "mouse_net": {...}}.
+Кнопке назначается действие (MOUSE_ACTIONS: выстрел, удар, идти к курсору, прицел прямо) или None — ничего.
+За одним компьютером мышь — у левого игрока (если геймпадов меньше двух), по сети — у своего мага.
 """
 import pygame
 
 ACTIONS = ("up", "down", "left", "right", "fire", "melee", "item1", "item2", "item3", "item4")
 COMMON_ACTIONS = ("pause", "chat")
+MOUSE_BUTTONS = ("left", "right", "middle")               # кнопки мыши (pygame: 1, 3, 2)
+BUTTON_NUMBER = {"left": 1, "right": 3, "middle": 2}
+MOUSE_ACTIONS = ("fire", "melee", "walk", "aim", None)    # что можно повесить на кнопку мыши (по кругу)
+DEFAULT_MOUSE = {"left": "fire", "right": "melee", "middle": "aim"}
 K = pygame
 DEFAULT_KEYS = {
     "blue": {"up": K.KSCAN_W, "down": K.KSCAN_S, "left": K.KSCAN_A, "right": K.KSCAN_D,
@@ -40,7 +49,9 @@ for _name in dir(pygame):
 
 
 def label(sc):
-    """Подпись клавиши по скан-коду (как на английской раскладке): W, Space, ←, Num 5…"""
+    """Подпись клавиши по скан-коду (как на английской раскладке): W, Space, ←, Num 5…; None — «—»."""
+    if sc is None:
+        return "—"
     name = _NAMES.get(sc)
     if name is None:
         return f"#{sc}"
@@ -52,29 +63,67 @@ def label(sc):
 
 
 def current(custom=None):
-    """Клавиши обоих игроков и общие: по умолчанию + изменённые (только известные действия и скан-коды)."""
+    """Клавиши обоих игроков и общие: по умолчанию + изменённые (только известные действия и скан-коды;
+    None — клавиша снята)."""
     out = {pid: dict(keys) for pid, keys in DEFAULT_KEYS.items()}
     for pid, keys in (custom or {}).items():
         if pid in out and isinstance(keys, dict):
             for action, sc in keys.items():
-                if action in GROUP_ACTIONS[pid] and isinstance(sc, int) and not isinstance(sc, bool) and sc not in RESERVED:
+                if action not in GROUP_ACTIONS[pid]:
+                    continue
+                if sc is None or (isinstance(sc, int) and not isinstance(sc, bool) and sc not in RESERVED):
                     out[pid][action] = sc
     return out
 
 
+def mouse(custom, net=False):
+    """Кнопки мыши набора: {"left": действие или None, ...}."""
+    out = dict(DEFAULT_MOUSE)
+    got = (custom or {}).get("mouse_net" if net else "mouse_hotseat")
+    if isinstance(got, dict):
+        for button, action in got.items():
+            if button in MOUSE_BUTTONS and action in MOUSE_ACTIONS:
+                out[button] = action
+    return out
+
+
+def set_mouse(custom, net, button, action):
+    """Назначить кнопке мыши действие; возвращает новые настройки клавиш."""
+    custom = dict(custom or {})
+    group = "mouse_net" if net else "mouse_hotseat"
+    m = mouse(custom, net)
+    m[button] = action
+    diff = {b: a for b, a in m.items() if DEFAULT_MOUSE.get(b) != a}
+    if diff:
+        custom[group] = diff
+    else:
+        custom.pop(group, None)
+    return custom
+
+
+def next_mouse_action(action, step=1):
+    i = MOUSE_ACTIONS.index(action) if action in MOUSE_ACTIONS else 0
+    return MOUSE_ACTIONS[(i + step) % len(MOUSE_ACTIONS)]
+
+
 def assign(custom, pid, action, sc):
     """Назначить клавишу sc действию (pid — "blue", "red", "net" или "common"); если она занята в том же
-    наборе (за одним компьютером или по сети; общие — в обоих) — обмен местами.
-    Возвращает новые изменённые клавиши (для настроек)."""
+    наборе (за одним компьютером или по сети; общие — в обоих) — обмен местами. sc=None — снять клавишу.
+    Возвращает новые изменённые клавиши (для настроек; кнопки мыши сохраняются как были)."""
     keys = current(custom)
     old = keys[pid][action]
-    for other_pid in DOMAINS[pid]:
-        for other_action, other_sc in keys[other_pid].items():
-            if other_sc == sc and (other_pid, other_action) != (pid, action):
-                keys[other_pid][other_action] = old
+    if sc is not None:
+        for other_pid in DOMAINS[pid]:
+            for other_action, other_sc in keys[other_pid].items():
+                if other_sc == sc and (other_pid, other_action) != (pid, action):
+                    keys[other_pid][other_action] = old
     keys[pid][action] = sc
-    return {p: {a: s for a, s in keys[p].items() if DEFAULT_KEYS[p][a] != s} for p in keys if
-            any(DEFAULT_KEYS[p][a] != s for a, s in keys[p].items())}
+    out = {p: {a: s for a, s in keys[p].items() if DEFAULT_KEYS[p][a] != s} for p in keys if
+           any(DEFAULT_KEYS[p][a] != s for a, s in keys[p].items())}
+    for group in ("mouse_hotseat", "mouse_net"):
+        if (custom or {}).get(group):
+            out[group] = custom[group]
+    return out
 
 
 def build(custom, controls_cls, net=False):

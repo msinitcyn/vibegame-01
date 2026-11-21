@@ -42,7 +42,7 @@ def test_keys_screen_tabs_and_reset(game):
         game.on_key(pygame.KSCAN_TAB)
         assert game.keys_tab == "net"
         game.draw_keys()
-        game.keys_pick(0, len(keys.ACTIONS) + 1)                       # сброс сетевой вкладки
+        game.keys_pick(0, game.KEY_ROWS + 1)                           # сброс сетевой вкладки
         assert "net" not in game.settings["keys"] and game.settings["keys"]["blue"]["melee"] == pygame.KSCAN_Q
         game.keys_pick(0, 4)                                            # «Выстрел» в сетевом наборе
         assert game.keys_wait == ("net", "fire")

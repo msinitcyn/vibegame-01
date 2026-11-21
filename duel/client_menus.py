@@ -239,12 +239,6 @@ class MenusMixin:
         elif row == "keys":
             if sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE, K.KSCAN_D, K.KSCAN_RIGHT):
                 self.open_keys()
-        elif row == "mouse_move":
-            if sc in (K.KSCAN_A, K.KSCAN_LEFT, K.KSCAN_D, K.KSCAN_RIGHT, K.KSCAN_RETURN, K.KSCAN_KP_ENTER,
-                      K.KSCAN_SPACE):
-                self.settings["mouse_move"] = not self.settings.get("mouse_move", False)
-                self.walk_to, self.walk_hold = None, False
-                settings.save(self.settings)
         elif row == "crash_reports":
             if sc in (K.KSCAN_A, K.KSCAN_LEFT, K.KSCAN_D, K.KSCAN_RIGHT, K.KSCAN_RETURN, K.KSCAN_KP_ENTER,
                       K.KSCAN_SPACE):
@@ -293,6 +287,7 @@ class MenusMixin:
         custom = self.settings.get("keys") or {}
         self.keys_net = self.net_keys_mode()
         self.controls = keys.build(custom, Controls, net=self.keys_net)
+        self.mouse_map = keys.mouse(custom, net=self.keys_net)      # кнопки мыши -> действие
         self.common_keys = keys.current(custom)["common"]     # пауза и чат
         self.key_names = {pid: [keys.label(sc) for sc in self.controls[pid].items] for pid in PLAYER_IDS}
 
@@ -304,25 +299,49 @@ class MenusMixin:
     def keys_tab_switch(self, tab=None):
         self.keys_tab = tab or ("net" if getattr(self, "keys_tab", "hotseat") == "hotseat" else "hotseat")
         self.keys_wait, self.keys_msg = None, None
-        if self.keys_tab == "net" and self.keys_row < len(keys.ACTIONS):
+        if self.keys_tab == "net" and self.keys_row < self.KEY_ROWS:
             self.keys_col = 0
 
+    KEY_ROWS = len(keys.ACTIONS) + len(keys.MOUSE_BUTTONS)     # строки действий: клавиши, потом кнопки мыши
+
+    def keys_row_kind(self, row):
+        """Что за строка экрана клавиш: "key", "mouse", "common" (пауза | чат), "reset"."""
+        if row < len(keys.ACTIONS):
+            return "key"
+        if row < self.KEY_ROWS:
+            return "mouse"
+        return "common" if row == self.KEY_ROWS else "reset"
+
+    def keys_group(self, col):
+        """Набор клавиш для колонки: по сети — "net", за одним компьютером — левый или правый игрок."""
+        return "net" if getattr(self, "keys_tab", "hotseat") == "net" else PLAYER_IDS[col]
+
+    def keys_save(self, custom):
+        self.settings["keys"] = custom
+        settings.save(self.settings)
+        self.apply_keys()
+
     def keys_key(self, sc):
-        """Экран клавиш: ↑/↓ — действие, ←/→ — игрок, Enter — назначить (дальше — нажать клавишу),
-        строка «Сбросить» — вернуть всё; Esc — к настройкам (при ожидании клавиши — отмена)."""
+        """Экран клавиш: Tab — вкладка, ↑/↓ — действие, ←/→ — игрок (на строке мыши — сменить действие),
+        Enter — назначить (дальше — нажать клавишу), Delete — снять клавишу (оставить без неё),
+        строка «Сбросить» — вернуть вкладку; Esc — к настройкам (при ожидании клавиши — отмена)."""
         K = pygame
         if self.keys_wait:
             if sc == K.KSCAN_ESCAPE:
                 self.keys_wait = None
+            elif sc == K.KSCAN_DELETE:
+                pid, action = self.keys_wait
+                self.keys_save(keys.assign(self.settings.get("keys"), pid, action, None))
+                self.keys_wait, self.keys_msg = None, None
             elif sc in keys.RESERVED:
                 self.keys_msg = t("keys.reserved", name=keys.label(sc))
             else:
                 pid, action = self.keys_wait
-                self.settings["keys"] = keys.assign(self.settings.get("keys"), pid, action, sc)
-                settings.save(self.settings)
-                self.apply_keys()
+                self.keys_save(keys.assign(self.settings.get("keys"), pid, action, sc))
                 self.keys_wait, self.keys_msg = None, None
             return
+        kind = self.keys_row_kind(self.keys_row)
+        net = getattr(self, "keys_tab", "hotseat") == "net"
         if sc in (K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE):
             self.state = "settings"
         elif sc == K.KSCAN_TAB:
@@ -330,32 +349,50 @@ class MenusMixin:
         elif sc in (K.KSCAN_UP, K.KSCAN_W):
             self.keys_row = max(0, self.keys_row - 1)
         elif sc in (K.KSCAN_DOWN, K.KSCAN_S):
-            self.keys_row = min(len(keys.ACTIONS) + 1, self.keys_row + 1)
+            self.keys_row = min(self.KEY_ROWS + 1, self.keys_row + 1)
+        elif sc == K.KSCAN_DELETE and kind == "key":
+            self.keys_save(keys.assign(self.settings.get("keys"), self.keys_group(self.keys_col),
+                                       keys.ACTIONS[self.keys_row], None))
+        elif sc == K.KSCAN_DELETE and kind == "mouse":
+            self.mouse_pick(self.keys_row, action=None)
         elif sc in (K.KSCAN_LEFT, K.KSCAN_A, K.KSCAN_RIGHT, K.KSCAN_D):
-            self.keys_col = 0 if sc in (K.KSCAN_LEFT, K.KSCAN_A) else 1
-            if getattr(self, "keys_tab", "hotseat") == "net" and self.keys_row < len(keys.ACTIONS):
-                self.keys_col = 0                 # по сети — одна колонка (две — только у паузы и чата)
+            step = -1 if sc in (K.KSCAN_LEFT, K.KSCAN_A) else 1
+            if kind == "mouse":
+                self.mouse_pick(self.keys_row, step=step)
+            else:
+                self.keys_col = 0 if step < 0 else 1
+                if net and kind == "key":
+                    self.keys_col = 0             # по сети — одна колонка (две — только у паузы и чата)
         elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
             self.keys_pick(self.keys_col, self.keys_row)
 
+    def mouse_pick(self, row, step=1, action="next"):
+        """Строка кнопки мыши: следующее действие по кругу (или action — None: ничего)."""
+        net = getattr(self, "keys_tab", "hotseat") == "net"
+        button = keys.MOUSE_BUTTONS[row - len(keys.ACTIONS)]
+        if action == "next":
+            action = keys.next_mouse_action(keys.mouse(self.settings.get("keys"), net)[button], step)
+        self.keys_save(keys.set_mouse(self.settings.get("keys"), net, button, action))
+        self.keys_msg = None
+
     def keys_pick(self, col, row):
-        """Выбрать действие (ждём клавишу): строки игроков, строка общих (пауза | чат),
-        «Сбросить по умолчанию» (последняя строка)."""
-        self.keys_col, self.keys_row = col, row
-        if row == len(keys.ACTIONS):
+        """Выбрать строку: действие — ждём клавишу; кнопка мыши — следующее действие; пауза | чат;
+        «Сбросить по умолчанию» (последняя строка) — только эта вкладка."""
+        kind = self.keys_row_kind(row)
+        self.keys_col, self.keys_row = (0 if kind == "mouse" else col), row
+        net = getattr(self, "keys_tab", "hotseat") == "net"
+        if kind == "common":
             self.keys_wait = ("common", keys.COMMON_ACTIONS[col])
             self.keys_msg = None
-            return
-        net = getattr(self, "keys_tab", "hotseat") == "net"
-        if row > len(keys.ACTIONS):               # сброс — только своей вкладки (общие пауза и чат — тоже)
-            drop = ("net", "common") if net else ("blue", "red", "common")
-            self.settings["keys"] = {k: v for k, v in (self.settings.get("keys") or {}).items() if k not in drop}
-            settings.save(self.settings)
-            self.apply_keys()
+        elif kind == "reset":                     # сброс — только своей вкладки (общие пауза и чат — тоже)
+            drop = ("net", "common", "mouse_net") if net else ("blue", "red", "common", "mouse_hotseat")
+            self.keys_save({k: v for k, v in (self.settings.get("keys") or {}).items() if k not in drop})
             self.keys_msg = t("keys.reset_done")
-            return
-        self.keys_wait = ("net" if net else PLAYER_IDS[col], keys.ACTIONS[row])
-        self.keys_msg = None
+        elif kind == "mouse":
+            self.mouse_pick(row)
+        else:
+            self.keys_wait = (self.keys_group(col), keys.ACTIONS[row])
+            self.keys_msg = None
 
     def open_pick(self, hp, bot=False):
         """Экран выбора героев перед партией за одним компьютером; последний выбор запоминается.

@@ -400,7 +400,7 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
             else ("" if self.watching else None)
         draw_field(s, self.snap, self.tiny, viewer)
         target = getattr(self, "walk_to", None)
-        if target and self.mouse_walk():              # ходьба мышью: куда идёт маг — ромбик на земле
+        if target:                                     # «идти к курсору»: куда идёт маг — ромбик на земле
             x, y = int(target[0]), int(target[1])
             pts = [(x, y - 6), (x + 9, y), (x, y + 6), (x - 9, y)]
             pygame.draw.polygon(s, (16, 12, 20), pts, 4)
