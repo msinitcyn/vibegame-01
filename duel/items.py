@@ -1,7 +1,7 @@
 """Артефакты: таблица, справка, группы, цвета рамок. Названия и описания — в i18n."""
 
 from .config import (
-    BEAM_DPS,
+    BEAM_DAMAGE,
     BEAM_LENGTH,
     ICE_LIFE,
     BEAR_HP,
@@ -107,7 +107,7 @@ def item_help(kind):
         rapid=f"{d['rapid']:.0f}", wavy=f"{d['wavy']:.0f}", clones=CLONE_COUNT,
         clone_time=f"{CLONE_TIME:.0f}", clone_hp=CLONE_HP, breaker=f"{d['breaker']:.0f}", wall_time=f"{WALL_TIME:.0f}",
         fastshots=f"{d['fastshots']:g}", mobpeace=f"{d['mobpeace']:g}", invisible=f"{d['invisible']:g}",
-        beam_len=BEAM_LENGTH, beam_dps=BEAM_DPS,
+        beam_len=BEAM_LENGTH, beam_dmg=BEAM_DAMAGE,
         icewalk=f"{d['icewalk']:g}", ice_life=f"{ICE_LIFE:g}", trees=f"{TREE_TIME:g}", tree_len=TREE_LENGTH,
         lasso=f"{d['lassoed']:g}", bear=f"{d['bear']:g}", bear_hp=BEAR_HP, immune=f"{d['immune']:g}",
         sentries=SENTRY_COUNT, sentry_time=f"{SENTRY_TIME:g}", sentry_range=SENTRY_RANGE, sentry_hp=SENTRY_HP,
@@ -120,7 +120,7 @@ WEAPON_ITEMS = ("triple", "wavy", "rapid", "breaker")      # улучшения 
 ATTACK_ITEMS = WEAPON_ITEMS + ("clones", "wall", "fastshots", "beam", "trees", "zombies", "bear", "mobswap",
                               "sentries")
 # эффект на игроке -> артефакт, чей значок показывать в статусе (если имена различаются)
-EFFECT_ICON = {"lassoed": "lasso", "raising": "zombies", "grow2": "foe_grow", "freeze": "foe_freeze", "nofire": "foe_nofire",
+EFFECT_ICON = {"lassoed": "lasso", "raising": "zombies", "cloning": "clones", "grow2": "foe_grow", "freeze": "foe_freeze", "nofire": "foe_nofire",
                "invert": "foe_invert", "noitems": "foe_noitems"}
 INSTANT_ITEMS = ("heal",)                                  # срабатывают при подборе, минуя инвентарь
 # дебаффы: снимаются только временем или очищением, ничем другим

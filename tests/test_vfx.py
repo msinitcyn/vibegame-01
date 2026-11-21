@@ -146,3 +146,26 @@ def test_shield_absorb_flashes_and_breaks():
     while "shield" in p.effects:
         p.shield_absorb()
     assert p.shield_break > 0                            # последний заряд — щит лопнул
+
+
+def test_mirror_firering_clone_noise_draw():
+    from duel import vfx_units as U
+    from duel.config import FIRE_RING_HEAT, FIRE_RING_R, FIRE_RING_TIME, WALL_TIME, WALL_W
+    for life in (WALL_TIME - 0.1, 4.0, 0.5, 0.2):
+        assert _drew(lambda s: U.draw_mirror(s, 200, 80, 260, life, WALL_TIME, 1, (180, 90, 255), 1.0, WALL_W))
+    for life in (FIRE_RING_TIME - 0.1, FIRE_RING_TIME - 1.0, 0.5):
+        assert _drew(lambda s: U.draw_fire_ring(s, 200, 150, FIRE_RING_R, FIRE_RING_HEAT, life, FIRE_RING_TIME, 1.0))
+    assert _drew(lambda s: U.draw_clone_noise(s, (200, 150), 14, 0.3, 1.0))
+
+
+def test_own_clones_see_through_only_for_owner():
+    from duel.render import draw_clone
+    heroes = {"blue": "dark", "red": "fire"}
+    c = {"id": 5, "owner": "blue", "x": 100, "y": 100, "r": 14, "aim": 0.0, "life": 5.0, "hit_flash": 0,
+         "effects": {}, "moving": False, "shot": 0.0, "melee_flash": 0.0}
+    pics = {}
+    for viewer in (None, "red", "blue"):
+        s = pygame.Surface((200, 200))
+        draw_clone(s, c, heroes, None, None, 0.0, viewer)
+        pics[viewer] = pygame.image.tobytes(s, "RGB")
+    assert pics[None] == pics["red"] != pics["blue"]      # за одним компьютером и сопернику — как маг

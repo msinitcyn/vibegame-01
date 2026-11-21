@@ -106,7 +106,15 @@ def draw_hit(surf, x, y, hero, on, age):
     layer = pygame.Surface((2 * pad, 2 * pad), pygame.SRCALPHA)
     c = pad
     A = int(255 * fade)
-    if on == "shield":                                      # щит гасит: голубая рябь кольцами
+    if on == "mirror":                                      # зеркало отразило: вспышка и рябь по стеклу
+        for i in range(3):
+            q = min(1.0, k * 1.6 - i * 0.2)
+            if q > 0:
+                rect = pygame.Rect(0, 0, int(size * 0.5 * (0.4 + q)), int(size * 2.2 * (0.4 + q)))
+                rect.center = (c, c)
+                pygame.draw.ellipse(layer, (*body, int(255 * (1 - q))), rect, 2)
+        _star(layer, (c, c), 4, size * (1.2 - k), 0, (255, 255, 255, A), 0.4, 2)
+    elif on == "shield":                                    # щит гасит: голубая рябь кольцами
         sh = rgb(P.get("shield_color"), (170, 220, 255))
         for i in range(2):
             q = min(1.0, k * 1.5 - i * 0.3)
@@ -160,7 +168,7 @@ def draw_hit(surf, x, y, hero, on, age):
             pygame.draw.circle(layer, (*INK, A), (int(gx), int(gy)), 3)
             pygame.draw.circle(layer, (*goo, A), (int(gx), int(gy)), 2)
     surf.blit(layer, (int(x - c), int(y - c)))
-    if style == "light" and on != "shield":                 # свет — вспышка-звезда (сложением)
+    if style == "light" and on not in ("shield", "mirror"):                 # свет — вспышка-звезда (сложением)
         g = pad
         glow = pygame.Surface((2 * g, 2 * g))
         bright = int(255 * (1 - k * k))                    # свет не тускнеет, а сжимается

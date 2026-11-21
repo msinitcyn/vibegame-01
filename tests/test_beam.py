@@ -4,7 +4,7 @@ import math
 import pytest
 
 from duel.commands import Command
-from duel.config import BEAM_LENGTH, BEAM_SPEED, BOTTOM, MAX_HP, SHIELD_HITS, TOP, WIDTH
+from duel.config import BEAM_DAMAGE, BEAM_LENGTH, BEAM_SPEED, BOTTOM, MAX_HP, SHIELD_HITS, TOP, WIDTH
 from duel.entities import Artifact, Mob
 from duel.match import Match
 from tests.conftest import DT, new_match, step
@@ -31,8 +31,8 @@ def test_beam_flies_through_mob_and_foe(light):
     m.mobs = [mob]
     r.hp = 50
     m.apply_item(b, "beam")
-    step(m, 1.0)                                        # пролетел обоих (касание короче секунды)
-    assert mob.hp == 9 and mob.target is b and r.hp == 49
+    step(m, 1.0)                                        # пролетел обоих — по BEAM_DAMAGE каждому, один раз
+    assert mob.hp == 10 - BEAM_DAMAGE and mob.target is b and r.hp == 50 - BEAM_DAMAGE
 
 
 def test_beam_keeps_length_and_flies(light):
@@ -77,6 +77,7 @@ def test_shield_and_clones(light):
     r = m.red
     m.give(r, "shield")
     m.apply_item(r, "clones")
+    r.x, r.y = 600, m.blue.y                             # двойники появились кучкой — вернуть мага на линию
     for c in m.clones:
         c.x, c.y = 400, m.blue.y
         c.moving, c.turn_timer, c.hp = 0, 99, 1          # стоят на линии луча, по жизни

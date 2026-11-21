@@ -31,7 +31,6 @@ from .config import (
     TREE_SPEED,
     TREE_TIME,
     TREE_W,
-    BEAM_DPS,
     BEAM_LENGTH,
     BEAM_SPEED,
     BEAM_WIDTH,
@@ -490,6 +489,7 @@ class Clone(Unit):
         self.x, self.y = owner.random_spot(self.radius + 4)      # на своей земле, мимо арены
         self.hp = CLONE_HP
         self.hit_flash = 0.0
+        self.shot_flash = 0.0
         self.aim = 0.0 if owner.dir > 0 else math.pi
         self.aim_jitter = 0.0
         self.heading = 0.0
@@ -519,16 +519,20 @@ class Clone(Unit):
             return []
         self.tick_effects(dt)
         self.hit_flash = max(0.0, self.hit_flash - dt)
+        self.shot_flash = max(0.0, self.shot_flash - dt)
         self.turn_timer -= dt
         if self.turn_timer <= 0:
             self.turn()
         r = self.radius
+        land = self.owner.land
+        home = land[0] + r <= self.x <= land[1] - r
+        if not home and self.moving:              # появился не на своей земле — идёт домой, без прыжков
+            self.heading = math.atan2(0.0, (land[0] + land[1]) / 2 - self.x)
         if self.moving:
             k = CLONE_SPEED * self.speed_mult * dt
             x = self.x + math.cos(self.heading) * k
             y = self.y + math.sin(self.heading) * k
-            land = self.owner.land
-            cx = max(land[0] + r, min(land[1] - r, x))
+            cx = max(land[0] + r, min(land[1] - r, x)) if home else x
             cy = max(TOP + r, min(BOTTOM - r, y))
             if (cx, cy) != (x, y) or in_arena(cx, cy, r):
                 self.turn()                   # край земли или арена — в другую сторону
@@ -539,6 +543,7 @@ class Clone(Unit):
             pause = self.owner.rng.uniform(*CLONE_SHOT_EVERY)
             self.shot_timer = pause * (RAPID_FACTOR if "rapid" in self.effects else 1)
             if self.can_fire:
+                self.shot_flash = SHOT_FLASH
                 return make_bullets(self.owner, self.x, self.y, self.aim, r,
                                     self.shot_offsets(), "wavy" in self.effects)
         return []
@@ -773,10 +778,16 @@ class TreeWall:
         return px + dx / d * need, py + dy / d * need
 
 
+class _Point:
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+        self.owner = None
+
+
 class Beam:
     """«Луч света»: длинный снаряд по прицелу. Голова летит как пуля и отражается от верхнего
     и нижнего края; за ней — хвост длиной BEAM_LENGTH (ломаная на отскоках). Бьёт насквозь:
-    пока касается цели, BEAM_DPS жизней в секунду (первый удар — сразу). Исчезает, целиком
+    каждому, кого коснулся, — BEAM_DAMAGE жизней, один раз за луч. Исчезает, целиком
     вылетев за левый или правый край."""
 
     def __init__(self, owner):
@@ -787,7 +798,7 @@ class Beam:
         self.hx, self.hy = owner.x + cos * edge, owner.y + sin * edge
         self.vx, self.vy = cos * BEAM_SPEED, sin * BEAM_SPEED
         self.path = [(self.hx, self.hy)]      # от хвоста к голове
-        self.touching = {}            # цель -> сколько секунд касается с последнего удара
+        self.touching = {}            # кого луч уже ударил (по разу на цель)
         self.alive = True
         self.age = 0.0                # для анимации каста
 
@@ -825,18 +836,16 @@ class Beam:
                 return True
         return len(self.path) == 1 and math.hypot(x - self.hx, y - self.hy) <= reach
 
+    def head(self):
+        """Голова луча — как пуля для hit_at (x, y)."""
+        return _Point(self.hx, self.hy)
+
     def tick(self, target, touching, dt):
-        """Сколько ударов нанести цели в этот такт (0 или 1)."""
-        if not touching:
-            self.touching.pop(target, None)
+        """Бить ли цель в этот такт: да — при первом касании, один раз за луч."""
+        if not touching or target in self.touching:
             return 0
-        t = self.touching.get(target, 1 / BEAM_DPS) + dt       # новая цель — удар сразу
-        hits = 0
-        if t >= 1 / BEAM_DPS:
-            t -= 1 / BEAM_DPS
-            hits = 1
-        self.touching[target] = t
-        return hits
+        self.touching[target] = True
+        return 1
 
 
 class Wall:
@@ -874,6 +883,8 @@ class Wall:
             b.x = 2 * self.mirror_face - b.x      # отражаем назад
             b.vx = -b.vx
             b.owner = self.owner                  # теперь это наша пуля
+            return True
+        return False
 
     def reflect_shot(self, s, prev_x):
         """Снаряд моба попал в зеркало — вместо него пуля хозяина стены, летящая обратно.

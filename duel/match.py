@@ -50,6 +50,8 @@ from .config import (
     SENTRY_R,
     ZOMBIE_MAX,
     ZOMBIE_RADIUS,
+    BEAM_DAMAGE,
+    CLONE_SCATTER,
     HIT_SHOW,
     ZOMBIE_RISE,
     ZOMBIE_TIME,
@@ -275,8 +277,10 @@ class Match:
             mine = self.clones_of(p)
             for c in mine:
                 c.life += CLONE_TIME
-            for _ in range(max(0, min(CLONE_COUNT, MAX_CLONES - len(mine)))):
-                self.clones.append(Clone(p))
+            born = [Clone(p) for _ in range(max(0, min(CLONE_COUNT, MAX_CLONES - len(mine))))]
+            if born:
+                self.clone_cluster(p, born)
+                self.clones.extend(born)
         elif kind == "invisible":             # мобы, что шли на тебя, теряют тебя из виду
             self.give(p, "invisible")
             for m in self.mobs:
@@ -489,27 +493,27 @@ class Match:
                 b.alive = False                   # деревья и огненная стена (изнутри) гасят пулю
                 continue
             for w in self.walls:
-                if b.alive:
-                    w.hit(b, prev_x)
+                if b.alive and w.hit(b, prev_x):
+                    self.hit_at(b, "mirror", None, w.owner)   # вспышка на зеркале
             for m in self.mobs:
                 if m.zombie_of is b.owner:
                     continue                  # свои пули сквозь своих зомби
                 if b.alive and m.alive and math.hypot(b.x - m.x, b.y - m.y) < m.radius + BULLET_R:
                     b.alive = False
                     m.hurt(b.owner)           # моб злится на того, чья пуля
-                    self.hit_at(b, "zombie" if m.zombie_of else "mob")
+                    self.hit_at(b, "zombie" if m.zombie_of else "mob", m)
             for st in self.sentries:          # пули соперника рубят стражей
                 if b.alive and st.owner is not b.owner and st.alive and \
                         math.hypot(b.x - st.x, b.y - st.y) < st.radius + BULLET_R:
                     b.alive = False
                     st.hurt()
-                    self.hit_at(b, "sentry")
+                    self.hit_at(b, "sentry", st)
             for g in self.guardians:          # стражи арены: ранит только изнутри, иначе — рикошет
                 if b.alive and g.alive and math.hypot(b.x - g.x, b.y - g.y) < g.radius + BULLET_R:
                     if self.can_hurt_guardian(g, b.owner):
                         b.alive = False
                         self.hurt_guardian(g, 1)
-                        self.hit_at(b, "guardian")
+                        self.hit_at(b, "guardian", g)
                     else:
                         g.reflect(b)
             if not b.alive:
@@ -522,7 +526,7 @@ class Match:
             if math.hypot(b.x - target.x, b.y - target.y) < target.radius + BULLET_R:
                 b.alive = False
                 self.hurt_player(target, 1)
-                self.hit_at(b, "mage")
+                self.hit_at(b, "mage", target)
                 continue
             for c in self.clones:
                 if not c.alive or c.owner is not target:
@@ -534,7 +538,7 @@ class Match:
                 if math.hypot(b.x - c.x, b.y - c.y) < c.radius + BULLET_R:
                     b.alive = False
                     c.hurt(1)
-                    self.hit_at(b, "mage")
+                    self.hit_at(b, "mage", c)
                     break
         self.clones = [c for c in self.clones if c.alive]
         for m in self.mobs:
@@ -551,9 +555,32 @@ class Match:
             if p.hp <= 0:
                 self.winner = self.other(p)
 
-    def hit_at(self, b, what):
-        """Запомнить попадание пули b для анимации (в правилах не участвует)."""
-        self.hits.append([b.x, b.y, b.owner, what, 0.0])
+    def clone_cluster(self, p, born):
+        """Двойники появляются кучкой там, где маг, — в магическом шуме; маг встаёт на случайное место
+        в этой кучке, чтобы соперник не уследил, где настоящий."""
+        n = len(born) + 1
+        gap = p.radius * 2.4
+        x0, y0 = p.x, p.y
+        spots = []
+        for k in range(n):
+            a = -math.pi / 2 + k * 2 * math.pi / n
+            x, y = x0 + math.cos(a) * gap, y0 + math.sin(a) * gap
+            off = not (p.radius < x < WIDTH - p.radius and TOP + p.radius < y < BOTTOM - p.radius)
+            if off or zone_at(x, y) == p.foe_zone or self.blocked(x, y, p.radius) or in_arena(x, y, p.radius):
+                x, y = x0, y0                         # нет места — прямо там, где маг
+            spots.append((x, y))
+        self.rng.shuffle(spots)
+        p.x, p.y = spots[0]
+        self.constrain(p)
+        for c, (x, y) in zip(born, spots[1:]):
+            c.x, c.y = x, y
+            c.turn_timer = CLONE_SCATTER          # сначала стоят кучкой, потом разбредаются
+        self.give(p, "cloning")
+
+    def hit_at(self, b, what, unit=None, owner=None):
+        """Запомнить попадание для анимации (в правилах не участвует): рисуется на цели unit
+        (её место — в снимке), а если цели нет — там, где была пуля."""
+        self.hits.append([b.x, b.y, owner or b.owner, what, 0.0, unit])
 
     def take_artifact(self, p, a):
         """Артефакт — магу p: мгновенный сразу применяется, остальные — в ячейку или очередь."""
@@ -790,24 +817,32 @@ class Match:
             m.windup = MOB_WINDUP
 
     def update_beams(self, dt):
-        """Лучи: летят, бьют насквозь соперника, его двойников и мобов, пока касаются."""
+        """Лучи: летят насквозь; соперник, его двойники, мобы и стражи от касания теряют BEAM_DAMAGE
+        жизней (по разу на луч). Щит гасит луч целиком одним зарядом."""
         for beam in self.beams:
             beam.update(dt)
             owner = beam.owner
             foe = self.other(owner)
-            if beam.tick(foe, beam.touches(foe.x, foe.y, foe.radius), dt) and not foe.shield_absorb():
-                self.hurt_player(foe, 1)
+            if beam.tick(foe, beam.touches(foe.x, foe.y, foe.radius), dt):
+                if foe.shield_absorb():
+                    self.hit_at(beam.head(), "shield", foe, owner)
+                else:
+                    self.hurt_player(foe, BEAM_DAMAGE)
+                    self.hit_at(beam.head(), "mage", foe, owner)
             for c in self.clones_of(foe):
                 if beam.tick(c, beam.touches(c.x, c.y, c.radius), dt):
-                    c.hurt(1)
+                    c.hurt(BEAM_DAMAGE)
+                    self.hit_at(beam.head(), "mage", c, owner)
             for m in self.mobs:
                 if m.zombie_of is owner:
                     continue                  # свои зомби
                 if m.alive and beam.tick(m, beam.touches(m.x, m.y, m.radius), dt):
-                    m.hurt(owner)         # злится на Свет (если нет «Мира с мобами»)
+                    m.hurt(owner, BEAM_DAMAGE)    # злится на Свет (если нет «Мира с мобами»)
+                    self.hit_at(beam.head(), "zombie" if m.zombie_of else "mob", m, owner)
             for g in self.guardians:
                 if g.alive and self.can_hurt_guardian(g, owner) and beam.tick(g, beam.touches(g.x, g.y, g.radius), dt):
-                    self.hurt_guardian(g, 1)
+                    self.hurt_guardian(g, BEAM_DAMAGE)
+                    self.hit_at(beam.head(), "guardian", g, owner)
         self.beams = [b for b in self.beams if b.alive]
 
     def update_mob_shots(self, dt):

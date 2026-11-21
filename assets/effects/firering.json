@@ -1,0 +1,14 @@
+{
+  "_about": "Огненный круг: обугленное кольцо, злые рваные языки пламени, искры и дым. Вспыхивает от одной точки и обегает круг. Времена — секунды, размеры — пиксели.",
+  "ignite_time": 0.45,
+  "tongues": 44,
+  "height_min": 12,
+  "height_max": 30,
+  "char_color": "#2a0c06",
+  "deep_color": "#a01808",
+  "flame_color": "#ff5a14",
+  "core_color": "#ffd24a",
+  "tip_color": "#fff4b4",
+  "embers": 18,
+  "smoke_alpha": 60
+}

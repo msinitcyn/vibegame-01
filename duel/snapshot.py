@@ -47,8 +47,8 @@ def snapshot(match):
         } for p in m.players],
         "bullets": [{"id": b.id, "x": _xy(b.x), "y": _xy(b.y), "owner": b.owner.id,
                      "a": round(math.atan2(b.vy, b.vx), 2)} for b in m.bullets],
-        "hits": [{"x": _xy(x), "y": _xy(y), "owner": o.id, "on": what, "age": _t(age)}
-                 for x, y, o, what, age in m.hits],
+        "hits": [{"x": _xy(u.x if u is not None else x), "y": _xy(u.y if u is not None else y),
+                  "owner": o.id, "on": what, "age": _t(age)} for x, y, o, what, age, u in m.hits],
         "mobs": [{
             "id": x.id, "x": _xy(x.x), "y": _xy(x.y), "r": _xy(x.radius), "hp": x.hp,
             "max_hp": x.max_hp, "ranged": x.ranged, "facing": x.facing, "flash": _t(x.flash),
@@ -82,6 +82,7 @@ def snapshot(match):
         "clones": [{"id": c.id, "owner": c.owner.id, "x": _xy(c.x), "y": _xy(c.y), "aim": _t(c.aim),
                     "r": _xy(c.radius), "life": _t(c.life), "hit_flash": _t(c.hit_flash),
                     "effects": _effects(c), "shield_hits": c.shield_hits,
+                    "moving": bool(c.moving), "shot": _t(c.shot_flash), "melee_flash": 0.0,
                     "shield_flash": _t(c.shield_flash), "shield_break": _t(c.shield_break)}
                    for c in m.clones],
     }

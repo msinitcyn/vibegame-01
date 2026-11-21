@@ -486,3 +486,36 @@ def test_zombie_stands_still_while_rising():
     assert (z.x, z.y) == (x0, y0)                        # встаёт из-под земли — на месте
     step(m, 1.5)
     assert (z.x, z.y) != (x0, y0)                        # встал — идёт к хозяину
+
+
+def test_clones_appear_in_a_cluster_and_mage_takes_a_random_spot():
+    from duel.match import Match
+    from duel.config import CLONE_SCATTER
+    spots = set()
+    for seed in range(8):
+        m = Match(seed=seed, heroes={"blue": "dark", "red": "fire"})
+        b = m.blue
+        b.x, b.y = 200, TOP + 300
+        x0, y0 = b.x, b.y
+        m.apply_item(b, "clones")
+        units = [b] + m.clones_of(b)
+        assert len(units) == 3
+        assert all(math.hypot(u.x - x0, u.y - y0) < b.radius * 3 for u in units)     # кучкой там, где маг
+        assert "cloning" in b.effects
+        spots.add((round(b.x - x0), round(b.y - y0)))
+        before = [(c.x, c.y) for c in m.clones]
+        step(m, CLONE_SCATTER * 0.5)
+        assert [(c.x, c.y) for c in m.clones] == before                              # сначала стоят
+    assert len(spots) > 1                                                            # маг — в разных местах
+
+
+def test_mirror_reflection_is_shown():
+    from duel.match import Match
+    m = Match(seed=1, heroes={"blue": "dark", "red": "fire"})
+    b, r = m.blue, m.red
+    b.x, b.y, r.x, r.y = 300, TOP + 100, 500, TOP + 100
+    m.apply_item(b, "wall")
+    from duel.entities import Bullet
+    m.bullets = [Bullet(r.x - 60, r.y, -520, 0, r)]
+    step(m, 0.4)
+    assert any(h[3] == "mirror" for h in m.hits) or m.bullets and m.bullets[0].owner is b

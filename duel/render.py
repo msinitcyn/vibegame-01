@@ -41,6 +41,9 @@ from .config import (
     SHIELD_GAP,
     SHIELD_FLASH,
     WALL_W,
+    WALL_TIME,
+    FIRE_RING_TIME,
+    CLONE_TIME,
 )
 from . import vfx, vfx_bullets, vfx_units
 from .icons import draw_icon
@@ -203,6 +206,8 @@ def draw_player(surf, p, heroes, viewer=None, time=0.0, font=None):
     if aim is not None:
         draw_aim(surf, p, side_color(heroes, pid))
     draw_effects(surf, p, time)
+    if "cloning" in p["effects"]:                 # двойники появляются — магический шум и на маге
+        vfx_units.draw_clone_noise(surf, pos, p["r"], 1 - p["effects"]["cloning"] / DURATION["cloning"], time, 7)
     draw_hp(surf, p, side_color(heroes, pid), font,
             scale=float(vfx.params("bear").get("scale", 1.1)) if bear else 1.0)
 
@@ -221,19 +226,33 @@ def draw_invisible(surf, p, heroes):
     pygame.draw.circle(surf, side_color(heroes, p["id"]), pos, int(r) + 4, 1)
 
 
-def draw_clone(surf, c, heroes, owner_p=None, font=None, time=0.0):
-    """Двойник — как настоящий маг: тот же рисунок, метка прицела, вспышка от попадания."""
+def draw_clone(surf, c, heroes, owner_p=None, font=None, time=0.0, viewer=None):
+    """Двойник — как настоящий маг: тот же рисунок и анимация, мушка, полоска жизней хозяина.
+    За одним компьютером и сопернику все одинаковые; хозяину по сети свои двойники — полупрозрачные."""
     owner = c["owner"]
     aim = c.get("aim", 0.0 if DIR[owner] > 0 else math.pi)
     facing = 1 if math.cos(aim) >= 0 else -1
-    draw_unit(surf, HERO_SPRITE[heroes[owner]], _pos(c), c["r"], facing, white=c.get("hit_flash", 0) > 0)
+    pos = _pos(c)
+    frame, bob = mage_frame(c, time)
+    px = c["r"] * 2 * 1.15 / 32
+    mine = viewer is not None and viewer == owner
+    alpha = int(vfx.params("clones").get("own_clone_alpha", 110)) if mine else 255
+    draw_unit(surf, HERO_SPRITE[heroes[owner]], (pos[0], pos[1] - bob * px), c["r"], facing,
+              white=c.get("hit_flash", 0) > 0, alpha=alpha, frame=frame)
+    shot = c.get("shot", 0) / SHOT_FLASH
     if "triple" in c["effects"]:
-        vfx.draw_triple(surf, _pos(c), c["r"], facing, triple_open(c))
+        vfx.draw_triple(surf, (pos[0], pos[1] - bob * px), c["r"], facing, triple_open(c), shot)
+    if shot > 0:
+        vfx.draw_muzzle(surf, pos, c["r"], facing, shot)
     draw_aim(surf, {**c, "aim": aim}, side_color(heroes, owner))
     draw_effects(surf, c, time)
     if owner_p is not None:
         draw_hp(surf, c, side_color(heroes, owner), font, owner_p["hp"], owner_p.get("max_hp") or 10,
                 owner_p.get("shield_hits", 0))
+    since = CLONE_TIME - c.get("life", CLONE_TIME)
+    T = DURATION["cloning"]
+    if 0 <= since < T:                            # магический шум — появились
+        vfx_units.draw_clone_noise(surf, pos, c["r"], since / T, time, int(c.get("id") or 0))
 
 
 def draw_bullet(surf, b, heroes, time=0.0):
@@ -323,17 +342,10 @@ def draw_mob_shot(surf, s):
     pygame.draw.circle(surf, (250, 255, 230), pos, MOB_SHOT_R // 2)
 
 
-def draw_wall(surf, w, heroes):
-    if w["life"] < 1.5 and int(w["life"] * 8) % 2 == 0:
-        return
-    y1, h = w["y1"], w["y2"] - w["y1"]
-    half = WALL_W // 2
-    back = -DIR[w["owner"]]
-    back_x = w["x"] if back > 0 else w["x"] - half
-    mirror_x = w["x"] - half if back > 0 else w["x"]
-    pygame.draw.rect(surf, (54, 58, 74), (back_x, y1, half, h))
-    pygame.draw.rect(surf, (225, 235, 255), (mirror_x, y1, half, h))
-    pygame.draw.rect(surf, side_color(heroes, w["owner"]), (mirror_x, y1, half, h), 1)
+def draw_wall(surf, w, heroes, time=0.0):
+    """Стена-зеркало: обсидиан с рунами к хозяину, серебряное зеркало к сопернику."""
+    vfx_units.draw_mirror(surf, w["x"], w["y1"], w["y2"], w["life"], WALL_TIME, -DIR[w["owner"]],
+                          side_color(heroes, w["owner"]), time, WALL_W)
 
 
 def draw_beam(surf, b, heroes, time=0.0):
@@ -376,26 +388,8 @@ def draw_sentry(surf, st, heroes):
 
 
 def draw_fire_ring(surf, ring, t):
-    """Огненный круг: тёплое свечение у стены и пляшущие языки пламени по окружности."""
-    R = FIRE_RING_R
-    x, y = ring["x"], ring["y"]
-    k = 1.0 if ring["life"] > 1 else (0.4 + 0.6 * (int(ring["life"] * 8) % 2))   # мигает перед концом
-    glow = pygame.Surface((2 * R + 2 * FIRE_RING_HEAT + 8,) * 2, pygame.SRCALPHA)
-    c = R + FIRE_RING_HEAT + 4
-    pygame.draw.circle(glow, (255, 90, 30, int(45 * k)), (c, c), R + FIRE_RING_HEAT)
-    pygame.draw.circle(glow, (0, 0, 0, 0), (c, c), R - FIRE_RING_HEAT)
-    pygame.draw.circle(glow, (255, 120, 40, int(90 * k)), (c, c), R + FIRE_RING_HEAT, 3)
-    pygame.draw.circle(glow, (255, 120, 40, int(90 * k)), (c, c), R - FIRE_RING_HEAT, 3)
-    surf.blit(glow, (int(x) - c, int(y) - c))
-    pygame.draw.circle(surf, (16, 12, 20), (int(x), int(y)), R, 10)
-    pygame.draw.circle(surf, (230, 70, 20), (int(x), int(y)), R, 6)
-    n = 36
-    for i in range(n):
-        a = i * 2 * math.pi / n
-        h = 9 + 6 * math.sin(t * 9 + i * 1.7)
-        fx, fy = x + math.cos(a) * R, y + math.sin(a) * R
-        pygame.draw.polygon(surf, (255, 150, 40), [(fx - 5, fy + 3), (fx + 5, fy + 3), (fx, fy - h)])
-        pygame.draw.polygon(surf, (255, 235, 130), [(fx - 2, fy + 2), (fx + 2, fy + 2), (fx, fy - h * 0.55)])
+    """Огненный круг: обугленное кольцо и злые рваные языки пламени."""
+    vfx_units.draw_fire_ring(surf, ring["x"], ring["y"], FIRE_RING_R, FIRE_RING_HEAT, ring["life"], FIRE_RING_TIME, t)
 
 
 def draw_guardian(surf, g, font, heroes):
@@ -430,14 +424,14 @@ def draw_field(surf, snap, font, viewer=None):
     for t in snap.get("ice", []):
         draw_ice(surf, t, heroes, snap.get("time", 0))
     for w in snap["walls"]:
-        draw_wall(surf, w, heroes)
+        draw_wall(surf, w, heroes, snap.get("time", 0))
     for a in snap["artifacts"]:
         draw_artifact(surf, a)
     for a in snap["ammo_packs"]:
         draw_ammo_pack(surf, a, font)
     owners = {p["id"]: p for p in snap["players"]}
     for c in snap["clones"]:
-        draw_clone(surf, c, heroes, owners.get(c["owner"]), font, snap.get("time", 0))
+        draw_clone(surf, c, heroes, owners.get(c["owner"]), font, snap.get("time", 0), viewer)
     for g in snap.get("guardians", []):
         draw_guardian(surf, g, font, heroes)
     for m in snap["mobs"]:
