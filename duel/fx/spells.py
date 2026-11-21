@@ -280,7 +280,7 @@ def draw_freeze(surf, pos, r, since, left, time):
     light = rgb(P.get("ice_light"), (234, 248, 255))
     dark = rgb(P.get("ice_dark"), (90, 156, 210))
     crack = rgb(P.get("crack_color"), (255, 255, 255))
-    grow = min(1.0, since / max(0.01, float(P.get("freeze_grow", 0.35))))
+    grow = max(0.0, min(1.0, since / max(0.01, float(P.get("freeze_grow", 0.35)))))
     shatter_t = float(P.get("freeze_shatter", 0.35))
     w, h = r * 2.4, r * 2.6
     size = int(r * 7)

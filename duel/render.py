@@ -56,6 +56,13 @@ from .sprites import SPRITE_TO_HITBOX, draw_unit, sprite, sprite_px
 DIR = {"blue": 1, "red": -1}              # +1 стреляет вправо, -1 влево (стороны поля)
 
 
+
+def since_start(effect, left):
+    """Сколько прошло с начала эффекта — для анимаций появления. Эффекты складываются: если времени
+    больше полной длительности (наложили ещё раз), анимация появления уже прошла, а не «в минусе»."""
+    total = DURATION[effect]
+    return total - left if left <= total else total
+
 def heroes_of(snap):
     """Герой каждой стороны из снимка (старые снимки без героя — по умолчанию)."""
     out = dict(DEFAULT_HERO)
@@ -79,14 +86,14 @@ def draw_effects(surf, u, time=0.0):
     pos = _pos(u)
     effects = u["effects"]
     if "freeze" in effects:                       # ледяная глыба: нарастает, держит, трескается
-        fx_spells.draw_freeze(surf, pos, u["r"], DURATION["freeze"] - effects["freeze"], effects["freeze"], time)
+        fx_spells.draw_freeze(surf, pos, u["r"], since_start("freeze", effects["freeze"]), effects["freeze"], time)
     if "speed" in effects:
         pygame.draw.circle(surf, ITEMS["speed"][1], pos, r + 8, 1)
     if "immune" in effects:                       # дубовая кора — золотисто-бурое кольцо
         pygame.draw.circle(surf, (16, 12, 20), pos, r + 12, 6)
         pygame.draw.circle(surf, ITEMS["immune"][1], pos, r + 12, 4)
     if "shield" in effects:                       # пузырь щита: соты, блик, заряды, рябь от удара
-        fx_mage.draw_shield(surf, pos, u["r"], SHIELD_GAP, effects["shield"], DURATION["shield"] - effects["shield"],
+        fx_mage.draw_shield(surf, pos, u["r"], SHIELD_GAP, effects["shield"], since_start("shield", effects["shield"]),
                               u.get("shield_hits", 0), u.get("shield_flash", 0) / SHIELD_FLASH, time)
     if u.get("shield_break", 0) > 0:              # щит лопнул — осколки
         fx_mage.draw_shield_break(surf, pos, u["r"], SHIELD_GAP, 1 - u["shield_break"] / (SHIELD_FLASH * 1.5))
@@ -135,7 +142,7 @@ def draw_bear(surf, p, heroes, pos, facing, time):
     def mage(k=1.0, flash=False):
         draw_unit(surf, HERO_SPRITE[hero], pos, r * k, facing, white=white or flash)
 
-    since = DURATION["bear"] - p["effects"]["bear"]
+    since = since_start("bear", p["effects"]["bear"])
     T = float(fx.params("bear").get("transform_time", 0.8))
     if 0 <= since < T:
         fx_mage.bear_transform(surf, pos, r, since / T, mage, bear)
@@ -179,7 +186,7 @@ def draw_player(surf, p, heroes, viewer=None, time=0.0, font=None):
     aim = p.get("aim")
     facing = DIR[pid] if aim is None else (1 if math.cos(aim) >= 0 else -1)   # лицом к прицелу
     bear = "bear" in p.get("effects", {})
-    since = DURATION["icewalk"] - p["effects"].get("icewalk", -9)
+    since = since_start("icewalk", p["effects"]["icewalk"]) if "icewalk" in p["effects"] else -1
     T = float(fx.params("ice").get("walk_cast_time", 0.5))
     if 0 <= since < T:                             # каст ледяной тропы — шипы льда из-под ног
         fx_spells.icewalk_cast(surf, pos, p["r"], since / T)
@@ -222,7 +229,7 @@ def draw_player(surf, p, heroes, viewer=None, time=0.0, font=None):
         draw_aim(surf, p, side_color(heroes, pid))
     draw_effects(surf, p, time)
     if "cloning" in p["effects"]:                 # двойники появляются — магический шум и на маге
-        fx_mage.draw_clone_noise(surf, pos, p["r"], 1 - p["effects"]["cloning"] / DURATION["cloning"], time, 7)
+        fx_mage.draw_clone_noise(surf, pos, p["r"], max(0.0, 1 - p["effects"]["cloning"] / DURATION["cloning"]), time, 7)
     draw_hp(surf, p, side_color(heroes, pid), font,
             scale=float(fx.params("bear").get("scale", 1.1)) if bear else 1.0)
 
@@ -259,7 +266,7 @@ def draw_invisible(surf, p, heroes, time=0.0, sees=True, who=None):
     pos = _pos(p)
     r = p["r"]
     T = float(P.get("vanish_time", 0.6))
-    since = DURATION["invisible"] - p["effects"]["invisible"]
+    since = since_start("invisible", p["effects"]["invisible"])
     ghost = float(P.get("ghost_alpha", 105))
     haze = float(P.get("haze", 2.5))
     img, center = body_image(p, heroes, who, time)

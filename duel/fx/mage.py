@@ -207,7 +207,7 @@ def draw_shield(surf, pos, r, gap, left, since, hits, flash, time):
     P = params("shield")
     col = rgb(P.get("color"), (170, 220, 255))
     rim = rgb(P.get("rim_color"), (234, 248, 255))
-    grow = min(1.0, since / max(0.01, float(P.get("grow_time", 0.3))))
+    grow = max(0.0, min(1.0, since / max(0.01, float(P.get("grow_time", 0.3)))))
     R = (r + gap) * (0.6 + 0.4 * grow)
     if left < 1.5 and int(left * 8) % 2 == 0:                # кончается — мигает
         return

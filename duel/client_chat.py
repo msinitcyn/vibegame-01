@@ -15,6 +15,7 @@ from . import keys, testcmd
 from .config import AMMO_PACK, CHAT_BUBBLE, CHAT_KEEP, CHAT_MAX, TOP, BOTTOM, WIDTH
 from .i18n import t as tr
 from .items import ITEMS, item_name
+from .logs import log
 
 CONSOLE_KEY = pygame.KSCAN_GRAVE      # ~ (перед 1): консоль внизу — история и ввод, после Enter не закрывается
 CONSOLE_PART = 0.4                    # консоль — такая доля поля сверху
@@ -116,6 +117,7 @@ class ChatMixin:
     def chat_send(self, text):
         """Строка из поля ввода: /команда — выполнить у себя, иначе — сообщение в чат."""
         if text.startswith("/"):
+            log.info("команда: %s", text)
             self.chat_lines.append(("cmd", "", text, time.monotonic()))     # что ввели — в историю
             self.chat_command(text[1:])
         elif text and self.net and not self.warmup:

@@ -38,6 +38,14 @@ if __name__ == "__main__":
         except (ConnectionError, OSError) as e:
             raise SystemExit(f"не удалось подключиться к {args.connect}: {e}")
     import pygame
+    from duel import logs
     from duel.game import Game
-    Game(windowed=args.windowed, net=net, pad=args.pad).run()
+    logs.setup()                       # лог и файлы падений — в папке настроек, logs/
+    try:
+        Game(windowed=args.windowed, net=net, pad=args.pad).run()
+    except Exception as e:
+        logs.report_crash(e)
+        raise
+    finally:
+        logs.log.info("выход")
     pygame.quit()

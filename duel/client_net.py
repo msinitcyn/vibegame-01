@@ -6,6 +6,7 @@ import time
 
 import pygame
 
+from .logs import log
 from .commands import Command
 from .config import HEROES, PING_EVERY
 from .i18n import t
@@ -223,6 +224,8 @@ class NetClientMixin:
 
     def enter_net(self, conn, seat, address=None):
         """Войти в комнату: соединение с сервером и место (seat: комната, цвет и ключ для возврата)."""
+        log.info("сеть: вошёл в комнату %s как %s", seat.get("room") if isinstance(seat, dict) else seat,
+                 seat.get("you") if isinstance(seat, dict) else "")
         self.restart()
         self.warmup, self.lobby_notice = False, None
         self.net_countdown = 0.0
@@ -259,6 +262,8 @@ class NetClientMixin:
     def leave_net(self, message=None, voluntary=True):
         """Уйти с сервера (или связь кончилась): закрыть соединение — экран серверов с причиной.
         Свой сервер продолжает работать."""
+        if self.net or self.lobby_conn:
+            log.info("сеть: вышел (%s)%s", message or "сам", "" if voluntary else ", обрыв")
         for conn in (self.net, self.lobby_conn):
             if conn:
                 if voluntary and not conn.closed:

@@ -18,6 +18,7 @@ from . import config
 from . import settings
 from .audio import Audio, MUSIC_END
 from .bot import Bot
+from .logs import log
 from .commands import Command
 from .client_chat import ChatMixin
 from .demos import has_demo
@@ -166,6 +167,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         if bot:
             self.chat_system(t("cmd.test_hello", **self.hint_keys()))
         self.heroes = dict(heroes or DEFAULT_HERO)
+        log.info("партия за одним компьютером%s: %s, жизней %s", " (тест с ботом)" if bot else "", self.heroes, hp)
         self.state = "play"
         self.held.clear()
         self.restart()
@@ -392,6 +394,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             elif kind == "hit_mage":              # пуля попала в мага
                 self.audio.hit()
             elif kind == "used":
+                log.info("артефакт: %s → %s", ev[2], ev[1])
                 self.audio.item(ev[2])
 
     def handle_events(self, events):
@@ -409,6 +412,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
                 pid, x, y, kind = ev[1:]
                 self.popups.append([item_name(kind), x + DIR[pid] * 90, y, POPUP_TIME, ring_color(kind)])
             elif kind == "used":
+                log.info("артефакт: %s → %s", ev[2], ev[1])
                 self.popup(item_name(ev[2]) + "!", ev[1], ITEMS[ev[2]][1])
             elif kind == "ammo":
                 self.popup(t("popup.ammo", n=ev[2]), ev[1], AMMO_COLOR)
