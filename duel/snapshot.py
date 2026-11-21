@@ -7,6 +7,7 @@
 Цвет, спрайт и направление мага экран выводит из его номера "blue" / "red".
 По снимку рисует duel/render.py; по сети снимки будет рассылать сервер.
 """
+import math
 
 
 def _xy(v):
@@ -38,9 +39,12 @@ def snapshot(match):
             "items": list(p.items), "queue": list(p.queue),
             "hit_flash": _t(p.hit_flash), "melee_flash": _t(p.melee_flash),
             "moving": bool(p.moving or p.moving_x), "shot": _t(p.shot_flash),
+            "burn": m.other(p).hero if m.in_danger(p) else None,
         } for p in m.players],
-        "bullets": [{"id": b.id, "x": _xy(b.x), "y": _xy(b.y), "owner": b.owner.id}
-                    for b in m.bullets],
+        "bullets": [{"id": b.id, "x": _xy(b.x), "y": _xy(b.y), "owner": b.owner.id,
+                     "a": round(math.atan2(b.vy, b.vx), 2)} for b in m.bullets],
+        "hits": [{"x": _xy(x), "y": _xy(y), "owner": o.id, "on": what, "age": _t(age)}
+                 for x, y, o, what, age in m.hits],
         "mobs": [{
             "id": x.id, "x": _xy(x.x), "y": _xy(x.y), "r": _xy(x.radius), "hp": x.hp,
             "max_hp": x.max_hp, "ranged": x.ranged, "facing": x.facing, "flash": _t(x.flash),

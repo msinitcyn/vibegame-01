@@ -50,6 +50,7 @@ from .config import (
     SENTRY_R,
     ZOMBIE_MAX,
     ZOMBIE_RADIUS,
+    HIT_SHOW,
     ZOMBIE_RISE,
     ZOMBIE_TIME,
     ARENA,
@@ -124,6 +125,7 @@ class Match:
         self.mob_shots = []           # снаряды дальнобойных мобов
         self.beams = []               # «Луч света»
         self.ice = []                 # «Ледяная тропа»: куски следа
+        self.hits = []                # попадания пуль для анимации: [x, y, чья пуля, во что, сколько прошло]
         self.trees = []               # «Стена деревьев»
         self.rings = []               # «Огненный круг»
         self.sentries = []            # «Лесные стражи»
@@ -476,6 +478,9 @@ class Match:
         self.artifacts = [a for a in self.artifacts if not a.taken]
         self.clones = [c for c in self.clones if c.alive]
 
+        for h in self.hits:
+            h[4] += dt
+        self.hits = [h for h in self.hits if h[4] < HIT_SHOW]
         for b in self.bullets:
             prev_x = b.x
             # если у цели «пули соперника медленнее» — эта пуля тормозит
@@ -492,16 +497,19 @@ class Match:
                 if b.alive and m.alive and math.hypot(b.x - m.x, b.y - m.y) < m.radius + BULLET_R:
                     b.alive = False
                     m.hurt(b.owner)           # моб злится на того, чья пуля
+                    self.hit_at(b, "zombie" if m.zombie_of else "mob")
             for st in self.sentries:          # пули соперника рубят стражей
                 if b.alive and st.owner is not b.owner and st.alive and \
                         math.hypot(b.x - st.x, b.y - st.y) < st.radius + BULLET_R:
                     b.alive = False
                     st.hurt()
+                    self.hit_at(b, "sentry")
             for g in self.guardians:          # стражи арены: ранит только изнутри, иначе — рикошет
                 if b.alive and g.alive and math.hypot(b.x - g.x, b.y - g.y) < g.radius + BULLET_R:
                     if self.can_hurt_guardian(g, b.owner):
                         b.alive = False
                         self.hurt_guardian(g, 1)
+                        self.hit_at(b, "guardian")
                     else:
                         g.reflect(b)
             if not b.alive:
@@ -509,20 +517,24 @@ class Match:
             target = self.other(b.owner)      # владелец мог смениться после зеркала
             if target.shield_blocks(b):
                 b.alive = False                   # щит поглощает пулю
+                self.hit_at(b, "shield")
                 continue
             if math.hypot(b.x - target.x, b.y - target.y) < target.radius + BULLET_R:
                 b.alive = False
                 self.hurt_player(target, 1)
+                self.hit_at(b, "mage")
                 continue
             for c in self.clones:
                 if not c.alive or c.owner is not target:
                     continue
                 if c.shield_blocks(b):
                     b.alive = False
+                    self.hit_at(b, "shield")
                     break
                 if math.hypot(b.x - c.x, b.y - c.y) < c.radius + BULLET_R:
                     b.alive = False
                     c.hurt(1)
+                    self.hit_at(b, "mage")
                     break
         self.clones = [c for c in self.clones if c.alive]
         for m in self.mobs:
@@ -538,6 +550,10 @@ class Match:
         for p in self.players:
             if p.hp <= 0:
                 self.winner = self.other(p)
+
+    def hit_at(self, b, what):
+        """Запомнить попадание пули b для анимации (в правилах не участвует)."""
+        self.hits.append([b.x, b.y, b.owner, what, 0.0])
 
     def take_artifact(self, p, a):
         """Артефакт — магу p: мгновенный сразу применяется, остальные — в ячейку или очередь."""

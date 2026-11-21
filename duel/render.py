@@ -39,7 +39,7 @@ from .config import (
     SHIELD_GAP,
     WALL_W,
 )
-from . import vfx
+from . import vfx, vfx_bullets
 from .icons import draw_icon
 from .items import ITEMS
 from .sprites import draw_unit
@@ -192,6 +192,8 @@ def draw_player(surf, p, heroes, viewer=None, time=0.0):
                 vfx.draw_triple(surf, (pos[0], pos[1] - bob * px), p["r"], facing, triple_open(p), shot)
             if shot > 0:                           # вспышка из ствола
                 vfx.draw_muzzle(surf, pos, p["r"], facing, shot)
+    if p.get("burn"):                             # горит на чужой земле — стихией хозяина земли
+        vfx_bullets.draw_burn(surf, pos, p["r"], p["burn"], time)
     if "icewalk" in p["effects"]:                 # «Ледяная тропа»: снежинки у ног
         vfx.snow_at_feet(surf, pos, p["r"], time)
     if aim is not None:
@@ -225,11 +227,10 @@ def draw_clone(surf, c, heroes):
     draw_effects(surf, c)
 
 
-def draw_bullet(surf, b, heroes):
-    pos = _pos(b)
-    pygame.draw.circle(surf, (16, 12, 20), pos, BULLET_R + 1)
-    pygame.draw.circle(surf, side_color(heroes, b["owner"]), pos, BULLET_R)
-    surf.set_at((pos[0] - 1, pos[1] - 2), (255, 255, 255))
+def draw_bullet(surf, b, heroes, time=0.0):
+    """Пуля в стихии героя-хозяина (огненный шар, ледяной осколок, лист, сгусток тьмы, звезда)."""
+    angle = b.get("a", 0.0 if DIR[b["owner"]] > 0 else math.pi)
+    vfx_bullets.draw_bullet(surf, b["x"], b["y"], angle, heroes[b["owner"]], time, int(b.get("id") or 0), BULLET_R)
 
 
 def draw_artifact(surf, a):
@@ -454,7 +455,7 @@ def draw_field(surf, snap, font, viewer=None):
     for s in snap["mob_shots"]:
         draw_mob_shot(surf, s)
     for b in snap["bullets"]:
-        draw_bullet(surf, b, heroes)
+        draw_bullet(surf, b, heroes, snap.get("time", 0))
     for t in snap.get("trees", []):
         draw_trees(surf, t)
     for ring in snap.get("rings", []):
@@ -488,3 +489,5 @@ def draw_field(surf, snap, font, viewer=None):
             vfx.beam_cast(surf, owner, aim, b["age"] / cast, side_color(heroes, b["owner"]))
     for m in snap["mobs"]:                # замахи и удары мобов — поверх магов, чтобы были видны
         draw_mob_attack(surf, m, font)
+    for h in snap.get("hits", []):        # попадания пуль — поверх всех
+        vfx_bullets.draw_hit(surf, h["x"], h["y"], heroes[h["owner"]], h["on"], h["age"])

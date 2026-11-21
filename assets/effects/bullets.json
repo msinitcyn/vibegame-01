@@ -1,0 +1,25 @@
+{
+  "_about": "Пули, попадания и горение — у каждого героя своя стихия. Цвета #RRGGBB, размеры — в пикселях поля, времена — секунды. trail — сколько точек хвоста.",
+  "fire":   {"core": "#fff4c0", "body": "#ff8a30", "edge": "#c8321e", "trail": 6},
+  "frost":  {"core": "#ffffff", "body": "#bfe8ff", "edge": "#4a8cd2", "trail": 5},
+  "nature": {"core": "#e6ffb4", "body": "#6ee164", "edge": "#2c7a30", "trail": 4},
+  "dark":   {"core": "#140c1c", "body": "#a050ff", "edge": "#5a1e9a", "trail": 6},
+  "light":  {"core": "#ffffff", "body": "#ffe66e", "edge": "#c89620", "trail": 5},
+  "hit_size": 16,
+  "hit_particles": 8,
+  "goo_mob": "#7864a0",
+  "goo_ranged": "#beff5a",
+  "goo_zombie": "#96ff78",
+  "shield_color": "#aadcff",
+  "burn": {
+    "_about": "Горение на чужой земле — цвет по хозяину земли: огонь, мороз, яд, тьма, святой свет.",
+    "tongues": 7,
+    "height": 1.5,
+    "alpha": 200,
+    "fire":   {"outer": "#e8401c", "inner": "#ffc840", "spark": "#fff0a0"},
+    "frost":  {"outer": "#4a9cff", "inner": "#dcf4ff", "spark": "#ffffff"},
+    "nature": {"outer": "#3c9a28", "inner": "#c8ff5a", "spark": "#e6ff96"},
+    "dark":   {"outer": "#5a1e9a", "inner": "#c878ff", "spark": "#140c1c"},
+    "light":  {"outer": "#e6b428", "inner": "#fffbe0", "spark": "#ffffff"}
+  }
+}

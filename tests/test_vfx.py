@@ -91,3 +91,32 @@ def test_beam_snapshot_has_age():
     m.apply_item(m.blue, "beam")
     m.step(1 / 60, {})
     assert 0 < snapshot(m)["beams"][0]["age"] < 0.1
+
+
+def test_bullets_hits_burn_for_every_hero():
+    from duel import vfx_bullets as V
+    from duel.config import HIT_SHOW
+    for hero in V.STYLES:
+        assert _drew(lambda s: V.draw_bullet(s, 200, 150, 0.5, hero, 1.3, 2, 4))
+        for on in ("mage", "mob", "zombie", "shield", "sentry", "guardian"):
+            assert _drew(lambda s: V.draw_hit(s, 200, 150, hero, on, HIT_SHOW * 0.3))
+        assert _drew(lambda s: V.draw_burn(s, (200, 150), 14, hero, 0.7))
+
+
+def test_hits_and_burn_in_snapshot():
+    from duel.entities import Bullet, Mob
+    from duel.match import Match
+    from duel.snapshot import snapshot
+    from duel.config import HIT_SHOW
+    m = Match(seed=1, heroes={"blue": "fire", "red": "frost"})
+    m.mobs = [Mob(300, 300, 5)]
+    m.bullets = [Bullet(290, 300, 520, 0, m.blue)]
+    m.step(1 / 60, {})
+    snap = snapshot(m)
+    assert snap["hits"] and snap["hits"][0]["on"] == "mob" and snap["hits"][0]["owner"] == "blue"
+    for _ in range(int(HIT_SHOW * 60) + 2):
+        m.step(1 / 60, {})
+    assert not snapshot(m)["hits"]                       # вспышка видна недолго
+    m.blue.x, m.blue.y = 800, 200                        # синий на земле красного (Холода) — мёрзнет
+    assert {p["id"]: p["burn"] for p in snapshot(m)["players"]}["blue"] == "frost"
+    assert {p["id"]: p["burn"] for p in snapshot(m)["players"]}["red"] is None

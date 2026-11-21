@@ -6,6 +6,7 @@ import pygame
 from .config import (
     SHOT_COOLDOWN,
     HELP_BASICS,
+    FOE_LAND_DPS,
     TOP,
     AMMO_COLOR,
     AMMO_PACK,
@@ -286,7 +287,7 @@ class MenuScreensMixin:
         pygame.display.flip()
 
     # что в справке: артефакт или умение мага (вкладка «Маги»)
-    BASIC_FRAME = {"walk": "walk1", "shoot": "shoot", "melee": "melee_hit"}
+    BASIC_FRAME = {"walk": "walk1", "shoot": "shoot", "melee": "melee_hit", "foe_land": "idle"}
 
     def help_name(self, kind):
         return tr(f"basic.{kind}") if kind in HELP_BASICS else item_name(kind)
@@ -294,7 +295,7 @@ class MenuScreensMixin:
     def help_text(self, kind):
         if kind in HELP_BASICS:
             return tr(f"basic.{kind}_help", cd=f"{SHOT_COOLDOWN:g}".replace(".", tr("decimal")),
-                      melee=MELEE_DAMAGE, melee_cd=f"{MELEE_COOLDOWN:g}".replace(".", tr("decimal")))
+                      melee=MELEE_DAMAGE, melee_cd=f"{MELEE_COOLDOWN:g}".replace(".", tr("decimal")), dps=FOE_LAND_DPS)
         return item_help(kind)
 
     def help_color(self, kind):
@@ -436,7 +437,7 @@ class MenuScreensMixin:
         numbers = dict(queue=QUEUE_SHOWN, weapon=f"{WEAPON_TIME:.0f}", wmax=WEAPON_MAX,
                        ammo=START_AMMO, pack=AMMO_PACK, every=f"{MOB_EVERY:.0f}",
                        mmax=MOB_MAX, mhp=MOB_MAX_HP, ranged=MOB_RANGED_EVERY, range=MOB_RANGE,
-                       melee=MELEE_DAMAGE, melee_cd=f"{MELEE_COOLDOWN:g}".replace(".", tr("decimal")))
+                       melee=MELEE_DAMAGE, melee_cd=f"{MELEE_COOLDOWN:g}".replace(".", tr("decimal")), dps=FOE_LAND_DPS)
         x0, y, width = 80, 100, WIDTH - 160
         for i in range(1, 11):
             lines = self.wrap(tr(f"note.{i}", **numbers), width, self.small)
