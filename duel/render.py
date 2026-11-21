@@ -46,10 +46,11 @@ from .config import (
     FIRE_RING_TIME,
     CLONE_TIME,
 )
-from . import vfx, vfx_bullets, vfx_units
+from . import fx
+from .fx import bullets as fx_bullets, mage as fx_mage, spells as fx_spells
 from .icons import draw_icon
 from .items import ITEMS
-from .sprites import SPRITE_TO_HITBOX, draw_unit, sprite
+from .sprites import SPRITE_TO_HITBOX, draw_unit, sprite, sprite_px
 
 DIR = {"blue": 1, "red": -1}              # +1 стреляет вправо, -1 влево (стороны поля)
 
@@ -77,17 +78,17 @@ def draw_effects(surf, u, time=0.0):
     pos = _pos(u)
     effects = u["effects"]
     if "freeze" in effects:                       # ледяная глыба: нарастает, держит, трескается
-        vfx.draw_freeze(surf, pos, u["r"], DURATION["freeze"] - effects["freeze"], effects["freeze"], time)
+        fx_spells.draw_freeze(surf, pos, u["r"], DURATION["freeze"] - effects["freeze"], effects["freeze"], time)
     if "speed" in effects:
         pygame.draw.circle(surf, ITEMS["speed"][1], pos, r + 8, 1)
     if "immune" in effects:                       # дубовая кора — золотисто-бурое кольцо
         pygame.draw.circle(surf, (16, 12, 20), pos, r + 12, 6)
         pygame.draw.circle(surf, ITEMS["immune"][1], pos, r + 12, 4)
     if "shield" in effects:                       # пузырь щита: соты, блик, заряды, рябь от удара
-        vfx_units.draw_shield(surf, pos, u["r"], SHIELD_GAP, effects["shield"], DURATION["shield"] - effects["shield"],
+        fx_mage.draw_shield(surf, pos, u["r"], SHIELD_GAP, effects["shield"], DURATION["shield"] - effects["shield"],
                               u.get("shield_hits", 0), u.get("shield_flash", 0) / SHIELD_FLASH, time)
     if u.get("shield_break", 0) > 0:              # щит лопнул — осколки
-        vfx_units.draw_shield_break(surf, pos, u["r"], SHIELD_GAP, 1 - u["shield_break"] / (SHIELD_FLASH * 1.5))
+        fx_mage.draw_shield_break(surf, pos, u["r"], SHIELD_GAP, 1 - u["shield_break"] / (SHIELD_FLASH * 1.5))
     if "nofire" in effects:
         d = int(r * 0.7)
         cx, cy = pos
@@ -97,7 +98,7 @@ def draw_effects(surf, u, time=0.0):
 
 def draw_aim(surf, p, color):
     """Мушка прицела: точка цвета героя на линии прицела."""
-    vfx_units.draw_sight(surf, p["x"], p["y"], p["r"], p["aim"], color)
+    fx_mage.draw_sight(surf, p["x"], p["y"], p["r"], p["aim"], color)
 
 
 def draw_hp(surf, u, color, font, hp=None, max_hp=None, shield=None, scale=1.0):
@@ -105,7 +106,7 @@ def draw_hp(surf, u, color, font, hp=None, max_hp=None, shield=None, scale=1.0):
     hp = u.get("hp", 0) if hp is None else hp
     max_hp = u.get("max_hp") or max(hp, 1) if max_hp is None else max_hp
     shield = u.get("shield_hits", 0) if shield is None else shield
-    vfx_units.draw_hp_bar(surf, u["x"], vfx_units.hp_bar_top(u["y"], u["r"] * scale), hp, max_hp, shield,
+    fx_mage.draw_hp_bar(surf, u["x"], fx_mage.hp_bar_top(u["y"], u["r"] * scale), hp, max_hp, shield,
                           color, u.get("hit_flash", 0) > 0, font)
 
 
@@ -114,7 +115,7 @@ def bear_frame(p, time):
     if p.get("melee_flash", 0) > 0:
         return "swipe_wind" if 1 - p["melee_flash"] / MELEE_FLASH < 0.3 else "swipe"
     if p.get("moving"):
-        return f"run{int(time * float(vfx.params('bear').get('run_fps', 11))) % 4 + 1}"
+        return f"run{int(time * float(fx.params('bear').get('run_fps', 11))) % 4 + 1}"
     return "idle"
 
 
@@ -122,7 +123,7 @@ def draw_bear(surf, p, heroes, pos, facing, time):
     """Медведь Природы; первые мгновения — превращение из мага."""
     r = p["r"]
     hero = heroes[p["id"]]
-    scale = float(vfx.params("bear").get("scale", 1.45))
+    scale = float(fx.params("bear").get("scale", 1.45))
     white = p["hit_flash"] > 0
     frame = bear_frame(p, time)
 
@@ -134,9 +135,9 @@ def draw_bear(surf, p, heroes, pos, facing, time):
         draw_unit(surf, HERO_SPRITE[hero], pos, r * k, facing, white=white or flash)
 
     since = DURATION["bear"] - p["effects"]["bear"]
-    T = float(vfx.params("bear").get("transform_time", 0.8))
+    T = float(fx.params("bear").get("transform_time", 0.8))
     if 0 <= since < T:
-        vfx.bear_transform(surf, pos, r, since / T, mage, bear)
+        fx_mage.bear_transform(surf, pos, r, since / T, mage, bear)
     else:
         bear()
 
@@ -157,7 +158,7 @@ def mage_frame(p, time):
 def triple_open(u):
     """Насколько раскрылись стволы тройного выстрела (0..1) — по времени с начала эффекта."""
     since = WEAPON_TIME - u["effects"].get("triple", 0)
-    return max(0.0, min(1.0, since / max(0.01, float(vfx.params("triple").get("open_time", 0.35)))))
+    return max(0.0, min(1.0, since / max(0.01, float(fx.params("triple").get("open_time", 0.35)))))
 
 
 def draw_player(surf, p, heroes, viewer=None, time=0.0, font=None):
@@ -173,51 +174,51 @@ def draw_player(surf, p, heroes, viewer=None, time=0.0, font=None):
     facing = DIR[pid] if aim is None else (1 if math.cos(aim) >= 0 else -1)   # лицом к прицелу
     bear = "bear" in p.get("effects", {})
     since = DURATION["icewalk"] - p["effects"].get("icewalk", -9)
-    T = float(vfx.params("ice").get("walk_cast_time", 0.5))
+    T = float(fx.params("ice").get("walk_cast_time", 0.5))
     if 0 <= since < T:                             # каст ледяной тропы — шипы льда из-под ног
-        vfx.icewalk_cast(surf, pos, p["r"], since / T)
+        fx_spells.icewalk_cast(surf, pos, p["r"], since / T)
     if p["melee_flash"] > 0:                       # докуда достаёт удар — бледное кольцо
         k = min(1.0, p["melee_flash"] / MELEE_FLASH)
         radius = int(p["r"])
         reach = MELEE_RANGE + (BEAR_REACH if bear else 0)
         ring = pygame.Surface((2 * (radius + reach) + 4,) * 2, pygame.SRCALPHA)
         c = ring.get_width() // 2
-        a = float(vfx.params("sword").get("reach_ring_alpha", 90)) if not bear else 220
+        a = float(fx.params("sword").get("reach_ring_alpha", 90)) if not bear else 220
         pygame.draw.circle(ring, (*side_color(heroes, pid), int(a * k)), (c, c), radius + reach, 3)
         surf.blit(ring, ring.get_rect(center=pos))
     if bear:
         draw_bear(surf, p, heroes, pos, facing, time)
     else:
         frame, bob = mage_frame(p, time)
-        px = p["r"] * 2 * 1.15 / 32
+        px = sprite_px(p["r"])
         reveal = p.get("reveal", 0) / REVEAL_TIME if p.get("reveal", 0) > 0 else 0.0
         if reveal > 0:                            # проявляется после невидимости: из марева и искр
             img = mage_image(p, heroes, frame, p["hit_flash"] > 0)
-            vfx_units.haze_blit(surf, img, (pos[0], pos[1] - bob * px), 255 * (1 - reveal),
-                                time, float(vfx.params("invisible").get("haze", 2.5)) * reveal)
-            vfx_units.invis_sparks(surf, pos, p["r"], 1 - reveal, rising=False)
+            fx_mage.haze_blit(surf, img, (pos[0], pos[1] - bob * px), 255 * (1 - reveal),
+                                time, float(fx.params("invisible").get("haze", 2.5)) * reveal)
+            fx_mage.invis_sparks(surf, pos, p["r"], 1 - reveal, rising=False)
         else:
             draw_unit(surf, HERO_SPRITE[heroes[pid]], (pos[0], pos[1] - bob * px), p["r"], facing,
                       white=p["hit_flash"] > 0, frame=frame)
         if p["melee_flash"] > 0:                   # меч
-            vfx.draw_sword(surf, pos, p["r"], facing, aim, 1 - p["melee_flash"] / MELEE_FLASH)
+            fx_mage.draw_sword(surf, pos, p["r"], facing, aim, 1 - p["melee_flash"] / MELEE_FLASH)
         else:
             shot = p.get("shot", 0) / SHOT_FLASH
             if "triple" in p["effects"]:           # три ствола веером
-                vfx.draw_triple(surf, (pos[0], pos[1] - bob * px), p["r"], facing, triple_open(p), shot)
+                fx_mage.draw_triple(surf, (pos[0], pos[1] - bob * px), p["r"], facing, triple_open(p), shot)
             if shot > 0:                           # вспышка из ствола
-                vfx.draw_muzzle(surf, pos, p["r"], facing, shot)
+                fx_mage.draw_muzzle(surf, pos, p["r"], facing, shot)
     if p.get("burn"):                             # горит на чужой земле — стихией хозяина земли
-        vfx_bullets.draw_burn(surf, pos, p["r"], p["burn"], time)
+        fx_bullets.draw_burn(surf, pos, p["r"], p["burn"], time)
     if "icewalk" in p["effects"]:                 # «Ледяная тропа»: снежинки у ног
-        vfx.snow_at_feet(surf, pos, p["r"], time)
+        fx_spells.snow_at_feet(surf, pos, p["r"], time)
     if aim is not None:
         draw_aim(surf, p, side_color(heroes, pid))
     draw_effects(surf, p, time)
     if "cloning" in p["effects"]:                 # двойники появляются — магический шум и на маге
-        vfx_units.draw_clone_noise(surf, pos, p["r"], 1 - p["effects"]["cloning"] / DURATION["cloning"], time, 7)
+        fx_mage.draw_clone_noise(surf, pos, p["r"], 1 - p["effects"]["cloning"] / DURATION["cloning"], time, 7)
     draw_hp(surf, p, side_color(heroes, pid), font,
-            scale=float(vfx.params("bear").get("scale", 1.1)) if bear else 1.0)
+            scale=float(fx.params("bear").get("scale", 1.1)) if bear else 1.0)
 
 
 def mage_image(p, heroes, frame="idle", white=False):
@@ -231,7 +232,7 @@ def mage_image(p, heroes, frame="idle", white=False):
 def draw_invisible(surf, p, heroes, time=0.0, sees=True):
     """Невидимка. Первые мгновения его видят все: растворяется в мареве, искры летят вверх, кольцо света
     сжимается. Потом себе и за одним компьютером — дрожащий полупрозрачный силуэт; сопернику — ничего."""
-    P = vfx.params("invisible")
+    P = fx.params("invisible")
     pos = _pos(p)
     r = p["r"]
     T = float(P.get("vanish_time", 0.6))
@@ -242,13 +243,13 @@ def draw_invisible(surf, p, heroes, time=0.0, sees=True):
     if 0 <= since < T:                            # исчезает
         k = since / T
         alpha = 255 - (255 - (ghost if sees else 0)) * k
-        vfx_units.haze_blit(surf, img, pos, alpha, time, haze * k)
-        vfx_units.invis_ring(surf, pos, r, k)
-        vfx_units.invis_sparks(surf, pos, r, k, rising=True)
+        fx_mage.haze_blit(surf, img, pos, alpha, time, haze * k)
+        fx_mage.invis_ring(surf, pos, r, k)
+        fx_mage.invis_sparks(surf, pos, r, k, rising=True)
         return
     if not sees:
         return
-    vfx_units.haze_blit(surf, img, pos, ghost + 20 * math.sin(time * 5), time, haze)
+    fx_mage.haze_blit(surf, img, pos, ghost + 20 * math.sin(time * 5), time, haze)
     pygame.draw.circle(surf, side_color(heroes, p["id"]), pos, int(r) + 4, 1)
 
 
@@ -260,16 +261,16 @@ def draw_clone(surf, c, heroes, owner_p=None, font=None, time=0.0, viewer=None):
     facing = 1 if math.cos(aim) >= 0 else -1
     pos = _pos(c)
     frame, bob = mage_frame(c, time)
-    px = c["r"] * 2 * 1.15 / 32
+    px = sprite_px(c["r"])
     mine = viewer is not None and viewer == owner
-    alpha = int(vfx.params("clones").get("own_clone_alpha", 110)) if mine else 255
+    alpha = int(fx.params("clones").get("own_clone_alpha", 110)) if mine else 255
     draw_unit(surf, HERO_SPRITE[heroes[owner]], (pos[0], pos[1] - bob * px), c["r"], facing,
               white=c.get("hit_flash", 0) > 0, alpha=alpha, frame=frame)
     shot = c.get("shot", 0) / SHOT_FLASH
     if "triple" in c["effects"]:
-        vfx.draw_triple(surf, (pos[0], pos[1] - bob * px), c["r"], facing, triple_open(c), shot)
+        fx_mage.draw_triple(surf, (pos[0], pos[1] - bob * px), c["r"], facing, triple_open(c), shot)
     if shot > 0:
-        vfx.draw_muzzle(surf, pos, c["r"], facing, shot)
+        fx_mage.draw_muzzle(surf, pos, c["r"], facing, shot)
     draw_aim(surf, {**c, "aim": aim}, side_color(heroes, owner))
     draw_effects(surf, c, time)
     if owner_p is not None:
@@ -278,13 +279,13 @@ def draw_clone(surf, c, heroes, owner_p=None, font=None, time=0.0, viewer=None):
     since = CLONE_TIME - c.get("life", CLONE_TIME)
     T = DURATION["cloning"]
     if 0 <= since < T:                            # магический шум — появились
-        vfx_units.draw_clone_noise(surf, pos, c["r"], since / T, time, int(c.get("id") or 0))
+        fx_mage.draw_clone_noise(surf, pos, c["r"], since / T, time, int(c.get("id") or 0))
 
 
 def draw_bullet(surf, b, heroes, time=0.0):
     """Пуля в стихии героя-хозяина (огненный шар, ледяной осколок, лист, сгусток тьмы, звезда)."""
     angle = b.get("a", 0.0 if DIR[b["owner"]] > 0 else math.pi)
-    vfx_bullets.draw_bullet(surf, b["x"], b["y"], angle, heroes[b["owner"]], time, int(b.get("id") or 0), BULLET_R)
+    fx_bullets.draw_bullet(surf, b["x"], b["y"], angle, heroes[b["owner"]], time, int(b.get("id") or 0), BULLET_R)
 
 
 def draw_artifact(surf, a):
@@ -340,24 +341,24 @@ def draw_mob(surf, m, font=None, heroes=DEFAULT_HERO):
     T = ZOMBIE_RISE
     if zombie and since < T:                      # превращение в зомби: руны, туман, корчится и зеленеет
         k = max(0.0, since / T)
-        vfx.zombie_rise(surf, pos, m["r"], k, side_color(heroes, zombie))
-        tw = int(float(vfx.params("zombie").get("twitch", 2)) * math.sin(since * 40) * (1 - k))
+        fx_spells.zombie_rise(surf, pos, m["r"], k, side_color(heroes, zombie))
+        tw = int(float(fx.params("zombie").get("twitch", 2)) * math.sin(since * 40) * (1 - k))
         at = (pos[0] + tw, pos[1])
         draw_unit(surf, name, at, m["r"], m["facing"], white=m["flash"] > 0)
         draw_unit(surf, name + "_zombie", at, m["r"], m["facing"], alpha=int(255 * k))
-        vfx.zombie_mist(surf, pos, m["r"], k)
+        fx_spells.zombie_mist(surf, pos, m["r"], k)
     else:
         if zombie:                                # зомби Тьмы: слабое облако и кольцо хозяина
             r = int(m["r"])
             aura = pygame.Surface((4 * r,) * 2, pygame.SRCALPHA)
             c = 2 * r
-            pygame.draw.circle(aura, (120, 220, 90, int(vfx.params("zombie").get("aura_alpha", 60))), (c, c), r + 8)
+            pygame.draw.circle(aura, (120, 220, 90, int(fx.params("zombie").get("aura_alpha", 60))), (c, c), r + 8)
             pygame.draw.circle(aura, (*side_color(heroes, zombie), 220), (c, c), r + 8, 3)
             surf.blit(aura, aura.get_rect(center=pos))
         draw_unit(surf, name + ("_zombie" if zombie else ""), pos, m["r"], m["facing"], white=m["flash"] > 0)
     color = (side_color(heroes, zombie) if zombie else
              side_color(heroes, m["target"]) if m["target"] else MOB_IDLE_COLOR)
-    vfx_units.draw_hp_bar(surf, pos[0], vfx_units.hp_bar_top(pos[1], m["r"]), m["hp"], m["max_hp"], 0,
+    fx_mage.draw_hp_bar(surf, pos[0], fx_mage.hp_bar_top(pos[1], m["r"]), m["hp"], m["max_hp"], 0,
                           color, m["flash"] > 0, font)
 
 
@@ -370,25 +371,25 @@ def draw_mob_shot(surf, s):
 
 def draw_wall(surf, w, heroes, time=0.0):
     """Стена-зеркало: обсидиан с рунами к хозяину, серебряное зеркало к сопернику."""
-    vfx_units.draw_mirror(surf, w["x"], w["y1"], w["y2"], w["life"], WALL_TIME, -DIR[w["owner"]],
+    fx_spells.draw_mirror(surf, w["x"], w["y1"], w["y2"], w["life"], WALL_TIME, -DIR[w["owner"]],
                           side_color(heroes, w["owner"]), time, WALL_W)
 
 
 def draw_beam(surf, b, heroes, time=0.0):
     """Летящий луч: ломаная (на отскоках) — мерцающее свечение цвета героя, сердцевина, искры."""
     pts = [tuple(p) for p in b["pts"]]
-    vfx.draw_beam(surf, pts, side_color(heroes, b["owner"]), b.get("age", 1.0), time, BEAM_WIDTH)
+    fx_spells.draw_beam(surf, pts, side_color(heroes, b["owner"]), b.get("age", 1.0), time, BEAM_WIDTH)
 
 
 def draw_ice(surf, t, heroes, time=0.0):
     """Кусок ледяного следа: льдинка с трещинами; растёт с хрустом, тает к концу жизни."""
-    vfx.draw_ice_piece(surf, t["x"], t["y"], t["life"], int(t.get("id") or 0), side_color(heroes, t["owner"]),
+    fx_spells.draw_ice_piece(surf, t["x"], t["y"], t["life"], int(t.get("id") or 0), side_color(heroes, t["owner"]),
                        ICE_LIFE, ICE_R)
 
 
 def draw_trees(surf, t):
     """Стена деревьев — терновник: кривые тёмные колючие кусты; вырастают из земли и вянут."""
-    vfx_units.draw_thorns(surf, t, TREE_W, TREE_SPEED, TREE_TIME)
+    fx_spells.draw_thorns(surf, t, TREE_W, TREE_SPEED, TREE_TIME)
 
 
 SEED_COLOR = (150, 230, 90)          # семя лесного стража
@@ -415,7 +416,7 @@ def draw_sentry(surf, st, heroes):
 
 def draw_fire_ring(surf, ring, t):
     """Огненный круг: обугленное кольцо и злые рваные языки пламени."""
-    vfx_units.draw_fire_ring(surf, ring["x"], ring["y"], FIRE_RING_R, FIRE_RING_HEAT, ring["life"], FIRE_RING_TIME, t)
+    fx_spells.draw_fire_ring(surf, ring["x"], ring["y"], FIRE_RING_R, FIRE_RING_HEAT, ring["life"], FIRE_RING_TIME, t)
 
 
 def draw_guardian(surf, g, font, heroes):
@@ -484,20 +485,20 @@ def draw_field(surf, snap, font, viewer=None):
             surf.blit(ring, (int(p["x"]) - c, int(p["y"]) - c))
         if "lassoed" in p.get("effects", {}):
             puller = by_id["red" if p["id"] == "blue" else "blue"]
-            vfx.draw_lasso(surf, p, puller, side_color(heroes, puller["id"]), snap.get("time", 0))
+            fx_spells.draw_lasso(surf, p, puller, side_color(heroes, puller["id"]), snap.get("time", 0))
     for b in snap.get("beams", []):
         draw_beam(surf, b, heroes, snap.get("time", 0))
     for p in snap["players"]:
         draw_player(surf, p, heroes, viewer, snap.get("time", 0), font)
-    cast = float(vfx.params("beam").get("cast_time", 0.55))
+    cast = float(fx.params("beam").get("cast_time", 0.55))
     for b in snap.get("beams", []):               # каст луча — поверх мага
         owner = by_id.get(b["owner"])
         if owner and b.get("age", 9) < cast and len(b["pts"]) > 1 and not (
                 "invisible" in owner.get("effects", {}) and viewer not in (None, owner["id"])):
             (x0, y0), (x1, y1) = b["pts"][0], b["pts"][1]
             aim = owner.get("aim") if owner.get("aim") is not None else math.atan2(y1 - y0, x1 - x0)
-            vfx.beam_cast(surf, owner, aim, b["age"] / cast, side_color(heroes, b["owner"]))
+            fx_spells.beam_cast(surf, owner, aim, b["age"] / cast, side_color(heroes, b["owner"]))
     for m in snap["mobs"]:                # замахи и удары мобов — поверх магов, чтобы были видны
         draw_mob_attack(surf, m, font)
     for h in snap.get("hits", []):        # попадания пуль — поверх всех
-        vfx_bullets.draw_hit(surf, h["x"], h["y"], heroes[h["owner"]], h["on"], h["age"])
+        fx_bullets.draw_hit(surf, h["x"], h["y"], heroes[h["owner"]], h["on"], h["age"])

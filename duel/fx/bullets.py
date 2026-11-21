@@ -14,11 +14,10 @@ import math
 
 import pygame
 
-from .config import HIT_SHOW
-from .vfx import _glow, _star, params, rgb
+from ..config import HIT_SHOW
+from . import INK, glow, params, rgb, star
 
 STYLES = ("fire", "frost", "nature", "dark", "light")
-INK = (16, 12, 20)
 
 
 def _style(hero):
@@ -87,8 +86,8 @@ def draw_bullet(surf, x, y, angle, hero, time, seed=0, radius=4):
                                (int(x - dx * r * 1.5 * i), int(y - dy * r * 1.5 * i)), max(1, r - 1 - i // 2))
         g = int(r * 5)
         layer = pygame.Surface((2 * g, 2 * g))
-        pygame.draw.circle(layer, _glow(body, 110), (g, g), int(r * 2.2))
-        _star(layer, (g, g), 4, r * 3.2, 0, _glow(core, 255), time * 8 + seed, 2)
+        pygame.draw.circle(layer, glow(body, 110), (g, g), int(r * 2.2))
+        star(layer, (g, g), 4, r * 3.2, 0, glow(core, 255), time * 8 + seed, 2)
         surf.blit(layer, (int(x - g), int(y - g)), special_flags=pygame.BLEND_RGB_ADD)
         pygame.draw.circle(surf, edge, (int(x), int(y)), r + 1)
         pygame.draw.circle(surf, core, (int(x), int(y)), r)
@@ -113,7 +112,7 @@ def draw_hit(surf, x, y, hero, on, age):
                 rect = pygame.Rect(0, 0, int(size * 0.5 * (0.4 + q)), int(size * 2.2 * (0.4 + q)))
                 rect.center = (c, c)
                 pygame.draw.ellipse(layer, (*body, int(255 * (1 - q))), rect, 2)
-        _star(layer, (c, c), 4, size * (1.2 - k), 0, (255, 255, 255, A), 0.4, 2)
+        star(layer, (c, c), 4, size * (1.2 - k), 0, (255, 255, 255, A), 0.4, 2)
     elif on == "shield":                                    # щит гасит: голубая рябь кольцами
         sh = rgb(P.get("shield_color"), (170, 220, 255))
         for i in range(2):
@@ -170,16 +169,16 @@ def draw_hit(surf, x, y, hero, on, age):
     surf.blit(layer, (int(x - c), int(y - c)))
     if style == "light" and on not in ("shield", "mirror"):                 # свет — вспышка-звезда (сложением)
         g = pad
-        glow = pygame.Surface((2 * g, 2 * g))
+        light = pygame.Surface((2 * g, 2 * g))
         bright = int(255 * (1 - k * k))                    # свет не тускнеет, а сжимается
-        pygame.draw.circle(glow, _glow(body, bright), (g, g), max(1, int(size * 0.7 * (1 - k))))
-        _star(glow, (g, g), 8, size * (0.8 + 1.2 * k) * (1 - k * 0.5), 0, _glow(core, bright), k * 2, 2)
-        surf.blit(glow, (int(x - g), int(y - g)), special_flags=pygame.BLEND_RGB_ADD)
+        pygame.draw.circle(light, glow(body, bright), (g, g), max(1, int(size * 0.7 * (1 - k))))
+        star(light, (g, g), 8, size * (0.8 + 1.2 * k) * (1 - k * 0.5), 0, glow(core, bright), k * 2, 2)
+        surf.blit(light, (int(x - g), int(y - g)), special_flags=pygame.BLEND_RGB_ADD)
     if on == "mage" and k < 0.5:                            # маг: звёздочки от удара
         for i in range(3):
             a = -math.pi / 2 + (i - 1) * 0.8 + k * 3
             sx, sy = x + math.cos(a) * size * 1.2, y - size * 0.6 + math.sin(a) * size * 0.4
-            _star(surf, (sx, sy), 4, 3, 0, (255, 255, 200), k * 6, 1)
+            star(surf, (sx, sy), 4, 3, 0, (255, 255, 200), k * 6, 1)
 
 
 def draw_burn(surf, pos, r, land_hero, time):
@@ -214,5 +213,5 @@ def draw_burn(surf, pos, r, land_hero, time):
     if land_hero == "frost":                                # мороз — ещё и иней на маге
         for i in range(3):
             if int(time * 5 + i) % 2:
-                _star(layer, (c - r * 0.6 + i * r * 0.6, c - r * 0.2 + (i % 2) * r * 0.5), 4, 3, 0, (*spark, 230), 0, 1)
+                star(layer, (c - r * 0.6 + i * r * 0.6, c - r * 0.2 + (i % 2) * r * 0.5), 4, 3, 0, (*spark, 230), 0, 1)
     surf.blit(layer, (int(pos[0] - c), int(pos[1] - c)))

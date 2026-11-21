@@ -1,50 +1,17 @@
-"""Эффекты заклинаний. Каждый — функция отрисовки и файл чисел assets/effects/<имя>.json
-(цвета, толщины, времена; F5 перечитывает). Анимация считается из состояния снимка
-(сколько осталось у эффекта, время матча) — одинаково по сети, в сценках справки и за одним компьютером.
-"""
-import json
+"""Заклинания на поле: огненное лассо, луч света, ледяная тропа и заморозка, восставшие мертвецы,
+терновая стена, стена-зеркало, огненный круг."""
 import math
+from functools import lru_cache
 
 import pygame
 
-from .config import ASSETS, DURATION
-
-EFFECT_DIR = ASSETS / "effects"
-_cache = {}
-
-
-def params(name):
-    """Числа эффекта из файла (нет файла или ошибка — пустой словарь: берутся значения по умолчанию)."""
-    if name not in _cache:
-        try:
-            data = json.loads((EFFECT_DIR / f"{name}.json").read_text(encoding="utf-8"))
-            _cache[name] = data if isinstance(data, dict) else {}
-        except (OSError, ValueError):
-            _cache[name] = {}
-    return _cache[name]
-
-
-def reload_all():
-    _cache.clear()
-
-
-def rgb(value, default):
-    try:
-        v = str(value).lstrip("#")
-        return tuple(int(v[i:i + 2], 16) for i in (0, 2, 4))
-    except (TypeError, ValueError):
-        return default
+from ..config import DURATION
+from . import INK, ease_out, glow, params, rgb, star
 
 
 def _frac(x):
     return x - math.floor(x)
 
-
-def _ease_out(k):
-    return 1 - (1 - k) ** 3
-
-
-# ------------------------------------------------------------------ огненное лассо
 
 def lasso_points(x0, y0, x1, y1, slack, amp, waves, phase, n=24):
     """Верёвка от (x0, y0) к (x1, y1): провис (дугой вниз) и бегущие волны."""
@@ -79,7 +46,7 @@ def draw_lasso(surf, victim, puller, color, time):
     vx, vy, vr = victim["x"], victim["y"], victim["r"]
 
     throw_k = min(1.0, elapsed / throw_t) if throw_t > 0 else 1.0
-    head = _ease_out(throw_k)
+    head = ease_out(throw_k)
     tx, ty = hx + (vx - hx) * head, hy + (vy - hy) * head      # где сейчас петля
     tense = max(0.0, min(1.0, (elapsed - throw_t) / max(catch_t, 0.01)))
     slack = float(P.get("slack", 34)) * (1 - tense) * (0.4 + 0.6 * throw_k)
@@ -157,222 +124,6 @@ def draw_lasso(surf, victim, puller, color, time):
     surf.blit(layer, box)
 
 
-# ------------------------------------------------------------------ меч и выстрел мага
-
-def hand(pos, r, facing):
-    """Передняя рука мага (где держит оружие) — в пикселях поля."""
-    return pos[0] + facing * r * 0.45, pos[1] + r * 0.2
-
-
-def draw_sword(surf, pos, r, facing, aim, k):
-    """Удар мечом: замах назад-вверх, быстрый взмах вниз-вперёд со светлым следом.
-    k — доля взмаха 0..1; aim — прицел (радианы) или None."""
-    P = params("sword")
-    base = aim if aim is not None else (0.0 if facing > 0 else math.pi)
-    start, end = math.radians(float(P.get("start_angle", -115))), math.radians(float(P.get("end_angle", 75)))
-    wind = float(P.get("windup", 0.3))
-    back = math.radians(float(P.get("windup_back", 20)))
-    if k < wind:                                     # замах: чуть дальше назад
-        rel = start - back * (k / wind)
-    else:
-        e = _ease_out((k - wind) / max(1e-6, 1 - wind))
-        rel = start - back + (end - start + back) * e
-    ang = base + facing * rel
-    hx, hy = hand(pos, r, facing)
-    length = r * float(P.get("blade_length", 1.9))
-    dx, dy = math.cos(ang), math.sin(ang)
-    px, py = -dy, dx
-    w = float(P.get("blade_width", 4)) / 2
-
-    pad = int(length + r + 10)
-    layer = pygame.Surface((2 * pad, 2 * pad), pygame.SRCALPHA)
-    ox, oy = hx - pad, hy - pad
-
-    def L(x, y):
-        return x - ox, y - oy
-
-    if k >= wind:                                    # след взмаха — веером позади клинка
-        span = math.radians(float(P.get("trail_span", 80)))
-        swept = facing * rel - facing * (start - back)
-        tail = max(0.0, min(span, abs(swept)))
-        steps = 10
-        trail = rgb(P.get("trail_color"), (255, 255, 255))
-        alpha = int(float(P.get("trail_alpha", 150)) * (1 - k) * 1.4)
-        for i in range(steps):
-            a0 = ang - facing * tail * i / steps
-            a1 = ang - facing * tail * (i + 1) / steps
-            fade = 1 - i / steps
-            pts = [L(hx + math.cos(a0) * length * 0.35, hy + math.sin(a0) * length * 0.35),
-                   L(hx + math.cos(a0) * length, hy + math.sin(a0) * length),
-                   L(hx + math.cos(a1) * length, hy + math.sin(a1) * length),
-                   L(hx + math.cos(a1) * length * 0.35, hy + math.sin(a1) * length * 0.35)]
-            pygame.draw.polygon(layer, (*trail, max(0, min(255, int(alpha * fade)))), pts)
-
-    outline = rgb(P.get("outline_color"), (24, 20, 32))
-    blade = rgb(P.get("blade_color"), (232, 238, 248))
-    edge = rgb(P.get("edge_color"), (140, 146, 160))
-    gx, gy = hx + dx * r * 0.3, hy + dy * r * 0.3        # гарда
-    tip = (hx + dx * length, hy + dy * length)
-    shape = [L(gx + px * w, gy + py * w), L(tip[0] - dx * w * 2 + px * w, tip[1] - dy * w * 2 + py * w),
-             L(*tip), L(tip[0] - dx * w * 2 - px * w, tip[1] - dy * w * 2 - py * w), L(gx - px * w, gy - py * w)]
-    pygame.draw.polygon(layer, (*outline, 255), shape, 0)
-    inner = [L(gx + px * (w - 1), gy + py * (w - 1)), L(tip[0] - dx * w * 2, tip[1] - dy * w * 2),
-             L(gx - px * (w - 1), gy - py * (w - 1))]
-    pygame.draw.polygon(layer, (*blade, 255), inner)
-    pygame.draw.line(layer, (*edge, 255), L(gx, gy), L(tip[0] - dx * w * 2, tip[1] - dy * w * 2), 1)
-    guard = rgb(P.get("guard_color"), (255, 214, 70))
-    pygame.draw.line(layer, (*outline, 255), L(gx + px * r * 0.4, gy + py * r * 0.4),
-                     L(gx - px * r * 0.4, gy - py * r * 0.4), 5)
-    pygame.draw.line(layer, (*guard, 255), L(gx + px * r * 0.35, gy + py * r * 0.35),
-                     L(gx - px * r * 0.35, gy - py * r * 0.35), 3)
-    grip = rgb(P.get("grip_color"), (120, 76, 40))
-    pygame.draw.line(layer, (*grip, 255), L(hx - dx * r * 0.1, hy - dy * r * 0.1), L(gx, gy), 3)
-    surf.blit(layer, (int(ox), int(oy)))
-
-
-def draw_muzzle(surf, pos, r, facing, k):
-    """Вспышка из ствола автомата (у кончика ствола на спрайте); k — 1 в момент выстрела, гаснет к 0."""
-    size = r * float(params("shot").get("size", 0.9)) * (0.5 + 0.5 * k)
-    px = r * 2 * 1.15 / 32                           # пиксель спрайта
-    _flash(surf, (pos[0] + facing * 16 * px, pos[1] + 4 * px), 0 if facing > 0 else math.pi, size)
-
-
-def _flash(surf, tip, angle, size):
-    """Вспышка выстрела у кончика ствола tip; angle — куда смотрит ствол."""
-    P = params("shot")
-    rays = int(P.get("rays", 5))
-    outer = rgb(P.get("outer_color"), (255, 154, 48))
-    flash = rgb(P.get("flash_color"), (255, 242, 160))
-    core = rgb(P.get("core_color"), (255, 255, 255))
-    tx, ty = tip
-    for i in range(rays):
-        a = (i - (rays - 1) / 2) * 0.45 + angle
-        ln = size * (1.0 if i == (rays - 1) // 2 else 0.6)
-        pygame.draw.line(surf, outer, (tx, ty), (tx + math.cos(a) * ln, ty + math.sin(a) * ln), 3)
-    pygame.draw.circle(surf, flash, (int(tx), int(ty)), max(2, int(size * 0.45)))
-    pygame.draw.circle(surf, core, (int(tx), int(ty)), max(1, int(size * 0.22)))
-
-
-def draw_triple(surf, pos, r, facing, opened, shot=0.0):
-    """Тройной выстрел: из автомата веером раскрываются ещё два ствола (вверх и вниз под углом).
-    opened — 0..1, насколько раскрылись; shot — 1 в момент выстрела, гаснет к 0 (вспышки из боковых стволов)."""
-    P = params("triple")
-    px = r * 2 * 1.15 / 32                                    # пиксель спрайта
-    pivot = (pos[0] + facing * 7 * px, pos[1] + 3.5 * px)       # где у автомата ствольная коробка
-    spread = math.radians(float(P.get("spread", 45))) * max(0.0, min(1.0, opened))
-    length = float(P.get("barrel_length", 13)) * px
-    w = max(1, round(float(P.get("barrel_width", 2)) * px))
-    dark = rgb(P.get("dark_color"), (46, 48, 58))
-    mid = rgb(P.get("mid_color"), (82, 86, 100))
-    light = rgb(P.get("light_color"), (140, 146, 160))
-    base = 0.0 if facing > 0 else math.pi
-    tips = []
-    for side in (-1, 1):
-        a = base + side * spread * facing
-        tip = (pivot[0] + math.cos(a) * length, pivot[1] + math.sin(a) * length)
-        pygame.draw.line(surf, (24, 20, 32), pivot, tip, w + 2)
-        pygame.draw.line(surf, mid, pivot, tip, w)
-        pygame.draw.line(surf, light, pivot, (pivot[0] + math.cos(a) * length * 0.8,
-                                              pivot[1] + math.sin(a) * length * 0.8 - 1), 1)
-        pygame.draw.circle(surf, dark, (int(tip[0]), int(tip[1])), max(1, int(w * 0.8)))
-        tips.append((tip, a))
-    pygame.draw.circle(surf, dark, (int(pivot[0]), int(pivot[1])), max(2, int(1.6 * px)))
-    if opened < 1:                                            # раскрываются — искра на коробке
-        spark = rgb(P.get("spark_color"), (255, 230, 110))
-        s = (1 - opened) * 3 * px
-        for k in range(4):
-            a = k * math.pi / 2 + opened * 3
-            pygame.draw.line(surf, spark, pivot, (pivot[0] + math.cos(a) * s, pivot[1] + math.sin(a) * s), 2)
-    if shot > 0:
-        size = r * float(params("shot").get("size", 0.9)) * (0.5 + 0.5 * shot) * 0.8
-        for tip, a in tips:
-            _flash(surf, tip, a, size)
-
-
-def bear_transform(surf, pos, r, k, draw_mage, draw_bear):
-    """Превращение мага в медведя, k — 0..1. Маг белеет и раздувается, вспышка, клочья шерсти разлетаются,
-    медведь вырастает из вспышки. draw_mage(scale, white) и draw_bear(scale, white) рисуют сами фигуры."""
-    P = params("bear")
-    swell = float(P.get("swell", 0.35))
-    if k < 0.45:
-        q = k / 0.45
-        draw_mage(1 + swell * q, q > 0.35)
-    else:
-        q = (k - 0.45) / 0.55
-        draw_bear(0.6 + 0.4 * min(1.0, q * 1.4), q < 0.3)
-    ring = rgb(P.get("ring_color"), (110, 225, 100))
-    if 0.3 < k < 0.9:                                         # кольцо силы Природы
-        q = (k - 0.3) / 0.6
-        layer = pygame.Surface((int(6 * r),) * 2, pygame.SRCALPHA)
-        c = layer.get_width() // 2
-        pygame.draw.circle(layer, (*ring, int(220 * (1 - q))), (c, c), int(r * (0.8 + 1.6 * q)), 3)
-        flash = rgb(P.get("flash_color"), (255, 255, 255))
-        if q < 0.35:
-            pygame.draw.circle(layer, (*flash, int(200 * (1 - q / 0.35))), (c, c), int(r * (1.2 - q)))
-        surf.blit(layer, layer.get_rect(center=pos))
-    if k > 0.4:                                               # клочья шерсти
-        q = (k - 0.4) / 0.6
-        colors = [rgb(c, (74, 46, 28)) for c in P.get("fur_colors", ["#4a2e1c"])] or [(74, 46, 28)]
-        n = int(P.get("tufts", 14))
-        fly = float(P.get("tuft_fly", 2.2))
-        for i in range(n):
-            a = i * 2.39996 + 0.3                             # золотой угол — ровно по кругу
-            d = r * (0.5 + fly * q * (0.7 + 0.3 * ((i * 7) % 5) / 4))
-            x, y = pos[0] + math.cos(a) * d, pos[1] + math.sin(a) * d + 8 * q * q
-            size = max(1, int(4 * (1 - q)))
-            pygame.draw.rect(surf, colors[i % len(colors)], (x - size, y - size, 2 * size, 2 * size))
-
-
-def zombie_rise(surf, pos, r, k, owner_color):
-    """Превращение в зомби, k — 0..1: руны цвета хозяина вспыхивают кругом на земле, из-под моба
-    поднимается зелёный туман. Рисуется под мобом (руны) — вызывать до спрайта; туман — zombie_mist после."""
-    P = params("zombie")
-    n = int(P.get("rune_count", 6))
-    rr = r * float(P.get("rune_radius", 1.3))
-    alpha = int(255 * min(1.0, k * 4) * (1 - max(0.0, k - 0.7) / 0.3))
-    layer = pygame.Surface((int(4 * rr + 8),) * 2, pygame.SRCALPHA)
-    c = layer.get_width() // 2
-    turn = k * 2.0
-    pygame.draw.ellipse(layer, (*owner_color, alpha // 2), (c - rr, c - rr * 0.5 + rr * 0.6, 2 * rr, rr), 2)
-    for i in range(n):                                        # руны — короткие черты-закорючки по кругу
-        a = turn + i * 2 * math.pi / n
-        x, y = c + math.cos(a) * rr, c + rr * 0.6 + math.sin(a) * rr * 0.5
-        pygame.draw.line(layer, (*owner_color, alpha), (x - 3, y - 3), (x + 3, y - 3), 2)
-        pygame.draw.line(layer, (*owner_color, alpha), (x, y - 3), (x + (2 if i % 2 else -2), y + 3), 2)
-    surf.blit(layer, layer.get_rect(center=pos))
-
-
-def zombie_mist(surf, pos, r, k):
-    """Зелёный туман, поднимающийся из-под моба (поверх спрайта)."""
-    P = params("zombie")
-    mist = rgb(P.get("mist_color"), (120, 220, 90))
-    n = int(P.get("mist_puffs", 10))
-    layer = pygame.Surface((int(4 * r),) * 2, pygame.SRCALPHA)
-    c = layer.get_width() // 2
-    for i in range(n):
-        q = (k * 1.6 + i / n) % 1.0                           # каждый клубок поднимается снизу вверх
-        x = c + math.sin(i * 2.1 + k * 6) * r * 0.7
-        y = c + r * (1.0 - 2.0 * q)
-        a = int(150 * math.sin(math.pi * q) * (1 - k * 0.6))
-        pygame.draw.circle(layer, (*mist, max(0, a)), (int(x), int(y)), max(2, int(r * 0.35 * (0.6 + q))))
-    surf.blit(layer, layer.get_rect(center=pos))
-
-
-def _glow(color, a):
-    """Цвет для слоя-свечения (складывается с полем): яркость вместо прозрачности."""
-    k = max(0, min(255, a)) / 255
-    return tuple(int(v * k) for v in color[:3])
-
-
-def _star(surf, center, rays, length, inner, color, turn=0.0, width=2):
-    cx, cy = center
-    for i in range(rays):
-        a = turn + i * 2 * math.pi / rays
-        ln = length * (1.0 if i % 2 == 0 else 0.55)
-        pygame.draw.line(surf, color, (cx + math.cos(a) * inner, cy + math.sin(a) * inner),
-                         (cx + math.cos(a) * ln, cy + math.sin(a) * ln), width)
-
-
 def beam_cast(surf, caster, aim, k, color):
     """Каст «Луча света», k — 0..1 от выпуска луча: над магом вспыхивает нимб, у руки — вертящаяся звезда
     из лучей, расходятся кольца цвета героя, по прицелу летят искры света."""
@@ -395,26 +146,26 @@ def beam_cast(surf, caster, aim, k, color):
     fade = 1 - k
     if k < 0.25:                                              # вспышка вокруг мага
         q = k / 0.25
-        pygame.draw.circle(layer, _glow(flash, int(200 * (1 - q))), L(*hand_at), int(r * (0.6 + 1.2 * q)))
+        pygame.draw.circle(layer, glow(flash, int(200 * (1 - q))), L(*hand_at), int(r * (0.6 + 1.2 * q)))
     for i in range(int(P.get("rings", 2))):                    # расходящиеся кольца
         q = k * 1.4 - i * 0.25
         if 0 < q < 1:
-            pygame.draw.circle(layer, _glow(color, int(230 * (1 - q))), L(*hand_at), int(r * (0.5 + 2.2 * q)), 3)
+            pygame.draw.circle(layer, glow(color, int(230 * (1 - q))), L(*hand_at), int(r * (0.5 + 2.2 * q)), 3)
     hx, hy = pos[0], pos[1] - r * 1.25                         # нимб над головой
     rect = pygame.Rect(0, 0, int(r * 1.5), int(r * 0.5))
     rect.center = (int(L(hx, hy)[0]), int(L(hx, hy)[1]))
-    pygame.draw.ellipse(layer, _glow(halo, int(255 * fade)), rect, 3)
+    pygame.draw.ellipse(layer, glow(halo, int(255 * fade)), rect, 3)
     star_len = r * float(P.get("star_length", 2.6)) * (0.4 + 0.6 * math.sin(math.pi * min(1.0, k * 1.6)))
-    _star(layer, L(*hand_at), int(P.get("star_rays", 8)), star_len, r * 0.3, _glow(halo, int(255 * fade)), k * 4, 3)
-    _star(layer, L(*hand_at), int(P.get("star_rays", 8)), star_len * 0.6, 0, _glow(core, int(255 * fade)), k * 4 + 0.2, 1)
-    pygame.draw.circle(layer, _glow(core, int(255 * fade)), L(*hand_at), max(2, int(r * 0.45 * fade)))
+    star(layer, L(*hand_at), int(P.get("star_rays", 8)), star_len, r * 0.3, glow(halo, int(255 * fade)), k * 4, 3)
+    star(layer, L(*hand_at), int(P.get("star_rays", 8)), star_len * 0.6, 0, glow(core, int(255 * fade)), k * 4 + 0.2, 1)
+    pygame.draw.circle(layer, glow(core, int(255 * fade)), L(*hand_at), max(2, int(r * 0.45 * fade)))
     n = int(P.get("motes", 12))
     for i in range(n):                                        # искры света летят по прицелу веером
         spread = ((i * 37) % 11 - 5) / 5 * 0.6
         d = r * (0.5 + 3.2 * k * (0.6 + 0.4 * ((i * 13) % 7) / 6))
         a = aim + spread
         x, y = hand_at[0] + math.cos(a) * d, hand_at[1] + math.sin(a) * d
-        pygame.draw.circle(layer, _glow(core if i % 2 else color, int(255 * fade)), L(x, y), 2 if i % 3 else 3)
+        pygame.draw.circle(layer, glow(core if i % 2 else color, int(255 * fade)), L(x, y), 2 if i % 3 else 3)
     surf.blit(layer, (int(ox), int(oy)), special_flags=pygame.BLEND_RGB_ADD)
 
 
@@ -445,7 +196,7 @@ def draw_beam(surf, pts, color, age, time, width):
         pygame.draw.circle(surf, (255, 255, 255), (int(at[0]), int(at[1] + off)), 1 + (i % 2))
     head = (int(pts[-1][0]), int(pts[-1][1]))
     flare = float(P.get("head_flare", 14)) * (0.8 + 0.2 * math.sin(time * 30))
-    _star(surf, head, 4, flare, 0, core, time * 6, 2)
+    star(surf, head, 4, flare, 0, core, time * 6, 2)
     pygame.draw.circle(surf, core, head, width // 2 + 2)
 
 
@@ -477,7 +228,7 @@ def draw_ice_piece(surf, x, y, life, seed, color, max_life, radius):
         pygame.draw.line(layer, (*crack, int(alpha * 0.8)), (c, c), pts[(i + seed) % n], 1)
     pygame.draw.circle(layer, (*light, int(alpha * 0.9)), (int(c - r * 0.3), int(c - r * 0.25)), max(1, int(r * 0.2)))
     if grow < 1:                                              # хруст — кристаллы торчат во все стороны
-        _star(layer, (c, c), 6, r * 1.3, r * 0.7, (*light, int(220 * (1 - grow))), seed, 1)
+        star(layer, (c, c), 6, r * 1.3, r * 0.7, (*light, int(220 * (1 - grow))), seed, 1)
     surf.blit(layer, (int(x - c), int(y - c)))
 
 
@@ -548,7 +299,7 @@ def draw_freeze(surf, pos, r, since, left, time):
         for i in range(3):                                     # иней сверху мерцает
             x = c - w / 3 + i * w / 3
             if int(time * 6 + i) % 3 == 0:
-                _star(layer, (x, top + 3), 4, 3, 0, (255, 255, 255, 230), 0, 1)
+                star(layer, (x, top + 3), 4, 3, 0, (255, 255, 255, 230), 0, 1)
         if grow < 1:                                            # растущий край — острые кристаллы
             for i in range(5):
                 x = c - w / 2 + (i + 0.5) * w / 5
@@ -569,3 +320,243 @@ def draw_freeze(surf, pos, r, since, left, time):
             pygame.draw.polygon(layer, (*ice, int(230 * (1 - q))), sh)
             pygame.draw.polygon(layer, (*light, int(255 * (1 - q))), sh, 1)
     surf.blit(layer, (int(pos[0] - c), int(pos[1] - c)))
+
+
+def zombie_rise(surf, pos, r, k, owner_color):
+    """Превращение в зомби, k — 0..1: руны цвета хозяина вспыхивают кругом на земле, из-под моба
+    поднимается зелёный туман. Рисуется под мобом (руны) — вызывать до спрайта; туман — zombie_mist после."""
+    P = params("zombie")
+    n = int(P.get("rune_count", 6))
+    rr = r * float(P.get("rune_radius", 1.3))
+    alpha = int(255 * min(1.0, k * 4) * (1 - max(0.0, k - 0.7) / 0.3))
+    layer = pygame.Surface((int(4 * rr + 8),) * 2, pygame.SRCALPHA)
+    c = layer.get_width() // 2
+    turn = k * 2.0
+    pygame.draw.ellipse(layer, (*owner_color, alpha // 2), (c - rr, c - rr * 0.5 + rr * 0.6, 2 * rr, rr), 2)
+    for i in range(n):                                        # руны — короткие черты-закорючки по кругу
+        a = turn + i * 2 * math.pi / n
+        x, y = c + math.cos(a) * rr, c + rr * 0.6 + math.sin(a) * rr * 0.5
+        pygame.draw.line(layer, (*owner_color, alpha), (x - 3, y - 3), (x + 3, y - 3), 2)
+        pygame.draw.line(layer, (*owner_color, alpha), (x, y - 3), (x + (2 if i % 2 else -2), y + 3), 2)
+    surf.blit(layer, layer.get_rect(center=pos))
+
+
+def zombie_mist(surf, pos, r, k):
+    """Зелёный туман, поднимающийся из-под моба (поверх спрайта)."""
+    P = params("zombie")
+    mist = rgb(P.get("mist_color"), (120, 220, 90))
+    n = int(P.get("mist_puffs", 10))
+    layer = pygame.Surface((int(4 * r),) * 2, pygame.SRCALPHA)
+    c = layer.get_width() // 2
+    for i in range(n):
+        q = (k * 1.6 + i / n) % 1.0                           # каждый клубок поднимается снизу вверх
+        x = c + math.sin(i * 2.1 + k * 6) * r * 0.7
+        y = c + r * (1.0 - 2.0 * q)
+        a = int(150 * math.sin(math.pi * q) * (1 - k * 0.6))
+        pygame.draw.circle(layer, (*mist, max(0, a)), (int(x), int(y)), max(2, int(r * 0.35 * (0.6 + q))))
+    surf.blit(layer, layer.get_rect(center=pos))
+
+
+@lru_cache(maxsize=256)
+def _bush(seed, size, colors):
+    """Один куст терновника: кривые тёмные ветки с шипами, редкие листья и ягоды. Основание — низ по центру."""
+    branch, light, thorn, leaf, berry = colors
+    w, h = size * 2, int(size * 1.5)
+    img = pygame.Surface((w, h), pygame.SRCALPHA)
+    bx, by = w / 2, h - 2
+
+    def rnd(k):
+        return ((seed * 9301 + k * 49297) % 233280) / 233280
+
+    tips = []
+    n = 5 + int(rnd(1) * 3)
+    for i in range(n):
+        ang = -math.pi / 2 + (i - (n - 1) / 2) * 0.42 + (rnd(i + 10) - 0.5) * 0.5
+        x, y = bx + (rnd(i + 20) - 0.5) * size * 0.3, by
+        length = size * (0.55 + 0.6 * rnd(i + 30))
+        pts = [(x, y)]
+        for seg in range(3):                                  # кривая ветка из трёх отрезков
+            ang += (rnd(i * 7 + seg + 40) - 0.5) * 0.9
+            x += math.cos(ang) * length / 3
+            y += math.sin(ang) * length / 3
+            pts.append((x, y))
+        pygame.draw.lines(img, INK, False, pts, 5)
+        pygame.draw.lines(img, branch, False, pts, 3)
+        pygame.draw.lines(img, light, False, [(p[0] - 1, p[1]) for p in pts[1:]], 1)
+        for j in range(1, 4):                                 # шипы поперёк ветки
+            (x0, y0), (x1, y1) = pts[j - 1], pts[j]
+            mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+            dx, dy = x1 - x0, y1 - y0
+            d = math.hypot(dx, dy) or 1
+            side = 1 if (i + j) % 2 else -1
+            nx, ny = -dy / d * side, dx / d * side
+            pygame.draw.line(img, thorn, (mx, my), (mx + nx * 4 + dx / d * 2, my + ny * 4 + dy / d * 2), 1)
+        tips.append(pts[-1])
+        if rnd(i + 60) < 0.5:                                 # шип на конце
+            pygame.draw.line(img, thorn, pts[-1], (pts[-1][0] + math.cos(ang) * 4, pts[-1][1] + math.sin(ang) * 4), 1)
+    for k, (x, y) in enumerate(tips):
+        if rnd(k + 80) < 0.45:                                # редкие тёмные листья
+            pygame.draw.circle(img, INK, (int(x), int(y)), 3)
+            pygame.draw.circle(img, leaf, (int(x), int(y)), 2)
+        elif rnd(k + 90) < 0.35:                              # кроваво-красные ягоды
+            pygame.draw.circle(img, INK, (int(x), int(y)), 3)
+            pygame.draw.circle(img, berry, (int(x), int(y)), 2)
+            img.set_at((int(x) - 1, int(y) - 1), (255, 150, 150))
+    return img
+
+
+def draw_thorns(surf, t, tree_w, tree_speed, tree_time):
+    """Стена деревьев: терновник вдоль отрезка; кусты вырастают из земли за растущим концом стены
+    и вянут, когда стена исчезает от мага к концу."""
+    P = params("thorns")
+    colors = tuple(rgb(P.get(k), d) for k, d in (("branch_color", (42, 26, 20)), ("branch_light", (74, 48, 34)),
+                                                 ("thorn_color", (210, 195, 165)), ("leaf_color", (44, 58, 30)),
+                                                 ("berry_color", (154, 20, 32))))
+    dirt = rgb(P.get("dirt_color"), (58, 42, 28))
+    a = t["angle"]
+    cos, sin = math.cos(a), math.sin(a)
+    elapsed = tree_time - t.get("life", tree_time)
+    grow_t = max(0.01, float(P.get("grow_time", 0.3)))
+    step = tree_w * float(P.get("spacing", 0.8))
+    i = 0
+    d = 0.0
+    while d <= t["len"]:
+        age = max(0.0, elapsed - d / tree_speed) if t.get("life") is not None else grow_t
+        g = min(1.0, age / grow_t)
+        if d < t["start"]:
+            g = 0.0                                           # уже исчез
+        elif t["start"] > 0 and d < t["start"] + tree_w:
+            g = min(g, (d - t["start"]) / tree_w)             # вянет
+        if g > 0.05:
+            x, y = t["x"] + cos * d, t["y"] + sin * d
+            seed = (int(t.get("id") or 0) * 31 + i) % 6
+            size = int(tree_w * 1.1)
+            img = _bush(seed, size, colors)
+            k = 0.3 + 0.7 * g + 0.15 * math.sin(min(1.0, g) * math.pi)     # чуть пружинит при росте
+            sw, sh = max(1, int(img.get_width() * k)), max(1, int(img.get_height() * k))
+            pygame.draw.ellipse(surf, dirt, (x - size * 0.6, y + tree_w * 0.25, size * 1.2, size * 0.35))
+            surf.blit(pygame.transform.scale(img, (sw, sh)), (int(x - sw / 2), int(y + tree_w * 0.45 - sh)))
+            if g < 1:                                         # комья земли летят из-под куста
+                for j in range(3):
+                    q = g
+                    ang = -math.pi / 2 + (j - 1) * 0.9
+                    pygame.draw.circle(surf, dirt, (int(x + math.cos(ang) * 12 * q), int(y + tree_w * 0.3 + math.sin(ang) * 14 * q + 20 * q * q)), 2)
+        d += step
+        i += 1
+
+
+def draw_mirror(surf, x, y1, y2, life, total, back_dir, color, time, width):
+    """Стена-зеркало: тыл (к хозяину) — обсидиан с рунами цвета героя, лицо к сопернику — серебряное
+    зеркало с бегущими бликами. back_dir — +1, если хозяин справа. Вырастает из середины, в конце
+    трескается и осыпается осколками."""
+    P = params("mirror")
+    since = total - life
+    grow = min(1.0, since / max(0.01, float(P.get("grow_time", 0.35))))
+    crack_t = float(P.get("crack_time", 0.8))
+    fall_t = float(P.get("fall_time", 0.35))
+    back_c = rgb(P.get("back_color"), (42, 34, 56))
+    glass = rgb(P.get("glass_color"), (200, 210, 230))
+    light = rgb(P.get("glass_light"), (244, 248, 255))
+    dark = rgb(P.get("glass_dark"), (126, 136, 160))
+    cy = (y1 + y2) / 2
+    half_h = (y2 - y1) / 2 * grow
+    top, h = cy - half_h, 2 * half_h
+    half = width // 2
+    back_x = x if back_dir > 0 else x - half
+    face_x = x - half if back_dir > 0 else x
+    if life < fall_t:                                         # осыпается: осколки падают
+        q = 1 - life / fall_t
+        for i in range(12):
+            fx = face_x + (i % 3) * half * 0.6 + (back_dir * -1) * q * 10 * ((i % 2) * 2 - 1)
+            fy = y1 + (i / 12) * (y2 - y1) + 80 * q * q
+            s = 5
+            pts = [(fx, fy), (fx + s, fy + s * 0.6), (fx + s * 0.3, fy + s * 1.4)]
+            pygame.draw.polygon(surf, light if i % 2 else glass, pts)
+            pygame.draw.polygon(surf, INK, pts, 1)
+        return
+    pygame.draw.rect(surf, INK, (min(back_x, face_x) - 1, top - 2, width + 2, h + 4))
+    pygame.draw.rect(surf, back_c, (back_x, top, half, h))
+    for i in range(int(h // 22)):                             # руны на тыле — мерцают
+        ry = top + 10 + i * 22
+        a = 120 + int(120 * (0.5 + 0.5 * math.sin(time * 4 + i)))
+        rc = tuple(int(v * a / 255) for v in color)
+        pygame.draw.line(surf, rc, (back_x + 1, ry), (back_x + half - 2, ry + 4), 1)
+        pygame.draw.line(surf, rc, (back_x + half / 2, ry - 3), (back_x + half / 2, ry + 6), 1)
+    pygame.draw.rect(surf, glass, (face_x, top, half, h))      # зеркало
+    pygame.draw.line(surf, dark, (face_x + half - 1, top), (face_x + half - 1, top + h))
+    pygame.draw.line(surf, light, (face_x, top), (face_x, top + h))
+    n = int(P.get("glints", 2))
+    for k in range(n):                                        # блики бегут сверху вниз
+        gy = top + ((time * 90 + k * h / n) % max(1.0, h))
+        pygame.draw.line(surf, (255, 255, 255), (face_x, gy), (face_x + half - 1, gy - 6), 2)
+    pygame.draw.rect(surf, color, (face_x, top, half, h), 1)
+    if grow < 1:                                              # растёт — искры на концах
+        for ey in (top, top + h):
+            pygame.draw.circle(surf, light, (int(x), int(ey)), 3)
+    if life < crack_t:                                        # трескается
+        q = 1 - life / crack_t
+        k = int(2 + 6 * q)
+        pts = [(face_x + (i % 2) * (half - 1), top + h * i / k) for i in range(k + 1)]
+        pygame.draw.lines(surf, INK, False, pts, 1)
+
+
+def draw_fire_ring(surf, x, y, R, heat, life, total, time):
+    """Огненный круг: обугленное кольцо и злые рваные языки пламени, искры, дым; вспыхивает от одной
+    точки и обегает круг; перед концом пламя опадает."""
+    P = params("firering")
+    since = total - life
+    ignite = min(1.0, since / max(0.01, float(P.get("ignite_time", 0.45))))
+    fade = min(1.0, life / 1.0)
+    char = rgb(P.get("char_color"), (42, 12, 6))
+    deep = rgb(P.get("deep_color"), (160, 24, 8))
+    flame = rgb(P.get("flame_color"), (255, 90, 20))
+    core = rgb(P.get("core_color"), (255, 210, 74))
+    tip = rgb(P.get("tip_color"), (255, 244, 180))
+    size = int(2 * (R + heat + 40))
+    glow = pygame.Surface((size, size), pygame.SRCALPHA)      # жар у стены
+    c = size // 2
+    pygame.draw.circle(glow, (*flame, int(40 * fade)), (c, c), R + heat // 2, max(1, heat))
+    surf.blit(glow, (int(x - c), int(y - c)))
+    smoke = pygame.Surface((size, size), pygame.SRCALPHA)     # дым над кольцом
+    for i in range(12):
+        a = i * 2 * math.pi / 12 + time * 0.3
+        q = (time * 0.6 + i / 12) % 1.0
+        sx, sy = c + math.cos(a) * R, c + math.sin(a) * R - 10 - q * 40
+        pygame.draw.circle(smoke, (30, 24, 24, int(float(P.get("smoke_alpha", 60)) * (1 - q) * ignite)),
+                           (int(sx), int(sy)), int(6 + q * 10))
+    surf.blit(smoke, (int(x - c), int(y - c)))
+    pygame.draw.circle(surf, INK, (int(x), int(y)), R, 10)
+    pygame.draw.circle(surf, char, (int(x), int(y)), R, 7)
+    pygame.draw.circle(surf, deep, (int(x), int(y)), R, 3)
+    n = int(P.get("tongues", 44))
+    hmin, hmax = float(P.get("height_min", 12)), float(P.get("height_max", 30))
+    order = sorted(range(n), key=lambda i: math.sin(i * 2 * math.pi / n))   # дальние (верх) — раньше
+    for i in order:
+        a = i * 2 * math.pi / n
+        around = abs(((a - math.pi / 2 + math.pi) % (2 * math.pi)) - math.pi) / math.pi   # от точки поджога
+        if around > ignite:
+            continue
+        rnd = math.sin(i * 12.9898) * 43758.5453 % 1.0
+        flick = 0.5 + 0.5 * math.sin(time * (13 + rnd * 9) + i * 2.1)
+        hgt = (hmin + (hmax - hmin) * (0.35 + 0.65 * rnd) * (0.6 + 0.4 * flick)) * fade
+        fx, fy = x + math.cos(a) * R, y + math.sin(a) * R
+        sway = math.sin(time * 7 + i) * 4
+        w = 6
+        outer = [(fx - w, fy + 3), (fx - w * 0.4, fy - hgt * 0.45), (fx - w * 0.6 + sway * 0.5, fy - hgt * 0.7),
+                 (fx + sway, fy - hgt), (fx + w * 0.3 + sway * 0.6, fy - hgt * 0.6),
+                 (fx + w * 0.8, fy - hgt * 0.75 + 4), (fx + w, fy + 3)]       # рваный язык с двумя зубцами
+        pygame.draw.polygon(surf, INK, outer)
+        pygame.draw.polygon(surf, deep, [(px + (fx - px) * 0.15, py + (fy - py) * 0.08) for px, py in outer])
+        mid = [(fx - w * 0.7, fy + 2), (fx - w * 0.2 + sway * 0.3, fy - hgt * 0.55),
+               (fx + sway * 0.8, fy - hgt * 0.8), (fx + w * 0.7, fy + 2)]
+        pygame.draw.polygon(surf, flame, mid)
+        inner = [(fx - w * 0.4, fy + 2), (fx + sway * 0.5, fy - hgt * 0.45), (fx + w * 0.4, fy + 2)]
+        pygame.draw.polygon(surf, core, inner)
+        pygame.draw.line(surf, tip, (fx, fy + 1), (fx + sway * 0.3, fy - hgt * 0.25), 1)
+    for i in range(int(P.get("embers", 18))):                 # искры летят вверх
+        a = i * 2.39996
+        q = (time * 0.9 + i / 18) % 1.0
+        ex = x + math.cos(a) * R + math.sin(time * 3 + i) * 6
+        ey = y + math.sin(a) * R - q * 50
+        if ignite >= 1 and q < 0.9:
+            pygame.draw.rect(surf, tip if i % 3 == 0 else core, (int(ex), int(ey), 2, 2))

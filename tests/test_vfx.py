@@ -3,12 +3,13 @@ import json
 
 import pygame
 
-from duel import vfx
+from duel import fx
+from duel.fx import mage as fx_mage, spells as fx_spells
 from duel.config import DURATION
 
 
 def test_effect_files_valid():
-    files = sorted(vfx.EFFECT_DIR.glob("*.json"))
+    files = sorted(fx.EFFECT_DIR.glob("*.json"))
     assert files
     for f in files:
         assert isinstance(json.loads(f.read_text(encoding="utf-8")), dict), f.name
@@ -20,20 +21,20 @@ def test_lasso_all_phases_draw():
     for left in (DURATION["lassoed"], DURATION["lassoed"] - 0.1, DURATION["lassoed"] - 0.3, 1.5, 0.1, 0.0):
         victim = {"x": 520, "y": 320, "r": 14, "effects": {"lassoed": left}}
         before = pygame.image.tobytes(surf, "RGB")
-        vfx.draw_lasso(surf, victim, puller, (255, 90, 60), 12.3)
+        fx_spells.draw_lasso(surf, victim, puller, (255, 90, 60), 12.3)
         if left > 0.05:
             assert pygame.image.tobytes(surf, "RGB") != before     # что-то нарисовано
 
 
 def test_lasso_without_file_uses_defaults(monkeypatch, tmp_path):
-    monkeypatch.setattr(vfx, "EFFECT_DIR", tmp_path)
-    vfx.reload_all()
+    monkeypatch.setattr(fx, "EFFECT_DIR", tmp_path)
+    fx.reload_all()
     try:
         surf = pygame.Surface((400, 300))
-        vfx.draw_lasso(surf, {"x": 300, "y": 150, "r": 14, "effects": {"lassoed": 2.0}},
+        fx_spells.draw_lasso(surf, {"x": 300, "y": 150, "r": 14, "effects": {"lassoed": 2.0}},
                        {"x": 60, "y": 150, "r": 14, "effects": {}}, (255, 90, 60), 1.0)
     finally:
-        vfx.reload_all()
+        fx.reload_all()
 
 
 def _drew(fn):
@@ -45,12 +46,12 @@ def _drew(fn):
 
 def test_triple_bear_zombie_draw_in_all_phases():
     for k in (0.0, 0.3, 1.0):
-        assert _drew(lambda s: vfx.draw_triple(s, (200, 150), 14, 1, k, shot=1 - k))
-        assert _drew(lambda s: vfx.zombie_rise(s, (200, 150), 12, 0.2 + k * 0.6, (180, 90, 255)))
-        assert _drew(lambda s: vfx.zombie_mist(s, (200, 150), 12, k * 0.9))
+        assert _drew(lambda s: fx_mage.draw_triple(s, (200, 150), 14, 1, k, shot=1 - k))
+        assert _drew(lambda s: fx_spells.zombie_rise(s, (200, 150), 12, 0.2 + k * 0.6, (180, 90, 255)))
+        assert _drew(lambda s: fx_spells.zombie_mist(s, (200, 150), 12, k * 0.9))
     calls = []
     for k in (0.1, 0.5, 0.9):
-        vfx.bear_transform(pygame.Surface((400, 300)), (200, 150), 14, k,
+        fx_mage.bear_transform(pygame.Surface((400, 300)), (200, 150), 14, k,
                            lambda sc, w: calls.append(("mage", w)), lambda sc, w: calls.append(("bear", w)))
     assert [c[0] for c in calls] == ["mage", "bear", "bear"]       # сначала маг, потом медведь
 
@@ -75,13 +76,13 @@ def test_beam_ice_freeze_draw():
     from duel.config import ICE_LIFE
     caster = {"x": 200, "y": 150, "r": 14}
     for k in (0.0, 0.4, 0.9):
-        assert _drew(lambda s: vfx.beam_cast(s, caster, 0.0, k, (255, 230, 120)))
-        assert _drew(lambda s: vfx.icewalk_cast(s, (200, 150), 14, k))
-    assert _drew(lambda s: vfx.draw_beam(s, [(50, 150), (300, 150)], (255, 230, 120), 0.02, 1.0, 12))
+        assert _drew(lambda s: fx_spells.beam_cast(s, caster, 0.0, k, (255, 230, 120)))
+        assert _drew(lambda s: fx_spells.icewalk_cast(s, (200, 150), 14, k))
+    assert _drew(lambda s: fx_spells.draw_beam(s, [(50, 150), (300, 150)], (255, 230, 120), 0.02, 1.0, 12))
     for life in (ICE_LIFE - 0.05, 3.0, 0.5):
-        assert _drew(lambda s: vfx.draw_ice_piece(s, 200, 150, life, 7, (215, 238, 255), ICE_LIFE, 22))
+        assert _drew(lambda s: fx_spells.draw_ice_piece(s, 200, 150, life, 7, (215, 238, 255), ICE_LIFE, 22))
     for since, left in ((0.1, 2.4), (1.0, 1.5), (2.3, 0.2)):     # нарастает, глыба, раскол
-        assert _drew(lambda s: vfx.draw_freeze(s, (200, 150), 14, since, left, 1.0))
+        assert _drew(lambda s: fx_spells.draw_freeze(s, (200, 150), 14, since, left, 1.0))
 
 
 def test_beam_snapshot_has_age():
@@ -94,7 +95,7 @@ def test_beam_snapshot_has_age():
 
 
 def test_bullets_hits_burn_for_every_hero():
-    from duel import vfx_bullets as V
+    from duel.fx import bullets as V
     from duel.config import HIT_SHOW
     for hero in V.STYLES:
         assert _drew(lambda s: V.draw_bullet(s, 200, 150, 0.5, hero, 1.3, 2, 4))
@@ -123,18 +124,17 @@ def test_hits_and_burn_in_snapshot():
 
 
 def test_hp_bar_sight_shield_thorns_draw():
-    from duel import vfx_units as U
     from duel.config import TREE_SPEED, TREE_TIME, TREE_W
     font = pygame.font.Font(None, 14)
     for hp, mx, sh in ((10, 10, 0), (3, 10, 5), (0, 15, 0), (57, 100, 2)):
-        assert _drew(lambda s: U.draw_hp_bar(s, 200, 100, hp, mx, sh, (255, 90, 80), hp % 2 == 0, font))
-    assert _drew(lambda s: U.draw_sight(s, 200, 150, 14, 0.3, (255, 90, 80)))
+        assert _drew(lambda s: fx_mage.draw_hp_bar(s, 200, 100, hp, mx, sh, (255, 90, 80), hp % 2 == 0, font))
+    assert _drew(lambda s: fx_mage.draw_sight(s, 200, 150, 14, 0.3, (255, 90, 80)))
     for left, since, flash in ((6.0, 0.05, 0.0), (4.0, 2.0, 1.0), (3.0, 3.0, 0.5)):
-        assert _drew(lambda s: U.draw_shield(s, (200, 150), 14, 10, left, since, 3, flash, 1.0))
-    assert _drew(lambda s: U.draw_shield_break(s, (200, 150), 14, 10, 0.4))
+        assert _drew(lambda s: fx_mage.draw_shield(s, (200, 150), 14, 10, left, since, 3, flash, 1.0))
+    assert _drew(lambda s: fx_mage.draw_shield_break(s, (200, 150), 14, 10, 0.4))
     for life, start, length in ((TREE_TIME - 0.05, 0, 100), (4.0, 0, 750), (0.3, 300, 750)):
         t = {"id": 3, "x": 50, "y": 150, "angle": 0.0, "life": life, "start": start, "len": length}
-        assert _drew(lambda s: U.draw_thorns(s, t, TREE_W, TREE_SPEED, TREE_TIME))
+        assert _drew(lambda s: fx_spells.draw_thorns(s, t, TREE_W, TREE_SPEED, TREE_TIME))
 
 
 def test_shield_absorb_flashes_and_breaks():
@@ -149,13 +149,12 @@ def test_shield_absorb_flashes_and_breaks():
 
 
 def test_mirror_firering_clone_noise_draw():
-    from duel import vfx_units as U
     from duel.config import FIRE_RING_HEAT, FIRE_RING_R, FIRE_RING_TIME, WALL_TIME, WALL_W
     for life in (WALL_TIME - 0.1, 4.0, 0.5, 0.2):
-        assert _drew(lambda s: U.draw_mirror(s, 200, 80, 260, life, WALL_TIME, 1, (180, 90, 255), 1.0, WALL_W))
+        assert _drew(lambda s: fx_spells.draw_mirror(s, 200, 80, 260, life, WALL_TIME, 1, (180, 90, 255), 1.0, WALL_W))
     for life in (FIRE_RING_TIME - 0.1, FIRE_RING_TIME - 1.0, 0.5):
-        assert _drew(lambda s: U.draw_fire_ring(s, 200, 150, FIRE_RING_R, FIRE_RING_HEAT, life, FIRE_RING_TIME, 1.0))
-    assert _drew(lambda s: U.draw_clone_noise(s, (200, 150), 14, 0.3, 1.0))
+        assert _drew(lambda s: fx_spells.draw_fire_ring(s, 200, 150, FIRE_RING_R, FIRE_RING_HEAT, life, FIRE_RING_TIME, 1.0))
+    assert _drew(lambda s: fx_mage.draw_clone_noise(s, (200, 150), 14, 0.3, 1.0))
 
 
 def test_own_clones_see_through_only_for_owner():

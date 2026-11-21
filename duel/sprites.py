@@ -108,6 +108,11 @@ def reload_all():
         f.cache_clear()
 
 
+def sprite_px(radius, pixels=32):
+    """Сколько пикселей поля в одном пикселе спрайта персонажа с кругом попадания radius."""
+    return radius * 2 * SPRITE_TO_HITBOX / pixels
+
+
 def draw_unit(surf, name, center, radius, facing, white=False, alpha=255, frame="idle"):
     """Рисует спрайт (кадр frame) по центру круга попадания radius; facing=-1 — смотрит влево."""
     size = max(8, round(radius * 2 * SPRITE_TO_HITBOX))

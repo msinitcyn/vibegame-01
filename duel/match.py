@@ -402,6 +402,25 @@ class Match:
             self.trail_last[p] = (p.x, p.y)
 
     def update(self, dt, moves):
+        """Один такт правил — фазы по порядку (порядок важен: он входит в отпечаток правил)."""
+        self.age_terrain(dt)
+        for p in self.players:
+            self.update_player(p, dt, moves.get(p.id, (0, 0)))
+        self.update_mobs(dt)
+        self.pick_artifacts()
+        self.update_ammo(dt)
+        for w in self.walls:
+            w.life -= dt
+        self.walls = [w for w in self.walls if w.life > 0]
+        self.update_clones(dt)
+        self.update_bullets(dt)
+        self.bury_mobs()
+        for p in self.players:
+            if p.hp <= 0:
+                self.winner = self.other(p)
+
+    def age_terrain(self, dt):
+        """Стена деревьев растёт и стареет, лёд тает, огненные круги догорают."""
         for t in self.trees:
             t.update(dt)
         self.trees = [t for t in self.trees if t.life > 0]
@@ -411,41 +430,43 @@ class Match:
         for ring in self.rings:
             ring.life -= dt
         self.rings = [r for r in self.rings if r.life > 0]
-        for p in self.players:
-            p.update(dt, moves.get(p.id, (0, 0)))
-            if p.bear_saved is not None and "bear" not in p.effects:
-                self.end_bear(p)              # время медведя вышло
-            if "lassoed" in p.effects:        # «Огненное лассо»: тянет к сопернику быстрее бега
-                foe = self.other(p)
-                dx, dy = foe.x - p.x, foe.y - p.y
-                d = math.hypot(dx, dy)
-                room = d - p.radius - foe.radius
-                if room > 0:
-                    step = min(LASSO_SPEED * dt, room)
-                    p.x += dx / d * step
-                    p.y += dy / d * step
-            self.constrain(p)
-            self.update_ice(p)
-            # на опасной земле отнимаются жизни: FOE_LAND_DPS в секунду; щит гасит каждый такой удар зарядом
-            if self.in_danger(p):
-                p.foe_land_t += dt
-                while p.foe_land_t >= 1 / FOE_LAND_DPS:
-                    p.foe_land_t -= 1 / FOE_LAND_DPS
-                    if not p.shield_absorb():
-                        self.hurt_player(p, 1)
-            else:
-                p.foe_land_t = 0.0
-            # у огненной стены соперника хозяина — FIRE_RING_DPS в секунду
-            if any(r.owner is not p and r.near_wall(p) for r in self.rings):
-                p.ring_t += dt
-                while p.ring_t >= 1 / FIRE_RING_DPS:
-                    p.ring_t -= 1 / FIRE_RING_DPS
-                    self.hurt_player(p, 1)
-            else:
-                p.ring_t = 0.0
-        self.update_mobs(dt)
 
-        # артефакты сами не появляются — только выпадают из убитых мобов (drop_artifact)
+    def update_player(self, p, dt, move):
+        """Маг за такт: движение, конец медведя, лассо, границы, ледяной след, урон земли и огня."""
+        p.update(dt, move)
+        if p.bear_saved is not None and "bear" not in p.effects:
+            self.end_bear(p)                  # время медведя вышло
+        if "lassoed" in p.effects:            # «Огненное лассо»: тянет к сопернику быстрее бега
+            foe = self.other(p)
+            dx, dy = foe.x - p.x, foe.y - p.y
+            d = math.hypot(dx, dy)
+            room = d - p.radius - foe.radius
+            if room > 0:
+                step = min(LASSO_SPEED * dt, room)
+                p.x += dx / d * step
+                p.y += dy / d * step
+        self.constrain(p)
+        self.update_ice(p)
+        # на опасной земле отнимаются жизни: FOE_LAND_DPS в секунду; щит гасит каждый такой удар зарядом
+        if self.in_danger(p):
+            p.foe_land_t += dt
+            while p.foe_land_t >= 1 / FOE_LAND_DPS:
+                p.foe_land_t -= 1 / FOE_LAND_DPS
+                if not p.shield_absorb():
+                    self.hurt_player(p, 1)
+        else:
+            p.foe_land_t = 0.0
+        # у огненной стены соперника хозяина — FIRE_RING_DPS в секунду
+        if any(r.owner is not p and r.near_wall(p) for r in self.rings):
+            p.ring_t += dt
+            while p.ring_t >= 1 / FIRE_RING_DPS:
+                p.ring_t -= 1 / FIRE_RING_DPS
+                self.hurt_player(p, 1)
+        else:
+            p.ring_t = 0.0
+
+    def pick_artifacts(self):
+        """Маг, коснувшийся артефакта, подбирает его (артефакты только выпадают из мобов — drop_artifact)."""
         for p in self.players:
             for a in self.artifacts:
                 if not a.taken and math.hypot(a.x - p.x, a.y - p.y) < p.radius + ARTIFACT_R:
@@ -453,7 +474,8 @@ class Match:
                     self.emit("pickup", p.id, a.kind)
         self.artifacts = [a for a in self.artifacts if not a.taken]
 
-        # патроны: пачки в случайном месте земли игрока, подбираются всегда
+    def update_ammo(self, dt):
+        """Пачки патронов: появляются на земле игрока по таймеру, подбираются всеми, исчезают сами."""
         for p in self.players:
             self.ammo_timer[p] -= dt
             if self.ammo_timer[p] <= 0:
@@ -468,10 +490,8 @@ class Match:
                     self.emit("ammo", p.id, AMMO_PACK)
         self.ammo_packs = [a for a in self.ammo_packs if a.life > 0]
 
-        for w in self.walls:
-            w.life -= dt
-        self.walls = [w for w in self.walls if w.life > 0]
-
+    def update_clones(self, dt):
+        """Двойники бродят и стреляют; деревья и огненная стена их разворачивают; подбирают артефакты хозяину."""
         for c in self.clones:
             x0, y0 = c.x, c.y
             self.bullets.extend(c.update(dt, self.other(c.owner)))
@@ -486,6 +506,9 @@ class Match:
         self.artifacts = [a for a in self.artifacts if not a.taken]
         self.clones = [c for c in self.clones if c.alive]
 
+    def update_bullets(self, dt):
+        """Пули летят и попадают: деревья и огненная стена, зеркало, мобы, лесные стражи, стражи арены,
+        щит и сам соперник, его двойники. Попадания — в hits (для картинки)."""
         for h in self.hits:
             h[4] += dt
         self.hits = [h for h in self.hits if h[4] < HIT_SHOW]
@@ -501,52 +524,62 @@ class Match:
             for w in self.walls:
                 if b.alive and w.hit(b, prev_x):
                     self.hit_at(b, "mirror", None, w.owner)   # вспышка на зеркале
-            for m in self.mobs:
-                if m.zombie_of is b.owner:
-                    continue                  # свои пули сквозь своих зомби
-                if b.alive and m.alive and math.hypot(b.x - m.x, b.y - m.y) < m.radius + BULLET_R:
-                    b.alive = False
-                    m.hurt(b.owner)           # моб злится на того, чья пуля
-                    self.hit_at(b, "zombie" if m.zombie_of else "mob", m)
-            for st in self.sentries:          # пули соперника рубят стражей
-                if b.alive and st.owner is not b.owner and st.alive and \
-                        math.hypot(b.x - st.x, b.y - st.y) < st.radius + BULLET_R:
-                    b.alive = False
-                    st.hurt()
-                    self.hit_at(b, "sentry", st)
-            for g in self.guardians:          # стражи арены: ранит только изнутри, иначе — рикошет
-                if b.alive and g.alive and math.hypot(b.x - g.x, b.y - g.y) < g.radius + BULLET_R:
-                    if self.can_hurt_guardian(g, b.owner):
-                        b.alive = False
-                        self.hurt_guardian(g, 1)
-                        self.hit_at(b, "guardian", g)
-                    else:
-                        g.reflect(b)
-            if not b.alive:
-                continue
-            target = self.other(b.owner)      # владелец мог смениться после зеркала
-            if target.shield_blocks(b):
-                b.alive = False                   # щит поглощает пулю
-                self.hit_at(b, "shield")
-                continue
-            if math.hypot(b.x - target.x, b.y - target.y) < target.radius + BULLET_R:
-                b.alive = False
-                self.hurt_player(target, 1)
-                self.hit_at(b, "mage", target)
-                continue
-            for c in self.clones:
-                if not c.alive or c.owner is not target:
-                    continue
-                if c.shield_blocks(b):
-                    b.alive = False
-                    self.hit_at(b, "shield")
-                    break
-                if math.hypot(b.x - c.x, b.y - c.y) < c.radius + BULLET_R:
-                    b.alive = False
-                    c.hurt(1)
-                    self.hit_at(b, "mage", c)
-                    break
+            self.bullet_hits_units(b)
+            if b.alive:
+                self.bullet_hits_side(b)
         self.clones = [c for c in self.clones if c.alive]
+
+    def bullet_hits_units(self, b):
+        """Пуля и всё, что не маг: мобы (свои зомби — насквозь), лесные стражи, стражи арены."""
+        for m in self.mobs:
+            if m.zombie_of is b.owner:
+                continue                      # свои пули сквозь своих зомби
+            if b.alive and m.alive and math.hypot(b.x - m.x, b.y - m.y) < m.radius + BULLET_R:
+                b.alive = False
+                m.hurt(b.owner)           # моб злится на того, чья пуля
+                self.hit_at(b, "zombie" if m.zombie_of else "mob", m)
+        for st in self.sentries:          # пули соперника рубят стражей
+            if b.alive and st.owner is not b.owner and st.alive and \
+                    math.hypot(b.x - st.x, b.y - st.y) < st.radius + BULLET_R:
+                b.alive = False
+                st.hurt()
+                self.hit_at(b, "sentry", st)
+        for g in self.guardians:          # стражи арены: ранит только изнутри, иначе — рикошет
+            if b.alive and g.alive and math.hypot(b.x - g.x, b.y - g.y) < g.radius + BULLET_R:
+                if self.can_hurt_guardian(g, b.owner):
+                    b.alive = False
+                    self.hurt_guardian(g, 1)
+                    self.hit_at(b, "guardian", g)
+                else:
+                    g.reflect(b)
+
+    def bullet_hits_side(self, b):
+        """Пуля и сторона соперника её хозяина (хозяин мог смениться после зеркала): щит, маг, двойники."""
+        target = self.other(b.owner)
+        if target.shield_blocks(b):
+            b.alive = False                   # щит поглощает пулю
+            self.hit_at(b, "shield")
+            return
+        if math.hypot(b.x - target.x, b.y - target.y) < target.radius + BULLET_R:
+            b.alive = False
+            self.hurt_player(target, 1)
+            self.hit_at(b, "mage", target)
+            return
+        for c in self.clones:
+            if not c.alive or c.owner is not target:
+                continue
+            if c.shield_blocks(b):
+                b.alive = False
+                self.hit_at(b, "shield")
+                return
+            if math.hypot(b.x - c.x, b.y - c.y) < c.radius + BULLET_R:
+                b.alive = False
+                c.hurt(1)
+                self.hit_at(b, "mage", c)
+                return
+
+    def bury_mobs(self):
+        """Погибшие мобы: обычный роняет артефакт, зомби — нет; мёртвые и пули — с поля."""
         for m in self.mobs:
             if not m.alive:
                 if m.zombie_of is None:
@@ -555,10 +588,6 @@ class Match:
                     self.emit("mob_dead", m.x, m.y)   # зомби артефакт не роняет
         self.mobs = [m for m in self.mobs if m.alive]
         self.bullets = [b for b in self.bullets if b.alive]
-
-        for p in self.players:
-            if p.hp <= 0:
-                self.winner = self.other(p)
 
     def ring_spot(self, p):
         """Куда встанет огненное кольцо мага p: на ближайшего героя соперника — его самого (если не

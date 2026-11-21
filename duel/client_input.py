@@ -31,9 +31,9 @@ class InputMixin:
             # перечитать картинки с диска — удобно, пока рисуешь в редакторе
             reload_all()
             self._field_bg = None         # фон поля перерисуется из новых картинок
-            from . import demos, vfx      # и сценки справки, и числа эффектов — из файлов
+            from . import demos, fx       # и сценки справки, и числа эффектов — из файлов
             demos.reload_all()
-            vfx.reload_all()
+            fx.reload_all()
             self.__dict__.pop("_demos", None)
             self.__dict__.pop("_demo_bg", None)
         if sc == pygame.KSCAN_F11:
@@ -191,6 +191,40 @@ class InputMixin:
             chars = "".join(ch for ch in text if ch.isprintable())
             self.set_name((self.settings["name"] + chars)[:settings.NAME_MAX])
 
+    def pad_keys(self):
+        """Кнопки геймпада в меню-экранах -> клавиши (None — экран не меню, см. on_pad)."""
+        B = pygame
+        up = {B.CONTROLLER_BUTTON_DPAD_UP: B.KSCAN_UP, PAD_UP: B.KSCAN_UP,
+              B.CONTROLLER_BUTTON_DPAD_DOWN: B.KSCAN_DOWN, PAD_DOWN: B.KSCAN_DOWN}
+        sides = {B.CONTROLLER_BUTTON_DPAD_LEFT: B.KSCAN_LEFT, PAD_LEFT: B.KSCAN_LEFT,
+                 B.CONTROLLER_BUTTON_DPAD_RIGHT: B.KSCAN_RIGHT, PAD_RIGHT: B.KSCAN_RIGHT}
+        ok = {B.CONTROLLER_BUTTON_A: B.KSCAN_RETURN}
+        back = {b: B.KSCAN_ESCAPE for b in (B.CONTROLLER_BUTTON_X, B.CONTROLLER_BUTTON_B,   # □, ○, Start — назад
+                                            B.CONTROLLER_BUTTON_START)}
+        if self.state == "menu":
+            return {**up, **ok, B.CONTROLLER_BUTTON_START: B.KSCAN_RETURN}
+        if self.state == "update":
+            return {**ok, **back}
+        if self.state in ("help", "settings", "keys"):
+            return {**up, **sides, **ok, **back}
+        if self.state in ("entry", "entering"):
+            return {**up, **ok, **back}
+        if self.state == "account":                # имя и пароль — с клавиатуры; □/○ — назад
+            return back
+        if self.state == "join":
+            return {**up, **ok, **back}
+        if self.state == "lobby":                  # △ — ищу соперника, Share — разминка
+            return {**up, **ok, **back, B.CONTROLLER_BUTTON_Y: B.KSCAN_F, B.CONTROLLER_BUTTON_BACK: B.KSCAN_T}
+        if self.state == "pick":
+            return None                            # у каждого геймпада — своя строка выбора (on_pad)
+        if self.watching:                          # зритель: только выход
+            return back
+        if self.net and self.net_waiting:          # выбор героя по сети: ←/→ — герой (on_pad)
+            return {**ok, **back}
+        if self.paused:                            # пауза: крестовина, ✕ — выбрать, Start/○ — продолжить
+            return {**up, **ok, **back}
+        return None
+
     def on_pad(self, iid, btn):
         """Кнопка геймпада -> соответствующая клавиша его игрока."""
         i = self.pads.index(iid)
@@ -198,35 +232,7 @@ class InputMixin:
             return
         pid = self.pad_side(i)        # чей это геймпад (в меню — неважно)
         B = pygame
-        if self.state == "menu":
-            if btn in (B.CONTROLLER_BUTTON_DPAD_UP, PAD_UP):
-                self.on_key(B.KSCAN_UP)
-            elif btn in (B.CONTROLLER_BUTTON_DPAD_DOWN, PAD_DOWN):
-                self.on_key(B.KSCAN_DOWN)
-            elif btn in (B.CONTROLLER_BUTTON_A, B.CONTROLLER_BUTTON_START):
-                self.on_key(B.KSCAN_RETURN)
-            return
-        back = (B.CONTROLLER_BUTTON_X, B.CONTROLLER_BUTTON_B)   # □ (и ○) — назад во всех меню
-        if self.state == "update":
-            if btn in (*back, B.CONTROLLER_BUTTON_START):
-                self.on_key(B.KSCAN_ESCAPE)
-            elif btn == B.CONTROLLER_BUTTON_A:
-                self.on_key(B.KSCAN_RETURN)
-            return
-        if self.state == "help":
-            if btn == B.CONTROLLER_BUTTON_A:
-                self.on_key(B.KSCAN_RETURN)
-            elif btn in (*back, B.CONTROLLER_BUTTON_START):
-                self.on_key(B.KSCAN_ESCAPE)
-            elif btn in (B.CONTROLLER_BUTTON_DPAD_UP, PAD_UP):
-                self.on_key(B.KSCAN_UP)
-            elif btn in (B.CONTROLLER_BUTTON_DPAD_DOWN, PAD_DOWN):
-                self.on_key(B.KSCAN_DOWN)
-            elif btn in (B.CONTROLLER_BUTTON_DPAD_LEFT, PAD_LEFT):
-                self.on_key(B.KSCAN_LEFT)
-            elif btn in (B.CONTROLLER_BUTTON_DPAD_RIGHT, PAD_RIGHT):
-                self.on_key(B.KSCAN_RIGHT)
-            return
+        back = (B.CONTROLLER_BUTTON_X, B.CONTROLLER_BUTTON_B)
         if self.state == "pick":          # геймпад игрока — его строка выбора
             if pid is None:
                 return
@@ -244,65 +250,13 @@ class InputMixin:
             elif btn == B.CONTROLLER_BUTTON_START:
                 self.state = "menu"
             return
-        if self.state in ("settings", "keys"):
-            keymap = {B.CONTROLLER_BUTTON_DPAD_UP: B.KSCAN_UP, PAD_UP: B.KSCAN_UP,
-                    B.CONTROLLER_BUTTON_DPAD_DOWN: B.KSCAN_DOWN, PAD_DOWN: B.KSCAN_DOWN,
-                    B.CONTROLLER_BUTTON_DPAD_LEFT: B.KSCAN_LEFT, B.CONTROLLER_BUTTON_DPAD_RIGHT: B.KSCAN_RIGHT,
-                    PAD_LEFT: B.KSCAN_LEFT, PAD_RIGHT: B.KSCAN_RIGHT,
-                    B.CONTROLLER_BUTTON_A: B.KSCAN_RETURN, B.CONTROLLER_BUTTON_B: B.KSCAN_ESCAPE,
-                    B.CONTROLLER_BUTTON_X: B.KSCAN_ESCAPE, B.CONTROLLER_BUTTON_START: B.KSCAN_ESCAPE}
-            if btn in keymap:
-                self.on_key(keymap[btn])
-            return
-        if self.state in ("entry", "entering"):
-            if btn in (B.CONTROLLER_BUTTON_DPAD_UP, PAD_UP):
-                self.on_key(B.KSCAN_UP)
-            elif btn in (B.CONTROLLER_BUTTON_DPAD_DOWN, PAD_DOWN):
-                self.on_key(B.KSCAN_DOWN)
-            elif btn == B.CONTROLLER_BUTTON_A:
-                self.on_key(B.KSCAN_RETURN)
-            elif btn in (*back, B.CONTROLLER_BUTTON_START):
-                self.on_key(B.KSCAN_ESCAPE)
-            return
-        if self.state == "account":                # имя и пароль — с клавиатуры; □/○ — назад
-            if btn in (*back, B.CONTROLLER_BUTTON_START):
-                self.on_key(B.KSCAN_ESCAPE)
-            return
-        if self.state in ("join", "lobby"):
-            if btn in (B.CONTROLLER_BUTTON_DPAD_UP, PAD_UP):
-                self.on_key(B.KSCAN_UP)
-            elif btn in (B.CONTROLLER_BUTTON_DPAD_DOWN, PAD_DOWN):
-                self.on_key(B.KSCAN_DOWN)
-            elif btn == B.CONTROLLER_BUTTON_A:
-                self.on_key(B.KSCAN_RETURN)
-            elif btn == B.CONTROLLER_BUTTON_Y and self.state == "lobby":
-                self.on_key(B.KSCAN_F)        # △ — ищу соперника
-            elif btn == B.CONTROLLER_BUTTON_BACK and self.state == "lobby":
-                self.on_key(B.KSCAN_T)        # Share — разминка
-            elif btn in (*back, B.CONTROLLER_BUTTON_START):
-                self.on_key(B.KSCAN_ESCAPE)
-            return
-        if self.watching:                 # зритель: только выход
-            if btn in (*back, B.CONTROLLER_BUTTON_START):
-                self.on_key(B.KSCAN_ESCAPE)
-            return
-        if self.net and self.net_waiting:          # выбор героя по сети
-            if btn == B.CONTROLLER_BUTTON_A:
-                self.on_key(B.KSCAN_RETURN)
-            elif btn in (B.CONTROLLER_BUTTON_DPAD_LEFT, B.CONTROLLER_BUTTON_DPAD_RIGHT, PAD_LEFT, PAD_RIGHT):
+        keys = self.pad_keys()
+        if keys is not None:
+            if self.state == "play" and self.net and self.net_waiting and not self.watching and \
+                    btn in (B.CONTROLLER_BUTTON_DPAD_LEFT, B.CONTROLLER_BUTTON_DPAD_RIGHT, PAD_LEFT, PAD_RIGHT):
                 self.next_hero(-1 if btn in (B.CONTROLLER_BUTTON_DPAD_LEFT, PAD_LEFT) else 1)
-            elif btn in (*back, B.CONTROLLER_BUTTON_START):
-                self.on_key(B.KSCAN_ESCAPE)
-            return
-        if self.paused:                   # пауза: крестовина, ✕ — выбрать, Start/○ — продолжить
-            if btn in (B.CONTROLLER_BUTTON_DPAD_UP, PAD_UP):
-                self.on_key(B.KSCAN_UP)
-            elif btn in (B.CONTROLLER_BUTTON_DPAD_DOWN, PAD_DOWN):
-                self.on_key(B.KSCAN_DOWN)
-            elif btn == B.CONTROLLER_BUTTON_A:
-                self.on_key(B.KSCAN_RETURN)
-            elif btn in (*back, B.CONTROLLER_BUTTON_START):
-                self.on_key(B.KSCAN_ESCAPE)
+            elif btn in keys:
+                self.on_key(keys[btn])
             return
         if pid is None:                   # лишний геймпад — в партии не участвует
             return

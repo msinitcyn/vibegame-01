@@ -241,36 +241,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             for e in pygame.event.get():
                 if e.type == pygame.QUIT:
                     return
-                if e.type == pygame.WINDOWFOCUSLOST:
-                    self.held.clear()
-                    self.focused = False
-                if e.type == pygame.WINDOWFOCUSGAINED:
-                    self.focused = True
-                if e.type == pygame.KEYUP:
-                    self.held.discard(e.scancode)
-                if e.type == pygame.KEYDOWN:
-                    self.held.add(e.scancode)
-                    self.on_key(e.scancode)
-                if e.type == pygame.MOUSEMOTION:
-                    self.on_mouse_move(e.pos, e.rel)
-                if e.type == pygame.MOUSEBUTTONDOWN:
-                    if not self.mouse_captured:
-                        self.on_mouse_move(e.pos)
-                    self.on_mouse_button(e.button)
-                if e.type == pygame.TEXTINPUT:
-                    self.on_text(e.text)
-                if e.type == MUSIC_END:
-                    self.audio.on_music_end()
-                if e.type == pygame.CONTROLLERDEVICEADDED:
-                    self.pads.add(e.device_index)
-                if e.type == pygame.CONTROLLERDEVICEREMOVED:
-                    self.pads.remove(e.instance_id)
-                if e.type == pygame.CONTROLLERBUTTONDOWN:
-                    self.on_pad(e.instance_id, e.button)
-                if e.type == pygame.CONTROLLERAXISMOTION:
-                    btn = self.pads.axis_event(e)
-                    if btn:
-                        self.on_pad(e.instance_id, btn)
+                self.on_event(e)
             if self.snap["winner"] and not self.win_time:
                 self.win_time = pygame.time.get_ticks()
             self.update_music()
@@ -284,71 +255,109 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
                 if self.update_frame():
                     return
                 self.draw_update()
-                continue
-            if self.state == "menu":
-                self.draw_menu()
-                continue
-            if self.state == "help":
-                self.draw_help()
-                continue
-            if self.state in ("keys", "settings"):
-                if self.settings_back == "play":
-                    self.background_play(dt)      # настройки с паузы: сеть и лобби живут дальше
-                if self.state == "keys":
-                    self.draw_keys()
-                elif self.state == "settings":
-                    self.draw_settings()
-                continue
-            if self.state == "pick":
-                self.draw_pick()
-                continue
-            if self.state == "join":
-                if self.finder:
-                    self.finder.poll()
-                self.join_autopick()
-                self.draw_join()
-                continue
-            if self.state in LOBBY_STATES:
-                self.lobby_frame()
-                if self.state == "lobby":
-                    self.draw_lobby_screen()
-                elif self.state == "entry":
-                    self.draw_entry()
-                elif self.state == "entering":
-                    self.draw_entering()
-                elif self.state == "account":
-                    self.draw_account()
-                continue
-            if self.warmup and self.lobby_conn:   # разминка из лобби: лобби слушаем, играем у себя
-                self.lobby_frame()
-                if self.state == "play" and self.warmup and not self.paused:
+            elif not self.screen_frame(dt):
+                self.play_frame(dt)
+
+    def on_event(self, e):
+        """Событие окна: фокус, клавиши, мышь, текст, музыка, геймпады."""
+        if e.type == pygame.WINDOWFOCUSLOST:
+            self.held.clear()
+            self.focused = False
+        elif e.type == pygame.WINDOWFOCUSGAINED:
+            self.focused = True
+        elif e.type == pygame.KEYUP:
+            self.held.discard(e.scancode)
+        elif e.type == pygame.KEYDOWN:
+            self.held.add(e.scancode)
+            self.on_key(e.scancode)
+        elif e.type == pygame.MOUSEMOTION:
+            self.on_mouse_move(e.pos, e.rel)
+        elif e.type == pygame.MOUSEBUTTONDOWN:
+            if not self.mouse_captured:
+                self.on_mouse_move(e.pos)
+            self.on_mouse_button(e.button)
+        elif e.type == pygame.TEXTINPUT:
+            self.on_text(e.text)
+        elif e.type == MUSIC_END:
+            self.audio.on_music_end()
+        elif e.type == pygame.CONTROLLERDEVICEADDED:
+            self.pads.add(e.device_index)
+        elif e.type == pygame.CONTROLLERDEVICEREMOVED:
+            self.pads.remove(e.instance_id)
+        elif e.type == pygame.CONTROLLERBUTTONDOWN:
+            self.on_pad(e.instance_id, e.button)
+        elif e.type == pygame.CONTROLLERAXISMOTION:
+            btn = self.pads.axis_event(e)
+            if btn:
+                self.on_pad(e.instance_id, btn)
+
+    def screen_frame(self, dt):
+        """Кадр экрана вне партии (меню, справка, настройки, выбор, серверы, лобби). False — это партия."""
+        if self.state == "menu":
+            self.draw_menu()
+        elif self.state == "help":
+            self.draw_help()
+        elif self.state in ("keys", "settings"):
+            if self.settings_back == "play":
+                self.background_play(dt)      # настройки с паузы: сеть и лобби живут дальше
+            if self.state == "keys":
+                self.draw_keys()
+            elif self.state == "settings":
+                self.draw_settings()
+        elif self.state == "pick":
+            self.draw_pick()
+        elif self.state == "join":
+            if self.finder:
+                self.finder.poll()
+            self.join_autopick()
+            self.draw_join()
+        elif self.state in LOBBY_STATES:
+            self.lobby_frame()
+            if self.state == "lobby":
+                self.draw_lobby_screen()
+            elif self.state == "entry":
+                self.draw_entry()
+            elif self.state == "entering":
+                self.draw_entering()
+            elif self.state == "account":
+                self.draw_account()
+        else:
+            return False
+        return True
+
+    def play_frame(self, dt):
+        """Кадр партии: разминка из лобби, сетевая партия или за одним компьютером (пауза, отсчёт, такты)."""
+        if self.warmup and self.lobby_conn:   # разминка из лобби: лобби слушаем, играем у себя
+            self.lobby_frame()
+            if self.state == "play" and self.warmup:
+                if not self.paused:
                     self.warm_frame(dt)
-                    self.draw()
-                continue
-            if self.net:
-                if not self.net_frame(dt):
-                    self.leave_net(t(self.net_end), voluntary=False)
-                    continue
-                if self.state != "play":      # соперник ушёл — мы снова в лобби сервера
-                    continue
-                if self.net_waiting:
-                    self.draw_lobby()
-                    continue
-            elif self.paused:
-                pass                          # пауза — матч стоит
-            elif self.count_down(dt):
-                pass                          # отсчёт перед партией — матч стоит
-            elif not self.snap["winner"]:
-                # фиксированный такт: копим время кадров, делаем целое число шагов
-                self.time_acc += dt
-                steps = 0
-                while self.time_acc >= STEP and steps < MAX_STEPS_PER_FRAME:
-                    self.update(STEP)
-                    self.time_acc -= STEP
-                    steps += 1
-                if steps == MAX_STEPS_PER_FRAME:
-                    self.time_acc = 0.0
-            self.draw()
+                self.draw()                   # и на паузе — чтобы было видно меню паузы
+            return
+        if self.net:
+            if not self.net_frame(dt):
+                self.leave_net(t(self.net_end), voluntary=False)
+                return
+            if self.state != "play":          # соперник ушёл — мы снова в лобби сервера
+                return
+            if self.net_waiting:
+                self.draw_lobby()
+                return
+        elif self.paused:
+            pass                              # пауза — матч стоит
+        elif self.count_down(dt):
+            pass                              # отсчёт перед партией — матч стоит
+        elif not self.snap["winner"]:
+            # фиксированный такт: копим время кадров, делаем целое число шагов
+            self.time_acc += dt
+            steps = 0
+            while self.time_acc >= STEP and steps < MAX_STEPS_PER_FRAME:
+                self.update(STEP)
+                self.time_acc -= STEP
+                steps += 1
+            if steps == MAX_STEPS_PER_FRAME:
+                self.time_acc = 0.0
+        self.draw()
 
     def popup(self, text, pid, color):
         """Надпись рядом с магом pid (положение — из снимка), со стороны соперника."""

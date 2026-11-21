@@ -136,3 +136,21 @@ def test_p_key_pauses(game):
     finally:
         game.net, game.me, game.net_hold = None, None, None
         game.state = "menu"
+
+
+def test_warmup_pause_is_drawn(game, monkeypatch):
+    """Разминка из лобби на паузе: матч стоит, но кадр (с меню паузы) рисуется."""
+    drawn, stepped = [], []
+    monkeypatch.setattr(game, "lobby_frame", lambda: None)
+    monkeypatch.setattr(game, "draw", lambda: drawn.append(1))
+    monkeypatch.setattr(game, "warm_frame", lambda dt: stepped.append(1))
+    game.state, game.warmup, game.lobby_conn, game.paused = "play", True, object(), True
+    try:
+        game.play_frame(1 / 60)
+        assert drawn and not stepped
+        game.paused = False
+        game.play_frame(1 / 60)
+        assert stepped
+    finally:
+        game.warmup, game.lobby_conn, game.paused = False, None, False
+        game.state = "menu"

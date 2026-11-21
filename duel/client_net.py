@@ -23,6 +23,24 @@ class NetClientMixin:
         now = time.monotonic()
         if self.reconnect_until is not None:
             return self.try_reconnect(now, dt)
+        self.send_commands(dt)
+        if now >= self.ping_next:                 # пинг и своя статистика связи — серверу (раздаст обоим)
+            self.ping_next = now + PING_EVERY
+            self.net.send({"type": "ping", "t": now, "stats": self.my_net_stats(now)})
+        for msg in self.net.recv():
+            self.net_heard = now
+            going_on = self.on_net_message(msg, now)
+            if going_on is not None:
+                return going_on
+        self.show_playback(dt)
+        if self.net.closed or now - self.net_heard > SILENCE:
+            self.net.close()
+            self.reconnect_until = now + RECONNECT_FOR
+            self.next_try = now
+        return True
+
+    def send_commands(self, dt):
+        """Такты по 1/60 с: на каждый — команда своего мага (в меню, чате, разминке — пустая, связь жива)."""
         self.time_acc += dt
         steps = 0
         while self.time_acc >= STEP and steps < MAX_STEPS_PER_FRAME:
@@ -39,74 +57,75 @@ class NetClientMixin:
                     self.pending = {pid: Command() for pid in PLAYER_IDS}
                 self.net.send({"type": "cmd", "move": [0, 0]})
                 continue
-            held = self.held | self.pad_held()
-            dx = dy = 0
-            fire = melee = False
-            slot = None
-            for pid in PLAYER_IDS:
-                c, p = self.controls[pid], self.pending[pid]
-                dx += (c.right in held) - (c.left in held)
-                dy += (c.down in held) - (c.up in held)
-                fire, melee = fire or p.fire, melee or p.melee
-                slot = p.use_slot if p.use_slot is not None else slot
-            self.pending = {pid: Command() for pid in PLAYER_IDS}
-            move = (max(-1, min(1, dx)), max(-1, min(1, dy)))
-            self.net.send({"type": "cmd", "move": list(move), "fire": fire, "melee": melee, "slot": slot,
-                           "aim": self.aim_for(self.me, move)})
+            self.net.send(self.command_message())
         if steps == MAX_STEPS_PER_FRAME:
             self.time_acc = 0.0
-        if now >= self.ping_next:                 # пинг и своя статистика связи — серверу (раздаст обоим)
-            self.ping_next = now + PING_EVERY
-            self.net.send({"type": "ping", "t": now, "stats": self.my_net_stats(now)})
-        for msg in self.net.recv():
-            self.net_heard = now
-            if msg.get("type") == "pong":
-                sent = msg.get("t")
-                if isinstance(sent, (int, float)) and not isinstance(sent, bool) and sent <= now:
-                    rtt = (now - sent) * 1000
-                    self.net_ping = rtt if self.net_ping is None else self.net_ping * 0.7 + rtt * 0.3
-                continue
-            if msg.get("type") == "state":
-                self.net_arrivals.append(now)
-                self.net_arrivals = self.net_arrivals[-90:]
-                stats = msg.get("stats")
-                self.net_stats = stats if isinstance(stats, dict) else {}
-                self.net_seats = msg.get("seats") or {}
-                self.net_spectators = int(msg.get("spectators") or 0)
-                left = msg.get("countdown") or 0
-                left = float(left) if isinstance(left, (int, float)) and not isinstance(left, bool) else 0.0
-                if self.net_countdown > 0 and left <= 0:
-                    self.go_flash = GO_FLASH      # отсчёт сервера кончился — «В бой!»
-                self.net_countdown = left
-                self.net_phase = msg.get("phase", "play")
-                self.net_paused = bool(msg.get("paused"))
-                hold = msg.get("hold")
-                self.net_hold = hold if hold in PLAYER_IDS else None
-                self.net_menus = msg.get("menus") if isinstance(msg.get("menus"), dict) else {}
-                self.net_pauses = msg.get("pauses") if isinstance(msg.get("pauses"), dict) else {}
-                self.net_can_hold = msg.get("can_hold") if isinstance(msg.get("can_hold"), dict) else {}
-                self.playback.push(msg["tick"], msg["snap"], msg["events"], msg.get("waiting", False),
-                                   msg.get("game", 0))
-            elif msg.get("type") == "chat":
-                self.chat_received(msg)
-            elif msg.get("type") == "bye":
-                self.net_end = "net.host_left"
-                return False
-            elif msg.get("type") == "room_closed":       # соперник ушёл — все в лобби сервера
-                conn = self.net
-                self.net, self.me = None, None
-                self.net_waiting = False
-                self.restart()
-                pygame.display.set_caption(t("title"))
-                self.show_lobby(conn, self.net_addr, self.lobby_server, resume=False,
-                                notice=t("lobby.closed." + str(msg.get("why"))))
-                return True
-        self.show_playback(dt)
-        if self.net.closed or now - self.net_heard > SILENCE:
-            self.net.close()
-            self.reconnect_until = now + RECONNECT_FOR
-            self.next_try = now
-        return True
+
+    def command_message(self):
+        """Команда своего мага за такт: обе раскладки клавиатуры и геймпад вместе."""
+        held = self.held | self.pad_held()
+        dx = dy = 0
+        fire = melee = False
+        slot = None
+        for pid in PLAYER_IDS:
+            c, p = self.controls[pid], self.pending[pid]
+            dx += (c.right in held) - (c.left in held)
+            dy += (c.down in held) - (c.up in held)
+            fire, melee = fire or p.fire, melee or p.melee
+            slot = p.use_slot if p.use_slot is not None else slot
+        self.pending = {pid: Command() for pid in PLAYER_IDS}
+        move = (max(-1, min(1, dx)), max(-1, min(1, dy)))
+        return {"type": "cmd", "move": list(move), "fire": fire, "melee": melee, "slot": slot,
+                "aim": self.aim_for(self.me, move)}
+
+    def on_net_message(self, msg, now):
+        """Сообщение сервера. None — играем дальше; True/False — net_frame сразу возвращает это."""
+        kind = msg.get("type")
+        if kind == "pong":
+            sent = msg.get("t")
+            if isinstance(sent, (int, float)) and not isinstance(sent, bool) and sent <= now:
+                rtt = (now - sent) * 1000
+                self.net_ping = rtt if self.net_ping is None else self.net_ping * 0.7 + rtt * 0.3
+        elif kind == "state":
+            self.on_state(msg, now)
+        elif kind == "chat":
+            self.chat_received(msg)
+        elif kind == "bye":
+            self.net_end = "net.host_left"
+            return False
+        elif kind == "room_closed":       # соперник ушёл — все в лобби сервера
+            conn = self.net
+            self.net, self.me = None, None
+            self.net_waiting = False
+            self.restart()
+            pygame.display.set_caption(t("title"))
+            self.show_lobby(conn, self.net_addr, self.lobby_server, resume=False,
+                            notice=t("lobby.closed." + str(msg.get("why"))))
+            return True
+        return None
+
+    def on_state(self, msg, now):
+        """Снимок сервера: места, отсчёт, пауза, меню, статистика — в поля клиента; снимок — в плавный показ."""
+        self.net_arrivals.append(now)
+        self.net_arrivals = self.net_arrivals[-90:]
+        stats = msg.get("stats")
+        self.net_stats = stats if isinstance(stats, dict) else {}
+        self.net_seats = msg.get("seats") or {}
+        self.net_spectators = int(msg.get("spectators") or 0)
+        left = msg.get("countdown") or 0
+        left = float(left) if isinstance(left, (int, float)) and not isinstance(left, bool) else 0.0
+        if self.net_countdown > 0 and left <= 0:
+            self.go_flash = GO_FLASH      # отсчёт сервера кончился — «В бой!»
+        self.net_countdown = left
+        self.net_phase = msg.get("phase", "play")
+        self.net_paused = bool(msg.get("paused"))
+        hold = msg.get("hold")
+        self.net_hold = hold if hold in PLAYER_IDS else None
+        self.net_menus = msg.get("menus") if isinstance(msg.get("menus"), dict) else {}
+        self.net_pauses = msg.get("pauses") if isinstance(msg.get("pauses"), dict) else {}
+        self.net_can_hold = msg.get("can_hold") if isinstance(msg.get("can_hold"), dict) else {}
+        self.playback.push(msg["tick"], msg["snap"], msg["events"], msg.get("waiting", False),
+                           msg.get("game", 0))
 
     def net_stats_reset(self):
         self.net_ping = None          # пинг до сервера, мс (сглаженный)
