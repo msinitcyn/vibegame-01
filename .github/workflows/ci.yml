@@ -19,8 +19,6 @@ jobs:
       matrix:
         os: [ubuntu-22.04, windows-latest]
     runs-on: ${{ matrix.os }}
-    # Windows — пока в режиме «узнать»: тесты писались на Linux, первые запуски могут найти мелочи
-    continue-on-error: ${{ matrix.os == 'windows-latest' }}
     env:
       SDL_VIDEODRIVER: dummy
       SDL_AUDIODRIVER: dummy
