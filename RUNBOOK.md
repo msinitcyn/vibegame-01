@@ -81,7 +81,9 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-GitHub сам (`.github/workflows/release.yml`, 5–10 минут) прогонит тесты, соберёт Linux и Windows, проверит обе сборки `--selftest` и выложит на страницу выпуска `v0.2.0`: `spellgunners-setup.exe`, `spellgunners-windows.exe`, `spellgunners-linux.tar.gz`, `spellgunners-linux`, `install.sh`. Ход сборки — вкладка Actions. Собрать без выпуска — Actions → «Сборка и выпуск» → Run workflow (файлы — в результатах запуска).
+GitHub сам (`.github/workflows/release.yml`, 5–10 минут) сверит метку с версией в `pyproject.toml` и спецификации OpenSpec (не совпало — выпуска не будет), прогонит тесты, соберёт Linux и Windows, проверит обе сборки `--selftest` и выложит на страницу выпуска `v0.2.0`: `spellgunners-setup.exe`, `spellgunners-windows.exe`, `spellgunners-linux.tar.gz`, `spellgunners-linux`, `install.sh`. Ход сборки — вкладка Actions. Собрать без выпуска — Actions → «Сборка и выпуск» → Run workflow (файлы — в результатах запуска).
+
+**Проверки на каждый push** (`.github/workflows/ci.yml`, вкладка Actions → «Проверки»): pyflakes, тесты и `--selftest` из исходников на Linux и Windows, спецификации OpenSpec. Красный значок у коммита — что-то сломалось ещё до выпуска. Windows пока «для сведения»: её падение не красит проверку (тесты писались на Linux; когда Windows будет стабильно зелёной — убрать `continue-on-error`).
 
 **Собрать на этом ноутбуке** (только Linux; Windows-сборку собирает GitHub):
 

@@ -1,0 +1,57 @@
+# Проверки на каждый push в master и на pull request: код, тесты (Linux и Windows), самопроверка,
+# спецификации OpenSpec. Красный значок — что-то сломалось ещё до выпуска версии.
+name: Проверки
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:                         # новый push отменяет недоделанную проверку прошлого
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    # Windows — пока в режиме «узнать»: тесты писались на Linux, первые запуски могут найти мелочи
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
+    env:
+      SDL_VIDEODRIVER: dummy
+      SDL_AUDIODRIVER: dummy
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Зависимости
+        run: python -m pip install pygame==2.6.1 pytest pyflakes
+
+      - name: Код (pyflakes)
+        run: python -m pyflakes main.py duel tests tools
+
+      - name: Тесты
+        run: python -m pytest -q
+
+      - name: Самопроверка из исходников
+        run: python main.py --selftest
+
+  specs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Спецификации OpenSpec
+        run: npx -y @fission-ai/openspec@2.1.0 validate --specs --strict
