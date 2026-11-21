@@ -23,7 +23,7 @@ from pathlib import Path
 
 from . import discovery
 from .accounts import AuthError, Accounts, default_path
-from .net import PORT, PROTO, Conn
+from .net import FEATURES, PORT, PROTO, Conn, version_tuple
 from .room import PIDS, Room, Seat, clean_name
 from .match import STEP
 
@@ -42,6 +42,8 @@ class Server:
                  discovery_port=discovery.DISCOVERY_PORT, clock=time.monotonic, name=None, db=":memory:",
                  dump_dir=None, records=None):
         self.log = log
+        from .logs import version
+        self.version = version()      # версия игры сервера — клиентам в hello и в ответ на поиск
         self.dump_dir = dump_dir      # куда писать файлы ошибок комнат (None — не писать)
         self.records = records        # matches.jsonl — итоги партий для баланса (None — не писать)
         self.clock = clock            # часы (тесты подменяют, чтобы не ждать секунды)
@@ -272,7 +274,8 @@ class Server:
             conn = Conn(sock)
             conn.addr = addr
             conn.user = None              # вошёл в аккаунт — имя аккаунта, иначе гость
-            conn.send({"type": "hello", "proto": self.proto, "role": "lobby", "server": self.name, "id": self.id})
+            conn.send({"type": "hello", "proto": self.proto, "role": "lobby", "server": self.name, "id": self.id,
+                       "version": self.version, "features": list(FEATURES)})
             self.newcomers.append((conn, self.clock()))
 
     def read_lobby(self):
@@ -318,6 +321,11 @@ class Server:
                 self.send_rooms([conn])
             elif kind == "lobby":
                 where = "lobby"
+                v = msg.get("version")
+                if isinstance(v, str) and getattr(conn, "version", None) is None:
+                    conn.version = v[:20]
+                    newer = version_tuple(v) and version_tuple(self.version) and version_tuple(v) > version_tuple(self.version)
+                    self.log(f"{conn.addr[0]}: игра v{conn.version}" + (" — новее сервера, обновите сервер" if newer else ""))
                 name = msg.get("name")
                 self.ensure_member(conn, name if isinstance(name, str) else "")
                 if conn not in self.lobby:        # сразу участник лобби: следом могут прийти seek, challenge
@@ -451,7 +459,7 @@ class Server:
             if msg and msg["type"] == "who":
                 try:
                     self.finder_sock.sendto(discovery.answer(self.port, self.name, len(self.rooms),
-                                                             self.players()), addr)
+                                                             self.players(), self.version), addr)
                 except OSError:
                     pass
 

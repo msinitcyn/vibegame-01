@@ -4,6 +4,8 @@
 Подмешивается в ScreensMixin (duel/screens.py)."""
 import pygame
 
+from . import logs
+from .net import version_tuple
 from .config import (
     AMMO_COLOR,
     BAD_TEXT,
@@ -164,6 +166,10 @@ class NetScreensMixin:
                 status, color = tr("net.st_proto"), BAD_TEXT
             else:
                 status, color = tr("net.st_server", rooms=g["rooms"], players=g["players"]), AMMO_COLOR
+                theirs, mine = version_tuple(g.get("version")), version_tuple(logs.version())
+                if not theirs or theirs != mine:      # другая версия игры на сервере — видно сразу
+                    status += "  ·  " + (tr("net.st_ver_old", v=g.get("version") or "?") if not theirs or theirs < mine
+                                         else tr("net.st_ver_new", v=g["version"]))
             self.list_row(y + 20 + i * 46, g["address"] == self.join_pick, g["name"], status, color,
                           sub=g["address"].rsplit(":", 1)[0],
                           click=lambda a=g["address"]: self.join_mouse(a, True),
@@ -295,6 +301,11 @@ class NetScreensMixin:
         s.blit(img, img.get_rect(midleft=(110, 30)))
         img = self.small.render(self.lobby_addr or "", True, GREY)
         s.blit(img, img.get_rect(midleft=(110 + img.get_width() * 0 + 0, 56)))
+        compat = self.server_compat()                 # сервер старее или новее игры — что не будет работать
+        if compat:
+            for i, line in enumerate(self.wrap(compat, WIDTH - 130, self.tiny_text)[:2]):
+                warn = self.tiny_text.render(line, True, AMMO_COLOR)
+                s.blit(warn, (110, 68 + i * 14))
         rows = self.lobby_rows()
         acc = (tr("acc.signed", name=self.account_user) + "  ·  " + tr("acc.logout") if self.account_user
                else tr("acc.guest", name=self.player_name() or "?") + "  ·  " + tr("acc.login_hint"))

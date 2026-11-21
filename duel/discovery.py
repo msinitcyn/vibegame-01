@@ -46,9 +46,12 @@ def question():
     return encode({"type": "who", "game": GAME})
 
 
-def answer(port, name=None, rooms=0, players=0):
-    return encode({"type": "here", "game": GAME, "proto": PROTO, "port": port,
-                   "name": name or socket.gethostname(), "rooms": rooms, "players": players})
+def answer(port, name=None, rooms=0, players=0, version=None):
+    msg = {"type": "here", "game": GAME, "proto": PROTO, "port": port,
+           "name": name or socket.gethostname(), "rooms": rooms, "players": players}
+    if version:
+        msg["version"] = version      # версия игры сервера: в списке видно «старее/новее»
+    return encode(msg)
 
 
 def is_ipv4(text):
@@ -122,7 +125,8 @@ class Finder:
         for (addr, port), (msg, seen) in self.found.items():
             if now - seen <= FRESH:
                 out.append({"address": f"{addr}:{port}", "name": msg["name"], "rooms": msg["rooms"],
-                            "players": msg["players"], "proto": msg.get("proto")})
+                            "players": msg["players"], "proto": msg.get("proto"),
+                            "version": msg["version"] if isinstance(msg.get("version"), str) else None})
         return sorted(out, key=lambda g: (g["name"], g["address"]))
 
     def close(self):

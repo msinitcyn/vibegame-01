@@ -234,6 +234,9 @@ class ChatMixin:
             return False
         where, bot, pid = ctx
         if where == "net":
+            if not self.server_can("test"):           # старый сервер команду молча проигнорирует
+                self.chat_system(tr("cmd.server_old"))
+                return False
             self.net.send({"type": "test", **msg})
         else:
             if testcmd.run(self.match, bot, pid, msg) and msg.get("do") != "bot":

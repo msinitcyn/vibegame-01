@@ -7,6 +7,8 @@ import time
 
 import pygame
 
+from . import logs
+from .net import FEATURES, server_features, version_tuple
 from . import config
 from . import settings
 from .bot import Bot
@@ -121,7 +123,29 @@ class LobbyMixin:
         self.remember_server(address)
         settings.save(self.settings)
         self.close_finder()
+        self.server_info = {"version": hello.get("version") if isinstance(hello.get("version"), str) else None,
+                            "features": server_features(hello)}
         self.show_lobby(conn, address, hello.get("server") or address, hello.get("id"))
+
+    def server_compat(self):
+        """Совместим ли сервер с этой игрой: None — всё в порядке; иначе строка-предупреждение."""
+        info = getattr(self, "server_info", None)
+        if not info:
+            return None
+        mine, theirs = version_tuple(logs.version()), version_tuple(info["version"])
+        missing = [f for f in FEATURES if f not in info["features"]]
+        if theirs and mine and theirs > mine:
+            return t("compat.newer", v=info["version"], mine=logs.version())
+        if missing or (theirs and mine and theirs < mine):
+            what = ", ".join(t("feat." + f) for f in missing)
+            return t("compat.older", v=info["version"] or "?", mine=logs.version()) + (
+                "  " + t("compat.missing", what=what) if what else "")
+        return None
+
+    def server_can(self, feature):
+        """Умеет ли сервер это (тестовые команды, чат…); без сведений — считаем, что умеет."""
+        info = getattr(self, "server_info", None)
+        return not info or feature in info["features"]
 
     def remember_server(self, address):
         """Адрес в «последние серверы» (до 5, новый — первым): поиск спрашивает их напрямую.
@@ -199,7 +223,7 @@ class LobbyMixin:
 
     def enter_lobby(self):
         """В лобби сервера (после выбора, как войти): серверу — имя для списка игроков."""
-        self.lobby_conn.send({"type": "lobby", "name": self.player_name()})
+        self.lobby_conn.send({"type": "lobby", "name": self.player_name(), "version": logs.version()})
         self.state = "lobby"
 
     def open_entry(self):

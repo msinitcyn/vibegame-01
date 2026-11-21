@@ -62,7 +62,7 @@ def test_finder_finds_server_rooms_and_players():
     try:
         games = find(srv, finder, lambda g: g)
         assert games == [{"address": f"127.0.0.1:{srv.port}", "name": socket.gethostname()[:16],
-                          "rooms": 0, "players": 0, "proto": PROTO}]
+                          "rooms": 0, "players": 0, "proto": PROTO, "version": srv.version}]
         from tests.test_network import Client
         c = Client(srv)
         find(srv, finder, lambda g: g and g[0]["rooms"] == 1 and g[0]["players"] == 1)

@@ -1,7 +1,8 @@
 """Сеть: сообщения JSON по TCP, по одному в строке.
 
 Протокол 7 — сервер с лобби (игроки, партии, вызовы), комнатами и аккаунтами:
-    сервер -> {"type": "hello", "proto": 7, "role": "lobby", "server": "Дом", "id": "номер сервера"}
+    сервер -> {"type": "hello", "proto": 7, "role": "lobby", "server": "Дом", "id": "номер сервера",
+               "version": "0.7.5", "features": ["chat", "pause", "stats", "test", "replay"]}
 Лобби игроков (подробно — duel/server.py и openspec/changes/archive/*lobby-duels/design.md):
     {"type": "lobby", "name"} -> {"type": "lobby", "you", "players": [...], "games": [...]} раз в 0,5 с
     {"type": "challenge", "to"} / {"type": "cancel"} / {"type": "answer", "from", "accept"}
@@ -39,6 +40,25 @@
 """
 import json
 import socket
+
+# Что умеет сервер сверх протокола (сервер шлёт в hello). Протокол тот же, но старый сервер чего-то
+# из этого не знает — клиент подключается и честно говорит, что не будет работать.
+FEATURES = ("chat", "pause", "stats", "test", "replay")
+BASELINE_FEATURES = ("chat", "pause", "stats")     # у серверов 0.7.4, которые ещё не присылали features
+
+
+def version_tuple(v):
+    """'0.7.4' или 'v0.7.4' -> (0, 7, 4); непонятное -> None."""
+    try:
+        return tuple(int(x) for x in str(v).lstrip("v").split(".")[:3])
+    except (TypeError, ValueError):
+        return None
+
+
+def server_features(hello):
+    f = hello.get("features")
+    return set(f) if isinstance(f, list) else set(BASELINE_FEATURES)
+
 
 PROTO = 7                          # 7: лобби игроков (вызов, поиск, бот); 6: аккаунты; 5: лобби с комнатами; 4: зрители; 3: лобби, готовность
 PORT = 5555
