@@ -343,14 +343,16 @@ class MenuScreensMixin:
     def draw_help_list(self):
         """Список артефактов вкладки: значок и название; наведение — выбрать, щелчок по выбранному — подробнее."""
         s = self.screen
-        x0, y0, w, row = 24, 100, 300, 44
-        for i, kind in enumerate(self.help_kinds()):
+        kinds = self.help_kinds()
+        x0, y0, w = 24, 100, 300
+        row = min(44, 545 // max(1, len(kinds)))          # длинный список (общие + снаряжение) — плотнее
+        for i, kind in enumerate(kinds):
             rect = pygame.Rect(x0, y0 + i * row, w, row - 4)
             sel = i == min(self.help_index, len(self.help_kinds()) - 1)
             pygame.draw.rect(s, (40, 46, 66) if sel else (22, 25, 34), rect, border_radius=8)
             if sel:
                 pygame.draw.rect(s, self.help_color(kind), rect, 2, border_radius=8)
-            self.help_icon(kind, (rect.x + 22, rect.centery), 15)
+            self.help_icon(kind, (rect.x + 22, rect.centery), min(15, row // 2 - 5))
             name = self.help_name(kind)
             font = self.font if self.font.size(name)[0] <= w - 52 else self.small
             img = font.render(name, True, self.help_color(kind) if sel else (200, 205, 220))

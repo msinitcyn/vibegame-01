@@ -177,3 +177,24 @@ def _draw_icon(surf, kind, center, r):
         pygame.draw.polygon(surf, color, [P(-0.22, -0.6), P(-0.42, -0.3), P(-0.02, -0.3)])
         pygame.draw.line(surf, color, P(0.22, -0.55), P(0.22, 0.45), w)
         pygame.draw.polygon(surf, color, [P(0.22, 0.6), P(0.42, 0.3), P(0.02, 0.3)])
+    elif kind == "boots":                         # сапог
+        pygame.draw.polygon(surf, color, [P(-0.3, -0.55), P(0.05, -0.55), P(0.05, 0.1), P(0.55, 0.22),
+                                          P(0.55, 0.45), P(-0.3, 0.45)])
+        pygame.draw.line(surf, (90, 60, 35), P(-0.3, 0.32), P(0.55, 0.32), max(1, w // 2))   # подошва
+        pygame.draw.line(surf, (255, 235, 200), P(-0.3, -0.38), P(0.05, -0.38), max(1, w // 2))
+    elif kind == "armor":                         # нагрудник
+        pygame.draw.polygon(surf, color, [P(-0.5, -0.45), P(-0.18, -0.55), P(0, -0.35), P(0.18, -0.55),
+                                          P(0.5, -0.45), P(0.38, 0.0), P(0.3, 0.5), P(-0.3, 0.5), P(-0.38, 0.0)])
+        pygame.draw.line(surf, (90, 100, 120), P(0, -0.3), P(0, 0.45), max(1, w // 2))
+        pygame.draw.line(surf, (90, 100, 120), P(-0.3, 0.05), P(0.3, 0.05), max(1, w // 2))
+    elif kind == "gun":                           # автомат: ствол, корпус, магазин, приклад
+        pygame.draw.rect(surf, color, (*P(-0.35, -0.2), r * 0.6, r * 0.25))
+        pygame.draw.line(surf, color, P(0.2, -0.1), P(0.62, -0.1), max(2, w - 1))
+        pygame.draw.polygon(surf, color, [P(-0.35, -0.2), P(-0.62, -0.1), P(-0.62, 0.15), P(-0.35, 0.05)])
+        pygame.draw.polygon(surf, color, [P(-0.05, 0.05), P(0.12, 0.05), P(0.2, 0.5), P(0.03, 0.5)])
+        pygame.draw.line(surf, (255, 160, 60), P(0.66, -0.1), P(0.75, -0.1), max(1, w // 2))     # вспышка
+    elif kind == "sword":                         # меч вверх: клинок, гарда, рукоять
+        pygame.draw.polygon(surf, color, [P(0, -0.65), P(0.1, -0.5), P(0.1, 0.2), P(-0.1, 0.2), P(-0.1, -0.5)])
+        pygame.draw.line(surf, (200, 160, 70), P(-0.32, 0.22), P(0.32, 0.22), w)
+        pygame.draw.line(surf, (140, 95, 55), P(0, 0.25), P(0, 0.55), w)
+        pygame.draw.circle(surf, (200, 160, 70), P(0, 0.6), max(2, r * 0.08))

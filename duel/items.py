@@ -26,6 +26,11 @@ from .config import (
     DURATION,
     FAST_BULLET_FACTOR,
     FOE_RING,
+    GEAR_FIRE,
+    GEAR_HP,
+    GEAR_REACH,
+    GEAR_RING,
+    GEAR_SPEED,
     HEAL_AMOUNT,
     RAPID_FACTOR,
     SELF_RING,
@@ -69,6 +74,10 @@ ITEMS = {
     "foe_nofire": ("foe", (255, 110, 90)),
     "foe_invert": ("foe", (255, 200, 90)),
     "foe_noitems": ("foe", (255, 130, 170)),
+    "boots": ("gear", (205, 150, 95)),        # снаряжение (пассивное, GEAR_ITEMS) — в свои ячейки
+    "armor": ("gear", (185, 200, 220)),
+    "gun": ("gear", (230, 205, 120)),
+    "sword": ("gear", (225, 235, 250)),
 }
 
 # Справка: группы артефактов (экран «Артефакты» в меню). Заголовок — section_title(id).
@@ -77,6 +86,7 @@ HELP_SECTIONS = [
     ("weapon", ["triple", "wavy"]),
     ("debuff", ["foe_grow", "foe_nofire", "foe_invert", "foe_noitems"]),
     # артефакты героев — свои страницы справки, по героям
+    ("gear", ["boots", "armor", "gun", "sword"]),
     ("hero", ["beam", "clearfoe", "mobpeace", "invisible", "icewalk", "foe_freeze", "shield", "slowfoe",
               "trees", "bear", "immune", "sentries", "lasso", "firering", "fastshots", "rapid",
               "zombies", "mobswap", "clones", "wall"]),
@@ -112,6 +122,8 @@ def item_help(kind):
         lasso=f"{d['lassoed']:g}", bear=f"{d['bear']:g}", bear_hp=BEAR_HP, immune=f"{d['immune']:g}",
         sentries=SENTRY_COUNT, sentry_time=f"{SENTRY_TIME:g}", sentry_range=SENTRY_RANGE, sentry_hp=SENTRY_HP,
         ring_r=FIRE_RING_R, ring_range=FIRE_RING_RANGE, ring_time=f"{FIRE_RING_TIME:g}", ring_dps=FIRE_RING_DPS, zmax=ZOMBIE_MAX, zr=ZOMBIE_RADIUS, ztime=f"{ZOMBIE_TIME:g}", fast=f"{FAST_BULLET_FACTOR:g}".replace(".", t("decimal")),
+        gear_speed=round((GEAR_SPEED - 1) * 100), gear_hp=GEAR_HP, gear_fire=round((1 - GEAR_FIRE) * 100),
+        gear_reach=GEAR_REACH,
     )
     return t(f"help.{kind}", **numbers)
 
@@ -131,6 +143,8 @@ def ring_color(kind):
     """Цвет рамки артефакта: оранжевая — по сопернику, синяя — атака, зелёная — защита."""
     if ITEMS[kind][0] == "foe":
         return FOE_RING
+    if ITEMS[kind][0] == "gear":
+        return GEAR_RING
     if kind in ATTACK_ITEMS:
         return ATTACK_RING
     return SELF_RING

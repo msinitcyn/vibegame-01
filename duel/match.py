@@ -78,6 +78,10 @@ from .config import (
     MELEE_DAMAGE,
     MELEE_FLASH,
     MELEE_RANGE,
+    GEAR_DROP_SHARE,
+    GEAR_HP,
+    GEAR_ITEMS,
+    GEAR_REACH,
     MOB_COUNT,
     MOB_DAMAGE,
     MOB_DELAY,
@@ -221,7 +225,7 @@ class Match:
         p.melee_flash = MELEE_FLASH
         self.emit("melee", p.id)
         bear = "bear" in p.effects            # медведь бьёт дальше и сильнее
-        reach = MELEE_RANGE + (BEAR_REACH if bear else 0)
+        reach = MELEE_RANGE + (BEAR_REACH if bear else 0) + (GEAR_REACH if "sword" in p.gear else 0)
         damage = BEAR_MELEE_DAMAGE if bear else MELEE_DAMAGE
         for m in self.mobs:
             if m.zombie_of is p:
@@ -263,7 +267,22 @@ class Match:
             for c in self.clones_of(p):
                 c.apply(effect)
 
+    def take_gear(self, p, kind):
+        """Снаряжение — в свою ячейку до конца партии; уже есть — ничего (артефакт просто пропадает)."""
+        if kind in p.gear:
+            return
+        p.gear.append(kind)
+        if kind == "armor":                   # броня: запас жизней больше, и сразу столько же жизней
+            p.max_hp += GEAR_HP
+            if p.bear_saved is not None:
+                p.bear_saved += GEAR_HP       # медведь: прибавка — жизням мага (вернутся после)
+            else:
+                p.hp += GEAR_HP
+
     def apply_item(self, p, kind):
+        if kind in GEAR_ITEMS:                # снаряжение не применяется — надевается
+            self.take_gear(p, kind)
+            return
         foe = self.other(p)
         if ITEMS[kind][0] == "foe" and "immune" in foe.effects:
             self.emit("immune", foe.id, kind)     # «Дубовая кора»: на Природу не действует
@@ -638,7 +657,7 @@ class Match:
 
     def take_artifact(self, p, a):
         """Артефакт — магу p: мгновенный сразу применяется, остальные — в ячейку или очередь."""
-        if a.kind in INSTANT_ITEMS:
+        if a.kind in INSTANT_ITEMS or a.kind in GEAR_ITEMS:
             self.apply_item(p, a.kind)
         else:
             p.add_item(a.kind)
@@ -658,9 +677,11 @@ class Match:
 
     def artifact_kind(self, zone, max_hp):
         """Случайный артефакт зоны (земля игрока, полоса, арена) с уровнем по жизням моба."""
+        if zone == "arena" and self.rng.random() < GEAR_DROP_SHARE:
+            return self.rng.choice(GEAR_ITEMS)     # снаряжение — только из мобов арены
         owner = self.player(zone) if zone in ("blue", "red") else None
         hero = owner.hero if owner else None
-        kinds = [k for k in ITEMS if HERO_ONLY_ITEMS.get(k, hero) == hero
+        kinds = [k for k in ITEMS if HERO_ONLY_ITEMS.get(k, hero) == hero and k not in GEAR_ITEMS
                  and max_hp >= LEVEL_MIN_MOB_HP[item_level(k)]]
         weights = [LEVEL_WEIGHT[item_level(k)] * (HERO_DROP_BOOST if k in HERO_ONLY_ITEMS else 1.0) for k in kinds]
         return self.rng.choices(kinds, weights)[0]

@@ -10,6 +10,7 @@
     {"do": "ammo", "n": 1..999, "to": "me" | "foe"}   патроны
     {"do": "drops", "on": bool}                        мобы роняют артефакты или нет
 """
+from .config import GEAR_ITEMS
 from .items import INSTANT_ITEMS, ITEMS, item_name
 
 AMMO_MAX_GIVE = 999                  # /ammo: не больше стольких патронов за раз
@@ -53,7 +54,7 @@ def find_item(text):
 
 def grant(match, p, kind):
     """Артефакт магу — как при подборе: мгновенный срабатывает сразу, остальные — в ячейку или очередь."""
-    if kind in INSTANT_ITEMS:
+    if kind in INSTANT_ITEMS or kind in GEAR_ITEMS:     # снаряжение — сразу в свою ячейку
         match.apply_item(p, kind)
     else:
         p.add_item(kind)

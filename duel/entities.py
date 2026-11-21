@@ -58,6 +58,8 @@ from .config import (
     CLONE_EFFECTS,
     CLONE_RADIUS,
     CLONE_SHOT_EVERY,
+    GEAR_FIRE,
+    GEAR_SPEED,
     CLONE_SPEED,
     CLONE_TIME,
     CLONE_TURN_EVERY,
@@ -244,6 +246,7 @@ class Player(Unit):
         self.reset_effects()
         self.items = [None] * INVENTORY_SIZE
         self.queue = []               # собранные артефакты, ждущие свободной ячейки
+        self.gear = []                # снаряжение (GEAR_ITEMS) — действует до конца партии
         self.moving = 0               # -1 вверх, +1 вниз, 0 — по вертикали стоит
         self.aim = 0.0 if self.dir > 0 else math.pi    # прицел (радианы): сначала — на соперника
         self.moving_x = 0             # -1 влево, +1 вправо
@@ -254,7 +257,8 @@ class Player(Unit):
         """Скорость с эффектами; на чужой земле и в арене — медленнее."""
         zone = zone_at(self.x, self.y)
         slow = FOE_LAND_SLOW if zone == self.foe_zone else ARENA_SLOW if zone == "arena" else 1.0
-        return BASE_SPEED * self.speed_mult * slow
+        boots = GEAR_SPEED if "boots" in self.gear else 1.0
+        return BASE_SPEED * self.speed_mult * slow * boots
 
     @property
     def foe_zone(self):
@@ -317,7 +321,8 @@ class Player(Unit):
         if not self.can_fire or self.cooldown > 0 or self.ammo <= 0:
             return []
         self.ammo -= 1                # веер тоже тратит один патрон
-        self.cooldown = SHOT_COOLDOWN * (RAPID_FACTOR if "rapid" in self.effects else 1)
+        self.cooldown = (SHOT_COOLDOWN * (RAPID_FACTOR if "rapid" in self.effects else 1)
+                         * (GEAR_FIRE if "gun" in self.gear else 1))
         self.shot_flash = SHOT_FLASH
         # пуля летит по прицелу; движение на направление не влияет
         return make_bullets(self, self.x, self.y, self.aim, self.radius,

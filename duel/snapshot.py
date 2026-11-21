@@ -40,7 +40,7 @@ def snapshot(match):
             "hp": p.hp, "max_hp": BEAR_HP if "bear" in p.effects else p.max_hp,
             "ammo": p.ammo, "effects": _effects(p), "shield_hits": p.shield_hits,
             "shield_flash": _t(p.shield_flash), "shield_break": _t(p.shield_break), "reveal": _t(p.reveal),
-            "items": list(p.items), "queue": list(p.queue),
+            "items": list(p.items), "queue": list(p.queue), "gear": list(p.gear),
             "hit_flash": _t(p.hit_flash), "melee_flash": _t(p.melee_flash),
             "moving": bool(p.moving or p.moving_x), "shot": _t(p.shot_flash),
             "burn": m.other(p).hero if m.in_danger(p) else None,

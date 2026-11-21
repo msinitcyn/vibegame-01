@@ -9,6 +9,8 @@ import pygame
 from .config import (
     NEUTRAL_HALF,
     AMMO_COLOR,
+    GEAR_ITEMS,
+    GEAR_RING,
     ARENA,
     ARENA_R,
     BAD_TEXT,
@@ -167,6 +169,34 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
             s.blit(txt, txt.get_rect(center=back.center))
         return used
 
+    def draw_gear(self, p, left, x0, inv_w, pad, q_used):
+        """Снаряжение: 4 маленькие ячейки (ботинки, броня, автомат, меч). Пустая — бледный силуэт.
+        С клавиатурой — под ячейками с другого края, чем очередь; с геймпадом — снаружи за очередью.
+        Возвращает, сколько ширины заняло сбоку от ячеек."""
+        s = self.screen
+        size, gap = 22, 3
+        row_w = len(GEAR_ITEMS) * size + (len(GEAR_ITEMS) - 1) * gap
+        if pad:
+            side = 8
+            x = x0 - q_used - side - row_w if left else x0 + inv_w + q_used + side
+            y, used = (HUD_H - size) // 2, row_w + side
+        else:
+            x = x0 + inv_w - row_w if left else x0
+            y, used = HUD_H - size - 6, 0
+        have = p.get("gear", [])
+        for i, kind in enumerate(GEAR_ITEMS):
+            rect = pygame.Rect(x + i * (size + gap), y, size, size)
+            pygame.draw.rect(s, (22, 24, 34), rect, border_radius=4)
+            pygame.draw.rect(s, GEAR_RING if kind in have else (70, 72, 86), rect, 1, border_radius=4)
+            if kind in have:
+                draw_icon(s, kind, rect.center, size // 2 - 2, level=False)
+            else:                                 # пустая ячейка: бледный силуэт — что сюда встанет
+                ghost = pygame.Surface(rect.size, pygame.SRCALPHA)
+                draw_icon(ghost, kind, (size // 2, size // 2), size // 2 - 2, level=False)
+                ghost.set_alpha(45)
+                s.blit(ghost, rect)
+        return used
+
     def draw_wave_timer(self):
         """В центре статуса: номер волны мобов и сколько секунд до следующей."""
         s = self.screen
@@ -217,6 +247,7 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
                         key = self.tiny.render(label, True, WHITE)
                         s.blit(key, (rect.right - key.get_width() - 3, rect.bottom - key.get_height() - 1))
             q_w = self.draw_queue(p, left, x0, inv_w, has_pad)
+            q_w += self.draw_gear(p, left, x0, inv_w, has_pad, q_w)
 
             # имя и жизни; ниже — патроны и всё, что действует, с таймерами
             avail = WIDTH // 2 - HUD_CENTER - inv_w - q_w - 20
