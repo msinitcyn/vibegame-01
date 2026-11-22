@@ -77,6 +77,10 @@ class Conn:
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)   # без задержки мелких пакетов
         except OSError:
             pass                      # не TCP (например, пара сокетов в тестах)
+        self.init_stream()
+
+    def init_stream(self):
+        """Состояние потока — общее для всех соединений (и для браузерного, у которого нет сокета)."""
         self.inbuf = b""
         self.outbuf = bytearray()      # дописывается без копирования всего буфера
         self.closed = False

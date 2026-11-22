@@ -113,3 +113,25 @@ def test_ammo_pack_timer_draws(game):
     game.match.ammo_packs = [AmmoPack(200, 300)]
     game.refresh_snap()
     game.draw()
+
+
+def test_browser_conn_reads_hello_through_js(monkeypatch):
+    """BrowserConn без браузера: JS-сторона — подделка. Приветствие сервера разбирается (раньше падало:
+    у браузерного соединения не было полей, добавленных в Conn позже — лимит сообщений)."""
+    import base64
+    import json
+    import types
+    from duel import webconn
+    from duel.net import Conn
+
+    js = types.SimpleNamespace(open=True, closed=False, failed=False, inbox=[])
+    win = types.SimpleNamespace(duelWS=lambda url: js,
+                                duelTake=lambda s: " ".join(s.inbox.pop() for _ in range(len(s.inbox))),
+                                duelSend=lambda s, b64: None, duelClose=lambda s: None)
+    monkeypatch.setattr(webconn, "_window", lambda: win)
+    conn = webconn.browser_connect("wss://example.invalid/")
+    fresh = Conn.__new__(Conn)
+    fresh.init_stream()
+    assert set(vars(fresh)) <= set(vars(conn))           # все поля Conn есть и у браузерного
+    js.inbox.append(base64.b64encode(json.dumps({"type": "hello", "proto": 7}).encode() + b"\n").decode())
+    assert [m["type"] for m in conn.recv()] == ["hello"]

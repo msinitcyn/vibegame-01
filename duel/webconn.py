@@ -50,14 +50,8 @@ class BrowserConn(Conn):
     def __init__(self, url):
         self.win = _window()
         self.js = self.win.duelWS(url)
-        self.inbuf = b""
-        self.outbuf = bytearray()
-        self.closed = False
-        self.violation = None
-        self.comp = self.dec = None
-        self.accept_z = False
-        self.sent_bytes = 0
         self.sock = None
+        self.init_stream()                # те же поля, что у Conn (буферы, сжатие, лимит) — без сокета
 
     @property
     def opened(self):
