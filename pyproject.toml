@@ -8,6 +8,7 @@ dependencies = ["pygame>=2.5"]
 [dependency-groups]
 dev = ["pytest>=8", "pyflakes>=3"]
 build = ["pyinstaller>=6", "pillow>=10"]
+web = ["pygbag>=0.9"]                  # браузерная версия: tools/build_web.py, python -m pygbag
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

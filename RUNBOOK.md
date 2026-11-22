@@ -98,13 +98,16 @@ dist/spellgunners-linux --selftest
 Тот же код игры, собранный в WebAssembly (pygbag); основная — компьютерная, браузер — «попробовать». Отличия только при `duel/platform.py: WEB`: в браузере нет игры по сети (нужен сервер с WebSocket и TLS — следующий шаг), своего сервера и автообновления; звуки — `.ogg` (сборщик переводит через ffmpeg).
 
 ```bash
-.venv/bin/pip install pygbag                     # один раз
+.venv/bin/pip install pygbag                     # один раз (группа web в pyproject.toml)
 .venv/bin/python tools/build_web.py              # build/web-src: web/main.py + duel/ + assets/
-.venv/bin/python -m pygbag build/web-src         # http://localhost:8000 — первая загрузка долгая
+.venv/bin/python -m pygbag build/web-src         # http://localhost:8000 — первая загрузка ~минута
+# порт 8000 занят? тестовый сервер pygbag работает только на нём — тогда так:
+.venv/bin/python -m pygbag --build build/web-src
+python3 -m http.server 8123 --bind 127.0.0.1 -d build/web-src/build/web   # http://127.0.0.1:8123/
 DUEL_WEB=1 .venv/bin/python build/web-src/main.py   # то же без браузера: ветки «как в браузере» на компьютере
 ```
 
-Ошибки браузерной версии — в консоли браузера (F12).
+Ошибки браузерной версии — в консоли браузера (F12) и в терминале pygbag на странице (адрес с `#debug`). В браузере нет геймпадов (pygame-ce в WebAssembly без `pygame._sdl2.controller`).
 
 ## Поле
 

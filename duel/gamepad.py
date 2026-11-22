@@ -3,7 +3,10 @@
 import math
 
 import pygame
-from pygame._sdl2 import controller
+try:
+    from pygame._sdl2 import controller
+except ImportError:                   # в браузере (pygame-ce в WebAssembly) этого модуля нет — без геймпадов
+    controller = None
 
 
 PAD_DEAD = 0.45                  # мёртвая зона стика (доля от максимума)
@@ -29,15 +32,17 @@ class Gamepads:
     """Подключённые геймпады в порядке подключения: [0] — синий, [1] — красный."""
 
     def __init__(self):
-        controller.init()
         self.pads = []                # (instance_id, Controller)
         self.trigger = {}             # instance_id -> R2 зажат
         self.stick = {}               # instance_id -> -1/0/1 положение стика для меню
+        if controller is None:
+            return
+        controller.init()
         for i in range(controller.get_count()):
             self.add(i)
 
     def add(self, device_index):
-        if not controller.is_controller(device_index):
+        if controller is None or not controller.is_controller(device_index):
             return
         c = controller.Controller(device_index)
         iid = c.as_joystick().get_instance_id()

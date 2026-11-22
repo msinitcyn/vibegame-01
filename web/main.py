@@ -6,12 +6,18 @@
 
 Отличия от компьютера — только в duel/platform.py (WEB): без сети, своего сервера и автообновления.
 """
+# /// script
+# dependencies = ["pygame-ce"]
+# ///
 import asyncio
+
+import pygame  # pygbag подгружает пакеты по импортам main.py — pygame нужен здесь явно
 
 from duel.game import Game
 
 
 async def main():
+    pygame.init()
     game = Game(windowed=True)
     await game.run_web()
 
