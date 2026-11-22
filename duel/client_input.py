@@ -5,6 +5,7 @@ import math
 
 import pygame
 
+from .platform import WEB
 from . import keys
 from .snapshot import player as snap_player
 from . import config
@@ -344,8 +345,12 @@ class InputMixin:
             cmd.use_slot = slot
 
     def aim_by_move(self):
-        """Режим прицела «по движению» (временный, для пробы): стик и мышь не целятся."""
-        return self.settings.get("aim_mode", "move") == "move"
+        """Прицел «по движению» (стик и мышь не целятся) — только у двоих за одним компьютером и только если
+        выбран в настройках. По сети, в разминке, в тесте с ботом, в браузере — всегда стик и мышь."""
+        if self.settings.get("aim_mode", "move") != "move":
+            return False
+        return not (self.net or self.warmup or getattr(self, "lobby_conn", None) or getattr(self, "test_bot", None)
+                    or getattr(self, "replay", None) or WEB)
 
     def mouse_side(self):
         """Кто целится мышью: по сети — свой маг; за одним компьютером — левый, если геймпадов меньше двух.

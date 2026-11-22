@@ -14,6 +14,7 @@ import math
 
 import pygame
 
+from .platform import WEB
 from . import config
 from . import settings
 from .audio import Audio, MUSIC_END
@@ -122,6 +123,9 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.walk_hold, self.walk_pid, self.walk_code = False, None, None
         self.settings_rows = ["lang", "name", "aim_mode", "aim_stick", "aim_mouse", "music", "sfx", "keys",
                               "updates", "check_now", "crash_reports", "back"]
+        if WEB:                           # в браузере: прицел «по движению» не бывает, обновлений и отчётов нет
+            self.settings_rows = [r for r in self.settings_rows
+                                  if r not in ("aim_mode", "updates", "check_now", "crash_reports")]
         self.keys_col, self.keys_row, self.keys_wait, self.keys_msg = 0, 0, None, None
         self.updater = Updater()          # новая версия: проверка — в run(), по настройке
         self.help_page = self.help_index = 0      # справка: вкладка и артефакт в ней

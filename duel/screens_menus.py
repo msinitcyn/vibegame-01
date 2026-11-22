@@ -3,6 +3,7 @@
 Подмешивается в ScreensMixin (duel/screens.py)."""
 import pygame
 
+from .platform import WEB
 from .config import (
     SHOT_COOLDOWN,
     HELP_BASICS,
@@ -61,8 +62,9 @@ class MenuScreensMixin:
             s.blit(txt, txt.get_rect(center=rect.center))
             self.hit(rect, lambda i=i: (setattr(self, "menu_index", i), self.menu_select()),
                      lambda i=i: setattr(self, "menu_index", i))
-        self.button((70, HEIGHT - 30), tr("menu.quit"), lambda: pygame.event.post(pygame.event.Event(pygame.QUIT)),
-                    w=120)
+        if not WEB:                               # в браузере выходить некуда — закрывают вкладку
+            self.button((70, HEIGHT - 30), tr("menu.quit"), lambda: pygame.event.post(pygame.event.Event(pygame.QUIT)),
+                        w=120)
         if self.menu_message:
             img = self.font.render(self.menu_message, True, BAD_TEXT)
             s.blit(img, img.get_rect(center=(WIDTH // 2, 528)))
@@ -70,12 +72,13 @@ class MenuScreensMixin:
         if u.available and not u.can_install:       # из исходников: только сообщить
             img = self.small.render(tr("update.source", v=u.latest), True, (120, 220, 140))
             s.blit(img, img.get_rect(center=(WIDTH // 2, 40)))
-        text = f"v{u.version}  ·  {self.update_status_text(short=True)}"
+        text = f"v{u.version}" if WEB else f"v{u.version}  ·  {self.update_status_text(short=True)}"
         rect = pygame.Rect((0, 0), self.tiny_text.size(text))
         rect.bottomright = (WIDTH - 8, HEIGHT - 6)
-        img = self.tiny_text.render(text, True, WHITE if self.hovered(rect) else GREY)
+        img = self.tiny_text.render(text, True, WHITE if self.hovered(rect) and not WEB else GREY)
         s.blit(img, rect)
-        self.hit(rect.inflate(8, 8), self.check_updates_now)         # щелчок — проверить сейчас
+        if not WEB:                               # в браузере обновлять нечего
+            self.hit(rect.inflate(8, 8), self.check_updates_now)         # щелчок — проверить сейчас
         hints = [(tr("menu.hint", n=len(self.menu)), GREY)]
         n = len(self.pads.pads)
         if n:

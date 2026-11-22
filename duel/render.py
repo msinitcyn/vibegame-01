@@ -337,11 +337,16 @@ def draw_artifact(surf, a, font=None):
     pos = _pos(a)
     draw_icon(surf, a["kind"], pos, ARTIFACT_R)
     if font is not None and life is not None:
-        color = (255, 120, 100) if life < 5 else (235, 235, 240)
-        txt = font.render(str(max(1, math.ceil(life))), True, color)
-        box = txt.get_rect(midleft=(pos[0] + ARTIFACT_R + 3, pos[1] + ARTIFACT_R - 4)).inflate(4, 0)
-        pygame.draw.rect(surf, (16, 12, 20), box, border_radius=3)
-        surf.blit(txt, txt.get_rect(center=box.center))
+        draw_timer(surf, font, life, (pos[0] + ARTIFACT_R + 3, pos[1] + ARTIFACT_R - 4))
+
+
+def draw_timer(surf, font, life, midleft):
+    """Сколько секунд ещё лежит (артефакт, пачка патронов): число на тёмной плашке, последние 5 с — красное."""
+    color = (255, 120, 100) if life < 5 else (235, 235, 240)
+    txt = font.render(str(max(1, math.ceil(life))), True, color)
+    box = txt.get_rect(midleft=midleft).inflate(4, 0)
+    pygame.draw.rect(surf, (16, 12, 20), box, border_radius=3)
+    surf.blit(txt, txt.get_rect(center=box.center))
 
 
 def draw_ammo_pack(surf, a, font):
@@ -357,6 +362,7 @@ def draw_ammo_pack(surf, a, font):
         pygame.draw.rect(surf, AMMO_COLOR, (bx - 2, box.top + 4, 4, 9), border_radius=2)
     txt = font.render(str(AMMO_PACK), True, AMMO_COLOR)
     surf.blit(txt, txt.get_rect(midbottom=(box.centerx, box.bottom + 1)))
+    draw_timer(surf, font, a["life"], (box.right + 3, box.bottom - 4))     # сколько ещё лежит
 
 
 def draw_mob_attack(surf, m, font):

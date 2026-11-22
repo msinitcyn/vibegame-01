@@ -102,7 +102,7 @@ class MenusMixin:
             self.menu_index = (self.menu_index - 1) % len(self.menu)
         elif sc in down:
             self.menu_index = (self.menu_index + 1) % len(self.menu)
-        elif sc == pygame.KSCAN_ESCAPE:   # Esc игру не закрывает — для этого кнопка «Выход»
+        elif sc == pygame.KSCAN_ESCAPE and not WEB:   # Esc игру не закрывает — для этого кнопка «Выход»
             self.menu_message = t("menu.quit_hint")
         elif sc in digits and digits.index(sc) < len(self.menu):
             self.menu_index = digits.index(sc)
@@ -111,7 +111,7 @@ class MenusMixin:
             self.menu_select()
 
     def menu_label(self, i):
-        return {"play": t("menu.two"), "net": t("menu.net"),
+        return {"play": t("menu.two"), "net": t("menu.connect" if WEB else "menu.net"),
                 "test": t("menu.test", hp=TEST_HP), "help": t("menu.help"),
                 "settings": t("menu.settings"),
                 "update": t("menu.update", v=self.updater.latest or "")}[self.menu[i]]

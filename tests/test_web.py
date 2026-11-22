@@ -43,3 +43,40 @@ def test_build_web(tmp_path, monkeypatch):
     out = tmp_path / "web-src"
     assert (out / "main.py").exists() and (out / "duel" / "game.py").exists() and (out / "duel" / "_version.py").exists()
     assert not list(out.rglob("*.mp3")) and (out / "assets" / "fonts").exists()
+
+
+def test_aim_by_move_only_for_two_on_one_computer(game, monkeypatch):
+    from duel import client_input
+    game.settings["aim_mode"] = "move"
+    game.start()
+    assert game.aim_by_move()                             # двое за одним компьютером — как выбрано
+    game.start(1000, None, bot=True)
+    assert not game.aim_by_move()                         # тест с ботом — мышью
+    game.start()
+    game.warmup = True
+    assert not game.aim_by_move()                         # разминка (и сеть) — мышью
+    game.warmup = False
+    monkeypatch.setattr(client_input, "WEB", True)
+    assert not game.aim_by_move()                         # браузер — мышью
+    game.settings["aim_mode"] = "stick"
+
+
+def test_web_menu_labels(game, monkeypatch):
+    from duel import client_menus, screens_menus
+    game.state = "menu"
+    game.hits = []
+    game.draw_menu()
+    desktop = len(game.hits)
+    monkeypatch.setattr(client_menus, "WEB", True)
+    monkeypatch.setattr(screens_menus, "WEB", True)
+    assert game.menu_label(game.menu.index("net")) == "Подключиться к серверу"
+    game.hits = []
+    game.draw_menu()
+    assert len(game.hits) == desktop - 2                  # без «Выход» и без «проверить обновления»
+
+
+def test_ammo_pack_timer_draws(game):
+    from duel.entities import AmmoPack
+    game.match.ammo_packs = [AmmoPack(200, 300)]
+    game.refresh_snap()
+    game.draw()
