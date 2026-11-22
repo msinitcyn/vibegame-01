@@ -39,6 +39,7 @@ from .config import (
     MOB_KEEP_DISTANCE,
     MOB_RANGE,
     MOB_SHOT_COOLDOWN,
+    MOBSWAP_FX,
     MOB_SHOT_R,
     MOB_SHOT_SPEED,
     WEAPON_MAX,
@@ -623,6 +624,15 @@ class Mob:
         self.alive = True
         self.zombie_of = None         # «Восставшие мертвецы»: маг-хозяин зомби
         self.zombie_life = 0.0
+        self.swap = 0.0               # «Мобы на соперника»: сколько ещё видна анимация перенаправления
+        self.swap_by = None           # кто перенаправил (цвет)
+        self.swap_dir = None          # куда теперь идёт (радианы) или None — успокоился
+
+    def redirect(self, caster, target):
+        """Тьма перенаправила моба на target (None — на него «Мир с мобами»: просто успокоился)."""
+        self.target = target
+        self.swap, self.swap_by = MOBSWAP_FX, caster
+        self.swap_dir = None if target is None else math.atan2(target.y - self.y, target.x - self.x)
 
     def hurt(self, attacker, damage=1):
         """Попадание: моб злится на того, кто ударил (маг или двойник)."""
@@ -643,6 +653,7 @@ class Mob:
         self.flash = max(0.0, self.flash - dt)
         self.hit_cd = max(0.0, self.hit_cd - dt)
         self.swing = max(0.0, self.swing - dt)
+        self.swap = max(0.0, self.swap - dt)
         p = self.target
         if p is None:
             self.windup = 0.0

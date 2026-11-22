@@ -560,3 +560,58 @@ def draw_fire_ring(surf, x, y, R, heat, life, total, time):
         ey = y + math.sin(a) * R - q * 50
         if ignite >= 1 and q < 0.9:
             pygame.draw.rect(surf, tip if i % 3 == 0 else core, (int(ex), int(ey), 2, 2))
+
+
+def mobswap(surf, pos, r, k, direction, caster_color, time):
+    """«Мобы на соперника» на мобе, k — 0..1: тёмные струйки втягиваются в моба, глаза загораются цветом
+    Тьмы, стрелки уходят туда, куда он теперь идёт (direction — радианы; None — просто успокоился)."""
+    P = params("mobswap")
+    smoke = rgb(P.get("smoke_color"), (96, 40, 150))
+    light = tuple(min(255, int(v * 0.5 + 255 * 0.5)) for v in caster_color)    # светлее цвета Тьмы
+    n = int(P.get("wisps", 7))
+    pull = float(P.get("pull_time", 0.4))
+    size = int(r * 6 + 40)
+    layer = pygame.Surface((size, size), pygame.SRCALPHA)
+    c = size // 2
+    if k < pull + 0.15:                                       # струйки тьмы скручиваются в моба
+        q = min(1.0, k / pull)
+        a = int(220 * (1 - max(0.0, k - pull) / 0.15))
+        for i in range(n):
+            ang = i * 2 * math.pi / n + q * 4.0
+            for j in range(4):                                # хвост струйки — несколько клубков
+                d = r * (2.6 - 1.7 * ease_out(q)) + j * 5
+                aj = ang - j * 0.22
+                at = (int(c + math.cos(aj) * d), int(c + math.sin(aj) * d))
+                pygame.draw.circle(layer, (*smoke, max(0, a - j * 45)), at, max(2, 7 - j))
+                if j == 0:
+                    pygame.draw.circle(layer, (*light, a), at, 2)
+    glow_a = int(150 * math.sin(math.pi * min(1.0, k * 1.3)))  # тёмное пятно под ним — вспухает и гаснет
+    if glow_a > 0:
+        pygame.draw.circle(layer, (*smoke, glow_a // 2), (c, c), int(r * 1.5))
+        pygame.draw.circle(layer, (*light, glow_a), (c, c), int(r * 1.5), 2)
+    if direction is not None and k > 0.25:                    # стрелки — куда теперь идёт
+        q = (k - 0.25) / 0.75
+        dx, dy = math.cos(direction), math.sin(direction)
+        nx, ny = -dy, dx
+        for i in range(3):
+            d = r + 8 + ease_out(q) * r * 2.2 + i * 11
+            a = int(255 * (1 - q) * (1 - i * 0.25))
+            if a <= 0:
+                continue
+            tx, ty = c + dx * d, c + dy * d
+            w, back = 10, 11
+            pts = [(tx - dx * back + nx * w, ty - dy * back + ny * w), (tx, ty),
+                   (tx - dx * back - nx * w, ty - dy * back - ny * w)]
+            pygame.draw.lines(layer, (*INK, a), False, pts, 8)
+            pygame.draw.lines(layer, (*light, a), False, pts, 4)
+    surf.blit(layer, layer.get_rect(center=(int(pos[0]), int(pos[1]))))
+    if 0.2 < k < 0.95:                                        # глаза загораются цветом Тьмы
+        e = math.sin(math.pi * (k - 0.2) / 0.75)
+        flick = 0.75 + 0.25 * math.sin(time * 30)
+        eye = pygame.Surface((int(r * 2),) * 2, pygame.SRCALPHA)
+        ec = eye.get_width() // 2
+        for sx in (-1, 1):
+            at = (int(ec + sx * r * 0.28), int(ec - r * 0.18))
+            pygame.draw.circle(eye, (*light, int(150 * e * flick)), at, max(4, int(r * 0.3)))
+            pygame.draw.circle(eye, (255, 240, 255, int(255 * e)), at, max(2, int(r * 0.13)))
+        surf.blit(eye, eye.get_rect(center=(int(pos[0]), int(pos[1]))))

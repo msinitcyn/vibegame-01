@@ -356,3 +356,47 @@ def draw_clone_noise(surf, pos, r, k, time, seed=0):
         col = colors[h % len(colors)]
         layer.fill((*col, int(255 * fade)), (int(c + px * r * 1.7), int(c + py * r * 1.7), s, s))
     surf.blit(layer, (int(pos[0] - c), int(pos[1] - c)))
+
+
+def draw_rapid(surf, pos, r, facing, since, time, shot=0.0):
+    """«Скорострельность» (Огонь): ствол раскалён — пульсирующий жар и искры над ним, вокруг мага быстро
+    крутятся огненные дуги; в начале — вспышка-кольцо с полосами скорости. since — сколько прошло с начала."""
+    P = params("rapid")
+    hot = rgb(P.get("hot_color"), (255, 150, 40))
+    core = rgb(P.get("core_color"), (255, 235, 150))
+    spin = float(P.get("spin", 9.0))
+    burst = float(P.get("burst_time", 0.45))
+    px = sprite_px(r)
+    tip = (pos[0] + facing * 14 * px, pos[1] + 4 * px)
+    size = int(r * 6 + 40)
+    layer = pygame.Surface((size, size), pygame.SRCALPHA)
+    c = size // 2
+    ox, oy = tip[0] - pos[0] + c, tip[1] - pos[1] + c
+    pulse = 0.5 + 0.5 * math.sin(time * 22)
+    heat = min(1.0, 0.55 + 0.45 * pulse + shot * 0.6)
+    pygame.draw.circle(layer, (*hot, int(90 * heat)), (int(ox), int(oy)), int(r * (0.32 + 0.1 * pulse)))
+    pygame.draw.circle(layer, (*core, int(170 * heat)), (int(ox), int(oy)), max(2, int(r * 0.13)))
+    for i in range(int(P.get("sparks", 5))):                  # искры жара поднимаются над стволом
+        q = (time * 1.9 + i / 5 + (i * 0.37) % 0.2) % 1.0
+        x = ox - facing * q * r * 0.5 + math.sin(time * 7 + i * 2.3) * 3
+        y = oy - q * r * 1.1
+        col = core if q < 0.3 else hot
+        pygame.draw.circle(layer, (*col, int(230 * (1 - q))), (int(x), int(y)), max(1, int(3 * (1 - q) + 1)))
+    R = r + 9                                                 # «турбина»: три дуги крутятся вокруг мага
+    for i in range(3):
+        a0 = time * spin + i * 2 * math.pi / 3
+        pts = [(c + math.cos(a0 + j * 0.12) * R, c + math.sin(a0 + j * 0.12) * R * 0.85) for j in range(6)]
+        pygame.draw.lines(layer, (*INK, 140), False, pts, 5)
+        pygame.draw.lines(layer, (*hot, 240), False, pts, 3)
+        pygame.draw.circle(layer, (*core, 255), (int(pts[-1][0]), int(pts[-1][1])), 3)
+    if 0 <= since < burst:                                    # получил: огненное кольцо и полосы скорости
+        k = since / burst
+        rr = int(r + 6 + ease_out(k) * r * 1.6)
+        a = int(255 * (1 - k))
+        pygame.draw.circle(layer, (*hot, a), (c, c), rr, max(1, int(5 * (1 - k)) + 1))
+        for i in range(10):
+            ang = i * 2 * math.pi / 10 + 0.3
+            d0, d1 = rr * 0.75, rr * 0.75 + r * 0.7 * (1 - k)
+            pygame.draw.line(layer, (*core, a), (c + math.cos(ang) * d0, c + math.sin(ang) * d0),
+                             (c + math.cos(ang) * d1, c + math.sin(ang) * d1), 2)
+    surf.blit(layer, layer.get_rect(center=(int(pos[0]), int(pos[1]))))

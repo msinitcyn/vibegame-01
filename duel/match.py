@@ -332,7 +332,7 @@ class Match:
             mine = [p] + self.clones_of(p)
             for m in self.mobs:
                 if m.target in mine:
-                    m.target = None if "mobpeace" in foe.effects else foe
+                    m.redirect(p, None if "mobpeace" in foe.effects else foe)
         elif kind == "bear":                  # маг — медведь; жизни мага сохраняются
             if p.bear_saved is None:
                 p.bear_saved = p.hp

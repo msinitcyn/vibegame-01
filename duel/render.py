@@ -11,6 +11,7 @@ from .config import (
     DURATION,
     WEAPON_TIME,
     ZOMBIE_RISE,
+    MOBSWAP_FX,
     ZOMBIE_TIME,
     SHOT_FLASH,
     WALK_FPS,
@@ -219,6 +220,9 @@ def draw_player(surf, p, heroes, viewer=None, time=0.0, font=None):
             shot = p.get("shot", 0) / SHOT_FLASH
             if "triple" in p["effects"]:           # три ствола веером
                 fx_mage.draw_triple(surf, (pos[0], pos[1] - bob * px), p["r"], facing, triple_open(p), shot)
+            if "rapid" in p["effects"]:            # скорострельность: раскалённый ствол, огненные дуги
+                fx_mage.draw_rapid(surf, (pos[0], pos[1] - bob * px), p["r"], facing,
+                                   since_start("rapid", p["effects"]["rapid"]), time, shot)
             if shot > 0:                           # вспышка из ствола
                 fx_mage.draw_muzzle(surf, pos, p["r"], facing, shot)
     if p.get("burn"):                             # горит на чужой земле — стихией хозяина земли
@@ -310,6 +314,9 @@ def draw_clone(surf, c, heroes, owner_p=None, font=None, time=0.0, viewer=None):
     shot = c.get("shot", 0) / SHOT_FLASH
     if "triple" in c["effects"]:
         fx_mage.draw_triple(surf, (pos[0], pos[1] - bob * px), c["r"], facing, triple_open(c), shot)
+    if "rapid" in c["effects"]:
+        fx_mage.draw_rapid(surf, (pos[0], pos[1] - bob * px), c["r"], facing,
+                           since_start("rapid", c["effects"]["rapid"]), time, shot)
     if shot > 0:
         fx_mage.draw_muzzle(surf, pos, c["r"], facing, shot)
     draw_aim(surf, {**c, "aim": aim}, side_color(heroes, owner))
@@ -414,6 +421,9 @@ def draw_mob(surf, m, font=None, heroes=DEFAULT_HERO):
             pygame.draw.circle(aura, (*side_color(heroes, zombie), 220), (c, c), r + 8, 3)
             surf.blit(aura, aura.get_rect(center=pos))
         draw_unit(surf, name + ("_zombie" if zombie else ""), pos, m["r"], m["facing"], white=m["flash"] > 0)
+    if m.get("swap", 0) > 0 and m.get("swap_by"):  # Тьма перенаправила на соперника
+        fx_spells.mobswap(surf, pos, m["r"], 1 - m["swap"] / MOBSWAP_FX, m.get("swap_dir"),
+                          side_color(heroes, m["swap_by"]), m["swap"])
     color = (side_color(heroes, zombie) if zombie else
              side_color(heroes, m["target"]) if m["target"] else MOB_IDLE_COLOR)
     fx_mage.draw_hp_bar(surf, pos[0], fx_mage.hp_bar_top(pos[1], m["r"]), m["hp"], m["max_hp"], 0,
