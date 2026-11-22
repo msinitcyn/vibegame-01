@@ -26,8 +26,12 @@ git fetch --tags --quiet origin
 LATEST=$(git tag -l 'v*' --sort=-v:refname | head -1)
 [[ -n "$LATEST" ]] && git -c advice.detachedHead=false checkout --quiet "$LATEST" && echo "версия $LATEST"
 
-echo "== пакеты: Caddy, файрвол, автообновления безопасности"
+echo "== система: все обновления (образ Lightsail старее последних исправлений безопасности)"
+export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
+apt-get -y -q full-upgrade
+
+echo "== пакеты: Caddy, файрвол, автообновления безопасности"
 apt-get install -y -q caddy ufw unattended-upgrades python3
 dpkg-reconfigure -f noninteractive unattended-upgrades || true
 
@@ -64,5 +68,6 @@ sleep 2
 echo
 systemctl --no-pager --lines=3 status spellgunners.service || true
 echo
+[[ -f /var/run/reboot-required ]] && echo "ВНИМАНИЕ: обновилось ядро — перезагрузите машину: sudo reboot (сервер поднимется сам)"
 echo "готово. Проверка сервера:  curl -s http://127.0.0.1:5557/health"
 echo "адрес для игры:            wss://$DOMAIN/"

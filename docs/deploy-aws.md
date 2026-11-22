@@ -68,6 +68,9 @@
 ## 7. Поставить игру на сервер
 
 1. Lightsail → ваш сервер → **Connect using SSH** (оранжевая кнопка) — откроется терминал в браузере.
+   При создании Lightsail пишет «Security update recommended» (и «PHP update» — к OS Only не относится:
+   PHP там нет, проверка `php -v` → `command not found`). Обновления ставит сам `install.sh`; если в конце
+   он скажет перезагрузиться — `sudo reboot`, сервер игры поднимется сам.
 2. Вставьте по очереди (вместо `spellgunners.duckdns.org` — своё имя из шага 6):
 
    ```bash
