@@ -145,3 +145,34 @@ def test_demos_show_their_point_even_at_low_fps():
         ice = run_demo("icewalk", fps)
         assert "red" in ice["zones"]["blue"] and "blue" not in ice["burn"], fps           # Холод по земле Огня — не горит
         assert ice["burn"].get("red") == {"frost"}, fps                                   # Огонь на тропе — горит морозом
+
+
+def test_mobswap_rapid_and_bear_demos():
+    """Сценки «Перевода стрелок» и «Скорострельности» показывают своё; медведь бьёт, только дойдя до моба."""
+    import math as _m
+    for fps in (60, 4):
+        demos.reload_all()
+        d = demos.Demo(demos.load("mobswap"))
+        swapped = set()
+        while d.t < d.length - 0.1:
+            d.update(1 / fps)
+            swapped |= {id(m) for m in d.match.mobs if m.swap > 0 and m.target is d.match.red}
+        assert len(swapped) == 2, fps                     # оба моба ушли на соперника — с анимацией
+
+        d = demos.Demo(demos.load("rapid"))
+        while d.t < d.length - 0.1:
+            d.update(1 / fps)
+            if "rapid" in d.match.blue.effects:
+                break
+        assert "rapid" in d.match.blue.effects, fps
+
+        d = demos.Demo(demos.load("bear"))
+        was = False
+        while d.t < d.length - 0.1:
+            d.update(1 / fps)
+            b = d.match.blue
+            if b.melee_flash > 0 and not was and d.match.mobs and "bear" in b.effects:
+                m = d.match.mobs[0]
+                gap = _m.hypot(m.x - b.x, m.y - b.y) - m.radius - b.radius
+                assert m.hp < m.max_hp, (fps, round(gap))  # каждый удар медведя — по мобу, не в воздух
+            was = b.melee_flash > 0

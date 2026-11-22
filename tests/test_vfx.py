@@ -128,7 +128,6 @@ def test_hp_bar_sight_shield_thorns_draw():
     font = pygame.font.Font(None, 14)
     for hp, mx, sh in ((10, 10, 0), (3, 10, 5), (0, 15, 0), (57, 100, 2)):
         assert _drew(lambda s: fx_mage.draw_hp_bar(s, 200, 100, hp, mx, sh, (255, 90, 80), hp % 2 == 0, font))
-    assert _drew(lambda s: fx_mage.draw_sight(s, 200, 150, 14, 0.3, (255, 90, 80)))
     for left, since, flash in ((6.0, 0.05, 0.0), (4.0, 2.0, 1.0), (3.0, 3.0, 0.5)):
         assert _drew(lambda s: fx_mage.draw_shield(s, (200, 150), 14, 10, left, since, 3, flash, 1.0))
     assert _drew(lambda s: fx_mage.draw_shield_break(s, (200, 150), 14, 10, 0.4))

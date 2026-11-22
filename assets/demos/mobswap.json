@@ -1,0 +1,61 @@
+{
+  "heroes": {
+    "blue": "dark",
+    "red": "fire"
+  },
+  "view": [
+    290,
+    70,
+    440,
+    200
+  ],
+  "length": 4.2,
+  "speed": 0.6,
+  "setup": {
+    "blue": {
+      "x": 340,
+      "y": 170
+    },
+    "red": {
+      "x": 680,
+      "y": 170
+    },
+    "mobs": [
+      {
+        "x": 470,
+        "y": 115,
+        "hp": 5,
+        "angry": true,
+        "target": "blue"
+      },
+      {
+        "x": 480,
+        "y": 225,
+        "hp": 5,
+        "angry": true,
+        "target": "blue"
+      }
+    ]
+  },
+  "script": [
+    {
+      "t": 0.0,
+      "who": "red",
+      "aim_at": "blue"
+    },
+    {
+      "t": 0.45,
+      "who": "blue",
+      "item": "mobswap"
+    },
+    {
+      "t": [
+        2.3,
+        3.9
+      ],
+      "every": 0.6,
+      "who": "red",
+      "melee": true
+    }
+  ]
+}

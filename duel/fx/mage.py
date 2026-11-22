@@ -1,5 +1,5 @@
-"""На маге и вокруг него: меч и вспышка выстрела, тройной ствол, полоска жизней, мушка, щит,
-невидимость, превращение в медведя, магический шум двойников."""
+"""На маге и вокруг него: меч и вспышка выстрела, тройной ствол, полоска жизней, щит,
+невидимость, превращение в медведя, магический шум двойников, скорострельность."""
 import math
 
 import pygame
@@ -190,15 +190,6 @@ def draw_hp_bar(surf, cx, top, hp, max_hp, shield, color, flash, font=None):
 def hp_bar_top(y, r):
     """Где верх полоски: над шляпой."""
     return int(y - r * 1.2 - float(params("hpbar").get("lift", 6)) - int(params("hpbar").get("height", 5)))
-
-
-def draw_sight(surf, x, y, r, aim, color):
-    """Мушка прицела — точка цвета героя на линии прицела."""
-    d = r + 20
-    px, py = int(x + math.cos(aim) * d), int(y + math.sin(aim) * d)
-    pygame.draw.circle(surf, INK, (px, py), 5)
-    pygame.draw.circle(surf, color, (px, py), 4)
-    pygame.draw.circle(surf, (255, 255, 255), (px - 1, py - 1), 1)
 
 
 def draw_shield(surf, pos, r, gap, left, since, hits, flash, time):

@@ -105,11 +105,6 @@ def draw_effects(surf, u, time=0.0):
         pygame.draw.line(surf, (30, 30, 30), (cx - d, cy + d), (cx + d, cy - d), 4)
 
 
-def draw_aim(surf, p, color):
-    """Мушка прицела: точка цвета героя на линии прицела."""
-    fx_mage.draw_sight(surf, p["x"], p["y"], p["r"], p["aim"], color)
-
-
 def draw_hp(surf, u, color, font, hp=None, max_hp=None, shield=None, scale=1.0):
     """Полоска жизней над головой (двойник показывает жизни хозяина — чтобы не выдать себя)."""
     hp = u.get("hp", 0) if hp is None else hp
@@ -229,8 +224,6 @@ def draw_player(surf, p, heroes, viewer=None, time=0.0, font=None):
         fx_bullets.draw_burn(surf, pos, p["r"], p["burn"], time)
     if "icewalk" in p["effects"]:                 # «Ледяная тропа»: снежинки у ног
         fx_spells.snow_at_feet(surf, pos, p["r"], time)
-    if aim is not None:
-        draw_aim(surf, p, side_color(heroes, pid))
     draw_effects(surf, p, time)
     if "cloning" in p["effects"]:                 # двойники появляются — магический шум и на маге
         fx_mage.draw_clone_noise(surf, pos, p["r"], max(0.0, 1 - p["effects"]["cloning"] / DURATION["cloning"]), time, 7)
@@ -288,7 +281,7 @@ def draw_invisible(surf, p, heroes, time=0.0, sees=True, who=None):
 
 
 def draw_clone(surf, c, heroes, owner_p=None, font=None, time=0.0, viewer=None):
-    """Двойник — как настоящий маг: тот же рисунок и анимация, мушка, полоска жизней хозяина.
+    """Двойник — как настоящий маг: тот же рисунок и анимация, полоска жизней хозяина.
     За одним компьютером и сопернику все одинаковые; хозяину по сети свои двойники — полупрозрачные."""
     owner = c["owner"]
     if hidden_now(c):                             # невидимость хозяина — и на двойниках
@@ -319,7 +312,6 @@ def draw_clone(surf, c, heroes, owner_p=None, font=None, time=0.0, viewer=None):
                            since_start("rapid", c["effects"]["rapid"]), time, shot)
     if shot > 0:
         fx_mage.draw_muzzle(surf, pos, c["r"], facing, shot)
-    draw_aim(surf, {**c, "aim": aim}, side_color(heroes, owner))
     draw_effects(surf, c, time)
     if owner_p is not None:
         draw_hp(surf, c, side_color(heroes, owner), font, owner_p["hp"], owner_p.get("max_hp") or 10,
