@@ -48,6 +48,7 @@ TEXTS = {
 
         "menu.two": "Два игрока",
         "menu.test": "Тест с ботом",
+        "web.no_net": "В браузере пока без сети — играйте за одним компьютером или с ботом",
         "menu.help": "Артефакты: что делает каждый",
         "menu.settings": "Настройки",
         "menu.update": "Обновить до {v}",
@@ -510,6 +511,7 @@ TEXTS = {
 
         "menu.two": "Two players",
         "menu.test": "Test vs bot",
+        "web.no_net": "No online play in the browser yet — play on one computer or vs the bot",
         "menu.help": "Artifacts: what each one does",
         "menu.settings": "Settings",
         "menu.update": "Update to {v}",
@@ -971,6 +973,7 @@ TEXTS = {
 
         "menu.two": "Kaksi pelaajaa",
         "menu.test": "Testi: botti",
+        "web.no_net": "Selaimessa ei vielä verkkopeliä — pelaa yhdellä koneella tai bottia vastaan",
         "menu.help": "Artefaktit: mitä kukin tekee",
         "menu.settings": "Asetukset",
         "menu.update": "Päivitä versioon {v}",

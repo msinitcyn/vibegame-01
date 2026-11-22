@@ -3,6 +3,7 @@
 import array
 import json
 import random
+from .platform import media, media_mask
 from pathlib import Path
 
 import pygame
@@ -82,7 +83,7 @@ class Audio:
             print("Звук отключён:", e)
             return
         self.enabled = True
-        self.tracks = {k: sorted(MUSIC_DIR.glob(mask)) for k, mask in MUSIC.items()}
+        self.tracks = {k: sorted(MUSIC_DIR.glob(media_mask(mask))) for k, mask in MUSIC.items()}
         for k, files in self.tracks.items():
             if not files:
                 print(f"Нет музыки «{k}» ({MUSIC[k]})")
@@ -97,11 +98,11 @@ class Audio:
         # у каждого игрока свой звук выстрела; shoot03.mp3 — звук ближнего удара
         for who, fname in (("blue", "shoot01.mp3"), ("red", "shoot02.mp3"), ("melee", "shoot03.mp3")):
             try:
-                snd = pygame.mixer.Sound(SOUNDS_DIR / fname)
+                snd = pygame.mixer.Sound(str(media(SOUNDS_DIR / fname)))
                 snd.set_volume(SHOOT_VOLUME)
                 self.shots[who] = snd
                 self.base[snd] = SHOOT_VOLUME
-            except pygame.error as e:
+            except (pygame.error, FileNotFoundError) as e:
                 print(f"Не загрузился {fname}:", e)
         for kind, (fname, volume) in ITEM_SOUNDS.items():
             snd = self.load(fname, volume, fmt)
@@ -116,7 +117,7 @@ class Audio:
     def load(self, fname, volume, fmt):
         """Звук из assets/sounds с правкой из edits.json (по имени файла без .mp3). Нет файла — None."""
         try:
-            snd = _edit(pygame.mixer.Sound(SOUNDS_DIR / fname), self.edits.get(Path(fname).stem), fmt)
+            snd = _edit(pygame.mixer.Sound(str(media(SOUNDS_DIR / fname))), self.edits.get(Path(fname).stem), fmt)
         except (pygame.error, FileNotFoundError) as e:
             print(f"Не загрузился {fname}:", e)
             return None

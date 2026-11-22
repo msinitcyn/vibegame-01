@@ -35,8 +35,10 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def current_version():
     """Своя версия: в собранной игре — вшитая сборкой (duel/_version.py); из исходников — из
-    pyproject.toml (_version.py мог остаться от давней сборки и врать)."""
-    if frozen():
+    pyproject.toml (_version.py мог остаться от давней сборки и врать). В браузере — тоже вшитая
+    (tools/build_web.py)."""
+    from .platform import WEB
+    if frozen() or WEB:
         try:
             from ._version import VERSION
             return VERSION

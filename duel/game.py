@@ -337,31 +337,45 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
 
     def main_loop(self):
         self.start_update_check()
-        while True:
-            dt = self.clock.tick(FPS) / 1000
-            self.go_flash = max(0.0, self.go_flash - dt)
-            for e in pygame.event.get():
-                if e.type == pygame.QUIT:
-                    return
-                self.on_event(e)
-            if self.snap["winner"] and not self.win_time:
-                self.win_time = pygame.time.get_ticks()
-                if not self.net:
-                    self.record_local()       # итог партии за этим компьютером — в matches.jsonl
-            self.sync_keys_mode()             # сеть или за одним компьютером — свой набор клавиш
-            self.update_music()
-            self.update_sounds()
-            self.sync_mouse_capture()
-            if self.state not in ("play", "settings", "keys"):
-                self.paused = False           # вышли из партии — паузы нет
-            self.hits = []                # экран при отрисовке заново отмечает, что можно нажать мышью
-            self.refresh_menu()
-            if self.state == "update":
-                if self.update_frame():
-                    return
-                self.draw_update()
-            elif not self.screen_frame(dt):
-                self.play_frame(dt)
+        while self.frame():
+            pass
+
+    async def run_web(self):
+        """Браузер (pygbag): тот же кадр, но после каждого — отдать управление странице."""
+        import asyncio
+        try:
+            while self.frame():
+                await asyncio.sleep(0)
+        finally:
+            self.stop_own_server()
+
+    def frame(self):
+        """Один кадр игры: события, музыка и звуки, экран или партия. False — выйти из игры."""
+        dt = self.clock.tick(FPS) / 1000
+        self.go_flash = max(0.0, self.go_flash - dt)
+        for e in pygame.event.get():
+            if e.type == pygame.QUIT:
+                return False
+            self.on_event(e)
+        if self.snap["winner"] and not self.win_time:
+            self.win_time = pygame.time.get_ticks()
+            if not self.net:
+                self.record_local()           # итог партии за этим компьютером — в matches.jsonl
+        self.sync_keys_mode()                 # сеть или за одним компьютером — свой набор клавиш
+        self.update_music()
+        self.update_sounds()
+        self.sync_mouse_capture()
+        if self.state not in ("play", "settings", "keys"):
+            self.paused = False               # вышли из партии — паузы нет
+        self.hits = []                    # экран при отрисовке заново отмечает, что можно нажать мышью
+        self.refresh_menu()
+        if self.state == "update":
+            if self.update_frame():
+                return False
+            self.draw_update()
+        elif not self.screen_frame(dt):
+            self.play_frame(dt)
+        return True
 
     def on_event(self, e):
         """Событие окна: фокус, клавиши, мышь, текст, музыка, геймпады."""

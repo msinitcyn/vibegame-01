@@ -5,6 +5,7 @@ import os
 
 import pygame
 
+from .platform import WEB
 from . import keys
 from . import settings
 from .config import DEFAULT_HERO, HELP_BASICS, HELP_PAGES, HELP_TABS, HERO_ONLY_ITEMS, HEROES, MAX_HP, TEST_HP
@@ -17,6 +18,8 @@ from .client_common import Controls, PLAYER_IDS
 class MenusMixin:
     def start_update_check(self):
         """Спросить GitHub о новой версии (в фоне), если не выключено в настройках и не в тестах."""
+        if WEB:
+            return                            # в браузере обновлять нечего: страница всегда свежая
         if self.settings.get("check_updates", True) and not os.environ.get("DUEL_NO_UPDATE_CHECK"):
             self.updater.check()
 
@@ -127,7 +130,10 @@ class MenusMixin:
         elif action == "test":
             self.open_pick(TEST_HP, bot=True)
         elif action == "net":
-            self.open_join()
+            if WEB:                           # в браузере пока без сети: нужен сервер с WebSocket и TLS
+                self.menu_message = t("web.no_net")
+            else:
+                self.open_join()
         elif action == "update":
             self.state = "update"
             self.updater.start()
