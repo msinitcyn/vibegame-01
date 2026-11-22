@@ -32,3 +32,7 @@ git -c advice.detachedHead=false checkout --quiet "$latest" || { log "не пе�
 rm -f "$STATE"
 $RESTART
 log "обновлён: $current -> $latest"
+if [[ -z "${SG_SKIP_SITE:-}" ]]; then                # сайт: страница и браузерная версия этого выпуска
+  bash deploy/site.sh "$latest" 2>&1 | logger -t spellgunners-update
+fi
+exit 0

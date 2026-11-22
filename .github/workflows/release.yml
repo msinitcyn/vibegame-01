@@ -3,7 +3,7 @@
 # Сначала — «Проверки» (ci.yml: тесты на Linux и Windows, OpenSpec) и сверка метки с версией;
 # сборка начинается, только если всё зелёное.
 #   Actions → «Сборка и выпуск» → Run workflow  — просто собрать (файлы — в результатах запуска)
-# Браузерная версия (задачи web и pages) — на GitHub Pages: https://msinitcyn.github.io/vibegame-01/
+# Браузерная версия (задача web) — spellgunners-web.zip в выпуске; сервер кладёт её на свой сайт (deploy/site.sh).
 name: Сборка и выпуск
 
 on:
@@ -87,7 +87,7 @@ jobs:
 
   release:
     if: github.ref_type == 'tag'
-    needs: build
+    needs: [build, web]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -105,7 +105,7 @@ jobs:
             --repo "${{ github.repository }}" --title "${{ github.ref_name }}" --generate-notes
 
   web:
-    # браузерная версия (pygbag) — та же игра, собранная в WebAssembly
+    # браузерная версия (pygbag) — та же игра, собранная в WebAssembly; архив — в выпуск, его берёт сайт сервера
     needs: [ci, checks]
     runs-on: ubuntu-latest
     steps:
@@ -125,22 +125,13 @@ jobs:
           python tools/build_web.py
           python -m pygbag --build build/web-src
 
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: build/web-src/build/web
+      - name: Архив для сайта сервера
+        run: |
+          mkdir -p dist
+          (cd build/web-src/build/web && zip -q -r ../../../../dist/spellgunners-web.zip .)
+          ls -l dist
 
-  pages:
-    # выложить браузерную версию: https://<владелец>.github.io/<репозиторий>/
-    # (один раз: Settings → Pages → Source: GitHub Actions)
-    if: github.ref_type == 'tag'
-    needs: web
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-    steps:
-      - id: deploy
-        uses: actions/deploy-pages@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spellgunners-web
+          path: dist/spellgunners-web.zip

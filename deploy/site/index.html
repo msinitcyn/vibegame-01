@@ -1,0 +1,102 @@
+<!doctype html>
+<!-- Сайт сервера Spellgunners (https://<домен>/): играть в браузере, скачать игру, кто онлайн.
+     Кладёт deploy/site.sh в /var/www/spellgunners; браузерная версия — рядом, в play/. Число игроков —
+     /status.json (Caddy -> публичная сводка сервера, duel/status.py). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spellgunners</title>
+<link rel="icon" href="icon.png">
+<style>
+  :root { --bg: #11131a; --card: #1a1d28; --line: #3c4052; --text: #e8e8ee; --dim: #9a9cab;
+          --gold: #e6c85a; --blue: #6aa8ff; --green: #6ad48a; --red: #ff7a6a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); min-height: 100vh;
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+         display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
+  main { width: 100%; max-width: 560px; text-align: center; }
+  img.logo { width: 96px; height: 96px; image-rendering: pixelated; }
+  h1 { margin: 8px 0 4px; font-size: 40px; letter-spacing: 1px; }
+  p.tag { margin: 0 0 28px; color: var(--dim); }
+  a.btn { display: block; padding: 16px; margin: 12px 0; border-radius: 12px; text-decoration: none;
+          font-weight: 700; font-size: 20px; color: var(--text); background: var(--card);
+          border: 2px solid var(--line); transition: border-color .15s, transform .15s; }
+  a.btn:hover { border-color: var(--blue); transform: translateY(-1px); }
+  a.btn.main { border-color: var(--gold); background: #262214; }
+  a.btn small { display: block; font-weight: 400; font-size: 14px; color: var(--dim); margin-top: 2px; }
+  .row { display: flex; gap: 12px; }
+  .row a.btn { flex: 1; font-size: 17px; }
+  .status { margin-top: 24px; padding: 12px; border-radius: 10px; background: var(--card); color: var(--dim);
+            font-size: 15px; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--dim);
+         margin-right: 6px; vertical-align: middle; }
+  .dot.on { background: var(--green); } .dot.off { background: var(--red); }
+  footer { margin-top: 20px; font-size: 13px; color: var(--dim); }
+  footer a { color: var(--dim); }
+  @media (max-width: 480px) { .row { flex-direction: column; gap: 0; } h1 { font-size: 32px; } }
+</style>
+</head>
+<body>
+<main>
+  <img class="logo" src="icon.png" alt="">
+  <h1>Spellgunners</h1>
+  <p class="tag" data-t="tag">A duel of mages with guns: artifacts, mobs, online play.</p>
+
+  <a class="btn main" href="play/" id="play"><span data-t="play">Play in the browser</span>
+    <small data-t="play_sub">No install. First load takes about a minute.</small></a>
+
+  <div class="row">
+    <a class="btn" href="https://github.com/msinitcyn/vibegame-01/releases/latest/download/spellgunners-setup.exe">
+      Windows<small data-t="win_sub">installer</small></a>
+    <a class="btn" href="https://github.com/msinitcyn/vibegame-01/releases/latest/download/spellgunners-linux.tar.gz">
+      Linux<small data-t="linux_sub">archive</small></a>
+  </div>
+
+  <div class="status"><span class="dot" id="dot"></span><span id="status" data-t="checking">Checking the server…</span></div>
+
+  <footer><span data-t="server">Server for the game:</span> <code id="addr"></code> ·
+    <a href="https://github.com/msinitcyn/vibegame-01/releases/latest" data-t="all">all downloads</a></footer>
+</main>
+<script>
+  const T = {
+    ru: { tag: "Дуэль магов со стволами: артефакты, мобы, игра по сети.", play: "Играть в браузере",
+          play_sub: "Без установки. Первая загрузка — около минуты.", win_sub: "установщик", linux_sub: "архив",
+          checking: "Проверяю сервер…", server: "Сервер для игры:", all: "все версии",
+          online: (p, r, v) => `Сервер работает · игроков: ${p} · партий: ${r} · версия ${v}`,
+          down: "Сервер сейчас не отвечает" },
+    fi: { tag: "Aseistettujen velhojen kaksintaistelu: artefaktit, hirviöt, verkkopeli.", play: "Pelaa selaimessa",
+          play_sub: "Ei asennusta. Ensimmäinen lataus noin minuutti.", win_sub: "asennusohjelma", linux_sub: "arkisto",
+          checking: "Tarkistetaan palvelinta…", server: "Pelin palvelin:", all: "kaikki versiot",
+          online: (p, r, v) => `Palvelin toimii · pelaajia: ${p} · otteluita: ${r} · versio ${v}`,
+          down: "Palvelin ei vastaa juuri nyt" },
+    en: { online: (p, r, v) => `Server is up · players: ${p} · matches: ${r} · version ${v}`,
+          down: "The server is not answering right now" },
+  };
+  const lang = (navigator.language || "en").slice(0, 2);
+  const tr = T[lang] && lang !== "en" ? T[lang] : null;
+  if (tr) {
+    document.documentElement.lang = lang;
+    document.querySelectorAll("[data-t]").forEach(el => { if (tr[el.dataset.t]) el.textContent = tr[el.dataset.t]; });
+  }
+  const say = tr || T.en;
+  document.getElementById("addr").textContent = "wss://" + location.host + "/";
+  async function refresh() {
+    const dot = document.getElementById("dot"), status = document.getElementById("status");
+    try {
+      const r = await fetch("status.json", { cache: "no-store" });
+      const s = await r.json();
+      dot.className = "dot " + (s.ok ? "on" : "off");
+      status.textContent = s.ok ? say.online(s.players + s.lobby, s.playing_rooms, s.version) : say.down;
+    } catch (e) {
+      dot.className = "dot off";
+      status.textContent = say.down;
+    }
+  }
+  refresh();
+  setInterval(refresh, 15000);
+  // браузерной версии в этом выпуске нет — кнопку прячем
+  fetch("play/", { method: "HEAD" }).then(r => { if (!r.ok) document.getElementById("play").style.display = "none"; });
+</script>
+</body>
+</html>

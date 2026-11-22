@@ -53,7 +53,10 @@ systemctl enable --now spellgunners.service
 systemctl enable --now spellgunners-backup.timer
 systemctl enable --now spellgunners-update.timer       # новый выпуск — сам, когда никто не играет
 
-echo "== Caddy: https/wss для $DOMAIN"
+echo "== сайт: страница и браузерная версия этого выпуска"
+bash deploy/site.sh "${LATEST:-}" || echo "сайт не разложен — проверьте связь с GitHub"
+
+echo "== Caddy: https/wss и сайт для $DOMAIN"
 sed "s/__DOMAIN__/$DOMAIN/" deploy/Caddyfile.template > /etc/caddy/Caddyfile
 systemctl enable caddy
 systemctl reload caddy || systemctl restart caddy

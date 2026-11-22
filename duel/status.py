@@ -3,6 +3,8 @@
     curl http://127.0.0.1:5557/         -> JSON: версия, сколько работает, комнаты, игроки, партии,
                                            ошибки за час и последняя, самый долгий такт за минуту
     curl http://127.0.0.1:5557/health   -> 200 «ok», если главный цикл крутится; 503 «stalled» — завис
+    curl http://127.0.0.1:5557/public   -> только то, что можно показать всем (сайт сервера, deploy/site):
+                                           версия, игроки, комнаты, жив ли — без ошибок и прочих подробностей
 
 Страница только читает готовую сводку (её раз в секунду собирает главный цикл сервера), поэтому
 её поток не трогает комнаты и соединения. По умолчанию слушает только этот компьютер (127.0.0.1).
@@ -70,6 +72,12 @@ class Health:
             "tick_ms_avg_last_min": round(sum(times) / len(times) * 1000, 2) if times else 0.0,
             **extra}
 
+    def public(self):
+        """Для всех (страница сайта): без текста ошибок и внутренних чисел."""
+        s = self.summary
+        return {"version": self.version, "ok": not self.stalled(), "players": s.get("players", 0),
+                "lobby": s.get("lobby", 0), "rooms": s.get("rooms", 0), "playing_rooms": s.get("playing_rooms", 0)}
+
     def page(self):
         return {**self.summary, "loop_age_s": round(self.clock() - self.last_beat, 2), "ok": not self.stalled()}
 
@@ -82,6 +90,9 @@ def serve(health, host="127.0.0.1", port=5557):
             if self.path.rstrip("/") == "/health":
                 ok = not health.stalled()
                 body, code, kind = (b"ok\n" if ok else b"stalled\n"), (200 if ok else 503), "text/plain"
+            elif self.path.rstrip("/") == "/public":
+                body = json.dumps(health.public()).encode("utf-8")
+                code, kind = 200, "application/json; charset=utf-8"
             elif self.path in ("/", "/status"):
                 body = json.dumps(health.page(), ensure_ascii=False, indent=1).encode("utf-8")
                 code, kind = 200, "application/json; charset=utf-8"

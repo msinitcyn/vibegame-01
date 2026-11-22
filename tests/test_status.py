@@ -63,3 +63,19 @@ def test_server_collects():
         assert page["rooms"] == 1 and page["players"] == 2 and page["playing_rooms"] == 1
     finally:
         srv.close()
+
+
+def test_public_summary_has_no_errors():
+    h = Health("0.8.3")
+    log = h.watch(lambda text: None)
+    log("ошибка в такте сервера: секрет")
+    h.collect(rooms=2, players=3, lobby=1, playing_rooms=1)
+    pub = h.public()
+    assert pub == {"version": "0.8.3", "ok": True, "players": 3, "lobby": 1, "rooms": 2, "playing_rooms": 1}
+    httpd = serve(h, "127.0.0.1", 0)
+    try:
+        data = json.loads(urllib.request.urlopen(f"http://127.0.0.1:{httpd.server_address[1]}/public", timeout=3).read())
+        assert data == pub and "секрет" not in json.dumps(data)
+    finally:
+        httpd.shutdown()
+        httpd.server_close()

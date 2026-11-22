@@ -1,6 +1,16 @@
-# Caddy: сертификат Let's Encrypt для домена сам, wss:// -> игровой сервер на этой машине (WebSocket).
-# deploy/install.sh подставляет домен и кладёт в /etc/caddy/Caddyfile. X-Forwarded-For Caddy ставит сам —
-# сервер берёт из него настоящий адрес игрока (только от 127.0.0.1).
+# Caddy: сертификат Let's Encrypt для домена сам; на одном адресе (deploy/install.sh подставляет домен):
+#   WebSocket (заголовок Upgrade)  -> игровой сервер на этой машине (wss://домен/ — для игры)
+#   /status.json                   -> публичная сводка сервера (игроки, версия — без подробностей)
+#   остальное                      -> сайт: страница и браузерная версия в /play/ (deploy/site.sh)
+# X-Forwarded-For Caddy ставит сам — сервер берёт из него настоящий адрес игрока (только от 127.0.0.1).
 __DOMAIN__ {
-	reverse_proxy 127.0.0.1:5560
+	encode zstd gzip
+	@ws header Connection *Upgrade*
+	route {
+		reverse_proxy @ws 127.0.0.1:5560
+		rewrite /status.json /public
+		reverse_proxy /public 127.0.0.1:5557
+		root * /var/www/spellgunners
+		file_server
+	}
 }
