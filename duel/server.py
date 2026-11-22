@@ -39,18 +39,27 @@ MAX_FAILS = 10                    # неудачных входов с одно�
 FAIL_WINDOW = 300.0               # … за столько секунд — дальше вход с адреса отклоняется
 CRASH_REPORTS = 3                 # отчётов о падениях с одного соединения
 CRASH_MAX = 20_000                # и длина каждого
+CRASH_FILES_MAX = 500             # файлов отчётов в папке — больше не пишем (только строка в лог)
+MAX_REGS = 3                      # новых аккаунтов с одного адреса …
+REG_WINDOW = 3600.0               # … за столько секунд
+# для сервера в интернете (python -m duel.server): лимиты включены; у сервера в игре и в тестах — нет
+MAX_PER_IP = 6                    # соединений с одного адреса (семья из одного дома — один адрес)
+MSG_BURST, MSG_RATE = 240, 150    # сообщений от соединения: запас и в секунду (игра шлёт ~65/с)
 
 
 class Server:
     def __init__(self, port=PORT, bot=False, host="0.0.0.0", proto=PROTO, log=print,
                  discovery_port=discovery.DISCOVERY_PORT, clock=time.monotonic, name=None, db=":memory:",
-                 dump_dir=None, records=None, ws_port=None):
+                 dump_dir=None, records=None, ws_port=None, max_per_ip=None, msg_rate=None):
         from .logs import version
         self.version = version()      # версия игры сервера — клиентам в hello и в ответ на поиск
         self.health = Health(self.version)    # для страницы состояния (--status-port, duel/status.py)
         self.log = self.health.watch(log)     # ошибки и итоги партий — ещё и в счётчики здоровья
         self.dump_dir = dump_dir      # куда писать файлы ошибок комнат (None — не писать)
         self.records = records        # matches.jsonl — итоги партий для баланса (None — не писать)
+        self.max_per_ip = max_per_ip  # соединений с одного адреса (None — без лимита)
+        self.msg_rate = msg_rate      # (запас, в секунду) сообщений от соединения (None — без лимита)
+        self.regs = {}                # адрес -> [моменты регистраций]
         self.clock = clock            # часы (тесты подменяют, чтобы не ждать секунды)
         self.listener = socket.create_server((host, port))
         self.listener.setblocking(False)
@@ -287,7 +296,9 @@ class Server:
                 sock.close()              # наплыв подключений — лишние сразу закрываем
                 continue
             conn = kind(sock)
-            conn.addr = addr
+            conn.addr = addr              # у WebSocket за прокси — уточнится после рукопожатия
+            if self.msg_rate:
+                conn.limit_rate(*self.msg_rate)
             conn.user = None              # вошёл в аккаунт — имя аккаунта, иначе гость
             conn.send({"type": "hello", "proto": self.proto, "role": "lobby", "server": self.name, "id": self.id,
                        "version": self.version, "features": list(FEATURES)})
@@ -298,6 +309,8 @@ class Server:
         now = self.clock()
         keep_new = []
         for conn, since in self.newcomers:
+            if self.too_many_from(conn):
+                continue
             try:
                 where = self.handle(conn, now)
             except Exception as e:        # последний рубеж: виновато одно соединение — закрыть его
@@ -324,6 +337,22 @@ class Server:
             if where in ("lobby", None) and not conn.closed:
                 keep.append(conn)
         self.lobby = [c for c in keep if not getattr(c, "in_room", False)]
+
+    def too_many_from(self, conn):
+        """Лимит соединений с одного адреса. Адрес WebSocket известен после рукопожатия (за прокси — из
+        X-Forwarded-For), поэтому проверяем новичка, как только адрес стал настоящим, один раз."""
+        if not self.max_per_ip or getattr(conn, "ip_checked", False):
+            return False
+        if not getattr(conn, "handshaken", True):
+            return False                      # WebSocket ещё здоровается — проверим позже
+        conn.ip_checked = True
+        ip = conn.addr[0]
+        same = sum(1 for c in self.all_conns() if c is not conn and not c.closed and c.addr[0] == ip)
+        if same >= self.max_per_ip:
+            self.log(f"{ip}: слишком много соединений с адреса ({same + 1}) — закрываем")
+            conn.close()
+            return True
+        return False
 
     def handle(self, conn, now):
         """Запросы соединения вне комнат. Возвращает: "room" — ушло в комнату, "lobby" — в лобби
@@ -444,6 +473,13 @@ class Server:
         if kind != "resume" and len(fails) >= MAX_FAILS:
             conn.send({"type": "auth", "ok": False, "why": "wait"})
             return
+        if kind == "register":                # новые аккаунты с одного адреса — не чаще MAX_REGS в час
+            regs = [t for t in self.regs.get(ip, []) if now - t < REG_WINDOW]
+            self.regs[ip] = regs
+            if len(regs) >= MAX_REGS:
+                conn.send({"type": "auth", "ok": False, "why": "wait"})
+                self.log(f"{ip}: слишком много новых аккаунтов — отказ")
+                return
         try:
             if kind == "resume":
                 user = self.accounts.resume(msg.get("token"))
@@ -462,6 +498,8 @@ class Server:
             conn.send({"type": "auth", "ok": False, "why": e.why})
             return
         conn.user = user
+        if kind == "register":
+            self.regs.setdefault(ip, []).append(now)
         conn.send({"type": "auth", "ok": True, "user": user, "token": token})
         self.log(f"{ip}: вошёл «{user}»" + (" (новый аккаунт)" if kind == "register" else ""))
 
@@ -597,6 +635,8 @@ class Server:
             try:
                 folder = Path(self.dump_dir) / "client-crashes"
                 folder.mkdir(parents=True, exist_ok=True)
+                if sum(1 for _ in folder.glob("*.txt")) >= CRASH_FILES_MAX:
+                    raise OSError("папка отчётов полна")      # не даём забить диск
                 path = folder / time.strftime(f"%Y%m%d-%H%M%S-{ip.replace(':', '_')}-{n + 1}.txt")
                 path.write_text(f"от {ip}, игра v{ver}, сервер v{self.version}\n\n{text[:CRASH_MAX]}",
                                 encoding="utf-8")
@@ -725,6 +765,13 @@ def main(argv=None):
     ap.add_argument("--name", default=None, help="имя сервера в списке (иначе — имя компьютера)")
     ap.add_argument("--bot", action="store_true", help="в новых комнатах пустое место занимает бот")
     ap.add_argument("--db", default=str(default_path()), help="файл базы аккаунтов")
+    ap.add_argument("--no-discovery", action="store_true", help="не отвечать на поиск игр в локальной сети (UDP)")
+    ap.add_argument("--host", default="0.0.0.0",
+                    help="на каком адресе слушать (127.0.0.1 — только эта машина, наружу — через прокси с TLS)")
+    ap.add_argument("--max-per-ip", type=int, default=MAX_PER_IP,
+                    help=f"соединений с одного адреса (по умолчанию {MAX_PER_IP}; 0 — без лимита)")
+    ap.add_argument("--msg-rate", type=int, default=MSG_RATE,
+                    help=f"сообщений в секунду от соединения (по умолчанию {MSG_RATE}; 0 — без лимита)")
     ap.add_argument("--ws-port", type=int, default=WS_PORT,
                     help=f"порт WebSocket (браузер, wss через прокси); 0 — не слушать (по умолчанию {WS_PORT})")
     ap.add_argument("--logs", default=None, help="папка логов (по умолчанию — logs рядом с настройками)")
@@ -737,8 +784,11 @@ def main(argv=None):
     folder = Path(args.logs) if args.logs else logs.log_dir()
     log = logs.setup_server(folder)
     try:
-        srv = Server(args.port, args.bot, log=log, name=args.name, db=args.db, dump_dir=folder,
-                     records=folder / "matches.jsonl", ws_port=args.ws_port or None)
+        srv = Server(args.port, args.bot, host=args.host, log=log,
+                     discovery_port=None if args.no_discovery else discovery.DISCOVERY_PORT, name=args.name, db=args.db, dump_dir=folder,
+                     records=folder / "matches.jsonl", ws_port=args.ws_port or None,
+                     max_per_ip=args.max_per_ip or None,
+                     msg_rate=(MSG_BURST, args.msg_rate) if args.msg_rate else None)
     except OSError as e:
         raise SystemExit(f"не удалось запустить сервер на порту {args.port}: {e.strerror or e}.\n"
                          f"Порт занят — уже работает другой сервер или игра со своим сервером; "

@@ -1,0 +1,32 @@
+# Служба игрового сервера Spellgunners (ставит deploy/install.sh в /etc/systemd/system/).
+# Слушает только эту машину: наружу — через Caddy (wss:// с сертификатом), см. deploy/Caddyfile.
+[Unit]
+Description=Spellgunners game server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=spellgunners
+Group=spellgunners
+WorkingDirectory=/opt/spellgunners
+Environment=PYTHONUNBUFFERED=1 HOME=/var/lib/spellgunners
+ExecStart=/usr/bin/python3 -m duel.server --name "Spellgunners" --host 127.0.0.1 --port 5555 --ws-port 5560 \
+    --no-discovery --db /var/lib/spellgunners/server.db --logs /var/lib/spellgunners/logs --status-port 5557
+Restart=always
+RestartSec=3
+
+# песочница: только своя папка данных на запись, без повышения прав, без доступа к домашним папкам
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+ReadWritePaths=/var/lib/spellgunners
+
+[Install]
+WantedBy=multi-user.target

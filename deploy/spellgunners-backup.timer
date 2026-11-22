@@ -1,0 +1,9 @@
+[Unit]
+Description=Spellgunners: daily backup of accounts database
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target

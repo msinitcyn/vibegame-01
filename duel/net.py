@@ -88,6 +88,8 @@ class Conn:
         self.dec = None                # zlib-декомпрессор входящего (в игре, после маркера z)
         self.accept_z = False          # эта сторона согласна на сжатый входящий поток (игра)
         self.sent_bytes = 0            # сколько байт ушло в сокет (для статистики и тестов)
+        self.rate = None               # сервер: (запас, сообщений в секунду) — не больше; None — без лимита
+        self.tokens, self.tokens_at = 0.0, 0.0
 
     def fileno(self):
         return self.sock.fileno()
@@ -162,6 +164,9 @@ class Conn:
             if not isinstance(msg, dict):
                 self.reject("не объект JSON")
                 break
+            if self.rate and not self.take_token():
+                self.reject("слишком много сообщений")
+                break
             if msg.get("type") == "z" and self.accept_z and self.dec is None:
                 self.dec = zlib.decompressobj()            # дальше поток сжат — и то, что уже пришло следом
                 try:
@@ -174,6 +179,23 @@ class Conn:
         if len(self.inbuf) > MAX_LINE:
             self.reject("слишком длинное сообщение")
         return out
+
+    def limit_rate(self, burst, per_second):
+        """Сервер: не больше per_second сообщений в секунду (с запасом burst) — иначе соединение закрывается."""
+        import time
+        self.rate = (burst, per_second)
+        self.tokens, self.tokens_at = float(burst), time.monotonic()
+
+    def take_token(self):
+        import time
+        burst, per_second = self.rate
+        now = time.monotonic()
+        self.tokens = min(burst, self.tokens + (now - self.tokens_at) * per_second)
+        self.tokens_at = now
+        if self.tokens < 1:
+            return False
+        self.tokens -= 1
+        return True
 
     def reject(self, why):
         """Нарушение протокола: запомнить причину и закрыть соединение."""

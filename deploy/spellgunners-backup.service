@@ -1,0 +1,9 @@
+# Копия базы аккаунтов (запускает spellgunners-backup.timer раз в день); хранятся последние 14.
+[Unit]
+Description=Spellgunners: backup of accounts database
+
+[Service]
+Type=oneshot
+User=spellgunners
+Group=spellgunners
+ExecStart=/usr/bin/python3 -c "import sqlite3, time, pathlib; d = pathlib.Path('/var/lib/spellgunners/backups'); d.mkdir(exist_ok=True); src = sqlite3.connect('/var/lib/spellgunners/server.db'); dst = sqlite3.connect(d / time.strftime('server-%%Y%%m%%d.db')); src.backup(dst); dst.close(); [p.unlink() for p in sorted(d.glob('server-*.db'))[:-14]]"

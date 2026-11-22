@@ -22,6 +22,7 @@ WS_PORT = 5560
 GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 MAX_HANDSHAKE = 8 * 1024          # заголовки рукопожатия длиннее — не WebSocket, закрыть
 MAX_FRAME = 1024 * 1024           # кадр длиннее — нарушение протокола
+TRUSTED_PROXIES = ("127.0.0.1", "::1")    # только от них верим X-Forwarded-For (прокси на этой же машине)
 
 
 def accept_key(key):
@@ -191,6 +192,7 @@ class WSConn(Conn):
                 pass
             self.violation = "не WebSocket"
             return b""
+        _real_address(self, headers)
         response = ("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
                     f"Sec-WebSocket-Accept: {accept_key(key)}\r\n\r\n").encode()
         self.wire[:0] = response              # ответ — первым, раньше всех кадров
@@ -199,6 +201,18 @@ class WSConn(Conn):
         self.flush()                          # и то, что сервер успел «отправить» до рукопожатия
         self.pending = rest                   # кадры, пришедшие сразу за заголовками
         return None
+
+
+def _real_address(conn, headers):
+    """За прокси на этой же машине (Caddy, Cloudflare Tunnel) соединение приходит с 127.0.0.1 — настоящий
+    адрес игрока в X-Forwarded-For (последний добавленный прокси) или X-Real-IP. Верим заголовку, только
+    если соединение и правда от прокси с этой машины: напрямую из интернета его подделать нельзя."""
+    peer = getattr(conn, "addr", None)
+    if not peer or peer[0] not in TRUSTED_PROXIES:
+        return
+    forwarded = headers.get("x-forwarded-for", "").split(",")[-1].strip() or headers.get("x-real-ip", "")
+    if forwarded and len(forwarded) <= 64:
+        conn.addr = (forwarded, peer[1])
 
 
 class WSClientConn(WSConn):

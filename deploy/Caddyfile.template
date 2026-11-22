@@ -1,0 +1,6 @@
+# Caddy: сертификат Let's Encrypt для домена сам, wss:// -> игровой сервер на этой машине (WebSocket).
+# deploy/install.sh подставляет домен и кладёт в /etc/caddy/Caddyfile. X-Forwarded-For Caddy ставит сам —
+# сервер берёт из него настоящий адрес игрока (только от 127.0.0.1).
+__DOMAIN__ {
+	reverse_proxy 127.0.0.1:5560
+}
