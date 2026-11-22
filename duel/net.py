@@ -39,6 +39,7 @@
                                                          пинг -> {"type": "pong", "t"}; статистика — в state "stats": {цвет: {...}}
 """
 import json
+import zlib
 import socket
 
 # Что умеет сервер сверх протокола (сервер шлёт в hello). Протокол тот же, но старый сервер чего-то
@@ -80,6 +81,13 @@ class Conn:
         self.outbuf = bytearray()      # дописывается без копирования всего буфера
         self.closed = False
         self.violation = None          # почему закрыли: кривое или слишком длинное сообщение
+        # сжатие потока сервер -> игра (zlib, один контекст на всё соединение — соседние снимки почти
+        # одинаковы, сжимаются ~в 30 раз). Игра просит {"type": "compress"}, сервер отвечает {"type": "z"}
+        # и дальше шлёт сжатое. Распаковывает только игра (accept_z) — сервер чужое сжатие не принимает.
+        self.comp = None               # zlib-компрессор исходящего (на сервере, после start_compress)
+        self.dec = None                # zlib-декомпрессор входящего (в игре, после маркера z)
+        self.accept_z = False          # эта сторона согласна на сжатый входящий поток (игра)
+        self.sent_bytes = 0            # сколько байт ушло в сокет (для статистики и тестов)
 
     def fileno(self):
         return self.sock.fileno()
@@ -87,7 +95,10 @@ class Conn:
     def send(self, msg):
         if self.closed:
             return
-        self.outbuf += (json.dumps(msg, separators=(",", ":")) + "\n").encode()
+        data = (json.dumps(msg, separators=(",", ":")) + "\n").encode()
+        if self.comp is not None:
+            data = self.comp.compress(data) + self.comp.flush(zlib.Z_SYNC_FLUSH)
+        self.outbuf += data
         if len(self.outbuf) > MAX_OUT:
             self.close()
             return
@@ -103,6 +114,13 @@ class Conn:
                 self.close()
                 return
             del self.outbuf[:n]
+            self.sent_bytes += n
+
+    def start_compress(self):
+        """Сервер: игра попросила сжатие — маркер (ещё несжатый) и дальше всё сжатое."""
+        if self.comp is None and not self.closed:
+            self.send({"type": "z"})
+            self.comp = zlib.compressobj(6)
 
     def recv(self):
         out = []
@@ -117,7 +135,7 @@ class Conn:
             if not data:
                 self.close()
                 break
-            self.inbuf += data
+            self.inbuf += self.dec.decompress(data) if self.dec is not None else data
         while b"\n" in self.inbuf and not self.violation:
             line, self.inbuf = self.inbuf.split(b"\n", 1)
             if not line.strip():
@@ -133,6 +151,14 @@ class Conn:
             if not isinstance(msg, dict):
                 self.reject("не объект JSON")
                 break
+            if msg.get("type") == "z" and self.accept_z and self.dec is None:
+                self.dec = zlib.decompressobj()            # дальше поток сжат — и то, что уже пришло следом
+                try:
+                    self.inbuf = self.dec.decompress(self.inbuf)
+                except zlib.error:
+                    self.reject("испорченный сжатый поток")
+                    break
+                continue
             out.append(msg)
         if len(self.inbuf) > MAX_LINE:
             self.reject("слишком длинное сообщение")
@@ -210,6 +236,8 @@ def open_server(address, timeout=5.0):
     if hello.get("proto") != PROTO:
         conn.close()
         raise NetError("proto", f"другая версия протокола: {hello.get('proto')} (у нас {PROTO})")
+    conn.accept_z = True               # попросить сжатый поток (старый сервер просьбу пропустит)
+    conn.send({"type": "compress"})
     return conn, hello
 
 

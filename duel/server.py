@@ -323,6 +323,8 @@ class Server:
             if kind == "rooms":
                 where = "lobby"
                 self.send_rooms([conn])
+            elif kind == "compress":              # игра просит сжатый поток (снимки ~в 30 раз меньше)
+                conn.start_compress()
             elif kind == "crash":                 # отчёт о падении игры (игрок разрешил отправлять)
                 self.save_crash_report(conn, msg)
             elif kind == "lobby":
