@@ -77,3 +77,22 @@ def test_bot_test_uses_one_player_set(game):
     finally:
         game.settings["keys"] = {}
         game.apply_keys()
+
+
+def test_one_player_mouse_defaults():
+    """«Один игрок»: ЛКМ — идти к курсору, ПКМ — стрелять, E — удар; «Вдвоём» — как раньше."""
+    import pygame
+    from duel import keys
+    net, blue = keys.DEFAULT_KEYS["net"], keys.DEFAULT_KEYS["blue"]
+    assert keys.M_LEFT in net["walk"] and keys.M_RIGHT in net["fire"] and pygame.KSCAN_E in net["melee"]
+    assert pygame.KSCAN_SPACE in net["fire"] and keys.M_LEFT not in net["fire"] + net["melee"]
+    assert keys.M_LEFT in blue["fire"] and keys.M_RIGHT in blue["melee"] and blue["walk"] == (None, None)
+
+
+def test_custom_key_wins_over_new_default():
+    """Раньше игрок сам поставил «идти» на ПКМ; теперь ПКМ по умолчанию — выстрел: остаётся только «идти»."""
+    from duel import keys
+    k = keys.current({"net": {"walk": [None, keys.M_RIGHT]}})
+    assert k["net"]["walk"] == [None, keys.M_RIGHT]
+    assert keys.M_RIGHT not in k["net"]["fire"]
+    assert keys.M_RIGHT in k["blue"]["melee"]                  # другой набор не задет

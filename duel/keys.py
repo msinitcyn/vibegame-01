@@ -35,7 +35,10 @@ DEFAULT_KEYS = {
             "item4": (K.KSCAN_EQUALS, _N)},
     "common": {"pause": (K.KSCAN_P, _N), "chat": (K.KSCAN_T, _N)},
 }
-DEFAULT_KEYS["net"] = dict(DEFAULT_KEYS["blue"])      # по сети — как у левого игрока, но настраивается отдельно
+# «Один игрок» (сеть, разминка, тест с ботом) — мышью: ЛКМ — идти к курсору, ПКМ — стрелять, E — удар вблизи;
+# клавиатура (WASD, пробел) — тоже работает. Настраивается отдельно от «Вдвоём».
+DEFAULT_KEYS["net"] = {**DEFAULT_KEYS["blue"], "fire": (K.KSCAN_SPACE, M_RIGHT), "melee": (K.KSCAN_E, _N),
+                       "walk": (M_LEFT, _N)}
 GROUP_ACTIONS = {"blue": ACTIONS, "red": ACTIONS, "net": ACTIONS, "common": COMMON_ACTIONS}
 # в каком наборе клавиши не должны повторяться (занятая — меняется местами)
 DOMAINS = {"blue": ("blue", "red", "common"), "red": ("blue", "red", "common"), "net": ("net", "common"),
@@ -113,7 +116,23 @@ def current(custom=None):
                         pair[s] = None
             if action in GROUP_ACTIONS[g]:
                 out[g][action][1] = code          # дополнительная клавиша действия
+    _drop_default_clashes(out)
     return out
+
+
+def _drop_default_clashes(keys):
+    """Назначенное вручную главнее: та же клавиша в умолчании другого действия (умолчания меняются между
+    версиями — например, ПКМ стала выстрелом, а у игрока на ней «идти») снимается с умолчания."""
+    for g, acts in keys.items():
+        for a, pair in acts.items():
+            for s, v in enumerate(pair):
+                if v is None or v == DEFAULT_KEYS[g][a][s]:
+                    continue                      # не назначено вручную
+                for g2 in DOMAINS[g]:
+                    for a2, pair2 in keys[g2].items():
+                        for s2, v2 in enumerate(pair2):
+                            if v2 == v and (g2, a2, s2) != (g, a, s) and v2 == DEFAULT_KEYS[g2][a2][s2]:
+                                pair2[s2] = None
 
 
 def assign(custom, group, action, slot, sc):
