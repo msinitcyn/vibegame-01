@@ -95,6 +95,8 @@ dist/spellgunners-linux --selftest
 
 ## Браузерная версия (проба, pygbag)
 
+**Играть без установки:** https://msinitcyn.github.io/vibegame-01/ — каждый выпуск (тег) GitHub собирает браузерную версию и выкладывает туда (задачи `web` и `pages` в `.github/workflows/release.yml`; один раз в репозитории: Settings → Pages → Source: **GitHub Actions**). Первая загрузка ~минута, по сети — сразу к серверу в интернете.
+
 Тот же код игры, собранный в WebAssembly (pygbag); основная — компьютерная, браузер — «попробовать». Отличия только при `duel/platform.py: WEB`: в браузере нет игры по сети (нужен сервер с WebSocket и TLS — следующий шаг), своего сервера и автообновления; звуки — `.ogg` (сборщик переводит через ffmpeg).
 
 ```bash
