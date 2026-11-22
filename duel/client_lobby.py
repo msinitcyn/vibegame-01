@@ -551,9 +551,9 @@ class LobbyMixin:
             fire = melee = False
             slot = None
             for pid in PLAYER_IDS:        # обе раскладки управляют своим магом, как в сети
-                c, p = self.controls[pid], self.pending[pid]
-                dx += (c.right in held) - (c.left in held)
-                dy += (c.down in held) - (c.up in held)
+                p = self.pending[pid]
+                ax, ay = self.axis(pid, held)
+                dx, dy = dx + ax, dy + ay
                 fire, melee = fire or p.fire, melee or p.melee
                 slot = p.use_slot if p.use_slot is not None else slot
             self.pending = {pid: Command() for pid in PLAYER_IDS}

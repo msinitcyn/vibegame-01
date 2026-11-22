@@ -287,9 +287,9 @@ class MenusMixin:
         custom = self.settings.get("keys") or {}
         self.keys_net = self.net_keys_mode()
         self.controls = keys.build(custom, Controls, net=self.keys_net)
-        self.mouse_map = keys.mouse(custom, net=self.keys_net)      # кнопки мыши -> действие
-        self.common_keys = keys.current(custom)["common"]     # пауза и чат
-        self.key_names = {pid: [keys.label(sc) for sc in self.controls[pid].items] for pid in PLAYER_IDS}
+        self.common_keys = keys.common(custom)                # пауза и чат: кортежи клавиш
+        self.key_names = {pid: [keys.label(ks[0]) if ks else "" for ks in self.controls[pid].items]
+                          for pid in PLAYER_IDS}
 
     def open_keys(self):
         self.keys_col, self.keys_row, self.keys_wait, self.keys_msg = 0, 0, None, None
@@ -299,22 +299,25 @@ class MenusMixin:
     def keys_tab_switch(self, tab=None):
         self.keys_tab = tab or ("net" if getattr(self, "keys_tab", "hotseat") == "hotseat" else "hotseat")
         self.keys_wait, self.keys_msg = None, None
-        if self.keys_tab == "net" and self.keys_row < self.KEY_ROWS:
-            self.keys_col = 0
+        self.keys_col = min(self.keys_col, self.keys_cols() - 1)
 
-    KEY_ROWS = len(keys.ACTIONS) + len(keys.MOUSE_BUTTONS)     # строки действий: клавиши, потом кнопки мыши
+    KEY_ROWS = len(keys.ACTIONS)      # строки действий; потом пауза | чат, потом «Сбросить»
 
     def keys_row_kind(self, row):
-        """Что за строка экрана клавиш: "key", "mouse", "common" (пауза | чат), "reset"."""
-        if row < len(keys.ACTIONS):
-            return "key"
+        """Что за строка экрана клавиш: "key", "common" (пауза | чат), "reset"."""
         if row < self.KEY_ROWS:
-            return "mouse"
+            return "key"
         return "common" if row == self.KEY_ROWS else "reset"
 
-    def keys_group(self, col):
-        """Набор клавиш для колонки: по сети — "net", за одним компьютером — левый или правый игрок."""
-        return "net" if getattr(self, "keys_tab", "hotseat") == "net" else PLAYER_IDS[col]
+    def keys_cols(self):
+        """Сколько колонок клавиш: за одним компьютером — 2 игрока × 2 клавиши, по сети — 2 клавиши."""
+        return 2 if getattr(self, "keys_tab", "hotseat") == "net" else 4
+
+    def keys_cell(self, col):
+        """Колонка -> (набор, ячейка: 0 — основная, 1 — дополнительная)."""
+        if getattr(self, "keys_tab", "hotseat") == "net":
+            return "net", col
+        return PLAYER_IDS[col // 2], col % 2
 
     def keys_save(self, custom):
         self.settings["keys"] = custom
@@ -322,26 +325,24 @@ class MenusMixin:
         self.apply_keys()
 
     def keys_key(self, sc):
-        """Экран клавиш: Tab — вкладка, ↑/↓ — действие, ←/→ — игрок (на строке мыши — сменить действие),
-        Enter — назначить (дальше — нажать клавишу), Delete — снять клавишу (оставить без неё),
+        """Экран клавиш: Tab — вкладка, ↑/↓ — действие, ←/→ — клавиша (основная, дополнительная; у двоих —
+        и игрок), Enter или щелчок — назначить (дальше — нажать клавишу или кнопку мыши), Delete — снять,
         строка «Сбросить» — вернуть вкладку; Esc — к настройкам (при ожидании клавиши — отмена)."""
         K = pygame
         if self.keys_wait:
             if sc == K.KSCAN_ESCAPE:
                 self.keys_wait = None
-            elif sc == K.KSCAN_DELETE:
-                pid, action = self.keys_wait
-                self.keys_save(keys.assign(self.settings.get("keys"), pid, action, None))
-                self.keys_wait, self.keys_msg = None, None
-            elif sc in keys.RESERVED:
+                return
+            if sc == K.KSCAN_DELETE:
+                sc = None                         # «без клавиши»
+            elif not keys.valid(sc):
                 self.keys_msg = t("keys.reserved", name=keys.label(sc))
-            else:
-                pid, action = self.keys_wait
-                self.keys_save(keys.assign(self.settings.get("keys"), pid, action, sc))
-                self.keys_wait, self.keys_msg = None, None
+                return
+            group, action, slot = self.keys_wait
+            self.keys_save(keys.assign(self.settings.get("keys"), group, action, slot, sc))
+            self.keys_wait, self.keys_msg = None, None
             return
         kind = self.keys_row_kind(self.keys_row)
-        net = getattr(self, "keys_tab", "hotseat") == "net"
         if sc in (K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE):
             self.state = "settings"
         elif sc == K.KSCAN_TAB:
@@ -350,48 +351,34 @@ class MenusMixin:
             self.keys_row = max(0, self.keys_row - 1)
         elif sc in (K.KSCAN_DOWN, K.KSCAN_S):
             self.keys_row = min(self.KEY_ROWS + 1, self.keys_row + 1)
+            if self.keys_row_kind(self.keys_row) == "common":
+                self.keys_col = min(self.keys_col, 1)
         elif sc == K.KSCAN_DELETE and kind == "key":
-            self.keys_save(keys.assign(self.settings.get("keys"), self.keys_group(self.keys_col),
-                                       keys.ACTIONS[self.keys_row], None))
-        elif sc == K.KSCAN_DELETE and kind == "mouse":
-            self.mouse_pick(self.keys_row, action=None)
+            group, slot = self.keys_cell(self.keys_col)
+            self.keys_save(keys.assign(self.settings.get("keys"), group, keys.ACTIONS[self.keys_row], slot, None))
         elif sc in (K.KSCAN_LEFT, K.KSCAN_A, K.KSCAN_RIGHT, K.KSCAN_D):
             step = -1 if sc in (K.KSCAN_LEFT, K.KSCAN_A) else 1
-            if kind == "mouse":
-                self.mouse_pick(self.keys_row, step=step)
-            else:
-                self.keys_col = 0 if step < 0 else 1
-                if net and kind == "key":
-                    self.keys_col = 0             # по сети — одна колонка (две — только у паузы и чата)
+            last = 1 if kind == "common" else self.keys_cols() - 1
+            self.keys_col = max(0, min(last, self.keys_col + step))
         elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
             self.keys_pick(self.keys_col, self.keys_row)
 
-    def mouse_pick(self, row, step=1, action="next"):
-        """Строка кнопки мыши: следующее действие по кругу (или action — None: ничего)."""
-        net = getattr(self, "keys_tab", "hotseat") == "net"
-        button = keys.MOUSE_BUTTONS[row - len(keys.ACTIONS)]
-        if action == "next":
-            action = keys.next_mouse_action(keys.mouse(self.settings.get("keys"), net)[button], step)
-        self.keys_save(keys.set_mouse(self.settings.get("keys"), net, button, action))
-        self.keys_msg = None
-
     def keys_pick(self, col, row):
-        """Выбрать строку: действие — ждём клавишу; кнопка мыши — следующее действие; пауза | чат;
-        «Сбросить по умолчанию» (последняя строка) — только эта вкладка."""
+        """Выбрать ячейку: действие — ждём клавишу (или щелчок мыши); пауза | чат; «Сбросить по умолчанию»
+        (последняя строка) — только эта вкладка."""
         kind = self.keys_row_kind(row)
-        self.keys_col, self.keys_row = (0 if kind == "mouse" else col), row
+        self.keys_col, self.keys_row = col, row
         net = getattr(self, "keys_tab", "hotseat") == "net"
         if kind == "common":
-            self.keys_wait = ("common", keys.COMMON_ACTIONS[col])
+            self.keys_wait = ("common", keys.COMMON_ACTIONS[min(col, 1)], 0)
             self.keys_msg = None
         elif kind == "reset":                     # сброс — только своей вкладки (общие пауза и чат — тоже)
-            drop = ("net", "common", "mouse_net") if net else ("blue", "red", "common", "mouse_hotseat")
+            drop = ("net", "common") if net else ("blue", "red", "common")
             self.keys_save({k: v for k, v in (self.settings.get("keys") or {}).items() if k not in drop})
             self.keys_msg = t("keys.reset_done")
-        elif kind == "mouse":
-            self.mouse_pick(row)
         else:
-            self.keys_wait = (self.keys_group(col), keys.ACTIONS[row])
+            group, slot = self.keys_cell(col)
+            self.keys_wait = (group, keys.ACTIONS[row], slot)
             self.keys_msg = None
 
     def open_pick(self, hp, bot=False):
@@ -425,7 +412,7 @@ class MenusMixin:
         """Клавиши выбора героя игрока — его же клавиши из настроек: влево/вправо — листать,
         выстрел или ближний удар — выбрать (ещё раз — передумать)."""
         c = self.controls[pid]
-        return (c.left,), (c.right,), tuple(c.fire) + tuple(c.melee)
+        return tuple(c.left), tuple(c.right), tuple(c.fire) + tuple(c.melee)
 
     def pick_key(self, sc):
         """Каждый игрок — своими клавишами (по умолчанию левый A/D и Пробел, правый ←/→ и Enter);

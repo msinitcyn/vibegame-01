@@ -119,7 +119,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.entry_name, self.entry_row = "", 1
         self.menu_index = 0
         self.walk_to = None           # кнопка мыши «идти»: куда идёт маг; walk_hold — кнопка зажата
-        self.walk_hold, self.walk_button = False, None
+        self.walk_hold, self.walk_pid, self.walk_code = False, None, None
         self.settings_rows = ["lang", "name", "aim_mode", "aim_stick", "aim_mouse", "music", "sfx", "keys",
                               "updates", "check_now", "crash_reports", "back"]
         self.keys_col, self.keys_row, self.keys_wait, self.keys_msg = 0, 0, None, None
@@ -303,9 +303,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         held = self.held | self.pad_held()
         commands = {}
         for pid in PLAYER_IDS:
-            c = self.controls[pid]
             cmd = self.pending[pid]
-            cmd.move = self.walk_move(pid, ((c.right in held) - (c.left in held), (c.down in held) - (c.up in held)))
+            cmd.move = self.walk_move(pid, self.axis(pid, held))
             cmd.aim = self.aim_for(pid, cmd.move)
             commands[pid] = cmd
         if self.test_bot:                     # тестовый режим: красным играет бот

@@ -254,47 +254,56 @@ class MenuScreensMixin:
             self.button((WIDTH // 2 - 160 + i * 320, 96), tr("keys.tab_" + name),
                         lambda name=name: self.keys_tab_switch(name), w=300, sel=tab == name)
         current = K.current(self.settings.get("keys"))
-        mouse = K.mouse(self.settings.get("keys"), net=tab == "net")
-        col_w, row_h, top, step = 400, 26, 160, 30
-        n_keys = len(K.ACTIONS) + len(K.MOUSE_BUTTONS)
-        columns = [("blue", "keys.left"), ("red", "keys.right")] if tab == "hotseat" else [("net", "keys.net")]
-        for col in range(2):
-            x = WIDTH // 2 - col_w - 20 + col * (col_w + 40)
-            rows = []
-            if col < len(columns):
-                group, title = columns[col]
-                if tab == "net":
-                    x = WIDTH // 2 - col_w // 2       # по сети — одна колонка по центру
-                img = self.small.render(tr(title), True, (200, 205, 220))
-                s.blit(img, (x, top - 24))
-                rows = [(row, group, action) for row, action in enumerate(K.ACTIONS)]
-                if col == 0:                      # мышь — у левого игрока (по сети — у своего мага)
-                    rows += [(len(K.ACTIONS) + i, "mouse", b) for i, b in enumerate(K.MOUSE_BUTTONS)]
-            cx = WIDTH // 2 - col_w - 20 + col * (col_w + 40)
-            rows.append((n_keys, "common", K.COMMON_ACTIONS[col]))     # общие: пауза | чат
-            for row, group, action in rows:
-                rx = cx if group == "common" else x
-                y = top + row * step + (12 if group == "common" else 6 if group == "mouse" else 0)
-                rect = pygame.Rect(rx, y, col_w, row_h)
-                sel = (col, row) == (self.keys_col, self.keys_row)
-                waiting = self.keys_wait == (group, action)
-                self.hit(rect, lambda col=col, row=row: self.keys_pick(col, row),
-                         lambda col=col, row=row: (setattr(self, "keys_col", col), setattr(self, "keys_row", row)))
-                on = sel or self.hovered(rect)
-                pygame.draw.rect(s, (40, 46, 66) if on else (26, 29, 40), rect, border_radius=8)
-                pygame.draw.rect(s, AMMO_COLOR if waiting else (BLUE if on else (60, 64, 80)), rect,
-                                 2, border_radius=8)
-                if group == "mouse":
-                    name = "keys.mouse_" + action
-                    key = "◀ " + tr("mouse." + (mouse[action] or "none")) + " ▶"
-                else:
-                    name = "keys." + action + ("_" if action in ("left", "right") else "")   # «влево» ≠ «левый игрок»
-                    key = tr("keys.press") if waiting else K.label(current[group][action])
-                img = self.small.render(tr(name), True, WHITE if on else (200, 205, 220))
-                s.blit(img, img.get_rect(midleft=(rect.left + 12, rect.centery)))
-                font = self.small if group == "mouse" else self.font
-                img = font.render(key, True, AMMO_COLOR if waiting else WHITE)
-                s.blit(img, img.get_rect(midright=(rect.right - 12, rect.centery)))
+        row_h, top, step, cell_w, gap = 26, 160, 30, 128, 6
+        n_keys = len(K.ACTIONS)
+        blocks = ([("blue", "keys.left", 40), ("red", "keys.right", 520)] if tab == "hotseat"
+                  else [("net", "keys.net", 250)])
+        block_w = 440 if tab == "hotseat" else 500
+
+        def cell(rect, text, sel, waiting):
+            on = sel or self.hovered(rect)
+            pygame.draw.rect(s, (40, 46, 66) if on else (26, 29, 40), rect, border_radius=7)
+            pygame.draw.rect(s, AMMO_COLOR if waiting else (BLUE if on else (60, 64, 80)), rect, 2, border_radius=7)
+            font = self.font if self.font.size(text)[0] <= rect.w - 10 else self.small
+            img = font.render(text, True, AMMO_COLOR if waiting else WHITE)
+            s.blit(img, img.get_rect(center=rect.center))
+
+        for b, (group, title, x) in enumerate(blocks):
+            img = self.small.render(tr(title), True, (200, 205, 220))
+            s.blit(img, (x, top - 24))
+            for i, slot_title in enumerate(("keys.slot1", "keys.slot2")):
+                img = self.tiny_text.render(tr(slot_title), True, GREY)
+                cx = x + block_w - 2 * cell_w - gap + i * (cell_w + gap) + cell_w // 2
+                s.blit(img, img.get_rect(midbottom=(cx, top - 4)))
+            for row, action in enumerate(K.ACTIONS):
+                y = top + row * step
+                name = "keys." + action + ("_" if action in ("left", "right") else "")   # «влево» ≠ «левый игрок»
+                sel_row = row == self.keys_row
+                img = self.small.render(tr(name), True, WHITE if sel_row else (200, 205, 220))
+                s.blit(img, img.get_rect(midleft=(x + 4, y + row_h // 2)))
+                for slot in range(K.SLOTS):
+                    col = b * 2 + slot
+                    rect = pygame.Rect(x + block_w - 2 * cell_w - gap + slot * (cell_w + gap), y, cell_w, row_h)
+                    waiting = self.keys_wait == (group, action, slot)
+                    text = tr("keys.press") if waiting else K.label(current[group][action][slot])
+                    cell(rect, text, (col, row) == (self.keys_col, self.keys_row), waiting)
+                    self.hit(rect, lambda col=col, row=row: self.keys_pick(col, row),
+                             lambda col=col, row=row: (setattr(self, "keys_col", col), setattr(self, "keys_row", row)))
+        y = top + n_keys * step + 12                     # общие: пауза | чат
+        for col, action in enumerate(K.COMMON_ACTIONS):
+            rect = pygame.Rect(40 + col * 480, y, 440, row_h)
+            waiting = self.keys_wait == ("common", action, 0)
+            sel = (col, n_keys) == (self.keys_col, self.keys_row)
+            on = sel or self.hovered(rect)
+            pygame.draw.rect(s, (40, 46, 66) if on else (26, 29, 40), rect, border_radius=8)
+            pygame.draw.rect(s, AMMO_COLOR if waiting else (BLUE if on else (60, 64, 80)), rect, 2, border_radius=8)
+            img = self.small.render(tr("keys." + action), True, WHITE if on else (200, 205, 220))
+            s.blit(img, img.get_rect(midleft=(rect.left + 12, rect.centery)))
+            key = tr("keys.press") if waiting else K.label(current["common"][action][0])
+            img = self.font.render(key, True, AMMO_COLOR if waiting else WHITE)
+            s.blit(img, img.get_rect(midright=(rect.right - 12, rect.centery)))
+            self.hit(rect, lambda col=col: self.keys_pick(col, n_keys),
+                     lambda col=col: (setattr(self, "keys_col", col), setattr(self, "keys_row", n_keys)))
         reset_y = top + (n_keys + 1) * step + 28
         self.button((WIDTH // 2, reset_y), tr("keys.reset"), lambda: self.keys_pick(self.keys_col, n_keys + 1),
                     w=320, sel=self.keys_row > n_keys)

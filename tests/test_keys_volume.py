@@ -12,19 +12,21 @@ def test_labels():
 
 
 def test_assign_swaps_and_keeps_only_changes():
-    custom = keys.assign({}, "blue", "up", pygame.KSCAN_S)      # S занята «вниз» — обмен
+    custom = keys.assign({}, "blue", "up", 0, pygame.KSCAN_S)      # S занята «вниз» — обмен
     cur = keys.current(custom)
-    assert cur["blue"]["up"] == pygame.KSCAN_S and cur["blue"]["down"] == pygame.KSCAN_W
-    custom = keys.assign(custom, "blue", "up", pygame.KSCAN_W)  # обратно — изменений нет
+    assert cur["blue"]["up"][0] == pygame.KSCAN_S and cur["blue"]["down"][0] == pygame.KSCAN_W
+    custom = keys.assign(custom, "blue", "up", 0, pygame.KSCAN_W)  # обратно — изменений нет
     assert custom == {}
-    custom = keys.assign({}, "blue", "fire", pygame.KSCAN_RETURN)   # Enter правого — меняются
+    custom = keys.assign({}, "blue", "fire", 0, pygame.KSCAN_RETURN)   # Enter правого — меняются
     cur = keys.current(custom)
-    assert cur["blue"]["fire"] == pygame.KSCAN_RETURN and cur["red"]["fire"] == pygame.KSCAN_SPACE
+    assert cur["blue"]["fire"][0] == pygame.KSCAN_RETURN and cur["red"]["fire"][0] == pygame.KSCAN_SPACE
 
 
-def test_bad_saved_keys_ignored():
+def test_bad_saved_keys_ignored_and_old_format_read():
     cur = keys.current({"blue": {"fire": "x", "up": pygame.KSCAN_ESCAPE, "nope": 5}, "green": {}})
-    assert cur == keys.DEFAULT_KEYS
+    assert cur == {g: {a: list(p) for a, p in acts.items()} for g, acts in keys.DEFAULT_KEYS.items()}
+    cur = keys.current({"blue": {"fire": pygame.KSCAN_F}})        # старый вид — одно число: основная
+    assert cur["blue"]["fire"] == [pygame.KSCAN_F, keys.M_LEFT]
 
 
 def test_keys_screen_assigns_and_game_uses_it(game):
@@ -35,7 +37,7 @@ def test_keys_screen_assigns_and_game_uses_it(game):
     game.draw_keys()
     game.keys_row = keys.ACTIONS.index("fire")
     game.on_key(pygame.KSCAN_RETURN)              # ждём клавишу
-    assert game.keys_wait == ("blue", "fire")
+    assert game.keys_wait == ("blue", "fire", 0)
     game.draw_keys()
     game.on_key(pygame.KSCAN_ESCAPE)              # служебную нельзя — отмена
     assert game.keys_wait is None
@@ -43,7 +45,7 @@ def test_keys_screen_assigns_and_game_uses_it(game):
     game.on_key(pygame.KSCAN_F5)
     assert game.keys_wait and game.keys_msg
     game.on_key(pygame.KSCAN_F)                   # выстрел — F
-    assert settings.load()["keys"] == {"blue": {"fire": pygame.KSCAN_F}}
+    assert settings.load()["keys"] == {"blue": {"fire": [pygame.KSCAN_F, keys.M_LEFT]}}
     game.start()
     b = game.match.blue
     game.state = "play"
@@ -58,7 +60,7 @@ def test_keys_screen_assigns_and_game_uses_it(game):
 
 
 def test_slot_labels_follow_keys(game):
-    game.settings["keys"] = keys.assign({}, "blue", "item1", pygame.KSCAN_Z)
+    game.settings["keys"] = keys.assign({}, "blue", "item1", 0, pygame.KSCAN_Z)
     game.apply_keys()
     assert game.slot_key("blue", 0) == "Z" and game.slot_key("red", 0) == "9"
     game.draw()

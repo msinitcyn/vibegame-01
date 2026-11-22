@@ -38,12 +38,13 @@ COMMANDS = {
 
 class ChatMixin:
     def chat_key_code(self):
-        """Клавиша чата (по умолчанию T, переназначается в настройках)."""
+        """Клавиши чата (по умолчанию T, переназначаются в настройках) — кортеж."""
         return self.common_keys["chat"]
 
     def hint_keys(self):
-        """Подписи клавиш паузы и чата — для подсказок."""
-        return {"pause": keys.label(self.common_keys["pause"]), "chat": keys.label(self.common_keys["chat"])}
+        """Подписи клавиш паузы и чата — для подсказок (основная клавиша)."""
+        first = {a: (ks[0] if ks else None) for a, ks in self.common_keys.items()}
+        return {"pause": keys.label(first["pause"]), "chat": keys.label(first["chat"])}
 
     def chat_reset(self):
         self.chat_typing = False      # открыто поле ввода
@@ -88,7 +89,7 @@ class ChatMixin:
         """Клавиша, пока открыт чат или консоль. True — клавиша съедена.
         T — одна строка (Enter — выполнить и закрыть), ~ — консоль (Enter — выполнить, ввод остаётся)."""
         if not self.chat_typing:
-            if sc in (self.chat_key_code(), CONSOLE_KEY) and self.can_chat():    # и на паузе — команды
+            if (sc in self.chat_key_code() or sc == CONSOLE_KEY) and self.can_chat():    # и на паузе — команды
                 self.chat_typing, self.chat_text, self.chat_swallow = True, "", True
                 self.console, self.console_scroll = sc == CONSOLE_KEY, 0
                 self.held.clear()

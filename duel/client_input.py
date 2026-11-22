@@ -83,7 +83,7 @@ class InputMixin:
             return
         if self.chat_key(sc):                 # чат по сети: T — написать; пока пишешь, клавиши — в чат
             return
-        if sc == self.common_keys["pause"]:   # P (переназначается) — пауза: по сети — для всех (снова — снять), иначе — своя
+        if sc in self.common_keys["pause"]:   # P (переназначается) — пауза: по сети — для всех (снова — снять), иначе — своя
             self.pause_key_p()
             return
         if sc == pygame.KSCAN_ESCAPE:
@@ -116,13 +116,17 @@ class InputMixin:
         if not self.snap["winner"]:
             # нажатия копятся в команду и применяются в ближайшем такте матча
             for pid, c in self.controls.items():
-                cmd = self.pending[pid]
                 if sc in c.fire:
-                    cmd.fire = True
+                    self.press(pid, "fire")
                 if sc in c.melee:
-                    cmd.melee = True
-                if sc in c.items:
-                    cmd.use_slot = c.items.index(sc)
+                    self.press(pid, "melee")
+                for i, ks in enumerate(c.items):
+                    if sc in ks:
+                        self.press(pid, "slot", i)
+                if sc in c.aim:
+                    self.reset_aim(pid)
+                if sc in c.walk:
+                    self.start_walk(pid, sc)
 
     def quit_match(self):
         """Выйти из партии: разминка — в лобби, по сети — из комнаты, за одним компьютером — в меню."""
@@ -268,7 +272,6 @@ class InputMixin:
             return
         if pid is None:                   # лишний геймпад — в партии не участвует
             return
-        c = self.controls[pid]
         if btn == B.CONTROLLER_BUTTON_START:
             self.on_key(B.KSCAN_ESCAPE)
         elif self.snap["winner"]:
@@ -276,13 +279,13 @@ class InputMixin:
             if btn == B.CONTROLLER_BUTTON_A and pygame.time.get_ticks() - self.win_time > 1000:
                 self.on_key(B.KSCAN_R)
         elif btn in (B.CONTROLLER_BUTTON_RIGHTSHOULDER, PAD_FIRE):
-            self.on_key(c.fire[0])
+            self.press(pid, "fire")
         elif btn == PAD_AIM_RESET:            # R2 — прицел прямо на соперника
             self.reset_aim(pid)
         elif btn in (B.CONTROLLER_BUTTON_LEFTSHOULDER, PAD_MELEE):
-            self.on_key(c.melee[0])
+            self.press(pid, "melee")
         elif btn in PAD_ITEM_BUTTONS:
-            self.on_key(c.items[PAD_ITEM_BUTTONS.index(btn)])
+            self.press(pid, "slot", PAD_ITEM_BUTTONS.index(btn))
 
     def pad_side(self, i):
         """Чей геймпад номер i: по сети — только свой; за одним компьютером при одном геймпаде
@@ -302,23 +305,43 @@ class InputMixin:
         return None
 
     def pad_held(self):
-        """Направления с геймпадов в виде «зажатых» клавиш игроков."""
+        """Направления с геймпадов в виде «зажатых» меток ("pad", игрок, направление) —
+        не зависят от того, какие клавиши назначены (их можно и снять)."""
         out = set()
         for i in range(len(self.pads.pads)):
             pid = self.pad_side(i)
             if pid is None:
                 continue
-            c = self.controls[pid]
             dx, dy = self.pads.direction(i)
             if dy < 0:
-                out.add(c.up)
+                out.add(("pad", pid, "up"))
             elif dy > 0:
-                out.add(c.down)
+                out.add(("pad", pid, "down"))
             if dx < 0:
-                out.add(c.left)
+                out.add(("pad", pid, "left"))
             elif dx > 0:
-                out.add(c.right)
+                out.add(("pad", pid, "right"))
         return out
+
+    def axis(self, pid, held):
+        """Куда тянут зажатые клавиши (и геймпад) игрока pid: (dx, dy), каждое -1, 0 или 1."""
+        c = self.controls[pid]
+
+        def on(direction):
+            return any(k in held for k in getattr(c, direction)) or ("pad", pid, direction) in held
+        return on("right") - on("left"), on("down") - on("up")
+
+    def press(self, pid, action, slot=None):
+        """Нажатие действия игрока pid (с клавиатуры, мыши или геймпада) — в команду ближайшего такта."""
+        if self.snap["winner"]:
+            return
+        cmd = self.pending[pid]
+        if action == "fire":
+            cmd.fire = True
+        elif action == "melee":
+            cmd.melee = True
+        elif action == "slot":
+            cmd.use_slot = slot
 
     def aim_by_move(self):
         """Режим прицела «по движению» (временный, для пробы): стик и мышь не целятся."""
@@ -407,30 +430,30 @@ class InputMixin:
             if p:
                 self.mouse_pos = (p["x"] + DIR[side] * 150, p["y"])
 
-    # ------------------------------------------------------------------ ходьба к курсору (кнопка мыши «идти»)
+    # ------------------------------------------------------------------ «идти к курсору»
 
     WALK_ARRIVE = 8                   # ближе стольких пикселей к цели — пришёл
     _DIRS = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
-    _PRESSED = {1: 0, 2: 1, 3: 2}     # номер кнопки pygame -> индекс в pygame.mouse.get_pressed()
 
-    def mouse_action(self, button):
-        """Что делает кнопка мыши (1 левая, 2 средняя, 3 правая) в действующем наборе клавиш."""
-        name = next((b for b, n in keys.BUTTON_NUMBER.items() if n == button), None)
-        return self.mouse_map.get(name) if name else None
+    def start_walk(self, pid, code):
+        """Нажата клавиша (или кнопка мыши) «идти к курсору»: цель — под курсором; пока зажата — за курсором."""
+        if self.mouse_pos is not None:
+            self.walk_to, self.walk_pid, self.walk_code = self.mouse_pos, pid, code
+            self.walk_hold = True
 
     def walk_move(self, pid, move):
         """Направление мага pid на этот такт: клавиши движения важнее (и отменяют цель); иначе — к цели
-        мыши (одно из 8 направлений), пока не дошёл. Кнопка «идти» зажата — цель едет за курсором."""
-        if pid != self.mouse_button_side() or getattr(self, "walk_to", None) is None:
+        (одно из 8 направлений), пока не дошёл."""
+        if getattr(self, "walk_to", None) is None or pid != getattr(self, "walk_pid", None):
             return move
         if move != (0, 0):
             self.walk_to = None
             return move
-        if self.walk_hold and self.mouse_pos is not None:
-            if not pygame.mouse.get_pressed()[self._PRESSED.get(self.walk_button, 2)]:
-                self.walk_hold = False            # кнопку отпустили, пока окно не видело события
+        if self.walk_hold:
+            if self.walk_code in self.held and self.mouse_pos is not None:
+                self.walk_to = self.mouse_pos         # держишь — цель едет за курсором
             else:
-                self.walk_to = self.mouse_pos
+                self.walk_hold = False
         p = snap_player(self.snap, pid)
         if not p:
             return move
@@ -442,13 +465,20 @@ class InputMixin:
         return self._DIRS[round(math.atan2(dy, dx) / (math.pi / 4)) % 8]
 
     def on_mouse_up(self, button):
-        if button == getattr(self, "walk_button", None):
-            self.walk_hold = False
+        """Кнопка мыши отпущена — «клавиша» отпущена."""
+        code = keys.mouse_code(button)
+        if code is not None:
+            self.held.discard(code)
 
     def on_mouse_button(self, button):
-        """В меню: левая — нажать то, что под курсором, правая — назад (как Esc).
-        В партии — то, что назначено кнопке в «Клавишах» (по умолчанию левая — выстрел, правая — удар,
-        средняя — прицел прямо; можно «идти к курсору» или ничего)."""
+        """В меню: левая — нажать то, что под курсором, правая — назад (как Esc); на экране «Клавиши»,
+        пока ждём клавишу, — щелчок назначается (кнопка мыши — тоже клавиша).
+        В партии кнопка мыши — клавиша: что ей назначено в «Клавишах» (по умолчанию левая — выстрел,
+        правая — удар, средняя — прицел прямо)."""
+        code = keys.mouse_code(button)
+        if self.state == "keys" and self.keys_wait and code is not None:
+            self.keys_key(code)
+            return
         if self.in_ui():
             if button == 1:
                 hit = self.ui_hit(self.ui_mouse)
@@ -461,14 +491,11 @@ class InputMixin:
         side = self.mouse_button_side()
         if self.state != "play" or side is None or (self.net and self.net_waiting and not self.warmup):
             return
-        action = self.mouse_action(button)
-        if action in ("fire", "melee"):
-            if not self.snap["winner"]:
-                setattr(self.pending[side], action, True)
-        elif action == "aim":
-            self.reset_aim(side)
-        elif action == "walk" and self.mouse_pos is not None:   # идти к курсору (держишь — за курсором)
-            self.walk_to, self.walk_hold, self.walk_button = self.mouse_pos, True, button
+        if not self.net_keys_mode() and side != "blue":
+            return                                # за одним компьютером мышь — у левого игрока
+        if code is not None:
+            self.held.add(code)                   # зажатая кнопка — как зажатая клавиша
+            self.on_key(code)
 
     def stick_turn_rate(self):
         """Скорость поворота прицела к стику, рад/с; None — сразу (уровень 10)."""

@@ -1,32 +1,39 @@
-"""Клавиши игроков за клавиатурой: действия, клавиши по умолчанию, назначение, подписи.
+"""Клавиши: действия, клавиши по умолчанию, назначение, подписи.
 
-Клавиши хранятся как скан-коды (физическое положение) — работают в любой раскладке.
-В настройках — только изменённые: {"blue": {"fire": скан-код, ...}, "red": {...}, "net": {...}, "common": {"pause": ...}}.
-Два набора: за одним компьютером — blue и red (левый и правый игрок), по сети (и в разминке) — net (свой маг).
-Общие (common) — пауза и чат: одни и те же в обоих наборах.
-Клавишу можно снять (None — действие без клавиши; в настройках — null).
+У каждого действия две клавиши — основная и дополнительная (любая может быть не назначена — None).
+Клавиша — скан-код (физическое положение, работает в любой раскладке) или кнопка мыши (MOUSE_CODES:
+левая, средняя, правая — свои коды, их ловит экран назначения по щелчку).
 
-Кнопки мыши — отдельно, у каждого набора свои: {"mouse_hotseat": {"left": "fire", ...}, "mouse_net": {...}}.
-Кнопке назначается действие (MOUSE_ACTIONS: выстрел, удар, идти к курсору, прицел прямо) или None — ничего.
-За одним компьютером мышь — у левого игрока (если геймпадов меньше двух), по сети — у своего мага.
+Наборы: за одним компьютером — blue и red (левый и правый игрок; мышь — у левого), по сети (и в разминке) —
+net (свой маг). Общие (common) — пауза и чат: одни и те же в обоих наборах.
+В настройках — только изменённые действия: {"blue": {"fire": [скан-код, код мыши], ...}, "net": {...}}.
+(Старый вид — одно число вместо пары — читается как основная клавиша.)
 """
 import pygame
 
-ACTIONS = ("up", "down", "left", "right", "fire", "melee", "item1", "item2", "item3", "item4")
+ACTIONS = ("up", "down", "left", "right", "fire", "melee", "walk", "aim", "item1", "item2", "item3", "item4")
 COMMON_ACTIONS = ("pause", "chat")
-MOUSE_BUTTONS = ("left", "right", "middle")               # кнопки мыши (pygame: 1, 3, 2)
-BUTTON_NUMBER = {"left": 1, "right": 3, "middle": 2}
-MOUSE_ACTIONS = ("fire", "melee", "walk", "aim", None)    # что можно повесить на кнопку мыши (по кругу)
-DEFAULT_MOUSE = {"left": "fire", "right": "melee", "middle": "aim"}
+SLOTS = 2                         # клавиш на действие: основная и дополнительная
+
+# кнопки мыши — тоже «клавиши»: свои коды (скан-коды клавиатуры меньше 512)
+MOUSE_CODES = {1: 1001, 2: 1002, 3: 1003}          # pygame: 1 — левая, 2 — средняя, 3 — правая
+M_LEFT, M_MIDDLE, M_RIGHT = MOUSE_CODES[1], MOUSE_CODES[2], MOUSE_CODES[3]
+_MOUSE_LABELS = {M_LEFT: "key.mouse_left", M_MIDDLE: "key.mouse_middle", M_RIGHT: "key.mouse_right"}
+
 K = pygame
+_N = None
 DEFAULT_KEYS = {
-    "blue": {"up": K.KSCAN_W, "down": K.KSCAN_S, "left": K.KSCAN_A, "right": K.KSCAN_D,
-             "fire": K.KSCAN_SPACE, "melee": K.KSCAN_E,
-             "item1": K.KSCAN_1, "item2": K.KSCAN_2, "item3": K.KSCAN_3, "item4": K.KSCAN_4},
-    "red": {"up": K.KSCAN_UP, "down": K.KSCAN_DOWN, "left": K.KSCAN_LEFT, "right": K.KSCAN_RIGHT,
-            "fire": K.KSCAN_RETURN, "melee": K.KSCAN_RSHIFT,
-            "item1": K.KSCAN_9, "item2": K.KSCAN_0, "item3": K.KSCAN_MINUS, "item4": K.KSCAN_EQUALS},
-    "common": {"pause": K.KSCAN_P, "chat": K.KSCAN_T},
+    "blue": {"up": (K.KSCAN_W, _N), "down": (K.KSCAN_S, _N), "left": (K.KSCAN_A, _N), "right": (K.KSCAN_D, _N),
+             "fire": (K.KSCAN_SPACE, M_LEFT), "melee": (K.KSCAN_E, M_RIGHT),
+             "walk": (_N, _N), "aim": (_N, M_MIDDLE),
+             "item1": (K.KSCAN_1, _N), "item2": (K.KSCAN_2, _N), "item3": (K.KSCAN_3, _N), "item4": (K.KSCAN_4, _N)},
+    "red": {"up": (K.KSCAN_UP, _N), "down": (K.KSCAN_DOWN, _N), "left": (K.KSCAN_LEFT, _N),
+            "right": (K.KSCAN_RIGHT, _N),
+            "fire": (K.KSCAN_RETURN, K.KSCAN_KP_ENTER), "melee": (K.KSCAN_RSHIFT, _N),
+            "walk": (_N, _N), "aim": (_N, _N),
+            "item1": (K.KSCAN_9, _N), "item2": (K.KSCAN_0, _N), "item3": (K.KSCAN_MINUS, _N),
+            "item4": (K.KSCAN_EQUALS, _N)},
+    "common": {"pause": (K.KSCAN_P, _N), "chat": (K.KSCAN_T, _N)},
 }
 DEFAULT_KEYS["net"] = dict(DEFAULT_KEYS["blue"])      # по сети — как у левого игрока, но настраивается отдельно
 GROUP_ACTIONS = {"blue": ACTIONS, "red": ACTIONS, "net": ACTIONS, "common": COMMON_ACTIONS}
@@ -48,10 +55,18 @@ for _name in dir(pygame):
         _NAMES.setdefault(getattr(pygame, _name), _name[len("KSCAN_"):])
 
 
+def mouse_code(button):
+    """Код «клавиши» кнопки мыши pygame (1, 2, 3) или None (колесо и прочее)."""
+    return MOUSE_CODES.get(button)
+
+
 def label(sc):
-    """Подпись клавиши по скан-коду (как на английской раскладке): W, Space, ←, Num 5…; None — «—»."""
+    """Подпись клавиши: W, Space, ←, Num 5…, кнопка мыши — «ЛКМ»; None — «—»."""
     if sc is None:
         return "—"
+    if sc in _MOUSE_LABELS:
+        from .i18n import t
+        return t(_MOUSE_LABELS[sc])
     name = _NAMES.get(sc)
     if name is None:
         return f"#{sc}"
@@ -62,68 +77,55 @@ def label(sc):
     return name if len(name) <= 3 else name.capitalize()
 
 
+def valid(sc):
+    """Можно ли назначить: None (снять), скан-код клавиатуры (не служебный) или кнопка мыши."""
+    if sc is None:
+        return True
+    if not isinstance(sc, int) or isinstance(sc, bool):
+        return False
+    return sc in _MOUSE_LABELS or (0 < sc < 512 and sc not in RESERVED)
+
+
 def current(custom=None):
-    """Клавиши обоих игроков и общие: по умолчанию + изменённые (только известные действия и скан-коды;
-    None — клавиша снята)."""
-    out = {pid: dict(keys) for pid, keys in DEFAULT_KEYS.items()}
-    for pid, keys in (custom or {}).items():
-        if pid in out and isinstance(keys, dict):
-            for action, sc in keys.items():
-                if action not in GROUP_ACTIONS[pid]:
-                    continue
-                if sc is None or (isinstance(sc, int) and not isinstance(sc, bool) and sc not in RESERVED):
-                    out[pid][action] = sc
+    """Клавиши всех наборов: {набор: {действие: [основная, дополнительная]}} — по умолчанию + изменённые."""
+    out = {g: {a: list(pair) for a, pair in acts.items()} for g, acts in DEFAULT_KEYS.items()}
+    for g, acts in (custom or {}).items():
+        if g not in out or not isinstance(acts, dict):
+            continue
+        for action, value in acts.items():
+            if action not in GROUP_ACTIONS[g]:
+                continue
+            if isinstance(value, list) and len(value) == SLOTS and all(valid(v) for v in value):
+                out[g][action] = list(value)
+            elif valid(value):                        # старый вид: одно число (или null) — основная клавиша
+                out[g][action][0] = value
     return out
 
 
-def mouse(custom, net=False):
-    """Кнопки мыши набора: {"left": действие или None, ...}."""
-    out = dict(DEFAULT_MOUSE)
-    got = (custom or {}).get("mouse_net" if net else "mouse_hotseat")
-    if isinstance(got, dict):
-        for button, action in got.items():
-            if button in MOUSE_BUTTONS and action in MOUSE_ACTIONS:
-                out[button] = action
-    return out
-
-
-def set_mouse(custom, net, button, action):
-    """Назначить кнопке мыши действие; возвращает новые настройки клавиш."""
-    custom = dict(custom or {})
-    group = "mouse_net" if net else "mouse_hotseat"
-    m = mouse(custom, net)
-    m[button] = action
-    diff = {b: a for b, a in m.items() if DEFAULT_MOUSE.get(b) != a}
-    if diff:
-        custom[group] = diff
-    else:
-        custom.pop(group, None)
-    return custom
-
-
-def next_mouse_action(action, step=1):
-    i = MOUSE_ACTIONS.index(action) if action in MOUSE_ACTIONS else 0
-    return MOUSE_ACTIONS[(i + step) % len(MOUSE_ACTIONS)]
-
-
-def assign(custom, pid, action, sc):
-    """Назначить клавишу sc действию (pid — "blue", "red", "net" или "common"); если она занята в том же
-    наборе (за одним компьютером или по сети; общие — в обоих) — обмен местами. sc=None — снять клавишу.
-    Возвращает новые изменённые клавиши (для настроек; кнопки мыши сохраняются как были)."""
+def assign(custom, group, action, slot, sc):
+    """Назначить клавишу sc (скан-код, кнопка мыши или None — снять) в ячейку slot действия. Если она занята
+    в том же наборе (за одним компьютером или по сети; общие — в обоих) — обмен местами.
+    Возвращает новые изменённые клавиши (для настроек)."""
     keys = current(custom)
-    old = keys[pid][action]
+    old = keys[group][action][slot]
     if sc is not None:
-        for other_pid in DOMAINS[pid]:
-            for other_action, other_sc in keys[other_pid].items():
-                if other_sc == sc and (other_pid, other_action) != (pid, action):
-                    keys[other_pid][other_action] = old
-    keys[pid][action] = sc
-    out = {p: {a: s for a, s in keys[p].items() if DEFAULT_KEYS[p][a] != s} for p in keys if
-           any(DEFAULT_KEYS[p][a] != s for a, s in keys[p].items())}
-    for group in ("mouse_hotseat", "mouse_net"):
-        if (custom or {}).get(group):
-            out[group] = custom[group]
+        for g in DOMAINS[group]:
+            for a, pair in keys[g].items():
+                for s, v in enumerate(pair):
+                    if v == sc and (g, a, s) != (group, action, slot):
+                        pair[s] = old
+    keys[group][action][slot] = sc
+    out = {}
+    for g, acts in keys.items():
+        diff = {a: pair for a, pair in acts.items() if tuple(pair) != tuple(DEFAULT_KEYS[g][a])}
+        if diff:
+            out[g] = diff
     return out
+
+
+def codes(pair):
+    """Назначенные клавиши действия (без пустых) — кортеж."""
+    return tuple(v for v in pair if v is not None)
 
 
 def build(custom, controls_cls, net=False):
@@ -133,12 +135,12 @@ def build(custom, controls_cls, net=False):
     if net:
         keys = {"blue": keys["net"], "red": keys["net"]}
     out = {}
-    for pid, k in keys.items():
-        if pid not in ("blue", "red"):
-            continue
-        fire = (k["fire"],)
-        if pid == "red" and k["fire"] == K.KSCAN_RETURN:
-            fire += (K.KSCAN_KP_ENTER,)               # по умолчанию у правого — оба Enter
-        out[pid] = controls_cls((k["up"], k["down"], k["left"], k["right"]), fire,
-                                (k["item1"], k["item2"], k["item3"], k["item4"]), (k["melee"],))
+    for pid in ("blue", "red"):
+        k = {a: codes(pair) for a, pair in keys[pid].items()}
+        out[pid] = controls_cls(k)
     return out
+
+
+def common(custom):
+    """Общие клавиши: {"pause": (коды), "chat": (коды)}."""
+    return {a: codes(pair) for a, pair in current(custom)["common"].items()}

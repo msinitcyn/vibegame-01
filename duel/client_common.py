@@ -27,13 +27,13 @@ def set_window_icon():
 
 
 class Controls:
-    """Клавиши одного игрока (по физическому положению — работают в любой раскладке)."""
+    """Клавиши одного игрока: у каждого действия — кортеж кодов (клавиши по физическому положению и кнопки
+    мыши; пустой — не назначено). items — четыре кортежа, по ячейке."""
 
-    def __init__(self, move, fire, items, melee):
-        self.up, self.down, self.left, self.right = move
-        self.fire = fire
-        self.items = items
-        self.melee = melee
+    def __init__(self, k):
+        self.up, self.down, self.left, self.right = k["up"], k["down"], k["left"], k["right"]
+        self.fire, self.melee, self.walk, self.aim = k["fire"], k["melee"], k["walk"], k["aim"]
+        self.items = (k["item1"], k["item2"], k["item3"], k["item4"])
 
 
 # экраны (Game.state): лобби сервера — с соединением в лобби; меню — без партии на экране

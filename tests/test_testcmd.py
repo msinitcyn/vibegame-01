@@ -243,10 +243,10 @@ def test_commands_work_while_paused(game):
 
 def test_pause_and_chat_keys_are_reassignable(game):
     from duel import keys
-    custom = keys.assign({}, "blue", "item1", pygame.KSCAN_T)       # T — под ячейку: чат получает «1»
+    custom = keys.assign({}, "blue", "item1", 0, pygame.KSCAN_T)    # T — под ячейку: чат получает «1»
     cur = keys.current(custom)
-    assert cur["blue"]["item1"] == pygame.KSCAN_T and cur["common"]["chat"] == pygame.KSCAN_1
-    custom = keys.assign(custom, "common", "pause", pygame.KSCAN_O)
+    assert cur["blue"]["item1"][0] == pygame.KSCAN_T and cur["common"]["chat"][0] == pygame.KSCAN_1
+    custom = keys.assign(custom, "common", "pause", 0, pygame.KSCAN_O)
     game.settings["keys"] = custom
     game.apply_keys()
     try:
