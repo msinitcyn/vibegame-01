@@ -1,0 +1,8 @@
+# Проверка нового выпуска и обновление сервера (deploy/autoupdate.sh); запускает spellgunners-update.timer.
+[Unit]
+Description=Spellgunners: update server to the latest release
+After=network-online.target spellgunners.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/spellgunners/deploy/autoupdate.sh

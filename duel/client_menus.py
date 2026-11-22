@@ -276,8 +276,10 @@ class MenusMixin:
         settings.save(self.settings)
 
     def net_keys_mode(self):
-        """Какой набор клавиш действует: сетевой (сеть, лобби сервера, разминка) или за одним компьютером."""
-        return bool(getattr(self, "net", None) or getattr(self, "warmup", False) or getattr(self, "lobby_conn", None))
+        """Какой набор клавиш действует: «один игрок» (сеть, лобби сервера, разминка, тест с ботом) или
+        «вдвоём за одним компьютером» (только игра двух людей)."""
+        return bool(getattr(self, "net", None) or getattr(self, "warmup", False) or getattr(self, "lobby_conn", None)
+                    or (getattr(self, "test_bot", None) and self.state == "play"))
 
     def sync_keys_mode(self):
         """Вошли в сеть или вышли — переключить набор клавиш (зовётся каждый кадр, дёшево)."""

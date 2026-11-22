@@ -3,7 +3,7 @@
 import array
 import json
 import random
-from .platform import media, media_mask
+from .platform import WEB, media, media_mask
 from pathlib import Path
 
 import pygame
@@ -147,7 +147,10 @@ class Audio:
 
     def play_next(self):
         if self.kind == "quiet":              # тишина (сценки в справке — слышны их звуки): плавно гасим
-            pygame.mixer.music.fadeout(MUSIC_FADE_MS)
+            if WEB:
+                pygame.mixer.music.stop()     # в браузере затухание не срабатывает — музыка играла бы дальше
+            else:
+                pygame.mixer.music.fadeout(MUSIC_FADE_MS)
             return
         files = self.tracks.get(self.kind) or []
         if not files:

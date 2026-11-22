@@ -21,6 +21,11 @@ if [[ "$SRC" != "/opt/spellgunners" ]]; then
   exit 1
 fi
 
+echo "== код: последний выпуск (сервер ходит по выпускам, как игроки)"
+git fetch --tags --quiet origin
+LATEST=$(git tag -l 'v*' --sort=-v:refname | head -1)
+[[ -n "$LATEST" ]] && git -c advice.detachedHead=false checkout --quiet "$LATEST" && echo "версия $LATEST"
+
 echo "== пакеты: Caddy, файрвол, автообновления безопасности"
 apt-get update -q
 apt-get install -y -q caddy ufw unattended-upgrades python3
@@ -37,9 +42,12 @@ echo "== служба сервера и копии базы"
 install -m 644 deploy/spellgunners.service /etc/systemd/system/spellgunners.service
 install -m 644 deploy/spellgunners-backup.service /etc/systemd/system/spellgunners-backup.service
 install -m 644 deploy/spellgunners-backup.timer /etc/systemd/system/spellgunners-backup.timer
+install -m 644 deploy/spellgunners-update.service /etc/systemd/system/spellgunners-update.service
+install -m 644 deploy/spellgunners-update.timer /etc/systemd/system/spellgunners-update.timer
 systemctl daemon-reload
 systemctl enable --now spellgunners.service
 systemctl enable --now spellgunners-backup.timer
+systemctl enable --now spellgunners-update.timer       # новый выпуск — сам, когда никто не играет
 
 echo "== Caddy: https/wss для $DOMAIN"
 sed "s/__DOMAIN__/$DOMAIN/" deploy/Caddyfile.template > /etc/caddy/Caddyfile

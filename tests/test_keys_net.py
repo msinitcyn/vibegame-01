@@ -62,3 +62,18 @@ def test_old_mouse_settings_are_migrated():
     assert cur["net"]["walk"][1] == keys.M_RIGHT and cur["net"]["melee"][1] is None
     saved = keys.assign(old, "blue", "item1", 0, pygame.KSCAN_Z)                     # при сохранении — новый вид
     assert "mouse_hotseat" not in saved and saved["blue"]["walk"][1] == keys.M_LEFT
+
+
+def test_bot_test_uses_one_player_set(game):
+    game.settings["keys"] = keys.assign({}, "net", "fire", 0, pygame.KSCAN_F)
+    game.apply_keys()
+    try:
+        game.start(1000, None, bot=True)
+        game.sync_keys_mode()
+        assert game.controls["blue"].fire[0] == pygame.KSCAN_F       # тест с ботом — «один игрок»
+        game.start()
+        game.sync_keys_mode()
+        assert game.controls["blue"].fire[0] == pygame.KSCAN_SPACE   # вдвоём — свой набор
+    finally:
+        game.settings["keys"] = {}
+        game.apply_keys()

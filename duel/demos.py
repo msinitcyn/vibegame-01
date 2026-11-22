@@ -136,14 +136,16 @@ class Demo:
         return out
 
     def update(self, dt):
+        """Часы сценки идут вместе с шагами её партии: на медленном компьютере или в браузере (редкие кадры)
+        сценка идёт медленнее, но сценарий и партия не расходятся — маги доходят, медведь добегает."""
         dt *= self.speed                              # замедленная сценка — время партии идёт медленнее
-        self.t += dt
-        if self.t > self.length:
-            self.reset()
-            return
-        self.acc += min(dt, 0.1)
+        self.acc += min(dt, 0.1)                      # за кадр — не больше 0,1 с партии
         while self.acc >= STEP:
             self.acc -= STEP
+            self.t += STEP
+            if self.t > self.length:
+                self.reset()
+                return
             self.events += self.match.step(STEP, self.commands())
             for unit in self.calm:                    # спокойные мобы не идут и не бьют
                 unit.target = None

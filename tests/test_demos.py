@@ -73,7 +73,7 @@ def test_frost_and_light_demos():
 def test_demos_on_neutral_strip_except_foe_land():
     from duel.entities import zone_at
     for f in sorted(demos.DEMO_DIR.glob("*.json")):
-        if f.stem == "foe_land":
+        if f.stem in ("foe_land", "icewalk"):         # эти — про чужую землю: маги там нарочно
             continue
         data = json.loads(f.read_text(encoding="utf-8"))
         for side in ("blue", "red"):
@@ -116,3 +116,32 @@ def test_demo_events_sound_and_music_goes_quiet(game, monkeypatch):
     game.state = "menu"
     game.update_music()
     assert music == ["quiet", "menu", "menu"]
+
+
+def run_demo(kind, fps=60):
+    """Прогнать сценку целиком с заданной частотой кадров; вернуть сведения по ходу."""
+    from duel.entities import zone_at
+    demos.reload_all()
+    dm = demos.Demo(demos.load(kind))
+    seen = {"zones": {}, "burn": {}, "mob_min": 99}
+    while dm.t < dm.length - 0.1:                     # до конца по часам самой сценки
+        dm.update(1 / fps)
+        for p in dm.match.players:
+            seen["zones"].setdefault(p.id, set()).add(zone_at(p.x, p.y))
+            if dm.match.danger(p)[1]:
+                seen["burn"].setdefault(p.id, set()).add(dm.match.danger(p)[1])
+        for m in dm.match.mobs:
+            seen["mob_min"] = min(seen["mob_min"], m.hp)
+    return seen
+
+
+def test_demos_show_their_point_even_at_low_fps():
+    """Сценки показывают своё и при 4 кадрах в секунду (браузер): часы сценки идут с её партией."""
+    for fps in (60, 4):
+        land = run_demo("foe_land", fps)
+        assert "red" in land["zones"]["blue"] and "blue" in land["zones"]["red"], fps    # дошли до чужой земли
+        assert land["burn"] == {"blue": {"fire"}, "red": {"frost"}}, fps
+        assert run_demo("bear", fps)["mob_min"] < 6, fps                                  # медведь добежал
+        ice = run_demo("icewalk", fps)
+        assert "red" in ice["zones"]["blue"] and "blue" not in ice["burn"], fps           # Холод по земле Огня — не горит
+        assert ice["burn"].get("red") == {"frost"}, fps                                   # Огонь на тропе — горит морозом
