@@ -26,6 +26,7 @@ from .accounts import AuthError, Accounts, default_path
 from .net import FEATURES, PORT, PROTO, Conn, version_tuple
 from .room import PIDS, Room, Seat, clean_name
 from .status import Health, serve as serve_status
+from .ws import WS_PORT, WSConn
 from .match import STEP
 
 JOIN_WAIT = 5.0                   # новичок без запроса столько секунд — закрываем
@@ -43,7 +44,7 @@ CRASH_MAX = 20_000                # и длина каждого
 class Server:
     def __init__(self, port=PORT, bot=False, host="0.0.0.0", proto=PROTO, log=print,
                  discovery_port=discovery.DISCOVERY_PORT, clock=time.monotonic, name=None, db=":memory:",
-                 dump_dir=None, records=None):
+                 dump_dir=None, records=None, ws_port=None):
         from .logs import version
         self.version = version()      # версия игры сервера — клиентам в hello и в ответ на поиск
         self.health = Health(self.version)    # для страницы состояния (--status-port, duel/status.py)
@@ -54,6 +55,11 @@ class Server:
         self.listener = socket.create_server((host, port))
         self.listener.setblocking(False)
         self.port = self.listener.getsockname()[1]
+        self.ws_listener = None       # WebSocket (браузер, wss через прокси): тот же протокол в кадрах
+        if ws_port is not None:
+            self.ws_listener = socket.create_server((host, ws_port))
+            self.ws_listener.setblocking(False)
+        self.ws_port = self.ws_listener.getsockname()[1] if self.ws_listener else None
         self.name = clean_name(name) or socket.gethostname()[:16]
         self.accounts = Accounts(db)  # аккаунты этого сервера (файл SQLite; тесты — в памяти)
         self.id = self.accounts.server_id
@@ -267,15 +273,20 @@ class Server:
     # ------------------------------------------------------------------ подключения
 
     def accept(self):
+        for listener, kind in ((self.listener, Conn), (self.ws_listener, WSConn)):
+            if listener is not None:
+                self.accept_from(listener, kind)
+
+    def accept_from(self, listener, kind):
         while True:
             try:
-                sock, addr = self.listener.accept()
+                sock, addr = listener.accept()
             except (BlockingIOError, OSError):
                 return
             if len(self.newcomers) >= MAX_PENDING or len(self.all_conns()) >= MAX_CONNS:
                 sock.close()              # наплыв подключений — лишние сразу закрываем
                 continue
-            conn = Conn(sock)
+            conn = kind(sock)
             conn.addr = addr
             conn.user = None              # вошёл в аккаунт — имя аккаунта, иначе гость
             conn.send({"type": "hello", "proto": self.proto, "role": "lobby", "server": self.name, "id": self.id,
@@ -559,7 +570,7 @@ class Server:
             conn.close()
         self.newcomers, self.lobby, self.rooms = [], [], {}
         self.accounts.close()
-        for s in (self.listener, self.finder_sock):
+        for s in (self.listener, self.ws_listener, self.finder_sock):
             try:
                 if s:
                     s.close()
@@ -617,6 +628,7 @@ class Server:
 
     def run(self):
         self.log(f"сервер «{self.name}» ждёт игроков на порту {self.port}"
+                 + (f", WebSocket — {self.ws_port}" if self.ws_port else "")
                  + (" (в новых комнатах — бот)" if self.bot else ""))
         try:
             self.loop(time.monotonic())
@@ -627,7 +639,7 @@ class Server:
         while self.running:
             # не дольше 0,1 с, чтобы stop() из другого потока срабатывал быстро
             wait = min(0.1, max(0.0, next_tick - time.monotonic()))
-            socks = [self.listener] + self.all_conns()
+            socks = [self.listener] + ([self.ws_listener] if self.ws_listener else []) + self.all_conns()
             if self.finder_sock:
                 socks.append(self.finder_sock)
             select.select(socks, [], [], wait)
@@ -713,6 +725,8 @@ def main(argv=None):
     ap.add_argument("--name", default=None, help="имя сервера в списке (иначе — имя компьютера)")
     ap.add_argument("--bot", action="store_true", help="в новых комнатах пустое место занимает бот")
     ap.add_argument("--db", default=str(default_path()), help="файл базы аккаунтов")
+    ap.add_argument("--ws-port", type=int, default=WS_PORT,
+                    help=f"порт WebSocket (браузер, wss через прокси); 0 — не слушать (по умолчанию {WS_PORT})")
     ap.add_argument("--logs", default=None, help="папка логов (по умолчанию — logs рядом с настройками)")
     ap.add_argument("--status-port", type=int, default=0,
                     help="страница состояния по HTTP на этом порту (/ — сводка JSON, /health — жив ли); 0 — нет")
@@ -724,7 +738,7 @@ def main(argv=None):
     log = logs.setup_server(folder)
     try:
         srv = Server(args.port, args.bot, log=log, name=args.name, db=args.db, dump_dir=folder,
-                     records=folder / "matches.jsonl")
+                     records=folder / "matches.jsonl", ws_port=args.ws_port or None)
     except OSError as e:
         raise SystemExit(f"не удалось запустить сервер на порту {args.port}: {e.strerror or e}.\n"
                          f"Порт занят — уже работает другой сервер или игра со своим сервером; "

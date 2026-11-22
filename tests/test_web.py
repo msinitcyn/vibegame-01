@@ -21,18 +21,51 @@ def test_frame_and_web_loop(game, monkeypatch):
     asyncio.run(game.run_web())                           # выход по QUIT, без зависания
 
 
-def test_web_menu_has_no_net(game, monkeypatch):
-    from duel import client_menus
+def test_web_menu_opens_server_address(game, monkeypatch):
+    from duel import client_lobby, client_menus, config
     monkeypatch.setattr(client_menus, "WEB", True)
+    monkeypatch.setattr(client_lobby, "WEB", True)
     game.state = "menu"
-    game.menu_message = None
+    game.address = "localhost"
     game.menu_index = game.menu.index("net")
     game.menu_select()
-    assert game.state == "menu" and game.menu_message
+    assert game.state == "join" and game.address == config.WEB_SERVER and game.finder is None
+    assert game.join_rows() == [None]                     # только адрес вручную, без «Создать свой сервер»
+    game.draw_join()
     called = []
     monkeypatch.setattr(game.updater, "check", lambda: called.append(1))
     game.start_update_check()
     assert not called                                     # в браузере не проверяем обновления
+    game.state = "menu"
+
+
+def test_web_connect_does_not_block(game, monkeypatch):
+    """Браузер: open_lobby не ждёт — приветствие ловит poll_connecting кадр за кадром, потом лобби."""
+    import socket
+    from duel import client_lobby
+    from duel.net import Conn
+    from tests.test_compress import run_server
+    from tests.test_network import make_server
+    srv = make_server()
+    stop, th = run_server(srv)
+    monkeypatch.setattr(client_lobby, "WEB", True)
+    monkeypatch.setattr(client_lobby, "transport",
+                        lambda address, timeout: Conn(socket.create_connection(("127.0.0.1", srv.port))))
+    try:
+        game.open_join()
+        game.open_lobby("ws://example/")
+        assert game.connecting and game.state == "join"     # сразу вернулись — ждём кадрами
+        import time
+        end = time.monotonic() + 3
+        while game.connecting and time.monotonic() < end:
+            game.poll_connecting()
+            time.sleep(0.01)
+        assert game.state in ("entry", "lobby", "entering") and game.lobby_conn is not None
+    finally:
+        game.leave_net()
+        stop.set()
+        th.join()
+        srv.close()
 
 
 def test_build_web(tmp_path, monkeypatch):

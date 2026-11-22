@@ -7,9 +7,10 @@ import time
 
 import pygame
 
+from .platform import WEB
 from .logs import log
 from . import logs
-from .net import FEATURES, server_features, version_tuple
+from .net import FEATURES, is_ws, server_features, version_tuple
 from . import config
 from . import settings
 from .bot import Bot
@@ -18,7 +19,7 @@ from .config import DEFAULT_HERO, HEROES
 from .discovery import Finder
 from .i18n import t
 from .match import Match, STEP
-from .net import error_key, open_server
+from .net import PROTO, error_key, open_server, transport
 from .snapshot import snapshot
 from .client_common import MAX_STEPS_PER_FRAME, ADDRESS_MAX, CONNECT_TIMEOUT, PLAYER_IDS, address_char
 
@@ -54,8 +55,14 @@ class LobbyMixin:
         self.join_pick = None
         self.join_touched = False
         self.close_finder()
+        if WEB:                           # в браузере: только адрес вручную (поиска в сети и своего сервера нет)
+            if not is_ws(self.address):
+                self.address = config.WEB_SERVER
+            self.join_pick = None
+            return
         if self.discovery_port:
-            known = [a.rsplit(":", 1)[0] for a in self.settings.get("recent_servers") or [] if isinstance(a, str)]
+            known = [a.rsplit(":", 1)[0] for a in self.settings.get("recent_servers") or []
+                     if isinstance(a, str) and not is_ws(a)]          # wss:// — не для поиска в сети
             try:
                 self.finder = Finder(port=self.discovery_port, known=known)
             except OSError:
@@ -79,6 +86,8 @@ class LobbyMixin:
 
     def join_rows(self):
         """Строки экрана серверов: свой, найденные, ручной ввод (None), создать/остановить свой."""
+        if WEB:
+            return [None]
         rows = ["own"] if self.host_server else []
         rows += [g["address"] for g in self.join_games()]
         return rows + [None, "stop" if self.host_server else "create"]
@@ -112,12 +121,50 @@ class LobbyMixin:
             self.open_lobby(self.address.strip() or "localhost", remember=True)
 
     def open_lobby(self, address, remember=False):
-        """Подключиться к серверу и показать его лобби."""
+        """Подключиться к серверу и показать его лобби. В браузере — без ожидания: соединение открывается,
+        а приветствие сервера ловит poll_connecting() каждый кадр."""
+        if WEB:
+            try:
+                conn = transport(address, CONNECT_TIMEOUT)
+            except Exception as e:
+                self.join_error = self.net_error(e)
+                return
+            self.connecting = {"conn": conn, "address": address, "remember": remember,
+                               "until": time.monotonic() + CONNECT_TIMEOUT * 2}
+            self.join_error = t("net.connecting")
+            return
         try:
             conn, hello = open_server(address, timeout=CONNECT_TIMEOUT)
         except (ConnectionError, OSError, ValueError) as e:
             self.join_error = self.net_error(e)
             return
+        self.lobby_ready(conn, hello, address, remember)
+
+    def poll_connecting(self):
+        """Браузер: ждём приветствие сервера (кадр за кадром, не блокируясь). Пришло — в лобби."""
+        c = getattr(self, "connecting", None)
+        if not c:
+            return
+        conn = c["conn"]
+        hello = next((m for m in conn.recv() if m.get("type") == "hello"), None)
+        conn.flush()
+        if hello is None:
+            if conn.closed or getattr(conn, "failed", False) or time.monotonic() > c["until"]:
+                conn.close()
+                self.connecting = None
+                self.join_error = t("net.err.refused")
+            return
+        self.connecting = None
+        if hello.get("proto") != PROTO:
+            conn.close()
+            self.join_error = t("net.err.proto")
+            return
+        conn.accept_z = True                  # как open_server: попросить сжатый поток
+        conn.send({"type": "compress"})
+        self.lobby_ready(conn, hello, c["address"], c["remember"])
+
+    def lobby_ready(self, conn, hello, address, remember):
+        """Соединение есть, приветствие получено — запомнить сервер и открыть его лобби."""
         self.join_error = None
         if remember:
             self.settings["last_address"] = address

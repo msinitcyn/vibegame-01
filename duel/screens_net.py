@@ -4,6 +4,7 @@
 Подмешивается в ScreensMixin (duel/screens.py)."""
 import pygame
 
+from .platform import WEB
 from . import logs
 from .net import version_tuple
 from .config import (
@@ -154,10 +155,11 @@ class NetScreensMixin:
                           (120, 220, 140), sub=None, click=lambda: self.join_mouse("own", True),
                           hover=lambda: self.join_mouse("own"))
             y += 50
-        img = self.small.render(tr("net.found") if games else tr("net.searching"), True, GREY)
+        img = self.small.render(tr("net.web_hint") if WEB else tr("net.found") if games else tr("net.searching"),
+                                True, GREY)
         s.blit(img, img.get_rect(midleft=(WIDTH // 2 - 320, y)))
         y += 30
-        if not games:
+        if not games and not WEB:
             for i, line in enumerate(self.wrap(tr("net.none_hint"), 640, self.small)):
                 img = self.small.render(line, True, GREY)
                 s.blit(img, img.get_rect(midleft=(WIDTH // 2 - 320, y + i * 22)))
@@ -187,8 +189,9 @@ class NetScreensMixin:
         s.blit(img, img.get_rect(midleft=(box.left + 16, box.centery)))
         self.hit(box, lambda: self.join_mouse(None))           # щелчок — строка ввода (набирать с клавиатуры)
         last = "stop" if self.host_server else "create"
-        self.list_row(y + 90, self.join_pick == last, tr("net." + last + "_server"),
-                      click=lambda: self.join_mouse(last, True), hover=lambda: self.join_mouse(last))
+        if not WEB:                               # в браузере своего сервера нет
+            self.list_row(y + 90, self.join_pick == last, tr("net." + last + "_server"),
+                          click=lambda: self.join_mouse(last, True), hover=lambda: self.join_mouse(last))
         self.back_button()
         if self.join_error:
             img = self.font.render(self.join_error, True, BAD_TEXT)

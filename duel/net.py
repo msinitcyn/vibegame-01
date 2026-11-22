@@ -104,10 +104,19 @@ class Conn:
             return
         self.flush()
 
+    # сырой ввод-вывод: TCP-сокет как есть; WebSocket (duel/ws.py) заворачивает байты в кадры
+    def raw_send(self, data):
+        """Отправить сколько получится из data; вернуть число ушедших байт (BlockingIOError — сокет занят)."""
+        return self.sock.send(data)
+
+    def raw_recv(self):
+        """Прочитать пришедшие байты; b"" — соединение закрыто, BlockingIOError — пока ничего нет."""
+        return self.sock.recv(65536)
+
     def flush(self):
         while self.outbuf and not self.closed:
             try:
-                n = self.sock.send(self.outbuf)
+                n = self.raw_send(self.outbuf)
             except BlockingIOError:
                 return
             except OSError:
@@ -126,12 +135,14 @@ class Conn:
         out = []
         while not self.closed:
             try:
-                data = self.sock.recv(65536)
+                data = self.raw_recv()
             except BlockingIOError:
                 break
             except OSError:
                 self.close()
                 break
+            if data is None:
+                continue                              # служебный кадр без данных (WebSocket)
             if not data:
                 self.close()
                 break
@@ -225,9 +236,10 @@ def wait_for(conn, kinds, timeout):
 
 
 def open_server(address, timeout=5.0):
-    """Подключиться к серверу и проверить версию. Возвращает (Conn, hello)."""
-    sock = socket.create_connection(parse_address(address), timeout=timeout)
-    conn = Conn(sock)
+    """Подключиться к серверу и проверить версию. Возвращает (Conn, hello).
+    Адрес "host" или "host:port" — TCP; "ws://…" или "wss://…" — WebSocket (duel/ws.py); в браузере —
+    всегда WebSocket браузера (duel/webconn.py)."""
+    conn = transport(address, timeout)
     try:
         hello = wait_for(conn, ("hello",), timeout)
     except NetError:
@@ -239,6 +251,22 @@ def open_server(address, timeout=5.0):
     conn.accept_z = True               # попросить сжатый поток (старый сервер просьбу пропустит)
     conn.send({"type": "compress"})
     return conn, hello
+
+
+def is_ws(address):
+    return str(address).startswith(("ws://", "wss://"))
+
+
+def transport(address, timeout=5.0):
+    """Соединение по адресу: TCP, WebSocket или (в браузере) WebSocket браузера."""
+    from .platform import WEB
+    if WEB:
+        from .webconn import browser_connect
+        return browser_connect(address, timeout)
+    if is_ws(address):
+        from .ws import ws_connect
+        return ws_connect(address, timeout)
+    return Conn(socket.create_connection(parse_address(address), timeout=timeout))
 
 
 def enter_room(conn, timeout=5.0, name="", token=None, role="player", room=None, create=False):

@@ -6,6 +6,7 @@ import time
 
 import pygame
 
+from .platform import WEB
 from .logs import log
 from .commands import Command
 from .config import HEROES, PING_EVERY
@@ -159,7 +160,7 @@ class NetClientMixin:
     def try_reconnect(self, now, dt):
         """Связь потеряна: раз в секунду пробуем вернуться на своё место по ключу."""
         self.show_playback(dt)        # картинка стоит на последнем снимке
-        if now > self.reconnect_until:
+        if now > self.reconnect_until or WEB:     # в браузере ждать, блокируясь, нельзя — без переподключения
             self.net_end = "net.lost"
             return False
         if now >= self.next_try:

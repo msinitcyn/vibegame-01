@@ -324,3 +324,7 @@ CLONE_SHOT_EVERY = (0.6, 1.5)    # пауза между выстрелами д
 CLONE_TURN_EVERY = (0.4, 1.4)    # как часто двойник меняет направление
 # эффекты хозяина, которые действуют и на его двойников
 CLONE_EFFECTS = ("shield", "triple", "wavy", "rapid", "grow2", "shrink", "speed", "nofire", "invisible")
+
+# Браузерная версия: к какому серверу подключаться по умолчанию (WebSocket). Для своего сервера в интернете —
+# wss://имя.домен/ (Caddy или Cloudflare Tunnel дают TLS); для пробы на своём компьютере — ws://localhost:5560/.
+WEB_SERVER = "ws://localhost:5560/"

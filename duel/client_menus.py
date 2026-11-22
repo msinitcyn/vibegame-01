@@ -130,10 +130,7 @@ class MenusMixin:
         elif action == "test":
             self.open_pick(TEST_HP, bot=True)
         elif action == "net":
-            if WEB:                           # в браузере пока без сети: нужен сервер с WebSocket и TLS
-                self.menu_message = t("web.no_net")
-            else:
-                self.open_join()
+            self.open_join()                  # в браузере — только адрес сервера (WebSocket)
         elif action == "update":
             self.state = "update"
             self.updater.start()

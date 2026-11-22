@@ -42,11 +42,12 @@ MENU_STATES = ("menu", "help", "settings", "keys", "pick", "join", "crash_ask") 
 
 PLAYER_IDS = ("blue", "red")      # первый геймпад — синий, второй — красный
 
-# набор адреса по физическим клавишам: цифры, латиница, точка, дефис, двоеточие (Shift + ;)
+# набор адреса по физическим клавишам: цифры, латиница, точка, дефис, «/», двоеточие (Shift + ;) — и wss://имя
 _ADDRESS_KEYS = {getattr(pygame, f"KSCAN_{d}"): d for d in "0123456789"}
 _ADDRESS_KEYS.update({getattr(pygame, f"KSCAN_KP_{d}"): d for d in "0123456789"})
 _ADDRESS_KEYS.update({getattr(pygame, f"KSCAN_{c}"): c.lower() for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"})
 _ADDRESS_KEYS.update({pygame.KSCAN_PERIOD: ".", pygame.KSCAN_KP_PERIOD: ".", pygame.KSCAN_MINUS: "-",
+                      pygame.KSCAN_SLASH: "/", pygame.KSCAN_KP_DIVIDE: "/",
                       pygame.KSCAN_KP_MINUS: "-"})
 
 

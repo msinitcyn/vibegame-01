@@ -432,6 +432,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         elif self.state == "pick":
             self.draw_pick()
         elif self.state == "join":
+            self.poll_connecting()            # браузер: подключение идёт без ожидания
             if self.finder:
                 self.finder.poll()
             self.join_autopick()
