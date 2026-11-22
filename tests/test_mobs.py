@@ -197,16 +197,21 @@ def test_drop_on_own_land_at_death_spot(match):
     assert (art.x, art.y) == (x, y)
 
 
-def test_artifact_stays_until_picked(match):
+def test_artifact_lies_for_a_while_then_vanishes(match):
+    from duel.config import ARTIFACT_LIFETIME
     from duel.entities import Artifact
     r = match.red
     art = Artifact(r.land[0] + 150, "speed", 150)
     match.artifacts = [art]
-    step(match, 60)
-    assert match.artifacts == [art]              # минута — лежит
+    step(match, ARTIFACT_LIFETIME - 1)
+    assert match.artifacts == [art] and 0.5 < art.life < 1.5   # ещё лежит, таймер почти вышел
     r.x, r.y = art.x, art.y
     step(match)
     assert match.artifacts == [] and "speed" in r.items
+    art2 = Artifact(r.land[0] + 150, "shield", 150)
+    match.artifacts = [art2]
+    step(match, ARTIFACT_LIFETIME + 0.1)
+    assert match.artifacts == []                             # не подобрали — пропал
 
 
 def test_ammo_packs_still_expire(match):
@@ -433,7 +438,7 @@ def test_dodge_during_windup_misses(match):
     step(match, MOB_WINDUP / 2)
     assert m.windup > 0
     b.y += 120                                      # отбежал
-    step(match, MOB_WINDUP)
+    step(match, MOB_WINDUP + 3 * DT)
     assert b.hp == MAX_HP and m.swing > 0 and not m.swing_hit
 
 
@@ -451,7 +456,7 @@ def test_mob_attack_draws(game):
     step(game.match, MOB_WINDUP / 2)
     game.refresh_snap()
     game.draw()
-    step(game.match, MOB_WINDUP)
+    step(game.match, MOB_WINDUP + 3 * DT)
     game.refresh_snap()
     assert game.snap["mobs"][0]["swing"] > 0
     game.draw()

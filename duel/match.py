@@ -70,6 +70,8 @@ from .config import (
     CLONE_TIME,
     FAST_BULLET_FACTOR,
     ARENA_DPS,
+    ARENA_SLOW,
+    FOE_LAND_SLOW,
     FOE_LAND_DPS,
     HEAL_AMOUNT,
     MAX_CLONES,
@@ -410,6 +412,17 @@ class Match:
         """Маг p стоит на ледяном следе хозяина owner."""
         return any(t.owner is owner and t.under(p.x, p.y) for t in self.ice)
 
+    def ground_slow(self, p):
+        """Замедление земли под магом. «Ледяная тропа» — земля Холода на время: на чужой тропе — как на чужой
+        земле (медленнее, и жжёт — см. danger); с действующей тропой или на своём следе чужая земля не
+        замедляет. Арена замедляет всегда."""
+        if self.on_trail(p, self.other(p)):
+            return FOE_LAND_SLOW
+        zone = zone_at(p.x, p.y)
+        if zone == p.foe_zone:
+            return 1.0 if ("icewalk" in p.effects or self.on_trail(p, p)) else FOE_LAND_SLOW
+        return ARENA_SLOW if zone == "arena" else 1.0
+
     def danger(self, p):
         """Опасная земля под магом: (жизней в секунду, чья стихия жжёт — герой или "arena") или (0, None).
         Чужая земля и след соперника — FOE_LAND_DPS, арена мобов — ARENA_DPS; «Ледяная тропа» и свой
@@ -461,7 +474,7 @@ class Match:
         for p in self.players:
             self.update_player(p, dt, moves.get(p.id, (0, 0)))
         self.update_mobs(dt)
-        self.pick_artifacts()
+        self.pick_artifacts(dt)
         self.update_ammo(dt)
         for w in self.walls:
             w.life -= dt
@@ -487,6 +500,7 @@ class Match:
 
     def update_player(self, p, dt, move):
         """Маг за такт: движение, конец медведя, лассо, границы, ледяной след, урон земли и огня."""
+        p.ground_slow = self.ground_slow(p)
         p.update(dt, move)
         if p.bear_saved is not None and "bear" not in p.effects:
             self.end_bear(p)                  # время медведя вышло
@@ -520,14 +534,17 @@ class Match:
         else:
             p.ring_t = 0.0
 
-    def pick_artifacts(self):
-        """Маг, коснувшийся артефакта, подбирает его (артефакты только выпадают из мобов — drop_artifact)."""
+    def pick_artifacts(self, dt):
+        """Маг, коснувшийся артефакта, подбирает его (артефакты только выпадают из мобов — drop_artifact);
+        не подобранный за ARTIFACT_LIFETIME — пропадает."""
         for p in self.players:
             for a in self.artifacts:
                 if not a.taken and math.hypot(a.x - p.x, a.y - p.y) < p.radius + ARTIFACT_R:
                     self.take_artifact(p, a)
                     self.emit("pickup", p.id, a.kind)
-        self.artifacts = [a for a in self.artifacts if not a.taken]
+        for a in self.artifacts:
+            a.life -= dt
+        self.artifacts = [a for a in self.artifacts if not a.taken and a.life > 0]
 
     def update_ammo(self, dt):
         """Пачки патронов: появляются на земле игрока по таймеру, подбираются всеми, исчезают сами."""

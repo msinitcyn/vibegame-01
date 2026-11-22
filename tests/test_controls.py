@@ -2,6 +2,8 @@
 import math
 
 import pygame
+
+from duel.config import MAX_HP
 import pytest
 
 from duel.gamepad import PAD_FIRE, PAD_ITEM_BUTTONS
@@ -81,7 +83,7 @@ def test_menu_keys(game):
     assert game.state == "pick"                 # сначала выбор героев
     game.on_key(pygame.KSCAN_SPACE)
     game.on_key(pygame.KSCAN_RETURN)
-    assert game.state == "play" and game.match.blue.hp == 10
+    assert game.state == "play" and game.match.blue.hp == MAX_HP
     game.on_key(pygame.KSCAN_ESCAPE)
     assert game.state == "play" and game.paused  # Esc в партии — пауза, а не выход
     game.on_key(pygame.KSCAN_ESCAPE)

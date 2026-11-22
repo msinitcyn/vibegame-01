@@ -329,8 +329,19 @@ def draw_bullet(surf, b, heroes, time=0.0):
     fx_bullets.draw_bullet(surf, b["x"], b["y"], angle, heroes[b["owner"]], time, int(b.get("id") or 0), BULLET_R)
 
 
-def draw_artifact(surf, a):
-    draw_icon(surf, a["kind"], _pos(a), ARTIFACT_R)
+def draw_artifact(surf, a, font=None):
+    """Артефакт на земле и рядом — сколько секунд он ещё пролежит (последние 3 с — мигает и краснеет)."""
+    life = a.get("life")
+    if life is not None and life < 3 and int(life * 6) % 2 == 0:
+        return
+    pos = _pos(a)
+    draw_icon(surf, a["kind"], pos, ARTIFACT_R)
+    if font is not None and life is not None:
+        color = (255, 120, 100) if life < 5 else (235, 235, 240)
+        txt = font.render(str(max(1, math.ceil(life))), True, color)
+        box = txt.get_rect(midleft=(pos[0] + ARTIFACT_R + 3, pos[1] + ARTIFACT_R - 4)).inflate(4, 0)
+        pygame.draw.rect(surf, (16, 12, 20), box, border_radius=3)
+        surf.blit(txt, txt.get_rect(center=box.center))
 
 
 def draw_ammo_pack(surf, a, font):
@@ -490,7 +501,7 @@ def draw_field(surf, snap, font, viewer=None):
     for w in snap["walls"]:
         draw_wall(surf, w, heroes, snap.get("time", 0))
     for a in snap["artifacts"]:
-        draw_artifact(surf, a)
+        draw_artifact(surf, a, font)
     for a in snap["ammo_packs"]:
         draw_ammo_pack(surf, a, font)
     owners = {p["id"]: p for p in snap["players"]}

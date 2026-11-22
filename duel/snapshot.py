@@ -60,7 +60,7 @@ def snapshot(match):
         "mob_shots": [{"id": s.id, "x": _xy(s.x), "y": _xy(s.y), "owner": _pid(s.owner)} for s in m.mob_shots],
         "sentries": [{"id": st.id, "owner": st.owner.id, "x": _xy(st.x), "y": _xy(st.y), "hp": st.hp,
                       "life": _t(st.life), "flash": _t(st.flash)} for st in m.sentries],
-        "artifacts": [{"id": a.id, "kind": a.kind, "x": _xy(a.x), "y": _xy(a.y)}
+        "artifacts": [{"id": a.id, "kind": a.kind, "x": _xy(a.x), "y": _xy(a.y), "life": _t(a.life)}
                       for a in m.artifacts],
         "ammo_packs": [{"id": a.id, "x": _xy(a.x), "y": _xy(a.y), "life": _t(a.life)}
                        for a in m.ammo_packs],

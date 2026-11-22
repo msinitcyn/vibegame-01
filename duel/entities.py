@@ -50,6 +50,7 @@ from .config import (
     MOB_RADIUS,
     MOB_SPEED,
     AMMO_LIFETIME,
+    ARTIFACT_LIFETIME,
     BASE_RADIUS,
     BASE_SPEED,
     BOTTOM,
@@ -262,9 +263,12 @@ class Player(Unit):
 
     @property
     def speed(self):
-        """Скорость с эффектами; на чужой земле и в арене — медленнее."""
+        """Скорость с эффектами; на чужой земле и в арене — медленнее. ground_slow — замедление земли,
+        которое посчитал матч (он видит ледяные тропы: тропа — земля Холода); None — только по зоне."""
         zone = zone_at(self.x, self.y)
-        slow = FOE_LAND_SLOW if zone == self.foe_zone else ARENA_SLOW if zone == "arena" else 1.0
+        slow = getattr(self, "ground_slow", None)
+        if slow is None:
+            slow = FOE_LAND_SLOW if zone == self.foe_zone else ARENA_SLOW if zone == "arena" else 1.0
         boots = GEAR_SPEED if "boots" in self.gear else 1.0
         return BASE_SPEED * self.speed_mult * slow * boots
 
@@ -582,7 +586,8 @@ class Artifact:
         self.x = x
         self.y = y
         self.kind = kind
-        self.taken = False            # лежит, пока маг сам не подберёт — по времени не исчезает
+        self.taken = False
+        self.life = ARTIFACT_LIFETIME     # лежит столько секунд — потом пропадает
 
 
 class AmmoPack:

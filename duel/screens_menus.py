@@ -7,6 +7,7 @@ from .config import (
     SHOT_COOLDOWN,
     HELP_BASICS,
     ARENA_DPS,
+    ARTIFACT_LIFETIME,
     FOE_LAND_DPS,
     TOP,
     AMMO_COLOR,
@@ -497,7 +498,7 @@ class MenuScreensMixin:
 
     def draw_help_rules(self):
         s = self.screen
-        numbers = dict(queue=QUEUE_SHOWN, weapon=f"{WEAPON_TIME:.0f}", wmax=WEAPON_MAX,
+        numbers = dict(art_life=f"{ARTIFACT_LIFETIME:g}", queue=QUEUE_SHOWN, weapon=f"{WEAPON_TIME:.0f}", wmax=WEAPON_MAX,
                        ammo=START_AMMO, pack=AMMO_PACK, every=f"{MOB_EVERY:.0f}",
                        mmax=MOB_MAX, mhp=MOB_MAX_HP, ranged=MOB_RANGED_EVERY, range=MOB_RANGE,
                        melee=MELEE_DAMAGE, melee_cd=f"{MELEE_COOLDOWN:g}".replace(".", tr("decimal")), dps=FOE_LAND_DPS, arena_dps=ARENA_DPS)
