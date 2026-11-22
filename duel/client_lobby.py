@@ -87,8 +87,8 @@ class LobbyMixin:
     def join_rows(self):
         """Строки экрана серверов: свой, найденные, ручной ввод (None), создать/остановить свой."""
         if WEB:
-            return [None]
-        rows = ["own"] if self.host_server else []
+            return ["public", None]
+        rows = ["public"] + (["own"] if self.host_server else [])
         rows += [g["address"] for g in self.join_games()]
         return rows + [None, "stop" if self.host_server else "create"]
 
@@ -96,8 +96,7 @@ class LobbyMixin:
         """Пока игрок ничего не трогал, выбран первый сервер (свой или найденный) — сразу Enter."""
         if not self.join_touched and self.join_pick is None:
             rows = self.join_rows()
-            if rows[0] is not None:
-                self.join_pick = rows[0]
+            self.join_pick = "own" if "own" in rows else rows[0]     # свой запущен — он, иначе интернет
 
     def join_move(self, step):
         rows = self.join_rows()
@@ -115,6 +114,8 @@ class LobbyMixin:
             self.join_pick = "create"
         elif pick == "own" and self.host_server:
             self.open_lobby(self.own_address())
+        elif pick == "public":                # сервер в интернете
+            self.open_lobby(config.PUBLIC_SERVER[1])
         elif pick in [g["address"] for g in self.join_games()]:
             self.open_lobby(pick)
         else:

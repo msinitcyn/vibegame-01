@@ -327,4 +327,6 @@ CLONE_EFFECTS = ("shield", "triple", "wavy", "rapid", "grow2", "shrink", "speed"
 
 # Браузерная версия: к какому серверу подключаться по умолчанию (WebSocket). Для своего сервера в интернете —
 # wss://имя.домен/ (Caddy или Cloudflare Tunnel дают TLS); для пробы на своём компьютере — ws://localhost:5560/.
-WEB_SERVER = "ws://localhost:5560/"
+# Сервер в интернете — первой строкой «Играть по сети» и у компьютерной игры, и в браузере.
+PUBLIC_SERVER = ("Spellgunners", "wss://spellgunners.duckdns.org/")    # сервер в интернете (docs/deploy-aws.md)
+WEB_SERVER = PUBLIC_SERVER[1]

@@ -431,7 +431,9 @@ def test_join_screen_with_many_servers(game):
     open_net(game)
     fake_servers(game, [(1, None), (0, None), (2, 1)])
     game.join_autopick()
-    assert game.join_pick == "10.0.0.2:5555"           # первый сервер выбран сам
+    assert game.join_pick == "public"                  # сам выбран сервер в интернете
+    game.on_key(pygame.KSCAN_DOWN)
+    assert game.join_pick == "10.0.0.2:5555"           # ниже — найденные в сети
     game.on_key(pygame.KSCAN_DOWN)
     assert game.join_pick == "10.0.0.3:5555"
     for _ in range(5):
@@ -538,3 +540,16 @@ def test_entry_screen_keeps_connection(game, monkeypatch):
         game.lobby_frame()
         time.sleep(0.02)
     assert game.state == "entry" and game.lobby_conn and not game.lobby_conn.closed
+
+
+def test_public_server_first_and_picked(game, monkeypatch):
+    from duel import config
+    opened = []
+    monkeypatch.setattr(game, "open_lobby", lambda address, remember=False: opened.append(address))
+    open_net(game)
+    assert game.join_rows()[0] == "public"
+    game.join_autopick()
+    assert game.join_pick == "public"
+    game.on_key(pygame.KSCAN_RETURN)                    # один Enter — к серверу в интернете
+    assert opened == [config.PUBLIC_SERVER[1]] and opened[0].startswith("wss://")
+    game.draw_join()

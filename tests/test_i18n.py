@@ -92,7 +92,7 @@ def test_saved_language_loaded_on_start(tmp_path, monkeypatch):
     settings.save({"lang": "fi"})
     assert settings.load()["lang"] == "fi"
     (tmp_path / "s.json").write_text("не json")
-    assert settings.load()["lang"] == "ru"      # битый файл — настройки по умолчанию
+    assert settings.load()["lang"] == "en"      # битый файл — настройки по умолчанию (английский)
 
 
 def test_title_same_in_every_language(lang_restore):

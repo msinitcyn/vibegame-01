@@ -8,7 +8,7 @@ import json
 import os
 from pathlib import Path
 
-DEFAULTS = {"lang": "ru", "name": "", "last_address": "localhost",
+DEFAULTS = {"lang": "en", "name": "", "last_address": "localhost",
             "aim_stick": 6, "aim_mouse": 5,       # чувствительность прицела, 1–10
             "aim_mode": "move",                   # прицел: "move" — по движению, "stick" — стик и мышь
             "check_updates": True,                # при запуске спрашивать GitHub о новой версии

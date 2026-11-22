@@ -26,7 +26,7 @@ if __name__ == "__main__":
         from duel import settings, single
         from duel.i18n import set_lang, t
         if not single.acquire():
-            set_lang(settings.load().get("lang", "ru"))
+            set_lang(settings.load().get("lang", "en"))
             single.tell_already_running(t("already_running"))
             raise SystemExit(0)
     net = None

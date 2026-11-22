@@ -30,7 +30,7 @@ def test_web_menu_opens_server_address(game, monkeypatch):
     game.menu_index = game.menu.index("net")
     game.menu_select()
     assert game.state == "join" and game.address == config.WEB_SERVER and game.finder is None
-    assert game.join_rows() == [None]                     # только адрес вручную, без «Создать свой сервер»
+    assert game.join_rows() == ["public", None]           # сервер в интернете и адрес вручную, без «Создать»
     game.draw_join()
     called = []
     monkeypatch.setattr(game.updater, "check", lambda: called.append(1))

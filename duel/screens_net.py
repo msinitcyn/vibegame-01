@@ -4,6 +4,7 @@
 Подмешивается в ScreensMixin (duel/screens.py)."""
 import pygame
 
+from . import config
 from .platform import WEB
 from . import logs
 from .net import version_tuple
@@ -148,6 +149,11 @@ class NetScreensMixin:
         s.blit(img, img.get_rect(center=(WIDTH // 2, 70)))
         games = self.join_games()
         y = 140
+        name, url = config.PUBLIC_SERVER               # сервер в интернете — первой строкой
+        self.list_row(y, self.join_pick == "public", tr("net.public_server", name=name), tr("net.public_where"),
+                      AMMO_COLOR, sub=url, click=lambda: self.join_mouse("public", True),
+                      hover=lambda: self.join_mouse("public"))
+        y += 50
         if self.host_server:
             srv = self.host_server
             addrs = "  ".join(f"{a}" for a in self.own_addresses()) or "127.0.0.1"
