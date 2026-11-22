@@ -133,7 +133,35 @@
 Отчёты о падениях от игроков — `/var/lib/spellgunners/logs/client-crashes/`, повторы партий —
 `/var/lib/spellgunners/logs/replays/` (скачать к себе: `scp` или кнопка в консоли Lightsail).
 
-## 10. Выключить и не платить
+## 10. Выпуски, которым нужен шаг на сервере
+
+Автообновление переключает **код** и перезапускает игровой сервер, но **не трогает системные настройки**:
+Caddy (`/etc/caddy/Caddyfile`), службы и таймеры systemd. Их ставит только `install.sh`. Поэтому если в
+выпуске менялись файлы `deploy/` (кроме `autoupdate.sh` и `site.sh` — эти работают сразу), после выпуска
+на сервере нужно один раз:
+
+```bash
+cd /opt/spellgunners && sudo bash deploy/install.sh spellgunners.duckdns.org
+```
+
+Повторный запуск безопасен: обновит Ubuntu, поставит последний выпуск игры, разложит сайт, применит
+настройки Caddy и служб. Игровой сервер при этом перезапустится — лучше, когда никто не играет.
+
+| Выпуск | Что изменилось на сервере | Что сделать |
+|---|---|---|
+| 0.8.2 | первая установка | шаг 7 |
+| 0.8.3 | сайт сервера (страница, браузерная версия в `/play/`, `/status.json`) — новые правила Caddy | после выхода 0.8.3: `install.sh` (команда выше), затем открыть https://spellgunners.duckdns.org/ |
+
+Проверка после `install.sh`:
+
+```bash
+curl -s http://127.0.0.1:5557/health                        # ok — игровой сервер жив
+curl -s https://spellgunners.duckdns.org/status.json        # {"version": "0.8.3", "ok": true, …}
+ls /var/www/spellgunners/play/                               # index.html, web-src.apk — браузерная версия
+sudo journalctl -u caddy --since "10 min ago" | tail -n 5   # без ошибок
+```
+
+## 11. Выключить и не платить
 
 Lightsail → сервер → **⋮ → Delete**; затем **Networking** → статический IP → **Delete**. Остановленный
 (stopped) сервер всё равно оплачивается — только удаление.

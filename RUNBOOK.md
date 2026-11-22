@@ -93,6 +93,9 @@ GitHub сам (`.github/workflows/release.yml`, 10–15 минут) сначал
 dist/spellgunners-linux --selftest
 ```
 
+
+**Если в выпуске менялись настройки сервера** (`deploy/`: Caddyfile, службы, таймеры — кроме `autoupdate.sh` и `site.sh`): сервер обновит код сам, а настройки — только после `cd /opt/spellgunners && sudo bash deploy/install.sh spellgunners.duckdns.org` на сервере. Записать выпуск в таблицу «Выпуски, которым нужен шаг на сервере» в `docs/deploy-aws.md`.
+
 ## Браузерная версия (проба, pygbag)
 
 **Играть без установки:** https://spellgunners.duckdns.org/ — сайт сервера: «Play in the browser», скачать для Windows и Linux, кто онлайн. Каждый выпуск GitHub собирает браузерную версию (`spellgunners-web.zip` в выпуске, задача `web` в `.github/workflows/release.yml`), а сервер при переходе на выпуск кладёт её себе в `/play/` (`deploy/site.sh`). Первая загрузка ~минута; по сети — к этому же серверу.
