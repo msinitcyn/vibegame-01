@@ -99,6 +99,20 @@ def current(custom=None):
                 out[g][action] = list(value)
             elif valid(value):                        # старый вид: одно число (или null) — основная клавиша
                 out[g][action][0] = value
+    for old, g in (("mouse_hotseat", "blue"), ("mouse_net", "net")):     # старый вид кнопок мыши
+        buttons = (custom or {}).get(old)
+        if not isinstance(buttons, dict):
+            continue
+        for button, action in buttons.items():
+            code = {"left": M_LEFT, "middle": M_MIDDLE, "right": M_RIGHT}.get(button)
+            if code is None:
+                continue
+            for pair in out[g].values():          # кнопка была на другом действии — снять оттуда
+                for s, v in enumerate(pair):
+                    if v == code:
+                        pair[s] = None
+            if action in GROUP_ACTIONS[g]:
+                out[g][action][1] = code          # дополнительная клавиша действия
     return out
 
 
@@ -115,7 +129,7 @@ def assign(custom, group, action, slot, sc):
                     if v == sc and (g, a, s) != (group, action, slot):
                         pair[s] = old
     keys[group][action][slot] = sc
-    out = {}
+    out = {}                                      # (старые mouse_* уже переведены в пары — не переносим)
     for g, acts in keys.items():
         diff = {a: pair for a, pair in acts.items() if tuple(pair) != tuple(DEFAULT_KEYS[g][a])}
         if diff:

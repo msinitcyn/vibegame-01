@@ -97,3 +97,14 @@ def test_keys_screen_catches_click_and_delete(game):
     assert keys.current(game.settings["keys"])["blue"]["up"][0] == pygame.KSCAN_W
     assert keys.current(game.settings["keys"])["blue"]["melee"][1] == keys.M_RIGHT
     game.state = "menu"
+
+
+def test_pick_screen_with_unbound_keys(game):
+    """Клавиши движения и выбора сняты — экран выбора героев рисуется (подписи «—»), не падает."""
+    for action in ("up", "down", "left", "right", "fire", "melee"):
+        for slot in (0, 1):
+            bind(game, action, slot, None)
+    game.open_pick(10)
+    game.draw_pick()
+    game.state = "menu"
+

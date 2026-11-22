@@ -138,8 +138,10 @@ class MenuScreensMixin:
             top = 120 + row * 260
             left, right, ok = self.pick_keys(pid)
             bot = pid == "red" and getattr(self, "pick_bot", False)
-            label = tr("pick.bot" if bot else "pick.left" if pid == "blue" else "pick.right", left=keys.label(left[0]),
-                       right=keys.label(right[0]), ok=" / ".join(keys.label(k) for k in ok[:1] + ok[-1:]))
+            first = (lambda ks: ks[0] if ks else None)      # клавиши можно снять — тогда «—»
+            label = tr("pick.bot" if bot else "pick.left" if pid == "blue" else "pick.right",
+                       left=keys.label(first(left)), right=keys.label(first(right)),
+                       ok=" / ".join(keys.label(k) for k in ok[:1] + ok[-1:]) if ok else keys.label(None))
             pad = self.pad_of(pid)
             pad_name = self.pads.pads[pad][1].name[:24] if pad is not None else ""
             if not bot:

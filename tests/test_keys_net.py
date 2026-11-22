@@ -52,3 +52,13 @@ def test_keys_screen_tabs_and_reset(game):
         game.settings["keys"] = {}
         game.apply_keys()
         game.state = "menu"
+
+
+def test_old_mouse_settings_are_migrated():
+    old = {"mouse_hotseat": {"left": "walk", "right": "fire", "middle": None}, "mouse_net": {"right": "walk"}}
+    cur = keys.current(old)
+    assert cur["blue"]["walk"][1] == keys.M_LEFT and cur["blue"]["fire"] == [pygame.KSCAN_SPACE, keys.M_RIGHT]
+    assert cur["blue"]["melee"][1] is None and cur["blue"]["aim"][1] is None        # ПКМ ушла с удара, СКМ — ничего
+    assert cur["net"]["walk"][1] == keys.M_RIGHT and cur["net"]["melee"][1] is None
+    saved = keys.assign(old, "blue", "item1", 0, pygame.KSCAN_Z)                     # при сохранении — новый вид
+    assert "mouse_hotseat" not in saved and saved["blue"]["walk"][1] == keys.M_LEFT

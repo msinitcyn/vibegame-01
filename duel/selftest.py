@@ -40,11 +40,11 @@ def run(seconds=None):
     games = 0
     for _ in range(int(seconds * 60)):
         for c in g.controls.values():
-            g.held = (g.held - {c.up, c.down, c.left, c.right}) | {
-                k for k in (c.up, c.down, c.left, c.right) if rng.random() < 0.3}
-            for key, p in ((c.fire[0], 0.15), (c.melee[0], 0.05), (c.items[rng.randrange(4)], 0.03)):
-                if rng.random() < p:
-                    g.on_key(key)
+            moves = {k for ks in (c.up, c.down, c.left, c.right) for k in ks}
+            g.held = (g.held - moves) | {k for k in moves if rng.random() < 0.3}
+            for keys_, p in ((c.fire, 0.15), (c.melee, 0.05), (c.items[rng.randrange(4)], 0.03)):
+                if keys_ and rng.random() < p:
+                    g.on_key(keys_[0])
         g.update(STEP)
         g.draw()
         if g.snap["winner"]:
