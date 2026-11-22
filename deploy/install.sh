@@ -25,6 +25,10 @@ echo "== код: последний выпуск (сервер ходит по �
 git fetch --tags --quiet origin
 LATEST=$(git tag -l 'v*' --sort=-v:refname | head -1)
 [[ -n "$LATEST" ]] && git -c advice.detachedHead=false checkout --quiet "$LATEST" && echo "версия $LATEST"
+# дальше — install.sh из этого выпуска, а не тот, что уже читает bash (старый не знает новых шагов)
+if [[ -z "${SG_REEXEC:-}" ]]; then
+  SG_REEXEC=1 exec bash deploy/install.sh "$@"
+fi
 
 echo "== система: все обновления (образ Lightsail старее последних исправлений безопасности)"
 export DEBIAN_FRONTEND=noninteractive
@@ -49,7 +53,8 @@ install -m 644 deploy/spellgunners-backup.timer /etc/systemd/system/spellgunners
 install -m 644 deploy/spellgunners-update.service /etc/systemd/system/spellgunners-update.service
 install -m 644 deploy/spellgunners-update.timer /etc/systemd/system/spellgunners-update.timer
 systemctl daemon-reload
-systemctl enable --now spellgunners.service
+systemctl enable spellgunners.service
+systemctl restart spellgunners.service             # уже работал — перезапуск, чтобы взять новый код
 systemctl enable --now spellgunners-backup.timer
 systemctl enable --now spellgunners-update.timer       # новый выпуск — сам, когда никто не играет
 

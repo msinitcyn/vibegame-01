@@ -150,7 +150,7 @@ cd /opt/spellgunners && sudo bash deploy/install.sh spellgunners.duckdns.org
 | Выпуск | Что изменилось на сервере | Что сделать |
 |---|---|---|
 | 0.8.2 | первая установка | шаг 7 |
-| 0.8.3 | сайт сервера (страница, браузерная версия в `/play/`, `/status.json`) — новые правила Caddy | после выхода 0.8.3: `install.sh` (команда выше), затем открыть https://spellgunners.duckdns.org/ |
+| 0.8.3 | сайт сервера (страница, браузерная версия в `/play/`, `/status.json`) — новые правила Caddy | `install.sh` (команда выше), затем `sudo bash /opt/spellgunners/deploy/site.sh` и `sudo systemctl restart spellgunners` (`install.sh` из 0.8.2 не знал шага сайта и не перезапускал сервер; с 0.8.4 — сам) |
 
 Проверка после `install.sh`:
 
