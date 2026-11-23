@@ -198,3 +198,13 @@ def test_speed_is_retired_and_gear_has_own_help_tab(game):
     assert "speed" not in game.help_kinds() and not set(GEAR_ITEMS) & set(game.help_kinds())
     game.help_page = HELP_TABS.index("gear")
     assert game.help_kinds() == list(GEAR_ITEMS)
+
+
+def test_firmground_removes_foe_land_slow_but_not_burn():
+    from duel.config import FOE_LAND_SLOW
+    m = earth_match()
+    b = m.blue
+    b.x, b.y = 850, 150                                  # на земле Огня
+    assert m.ground_slow(b) == FOE_LAND_SLOW
+    m.apply_item(b, "firmground")
+    assert m.ground_slow(b) == 1.0 and m.danger(b)[0] == FOE_LAND_DPS    # не замедляет, но жжёт

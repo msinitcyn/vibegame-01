@@ -448,12 +448,13 @@ class Match:
     def ground_slow(self, p):
         """Замедление земли под магом. «Ледяная тропа» — земля Холода на время: на чужой тропе — как на чужой
         земле (медленнее, и жжёт — см. danger); с действующей тропой или на своём следе чужая земля не
-        замедляет. Арена замедляет всегда."""
+        замедляет. «Твёрдая почва» Земли снимает замедление чужой земли (и чужой тропы). Арена замедляет всегда."""
+        firm = "firmground" in p.effects
         if self.on_trail(p, self.other(p)):
-            return FOE_LAND_SLOW
+            return 1.0 if firm else FOE_LAND_SLOW
         zone = zone_at(p.x, p.y)
         if zone == self.foe_zone_of(p):
-            return 1.0 if ("icewalk" in p.effects or self.on_trail(p, p)) else FOE_LAND_SLOW
+            return 1.0 if (firm or "icewalk" in p.effects or self.on_trail(p, p)) else FOE_LAND_SLOW
         return ARENA_SLOW if zone == "arena" else 1.0
 
     def danger(self, p):
