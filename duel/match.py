@@ -347,6 +347,7 @@ class Match:
         elif kind == "bear":                  # маг — медведь; жизни мага сохраняются
             if p.bear_saved is None:
                 p.bear_saved = p.hp
+                p.bear_at = (p.x, p.y)        # маг вернётся сюда
             p.hp = BEAR_HP
             self.give(p, "bear")
         elif kind == "immune":                # дубовая кора: долой дебаффы, артефакты соперника не действуют
@@ -396,9 +397,12 @@ class Match:
                 "hp": {p.id: p.hp for p in self.players}, "max_hp": {p.id: p.max_hp for p in self.players},
                 "gear": {p.id: list(p.gear) for p in self.players}, "stats": self.stats}
 
-    def hurt_player(self, p, n):
+    def hurt_player(self, p, n, hit=True):
         """Маг теряет n жизней (щит проверяется до этого). Пока у него есть зомби — урон
-        получает зомби («Восставшие мертвецы»)."""
+        получает зомби («Восставшие мертвецы»). hit — попадание (пуля, удар, снаряд), а не горение:
+        попадания растапливают заморозку."""
+        if hit:
+            p.struck()
         zombies = self.zombies_of(p)
         if zombies:
             z = zombies[0]
@@ -411,11 +415,18 @@ class Match:
         p.hit_flash = 0.12
         self.stats[p.id]["damage_taken"] += n
         if p.bear_saved is not None and p.hp <= 0:
-            self.end_bear(p)                  # медведя победили — снова маг, партия идёт
+            self.end_bear(p, killed=True)     # медведя победили — маг погиб
 
-    def end_bear(self, p):
-        """Конец превращения: у мага — жизни, что были до него."""
-        p.hp, p.bear_saved = p.bear_saved, None
+    def end_bear(self, p, killed=False):
+        """Конец превращения. По времени: маг — там, где превратился, с жизнями, что были до него.
+        Медведя убили — погибает и маг."""
+        if killed:
+            p.hp = 0
+        else:
+            p.hp = p.bear_saved
+            if p.bear_at:
+                p.x, p.y = p.bear_at
+        p.bear_saved = p.bear_at = None
         p.effects.pop("bear", None)
         self.emit("bear_end", p.id)
 
@@ -542,7 +553,7 @@ class Match:
             while p.foe_land_t >= 1 / dps:
                 p.foe_land_t -= 1 / dps
                 if not p.shield_absorb():
-                    self.hurt_player(p, 1)
+                    self.hurt_player(p, 1, hit=False)
         else:
             p.foe_land_t = 0.0
         # у огненной стены соперника хозяина — FIRE_RING_DPS в секунду
@@ -550,7 +561,7 @@ class Match:
             p.ring_t += dt
             while p.ring_t >= 1 / FIRE_RING_DPS:
                 p.ring_t -= 1 / FIRE_RING_DPS
-                self.hurt_player(p, 1)
+                self.hurt_player(p, 1, hit=False)
         else:
             p.ring_t = 0.0
 
@@ -865,7 +876,9 @@ class Match:
             g.hit_cd = max(0.0, g.hit_cd - dt)
             g.swing = max(0.0, g.swing - dt)
             target = self.player(g.side)
-            g.awake = in_arena(target.x, target.y) and not self.hidden(target)
+            # «Твёрдая почва»: для стражей Земля — свой, спящий страж не просыпается (проснувшийся бьёт дальше)
+            g.awake = in_arena(target.x, target.y) and not self.hidden(target) and \
+                (g.awake or "firmground" not in target.effects)
             if not g.awake:                   # статуя: на пост
                 g.windup = 0.0
                 g.shot_timer = GUARDIAN_SHOT_EVERY

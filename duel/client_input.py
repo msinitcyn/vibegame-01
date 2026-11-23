@@ -40,7 +40,7 @@ class InputMixin:
             self.__dict__.pop("_demos", None)
             self.__dict__.pop("_demo_bg", None)
         if sc == pygame.KSCAN_F11:
-            pygame.display.toggle_fullscreen()
+            self.toggle_fullscreen()
             self.held.clear()
         if getattr(self, "replay", None):         # повтор партии: только просмотр
             self.replay_key(sc)

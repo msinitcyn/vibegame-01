@@ -25,6 +25,8 @@ from .config import (
     CLONE_HP,
     BEAR_SIZE,
     BEAR_SPEED,
+    BULLET_WALL_BOUNCES,
+    FREEZE_BREAK_HITS,
     FIRE_RING_HEAT,
     FIRE_RING_R,
     FIRE_RING_TIME,
@@ -207,6 +209,18 @@ class Unit:
             self.effects[effect] = self.effects.get(effect, 0) + DURATION[effect]
         if effect == "shield":
             self.shield_hits += SHIELD_HITS
+        if effect == "freeze":                # новая заморозка — счёт попаданий заново
+            self.freeze_hits = 0
+
+    def struck(self):
+        """Попадание (пуля, удар, снаряд — не горение земли): замороженный после FREEZE_BREAK_HITS
+        попаданий оттаивает."""
+        if "freeze" not in self.effects:
+            return
+        self.freeze_hits = getattr(self, "freeze_hits", 0) + 1
+        if self.freeze_hits >= FREEZE_BREAK_HITS:
+            del self.effects["freeze"]
+            self.freeze_hits = 0
 
     def tick_effects(self, dt):
         self.shield_flash = max(0.0, getattr(self, "shield_flash", 0.0) - dt)
@@ -271,6 +285,7 @@ class Player(Unit):
         self.melee_flash = 0.0        # сколько ещё виден взмах
         self.shot_flash = 0.0         # сколько ещё видны отдача и вспышка выстрела
         self.bear_saved = None        # «Медведь»: жизни мага до превращения
+        self.bear_at = None           # …и где он превратился (туда вернётся маг)
         self.ring_t = 0.0             # сколько стоит у огненной стены с последнего урона
         self.reset_effects()
         self.items = [None] * INVENTORY_SIZE
@@ -487,6 +502,13 @@ class Bullet:
         self.wave_nx, self.wave_ny = 0.0, 1.0      # куда смещает волна (поперёк полёта)
         self.wave_w = 0.0
         self.wave_phase = 0.0
+        self.bounces = 0              # сколько раз отскочила от стенок поля (стражи и зеркало — не в счёт)
+
+    def bounce(self):
+        """Отскок от стенки поля; сверх BULLET_WALL_BOUNCES — пуля гаснет."""
+        self.bounces += 1
+        if self.bounces > BULLET_WALL_BOUNCES:
+            self.alive = False
 
     def update(self, dt):
         self.px, self.py = self.x, self.y
@@ -499,16 +521,23 @@ class Bullet:
             new = math.sin(self.wave_w * self.t + self.wave_phase)
             self.x += self.wave_amp * (new - old) * self.wave_nx
             self.y += self.wave_amp * (new - old) * self.wave_ny
-        # отскок от верхней и нижней стенок
+        # отскок от всех четырёх стенок поля — не больше BULLET_WALL_BOUNCES раз
         if self.y - BULLET_R < TOP:
             self.y = TOP + BULLET_R
             self.vy = abs(self.vy)
+            self.bounce()
         elif self.y + BULLET_R > BOTTOM:
             self.y = BOTTOM - BULLET_R
             self.vy = -abs(self.vy)
-        # задняя стенка — без отскока, пуля просто улетает
-        if self.x < -BULLET_R or self.x > WIDTH + BULLET_R:
-            self.alive = False
+            self.bounce()
+        if self.x - BULLET_R < 0:
+            self.x = BULLET_R
+            self.vx = abs(self.vx)
+            self.bounce()
+        elif self.x + BULLET_R > WIDTH:
+            self.x = WIDTH - BULLET_R
+            self.vx = -abs(self.vx)
+            self.bounce()
 
 
 class Clone(Unit):
@@ -552,6 +581,7 @@ class Clone(Unit):
     def hurt(self, n):
         self.hp -= n
         self.hit_flash = 0.12
+        self.struck()
         if self.hp <= 0:
             self.alive = False
 
@@ -657,9 +687,12 @@ class Mob:
         """Попадание: моб злится на того, кто ударил (маг или двойник)."""
         self.hp -= damage
         self.flash = 0.12
-        if "mobpeace" in getattr(attacker, "owner", attacker).effects:    # «Мир с мобами» хозяина: не злит
+        hero = getattr(attacker, "owner", attacker)
+        if "mobpeace" in hero.effects:        # «Мир с мобами» хозяина: не злит
             if self.target is attacker:
                 self.target = None
+        elif "firmground" in hero.effects:    # «Твёрдая почва»: Земля для мобов свой — не злит, злой бьёт дальше
+            pass
         else:
             self.target = attacker
         if self.hp <= 0:

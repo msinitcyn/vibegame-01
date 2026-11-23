@@ -69,6 +69,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         pygame.display.set_caption(t("title"))
         set_window_icon()             # до создания окна — так значок подхватывают все системы
         # SCALED: поле остаётся WIDTH×HEIGHT, а на экран растягивается с сохранением пропорций
+        self.fullscreen = not windowed
         flags = pygame.SCALED if windowed else pygame.SCALED | pygame.FULLSCREEN
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
         try:
@@ -169,6 +170,24 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             self.start_replay(replay)
         elif logs.ready() and logs.unsent_crashes() and self.settings.get("crash_reports", "ask") == "ask":
             self.state = "crash_ask"          # в прошлый раз игра упала — спросить, можно ли отправлять отчёты
+
+    def toggle_fullscreen(self):
+        """F11: окно <-> полный экран. Окно пересоздаётся на том мониторе, где оно сейчас: просто
+        toggle_fullscreen в Linux оставлял поле размером с прежний монитор в углу большого."""
+        if WEB:
+            pygame.display.toggle_fullscreen()
+            return
+        try:
+            from pygame._sdl2.video import Window
+            display = Window.from_display_module().display_index
+        except Exception:
+            display = 0
+        self.fullscreen = not self.fullscreen
+        flags = pygame.SCALED | (pygame.FULLSCREEN if self.fullscreen else 0)
+        try:
+            self.screen = pygame.display.set_mode((WIDTH, HEIGHT), flags, display=display)
+        except pygame.error:
+            self.screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
 
     @property
     def players(self):

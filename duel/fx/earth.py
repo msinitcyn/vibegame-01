@@ -16,33 +16,31 @@ def _layer(r, k=6):
 
 
 def draw_firmground(surf, pos, r, since, time):
-    """«Твёрдая почва»: под ногами каменная плита, вокруг ног по кругу ходят камешки; в начале — плита
+    """«Твёрдая почва»: под магом круглая каменная плита, вокруг по кругу ходят камешки; в начале — плита
     поднимается из земли с пылью."""
     P = params("earth")
     stone = rgb(P.get("stone"), (150, 124, 88))
     dark = rgb(P.get("stone_dark"), (86, 66, 42))
     layer, c = _layer(r)
     rise = min(1.0, since / 0.35)
-    fy = c + r * 0.85                                         # у ног
-    plate = pygame.Rect(0, 0, int(r * 2.4 * (0.6 + 0.4 * ease_out(rise))), int(r * 0.7))
-    plate.center = (c, int(fy))
-    pygame.draw.ellipse(layer, (*INK, int(160 * rise)), plate.inflate(4, 4))
-    pygame.draw.ellipse(layer, (*dark, int(230 * rise)), plate)
-    pygame.draw.ellipse(layer, (*stone, int(230 * rise)), plate.inflate(-6, -6), 2)
+    pr = int(r * 1.35 * (0.6 + 0.4 * ease_out(rise)))         # плита — круг под магом
+    pygame.draw.circle(layer, (*INK, int(160 * rise)), (c, c), pr + 2)
+    pygame.draw.circle(layer, (*dark, int(200 * rise)), (c, c), pr)
+    pygame.draw.circle(layer, (*stone, int(230 * rise)), (c, c), max(1, pr - 3), 2)
     n = int(P.get("pebbles", 5))
-    for i in range(n):                                        # камешки кружат у ног (сплюснутый круг)
+    for i in range(n):                                        # камешки кружат вокруг мага
         a = time * 2.4 + i * 2 * math.pi / n
-        x, y = c + math.cos(a) * r * 1.25, fy + math.sin(a) * r * 0.38
+        x, y = c + math.cos(a) * r * 1.6, c + math.sin(a) * r * 1.6
         s = max(2, int(r * (0.16 + 0.05 * math.sin(i * 2.1))))
         pygame.draw.circle(layer, (*INK, 200), (int(x), int(y)), s + 1)
-        pygame.draw.circle(layer, (*(stone if math.sin(a) > 0 else dark), 255), (int(x), int(y)), s)
+        pygame.draw.circle(layer, (*(stone if i % 2 else dark), 255), (int(x), int(y)), s)
     if since < 0.5:                                           # пыль, пока плита поднимается
         q = since / 0.5
         for i in range(8):
             a = i * math.pi / 4 + 0.2
-            d = r * (0.8 + 1.2 * q)
+            d = r * (1.2 + 1.2 * q)
             pygame.draw.circle(layer, (*stone, int(150 * (1 - q))),
-                               (int(c + math.cos(a) * d), int(fy + math.sin(a) * d * 0.35)), int(3 + 4 * q))
+                               (int(c + math.cos(a) * d), int(c + math.sin(a) * d)), int(3 + 4 * q))
     surf.blit(layer, layer.get_rect(center=(int(pos[0]), int(pos[1]))))
 
 
@@ -62,19 +60,18 @@ def draw_quickstep(surf, pos, r, time, facing):
 
 
 def draw_sapped(surf, pos, r, time):
-    """«Кража скорости» у соперника: ноги вязнут — бурая пыль кольцом у ног и капли, тянущиеся вниз."""
+    """«Кража скорости» у соперника: маг вязнет — круг бурой грязи под ним и капли, тянущиеся вниз."""
     P = params("earth")
     mud = rgb(P.get("mud"), (118, 86, 50))
     layer, c = _layer(r)
-    fy = c + r * 0.9
-    ring = pygame.Rect(0, 0, int(r * 2.2), int(r * 0.6))
-    ring.center = (c, int(fy))
-    pygame.draw.ellipse(layer, (*mud, 150), ring)
-    pygame.draw.ellipse(layer, (*INK, 160), ring, 2)
-    for i in range(5):                                        # грязь налипает и тянется
-        q = (time * 1.2 + i / 5) % 1.0
-        x = c - r * 0.8 + i * r * 0.4
-        pygame.draw.line(layer, (*mud, int(220 * (1 - q))), (x, fy - r * 0.3), (x, fy - r * 0.3 + q * r * 0.5), 3)
+    rr = int(r * 1.3)
+    pygame.draw.circle(layer, (*mud, 130), (c, c), rr)
+    pygame.draw.circle(layer, (*INK, 160), (c, c), rr, 2)
+    for i in range(6):                                        # грязь налипает по кругу и тянется вниз
+        q = (time * 1.2 + i / 6) % 1.0
+        a = i * math.pi / 3 + 0.5
+        x, y = c + math.cos(a) * rr, c + math.sin(a) * rr
+        pygame.draw.line(layer, (*mud, int(220 * (1 - q))), (x, y), (x, y + q * r * 0.5), 3)
     surf.blit(layer, layer.get_rect(center=(int(pos[0]), int(pos[1]))))
 
 
@@ -103,39 +100,38 @@ def quake_phase(left):
 
 
 def draw_quake(surf, pos, r, left, time):
-    """«Толчки» на сопернике: под ним круг рун-трещин; в начале каждого толчка — ударная волна, камни
-    подбрасывает, земля трескается, над головой — звёздочки, пока он оглушён."""
+    """«Толчки» на сопернике: вокруг него круг трещин; в начале каждого толчка — круглая ударная волна,
+    трещины во все стороны, камни подбрасывает, над головой — звёздочки, пока он оглушён."""
     P = params("earth")
     crack = rgb(P.get("crack"), (236, 176, 90))
     stone = rgb(P.get("stone"), (150, 124, 88))
     n, t = quake_phase(left)
     layer, c = _layer(r, 8)
-    fy = c + r * 0.85
     rr = r * 1.6
-    pygame.draw.ellipse(layer, (*crack, 90), (c - rr, fy - rr * 0.35, 2 * rr, rr * 0.7), 2)
+    pygame.draw.circle(layer, (*crack, 90), (c, c), int(rr), 2)
     for i in range(QUAKE_PULSES):                             # сколько толчков осталось — точки на круге
-        a = math.pi * (0.75 + 0.25 * i)
+        a = math.pi * (1.25 + 0.25 * i)
         on = i > n or (i == n and t < QUAKE_STUN)
         pygame.draw.circle(layer, (*(crack if on else (90, 70, 50)), 230),
-                           (int(c + math.cos(a) * rr), int(fy + math.sin(a) * rr * 0.35)), 3)
+                           (int(c + math.cos(a) * rr), int(c + math.sin(a) * rr)), 3)
     if t < QUAKE_STUN + 0.35:                                 # толчок: волна, трещины, камни
         q = min(1.0, t / (QUAKE_STUN + 0.35))
         w = rr * (0.5 + 1.4 * ease_out(q))
-        pygame.draw.ellipse(layer, (*crack, int(255 * (1 - q))), (c - w, fy - w * 0.35, 2 * w, w * 0.7),
-                            max(1, int(5 * (1 - q))))
-        for i in range(6):                                    # трещины от ног
+        pygame.draw.circle(layer, (*crack, int(255 * (1 - q))), (c, c), int(w), max(1, int(5 * (1 - q))))
+        for i in range(6):                                    # трещины от мага во все стороны
             a = i * math.pi / 3 + n
-            pts = [(c, fy)]
+            pts = [(c + math.cos(a) * r * 0.8, c + math.sin(a) * r * 0.8)]
             for j in range(1, 4):
-                d = rr * j / 3 * min(1.0, q * 2.5)
-                pts.append((c + math.cos(a + 0.25 * (-1) ** j) * d, fy + math.sin(a + 0.25 * (-1) ** j) * d * 0.4))
+                d = r * 0.8 + rr * j / 3 * min(1.0, q * 2.5)
+                pts.append((c + math.cos(a + 0.25 * (-1) ** j) * d, c + math.sin(a + 0.25 * (-1) ** j) * d))
             pygame.draw.lines(layer, (*INK, int(230 * (1 - q))), False, pts, 4)
             pygame.draw.lines(layer, (*crack, int(255 * (1 - q))), False, pts, 2)
-        for i in range(5):                                    # камни подбрасывает
+        for i in range(5):                                    # камни разлетаются и падают
             a = i * 2 * math.pi / 5 + n
-            h = math.sin(math.pi * min(1.0, q * 1.4)) * r * 1.1
-            x = c + math.cos(a) * r * 1.1
-            y = fy + math.sin(a) * r * 0.35 - h
+            d = r * (1.1 + 0.6 * min(1.0, q * 1.4))
+            h = math.sin(math.pi * min(1.0, q * 1.4)) * r * 0.6
+            x = c + math.cos(a) * d
+            y = c + math.sin(a) * d - h
             pygame.draw.circle(layer, (*INK, 220), (int(x), int(y)), 4)
             pygame.draw.circle(layer, (*stone, 255), (int(x), int(y)), 3)
     if t < QUAKE_STUN:                                        # оглушён — звёздочки над головой

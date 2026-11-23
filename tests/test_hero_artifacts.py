@@ -1,6 +1,8 @@
 """Артефакты героев: ледяная тропа, стена деревьев, притяжение тьмы, угасание от мага."""
 import math
 
+import pytest
+
 from duel.commands import Command
 from duel.config import (FOE_LAND_DPS, HERO_FADE, MAX_HP, TOP, TREE_LENGTH,
                          TREE_TIME, TREE_W)
@@ -205,23 +207,28 @@ def test_zombie_goes_for_foe_and_expires_without_drop():
 
 # ------------------------------------------------------------------ медведь
 
-def test_bear_is_big_fast_melee_and_returns_old_hp():
+def test_bear_is_big_fast_melee_and_returns_old_hp_and_spot():
     from duel.config import BASE_RADIUS, BEAR_HP, BEAR_SIZE, BEAR_SPEED, DURATION
     m = new_match()
     b = m.blue
     b.hp = 6
     speed0 = b.speed
+    spot = (b.x, b.y)
     m.apply_item(b, "bear")
     assert b.hp == BEAR_HP and b.radius == BASE_RADIUS * BEAR_SIZE
-    assert b.speed == speed0 * BEAR_SPEED == speed0 and not b.can_fire     # скорость как у мага
+    assert b.speed == pytest.approx(speed0 * BEAR_SPEED) and BEAR_SPEED > 1 and not b.can_fire   # быстрее мага
     assert BEAR_HP == 15
     m.hurt_player(b, 10)
     assert b.hp == BEAR_HP - 10
-    step(m, DURATION["bear"] + 0.1)
+    for _ in range(round(2 / DT)):                       # медведь ушёл
+        m.step(DT, {"blue": Command(move=(0, 1))})
+    assert b.y > spot[1] + 50
+    step(m, DURATION["bear"])
     assert b.hp == 6 and "bear" not in b.effects and b.bear_saved is None
+    assert (b.x, b.y) == spot                            # маг — там, где превратился
 
 
-def test_bear_defeated_turns_back_without_losing():
+def test_bear_defeated_kills_the_mage():
     from duel.config import BEAR_HP
     m = new_match()
     b = m.blue
@@ -229,7 +236,7 @@ def test_bear_defeated_turns_back_without_losing():
     m.apply_item(b, "bear")
     m.hurt_player(b, BEAR_HP)
     step(m)
-    assert b.hp == 3 and "bear" not in b.effects and m.winner is None
+    assert b.hp <= 0 and "bear" not in b.effects and m.winner is m.red
 
 
 def test_bear_melee_reaches_further_and_hits_harder():
