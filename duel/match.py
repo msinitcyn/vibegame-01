@@ -26,6 +26,7 @@ import random
 from .commands import Command
 from .config import (
     MOB_LATE_EXTRA,
+    GUARDIAN_PETRIFY,
     GUARDIAN_RESPAWN,
     GUARDIAN_SHOT_EVERY,
     GUARDIAN_SPEED,
@@ -875,14 +876,18 @@ class Match:
             g.flash = max(0.0, g.flash - dt)
             g.hit_cd = max(0.0, g.hit_cd - dt)
             g.swing = max(0.0, g.swing - dt)
+            g.petrify = max(0.0, g.petrify - dt)
             target = self.player(g.side)
-            # «Твёрдая почва»: для стражей Земля — свой, спящий страж не просыпается (проснувшийся бьёт дальше)
-            g.awake = in_arena(target.x, target.y) and not self.hidden(target) and \
-                (g.awake or "firmground" not in target.effects)
+            # «Твёрдая почва»: для стражей Земля — свой: не просыпаются, проснувшиеся снова каменеют
+            awake = in_arena(target.x, target.y) and not self.hidden(target) and "firmground" not in target.effects
+            if g.awake and not awake:
+                g.petrify = GUARDIAN_PETRIFY
+            g.awake = awake
             if not g.awake:                   # статуя: на пост
                 g.windup = 0.0
                 g.shot_timer = GUARDIAN_SHOT_EVERY
-                self.guardian_walk(g, *g.post, dt)
+                if g.petrify == 0:            # окаменев, статуя возвращается на пост
+                    self.guardian_walk(g, *g.post, dt)
                 continue
             g.facing = 1 if target.x >= g.x else -1
             dist = math.hypot(target.x - g.x, target.y - g.y)

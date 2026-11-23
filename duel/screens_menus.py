@@ -33,11 +33,12 @@ from .config import (
     WEAPON_MAX,
     WEAPON_TIME,
     WHITE,
+    TOP,
     WIDTH,
 )
 from .i18n import get_lang, LANGS, t as tr
 from . import keys
-from .demos import Demo, has_demo, load as load_demo
+from .demos import Demo, fit_view, has_demo, load as load_demo
 from .render import draw_field
 from .snapshot import snapshot
 from .icons import draw_icon
@@ -491,8 +492,8 @@ class MenuScreensMixin:
             field = self._demo_surface = pygame.Surface((WIDTH, HEIGHT))
         self.blit_field(field, snap, heroes)
         draw_field(field, snap, self.tiny)
-        vx, vy, vw, vh = demo.data["view"]
-        view = pygame.Rect(int(vx), int(vy), int(vw), int(vh)).clip(field.get_rect())
+        # участок — в пропорциях окошка (иначе широкие сценки сплющиваются), не выше поля (там панель)
+        view = pygame.Rect(fit_view(demo.data["view"], box.size, (0, TOP, WIDTH, HEIGHT - TOP)))
         part = field.subsurface(view)
         # крупнее, чем на поле, — по пикселям (чётко, как пиксель-арт); мельче — сглаженно
         img = (pygame.transform.scale(part, box.size) if box.w >= view.w

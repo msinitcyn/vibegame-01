@@ -427,6 +427,7 @@ class Guardian:
         self.alive = True
         self.respawn_at = 0.0
         self.awake = False
+        self.petrify = 0.0            # заснул — сколько ещё каменеет (анимация)
         self.facing = -sx
         self.hit_cd = self.windup = self.swing = 0.0
         self.swing_dir, self.swing_hit = 0.0, False

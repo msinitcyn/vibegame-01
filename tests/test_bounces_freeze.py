@@ -83,14 +83,39 @@ def test_firmground_mobs_do_not_get_angry_and_guardians_sleep():
     assert any(g.awake for g in m.guardians if g.side == "blue")
 
 
-def test_firmground_does_not_calm_awake_guardians():
+def test_firmground_turns_awake_guardians_back_to_statues():
+    from duel.config import GUARDIAN_PETRIFY
     m = new_match()
     m.set_heroes({"blue": "earth", "red": "fire"})
     b = m.blue
     b.x, b.y = ARENA
     step(m)
-    assert any(g.awake for g in m.guardians if g.side == "blue")
+    mine = [g for g in m.guardians if g.side == "blue"]
+    assert all(g.awake for g in mine)
     m.apply_item(b, "firmground")
     step(m)
-    assert any(g.awake for g in m.guardians if g.side == "blue")
+    assert not any(g.awake for g in mine) and all(g.petrify > 0 for g in mine)     # каменеют
+    step(m, GUARDIAN_PETRIFY)
+    assert all(g.petrify == 0 and not g.awake for g in mine)
     assert math.isclose(m.danger(b)[0], 0)
+
+
+def test_demo_view_keeps_box_proportions():
+    from duel.demos import fit_view
+    assert fit_view((340, 90, 640, 150), (632, 316), (0, 84, 1000, 640)) == (340, 84, 640, 320)   # шире — выше
+    assert fit_view((200, 300, 100, 100), (200, 100), (0, 84, 1000, 640)) == (150, 300, 200, 100)  # уже — шире
+    x, y, w, h = fit_view((900, 600, 400, 100), (2, 1), (0, 84, 1000, 640))
+    assert w == 2 * h and x + w <= 1000 and y + h <= 724                       # за край поля не выходит
+
+
+def test_firmground_demo_shows_guardians_waking_and_petrifying():
+    from duel import demos
+    d = demos.Demo(demos.load("firmground"))
+    woke = slept_after = False
+    while d.t < d.length - 0.1:
+        d.update(1 / 60)
+        gs = d.match.guardians
+        woke = woke or any(g.awake for g in gs)
+        if "firmground" in d.match.blue.effects and d.t > 3.6:
+            slept_after = slept_after or not any(g.awake for g in gs)
+    assert d.match.guardians and woke and slept_after

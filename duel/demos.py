@@ -54,6 +54,23 @@ def has_demo(kind):
     return load(kind) is not None
 
 
+def fit_view(view, size, bounds):
+    """Участок поля сценки (x, y, w, h), расширенный до пропорций окошка size (w, h) — чтобы картинка
+    не сплющивалась; центр тот же, за край поля bounds (x, y, w, h) не выходит."""
+    x, y, w, h = (float(v) for v in view)
+    k = size[0] / size[1]
+    if w / h > k:
+        nw, nh = w, w / k
+    else:
+        nw, nh = h * k, h
+    bx, by, bw, bh = bounds
+    nw, nh = min(nw, bw), min(nh, bh)
+    cx, cy = x + w / 2, y + h / 2
+    nx = min(max(bx, cx - nw / 2), bx + bw - nw)
+    ny = min(max(by, cy - nh / 2), by + bh - nh)
+    return (round(nx), round(ny), round(nw), round(nh))
+
+
 def _span(t):
     return (float(t[0]), float(t[1])) if isinstance(t, (list, tuple)) else (float(t), float(t))
 
@@ -73,7 +90,9 @@ class Demo:
         m = Match(seed=int(d.get("seed", 1)), heroes=heroes)
         m.ammo_timer = {p: 1e9 for p in m.players}
         m.next_wave = 1e9
-        m.mobs, m.guardians, m.artifacts, m.ammo_packs = [], [], [], []
+        keep = (d.get("setup") or {}).get("guardians") or []     # стражи арены этих сторон остаются
+        m.guardians = [g for g in m.guardians if g.side in keep]
+        m.mobs, m.artifacts, m.ammo_packs = [], [], []
         for p in m.players:
             spot = (d.get("setup") or {}).get(p.id) or {}
             p.x = float(spot.get("x", p.x))

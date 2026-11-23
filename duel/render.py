@@ -9,6 +9,7 @@ import pygame
 
 from .config import (
     DURATION,
+    GUARDIAN_PETRIFY,
     WEAPON_TIME,
     ZOMBIE_RISE,
     MOBSWAP_FX,
@@ -501,9 +502,20 @@ def draw_guardian(surf, g, font, heroes):
         pygame.draw.circle(surf, side_color(heroes, g["side"]), pos, int(r) + 5, 3)
     draw_unit(surf, "mob_ranged" if g["kind"] == "ranged" else "mob", pos, r, g["facing"],
               white=g["flash"] > 0)
-    if not g["awake"]:                            # статуя: серый камень поверх
-        stone = pygame.Surface((int(2 * r + 4),) * 2, pygame.SRCALPHA)
-        pygame.draw.circle(stone, (150, 150, 160, 170), (int(r + 2),) * 2, int(r + 1))
+    if not g["awake"]:                            # статуя: серый камень поверх (засыпает — каменеет снизу вверх)
+        k = 1.0 - g.get("petrify", 0) / GUARDIAN_PETRIFY
+        size = int(2 * r + 4)
+        stone = pygame.Surface((size, size), pygame.SRCALPHA)
+        pygame.draw.circle(stone, (150, 150, 160, 170), (size // 2,) * 2, int(r + 1))
+        if k < 1:
+            h = int(size * k)
+            pygame.draw.line(stone, (230, 230, 240, 230), (0, size - h), (size, size - h), 2)   # край камня
+            stone.fill((0, 0, 0, 0), (0, 0, size, size - h))
+            for i in range(6):                    # каменная крошка разлетается от края
+                a = i * math.pi / 3 + k * 2
+                d = r * (0.6 + 0.9 * k)
+                pygame.draw.circle(surf, (170, 170, 180), (int(pos[0] + math.cos(a) * d),
+                                                           int(pos[1] + r - 2 * r * k + math.sin(a) * d * 0.4)), 2)
         surf.blit(stone, stone.get_rect(center=pos))
         return
     fx_mage.draw_hp_bar(surf, pos[0], fx_mage.hp_bar_top(pos[1], r), g["hp"], g["max_hp"], 0,
