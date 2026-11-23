@@ -177,6 +177,29 @@ def _draw_icon(surf, kind, center, r):
         pygame.draw.polygon(surf, color, [P(-0.22, -0.6), P(-0.42, -0.3), P(-0.02, -0.3)])
         pygame.draw.line(surf, color, P(0.22, -0.55), P(0.22, 0.45), w)
         pygame.draw.polygon(surf, color, [P(0.22, 0.6), P(0.42, 0.3), P(0.02, 0.3)])
+    elif kind == "landswap":                      # две половины земли и стрелки навстречу
+        pygame.draw.rect(surf, (110, 82, 50), (*P(-0.6, -0.42), r * 0.56, r * 0.84), border_radius=2)
+        pygame.draw.rect(surf, (52, 96, 58), (*P(0.04, -0.42), r * 0.56, r * 0.84), border_radius=2)
+        pygame.draw.line(surf, color, P(-0.42, -0.18), P(0.3, -0.18), w)
+        pygame.draw.polygon(surf, color, [P(0.48, -0.18), P(0.26, -0.36), P(0.26, 0.0)])
+        pygame.draw.line(surf, color, P(0.42, 0.2), P(-0.3, 0.2), w)
+        pygame.draw.polygon(surf, color, [P(-0.48, 0.2), P(-0.26, 0.02), P(-0.26, 0.38)])
+    elif kind == "firmground":                    # камень-плита под ногой, сверху — погасший огонёк
+        pygame.draw.polygon(surf, color, [P(-0.6, 0.15), P(-0.2, -0.05), P(0.35, 0.0), P(0.6, 0.2),
+                                          P(0.45, 0.5), P(-0.45, 0.5)])
+        pygame.draw.line(surf, (90, 70, 45), P(-0.1, 0.05), P(0.0, 0.45), max(1, w // 2))
+        pygame.draw.polygon(surf, (150, 120, 210), [P(0, -0.65), P(0.16, -0.32), P(0, -0.18), P(-0.16, -0.32)])
+        pygame.draw.line(surf, (230, 90, 80), P(-0.3, -0.6), P(0.3, -0.12), max(2, w - 1))
+    elif kind == "speedsteal":                    # шевроны скорости идут в руку (к магу)
+        for dx in (0.25, -0.15):
+            pygame.draw.lines(surf, color, False, [P(dx, -0.4), P(dx - 0.32, 0), P(dx, 0.4)], w)
+        pygame.draw.circle(surf, (214, 150, 70), P(-0.52, 0), max(2, r * 0.14))
+    elif kind == "quake":                         # трещина в земле и три волны толчков
+        pygame.draw.lines(surf, color, False, [P(-0.55, 0.3), P(-0.2, 0.05), P(0.0, 0.35), P(0.25, 0.0),
+                                               P(0.55, 0.25)], w)
+        for u in (-0.35, 0.0, 0.35):
+            pygame.draw.arc(surf, (240, 210, 150), (*P(u - 0.14, -0.62), r * 0.28, r * 0.28), 0.3, 2.84,
+                            max(1, w // 2))
     elif kind == "boots":                         # сапог
         pygame.draw.polygon(surf, color, [P(-0.3, -0.55), P(0.05, -0.55), P(0.05, 0.1), P(0.55, 0.22),
                                           P(0.55, 0.45), P(-0.3, 0.45)])

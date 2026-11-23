@@ -73,7 +73,7 @@ def test_frost_and_light_demos():
 def test_demos_on_neutral_strip_except_foe_land():
     from duel.entities import zone_at
     for f in sorted(demos.DEMO_DIR.glob("*.json")):
-        if f.stem in ("foe_land", "icewalk"):         # эти — про чужую землю: маги там нарочно
+        if f.stem in ("foe_land", "icewalk", "landswap", "firmground"):   # про землю и арену: маги там нарочно
             continue
         data = json.loads(f.read_text(encoding="utf-8"))
         for side in ("blue", "red"):

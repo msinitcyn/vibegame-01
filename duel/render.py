@@ -49,7 +49,7 @@ from .config import (
     CLONE_TIME,
 )
 from . import fx
-from .fx import bullets as fx_bullets, mage as fx_mage, spells as fx_spells
+from .fx import bullets as fx_bullets, earth as fx_earth, mage as fx_mage, spells as fx_spells
 from .icons import draw_icon
 from .items import ITEMS
 from .sprites import SPRITE_TO_HITBOX, draw_unit, sprite, sprite_px
@@ -182,6 +182,16 @@ def draw_player(surf, p, heroes, viewer=None, time=0.0, font=None):
     aim = p.get("aim")
     facing = DIR[pid] if aim is None else (1 if math.cos(aim) >= 0 else -1)   # лицом к прицелу
     bear = "bear" in p.get("effects", {})
+    effects = p.get("effects", {})
+    if "quake" in effects:                         # «Толчки»: трясёт, под ногами — трещины
+        pos = (pos[0] + fx_earth.quake_shake(effects["quake"], time), pos[1])
+        fx_earth.draw_quake(surf, pos, p["r"], effects["quake"], time)
+    if "firmground" in effects:                    # «Твёрдая почва»: каменная плита и камешки у ног
+        fx_earth.draw_firmground(surf, pos, p["r"], since_start("firmground", effects["firmground"]), time)
+    if "sapped" in effects:                        # «Кража скорости» у соперника: ноги вязнут
+        fx_earth.draw_sapped(surf, pos, p["r"], time)
+    if "quickstep" in effects:                     # …а у Земли — ветер позади
+        fx_earth.draw_quickstep(surf, pos, p["r"], time, facing)
     since = since_start("icewalk", p["effects"]["icewalk"]) if "icewalk" in p["effects"] else -1
     T = float(fx.params("ice").get("walk_cast_time", 0.5))
     if 0 <= since < T:                             # каст ледяной тропы — шипы льда из-под ног
@@ -539,6 +549,12 @@ def draw_field(surf, snap, font, viewer=None):
             pygame.draw.circle(ring, (120, 220, 90, int(50 * k)), (c, c), ZOMBIE_RADIUS)
             pygame.draw.circle(ring, (150, 240, 110, int(230 * k)), (c, c), ZOMBIE_RADIUS, 3)
             surf.blit(ring, (int(p["x"]) - c, int(p["y"]) - c))
+        steal = p.get("effects", {}).get("quickstep")
+        if steal is not None and since_start("quickstep", steal) < 0.8:   # скорость утекает к Земле
+            src = by_id["red" if p["id"] == "blue" else "blue"]
+            if not hidden_now(src) and not hidden_now(p):
+                fx_earth.draw_steal_stream(surf, _pos(src), _pos(p), since_start("quickstep", steal) / 0.8,
+                                           fx.rgb(fx.params("earth").get("steal"), (130, 220, 120)))
         if "lassoed" in p.get("effects", {}):
             puller = by_id["red" if p["id"] == "blue" else "blue"]
             fx_spells.draw_lasso(surf, p, puller, side_color(heroes, puller["id"]), snap.get("time", 0))

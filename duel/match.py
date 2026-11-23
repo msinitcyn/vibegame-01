@@ -226,7 +226,7 @@ class Match:
         """Ближний удар: MELEE_DAMAGE всем мобам и магу-сопернику рядом (щит гасит), двойники
         соперника рядом погибают. Пули не сбивает; патроны не тратит, работает и под заморозкой,
         «не стреляет», запретом артефактов."""
-        if p.melee_cd > 0:
+        if p.melee_cd > 0 or p.stunned:
             return
         p.melee_cd = MELEE_COOLDOWN
         p.melee_flash = MELEE_FLASH
@@ -261,6 +261,8 @@ class Match:
             return
         if "noitems" in p.effects and kind != "cleanse":
             return                            # запрет артефактов: ячейка не тратится
+        if p.stunned:
+            return                            # «Толчки»: пока земля уходит из-под ног — не колдует
         self.apply_item(p, p.take_item(slot))
         used = self.stats[p.id]["used"]
         used[kind] = used.get(kind, 0) + 1
@@ -328,6 +330,15 @@ class Match:
             for m in self.mobs:
                 if m.target in mine:
                     m.target = None
+        elif kind == "landswap":              # «Смена земель»: земли меняются хозяевами на время
+            self.give(p, "landswap")
+        elif kind == "firmground":            # «Твёрдая почва»: арена мобов не жжёт
+            self.give(p, "firmground")
+        elif kind == "speedsteal":            # «Кража скорости»: соперник медленнее, Земля быстрее
+            self.give(p, "quickstep")
+            self.give(foe, "sapped")
+        elif kind == "quake":                 # «Толчки»: соперник трижды замирает
+            self.give(foe, "quake")
         elif kind == "mobswap":               # мобы, что шли на тебя (и двойников), — на соперника
             mine = [p] + self.clones_of(p)
             for m in self.mobs:
@@ -412,6 +423,15 @@ class Match:
         """Маг p стоит на ледяном следе хозяина owner."""
         return any(t.owner is owner and t.under(p.x, p.y) for t in self.ice)
 
+    def lands_swapped(self):
+        """«Смена земель» действует (у кого-то из магов): земли сторон поменялись хозяевами."""
+        return any("landswap" in q.effects for q in self.players)
+
+    def foe_zone_of(self, p):
+        """Чья земля сейчас чужая для мага p: обычно — соперника, при «Смене земель» — своя."""
+        own = "blue" if p.dir > 0 else "red"
+        return own if self.lands_swapped() else p.foe_zone
+
     def ground_slow(self, p):
         """Замедление земли под магом. «Ледяная тропа» — земля Холода на время: на чужой тропе — как на чужой
         земле (медленнее, и жжёт — см. danger); с действующей тропой или на своём следе чужая земля не
@@ -419,7 +439,7 @@ class Match:
         if self.on_trail(p, self.other(p)):
             return FOE_LAND_SLOW
         zone = zone_at(p.x, p.y)
-        if zone == p.foe_zone:
+        if zone == self.foe_zone_of(p):
             return 1.0 if ("icewalk" in p.effects or self.on_trail(p, p)) else FOE_LAND_SLOW
         return ARENA_SLOW if zone == "arena" else 1.0
 
@@ -432,9 +452,9 @@ class Match:
             return FOE_LAND_DPS, foe.hero
         if "icewalk" in p.effects or self.on_trail(p, p):
             return 0, None
-        if p.on_foe_land():
+        if zone_at(p.x, p.y) == self.foe_zone_of(p):
             return FOE_LAND_DPS, foe.hero
-        if in_arena(p.x, p.y):
+        if in_arena(p.x, p.y) and "firmground" not in p.effects:      # «Твёрдая почва»: арена не жжёт
             return ARENA_DPS, "arena"
         return 0, None
 

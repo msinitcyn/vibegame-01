@@ -133,5 +133,5 @@ def test_browser_conn_reads_hello_through_js(monkeypatch):
     fresh = Conn.__new__(Conn)
     fresh.init_stream()
     assert set(vars(fresh)) <= set(vars(conn))           # все поля Conn есть и у браузерного
-    js.inbox.append(base64.b64encode(json.dumps({"type": "hello", "proto": 7}).encode() + b"\n").decode())
+    js.inbox.append(base64.b64encode(json.dumps({"type": "hello", "proto": 8}).encode() + b"\n").decode())
     assert [m["type"] for m in conn.recv()] == ["hello"]

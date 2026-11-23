@@ -397,7 +397,11 @@ def test_join_picks_found_server(game):
             time.sleep(0.02)
         assert game.join_games()[0]["name"] == "Дом"
         game.draw_join()                              # экран со списком рисуется
-        game.on_key(pygame.KSCAN_RETURN)              # найденный сервер выбран сам — сразу Enter
+        game.join_autopick()
+        assert game.join_pick == "public"             # сам выбран сервер в интернете…
+        game.on_key(pygame.KSCAN_DOWN)                # …ниже — найденный в сети (в интернет тест не ходит)
+        assert game.join_pick == game.join_games()[0]["address"]
+        game.on_key(pygame.KSCAN_RETURN)
         assert game.state == "entry" and game.finder is None
     finally:
         game.leave_net()

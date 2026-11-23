@@ -19,6 +19,7 @@ from .config import (
     HEIGHT,
     HERO_EDGE,
     HERO_LAND,
+    LANDSWAP_FADE,
     HUD_CENTER,
     HUD_H,
     INVENTORY_SIZE,
@@ -30,6 +31,7 @@ from .config import (
 )
 from .gamepad import PAD_ITEM_COLORS, PAD_ITEM_LABELS, PAD_ITEM_LAYOUT
 from .i18n import t as tr
+from .fx import earth as fx_earth
 from .icons import draw_ammo_icon, draw_icon
 from .items import EFFECT_ICON, ITEMS, WEAPON_ITEMS
 from .render import draw_field
@@ -392,9 +394,24 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
             pygame.draw.rect(s, (16, 12, 20), box, border_radius=8)
             s.blit(img, img.get_rect(center=box.center))
 
+    def blit_field(self, surf, snap, heroes=None):
+        """Фон поля; при «Смене земель» поверх — земли наоборот (перетекают в начале и в конце)."""
+        surf.blit(self.field_background(heroes), (0, TOP))
+        left = max((p.get("effects", {}).get("landswap", 0) for p in (snap or {}).get("players", [])), default=0)
+        if left > 0:
+            pair = tuple(heroes) if heroes else (self.side_hero("blue"), self.side_hero("red"))
+            swapped = self.field_background(pair[::-1])
+            alpha = fx_earth.landswap_alpha(left, LANDSWAP_FADE)
+            if alpha >= 255:
+                surf.blit(swapped, (0, TOP))
+            elif alpha > 0:
+                swapped.set_alpha(alpha)
+                surf.blit(swapped, (0, TOP))
+                swapped.set_alpha(None)
+
     def draw(self):
         s = self.screen
-        s.blit(self.field_background(), (0, TOP))
+        self.blit_field(s, self.snap)
         # кто смотрит: None — за одним компьютером (видно всё), "" — зритель по сети
         viewer = (getattr(self, "me", None) or "") if (self.net or getattr(self, "warmup", False)) and not self.watching \
             else ("" if self.watching else None)

@@ -1,6 +1,10 @@
 """Артефакты: таблица, справка, группы, цвета рамок. Названия и описания — в i18n."""
 
 from .config import (
+    QUAKE_EVERY,
+    QUAKE_PULSES,
+    QUAKE_STUN,
+    SPEEDSTEAL,
     BEAM_DAMAGE,
     BEAM_LENGTH,
     ICE_LIFE,
@@ -69,6 +73,10 @@ ITEMS = {
     "immune": ("self", (215, 175, 95)),
     "sentries": ("self", (80, 190, 110)),
     "firering": ("foe", (255, 110, 40)),
+    "landswap": ("self", (196, 150, 84)),     # Земля
+    "firmground": ("self", (170, 140, 100)),
+    "speedsteal": ("foe", (120, 205, 110)),
+    "quake": ("foe", (214, 150, 70)),
     "foe_grow": ("foe", (190, 120, 255)),
     "foe_freeze": ("foe", (170, 220, 255)),
     "foe_nofire": ("foe", (255, 110, 90)),
@@ -89,7 +97,7 @@ HELP_SECTIONS = [
     ("gear", ["boots", "armor", "gun", "sword"]),
     ("hero", ["beam", "clearfoe", "mobpeace", "invisible", "icewalk", "foe_freeze", "shield", "slowfoe",
               "trees", "bear", "immune", "sentries", "lasso", "firering", "fastshots", "rapid",
-              "zombies", "mobswap", "clones", "wall"]),
+              "zombies", "mobswap", "clones", "wall", "landswap", "firmground", "speedsteal", "quake"]),
 ]
 
 
@@ -124,19 +132,22 @@ def item_help(kind):
         ring_r=FIRE_RING_R, ring_range=FIRE_RING_RANGE, ring_time=f"{FIRE_RING_TIME:g}", ring_dps=FIRE_RING_DPS, zmax=ZOMBIE_MAX, zr=ZOMBIE_RADIUS, ztime=f"{ZOMBIE_TIME:g}", fast=f"{FAST_BULLET_FACTOR:g}".replace(".", t("decimal")),
         gear_speed=round((GEAR_SPEED - 1) * 100), gear_hp=GEAR_HP, gear_fire=round((1 - GEAR_FIRE) * 100),
         gear_reach=GEAR_REACH,
+        landswap=f"{d['landswap']:g}", firmground=f"{d['firmground']:g}", steal=round(SPEEDSTEAL * 100),
+        speedsteal=f"{d['sapped']:g}", quakes=QUAKE_PULSES, quake_every=f"{QUAKE_EVERY:g}".replace(".", t("decimal")),
+        quake_stun=f"{QUAKE_STUN:g}".replace(".", t("decimal")),
     )
     return t(f"help.{kind}", **numbers)
 
 
 WEAPON_ITEMS = ("triple", "wavy", "rapid")      # улучшения оружия: на WEAPON_TIME
 ATTACK_ITEMS = WEAPON_ITEMS + ("clones", "wall", "fastshots", "beam", "trees", "zombies", "bear", "mobswap",
-                              "sentries")
+                              "sentries", "landswap")
 # эффект на игроке -> артефакт, чей значок показывать в статусе (если имена различаются)
 EFFECT_ICON = {"lassoed": "lasso", "raising": "zombies", "cloning": "clones", "grow2": "foe_grow", "freeze": "foe_freeze", "nofire": "foe_nofire",
-               "invert": "foe_invert", "noitems": "foe_noitems"}
+               "invert": "foe_invert", "noitems": "foe_noitems", "quickstep": "speedsteal", "sapped": "speedsteal"}
 INSTANT_ITEMS = ("heal",)                                  # срабатывают при подборе, минуя инвентарь
 # дебаффы: снимаются только временем или очищением, ничем другим
-BAD_EFFECTS = ("grow2", "freeze", "nofire", "invert", "noitems")
+BAD_EFFECTS = ("grow2", "freeze", "nofire", "invert", "noitems", "sapped", "quake")
 
 
 def ring_color(kind):

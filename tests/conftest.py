@@ -25,6 +25,9 @@ DT = 1 / 60
 
 import duel.config  # noqa: E402
 duel.config.COUNTDOWN = 0.0     # партии в тестах начинаются сразу; сам отсчёт — в своих тестах
+# «сервер в интернете» в тестах — недоступный адрес на этом компьютере: тесты не подключаются к настоящему
+duel.config.PUBLIC_SERVER = ("Spellgunners", "wss://127.0.0.1:9/")
+duel.config.WEB_SERVER = duel.config.PUBLIC_SERVER[1]
 
 def quiet(m):
     """Без случайных пачек патронов и волн мобов — только то, что тест создаст сам."""

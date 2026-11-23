@@ -5,6 +5,7 @@
   "nature": {"core": "#e6ffb4", "body": "#6ee164", "edge": "#2c7a30", "trail": 4},
   "dark":   {"core": "#140c1c", "body": "#a050ff", "edge": "#5a1e9a", "trail": 6},
   "light":  {"core": "#ffffff", "body": "#ffe66e", "edge": "#c89620", "trail": 5},
+  "earth":  {"core": "#e6d2a0", "body": "#a07a48", "edge": "#5a4428", "trail": 5},
   "hit_size": 16,
   "hit_particles": 8,
   "goo_mob": "#7864a0",
@@ -21,6 +22,7 @@
     "nature": {"outer": "#3c9a28", "inner": "#c8ff5a", "spark": "#e6ff96"},
     "dark":   {"outer": "#5a1e9a", "inner": "#c878ff", "spark": "#140c1c"},
     "light":  {"outer": "#e6b428", "inner": "#fffbe0", "spark": "#ffffff"},
+    "earth":  {"outer": "#6e5430", "inner": "#c8a064", "spark": "#e6d2a0"},
     "arena":  {"outer": "#7a5cb4", "inner": "#d2c4ff", "spark": "#f0e8ff"}
   }
 }

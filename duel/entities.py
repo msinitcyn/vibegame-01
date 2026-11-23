@@ -5,6 +5,10 @@
 import math
 
 from .config import (
+    QUAKE_EVERY,
+    QUAKE_PULSES,
+    QUAKE_STUN,
+    SPEEDSTEAL,
     SHOT_FLASH,
     GUARDIAN_HP,
     GUARDIAN_POST,
@@ -165,15 +169,27 @@ class Unit:
 
     @property
     def speed_mult(self):
-        return (1.8 if "speed" in self.effects else 1.0) * (BEAR_SPEED if "bear" in self.effects else 1.0)
+        return ((1.8 if "speed" in self.effects else 1.0) * (BEAR_SPEED if "bear" in self.effects else 1.0)
+                * (1 + SPEEDSTEAL if "quickstep" in self.effects else 1.0)        # «Кража скорости» у Земли
+                * (1 - SPEEDSTEAL if "sapped" in self.effects else 1.0))          # …и у соперника
+
+    @property
+    def stunned(self):
+        """«Толчки» Земли: в начале каждого толчка (QUAKE_PULSES раз через QUAKE_EVERY с) — QUAKE_STUN с
+        ни ходить, ни стрелять, ни бить, ни применять артефакты."""
+        left = self.effects.get("quake")
+        if left is None:
+            return False
+        since = DURATION["quake"] - left
+        return since >= 0 and since % QUAKE_EVERY < QUAKE_STUN and since < QUAKE_PULSES * QUAKE_EVERY
 
     @property
     def frozen(self):
-        return "freeze" in self.effects
+        return "freeze" in self.effects or self.stunned
 
     @property
     def can_fire(self):
-        return "nofire" not in self.effects and "bear" not in self.effects      # медведь не стреляет
+        return "nofire" not in self.effects and "bear" not in self.effects and not self.stunned   # медведь не стреляет
 
     def apply(self, effect):
         """Эффекты складываются: разные действуют одновременно, повтор того же добавляет время.
@@ -185,7 +201,10 @@ class Unit:
             if effect not in active and len(active) >= WEAPON_MAX:
                 # новое улучшение вытесняет то, у которого меньше всего времени
                 del self.effects[min(active, key=self.effects.get)]
-        self.effects[effect] = self.effects.get(effect, 0) + DURATION[effect]
+        if effect == "quake":                 # толчки не копятся — начинаются заново (три толчка)
+            self.effects[effect] = DURATION[effect]
+        else:
+            self.effects[effect] = self.effects.get(effect, 0) + DURATION[effect]
         if effect == "shield":
             self.shield_hits += SHIELD_HITS
 

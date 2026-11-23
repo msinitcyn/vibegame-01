@@ -1,0 +1,61 @@
+{
+  "heroes": {
+    "blue": "earth",
+    "red": "fire"
+  },
+  "view": [
+    340,
+    90,
+    640,
+    150
+  ],
+  "length": 5.0,
+  "speed": 0.7,
+  "setup": {
+    "blue": {
+      "x": 380,
+      "y": 140
+    },
+    "red": {
+      "x": 660,
+      "y": 140
+    }
+  },
+  "script": [
+    {
+      "t": 0.0,
+      "who": "red",
+      "aim_at": "blue"
+    },
+    {
+      "t": 0.0,
+      "who": "blue",
+      "aim_at": "red"
+    },
+    {
+      "t": 0.7,
+      "who": "blue",
+      "item": "quake"
+    },
+    {
+      "t": [
+        0.4,
+        4.3
+      ],
+      "who": "red",
+      "move": [
+        1,
+        0
+      ]
+    },
+    {
+      "t": [
+        0.4,
+        4.3
+      ],
+      "every": 0.4,
+      "who": "red",
+      "fire": true
+    }
+  ]
+}

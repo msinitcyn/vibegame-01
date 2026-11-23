@@ -9,6 +9,7 @@
     природа — крутящийся лист-семечко; попадание — разлетаются листья
     тьма   — сгусток пустоты с фиолетовыми космами; попадание — схлопывающееся кольцо
     свет   — сияющая звезда; попадание — вспышка-звезда
+    земля  — крутящийся камень с пыльным хвостом; попадание — облако пыли и камешки
 """
 import math
 
@@ -17,7 +18,7 @@ import pygame
 from ..config import HIT_SHOW
 from . import INK, glow, params, rgb, star
 
-STYLES = ("fire", "frost", "nature", "dark", "light")
+STYLES = ("fire", "frost", "nature", "dark", "light", "earth")
 
 
 def _style(hero):
@@ -80,6 +81,21 @@ def draw_bullet(surf, x, y, angle, hero, time, seed=0, radius=4):
         pygame.draw.circle(surf, core, (int(x), int(y)), r)
         a = time * 10 + seed
         pygame.draw.circle(surf, body, (int(x + math.cos(a) * r * 0.5), int(y + math.sin(a) * r * 0.5)), 1)
+    elif style == "earth":
+        for i in range(1, trail + 1):                       # пыльный хвост
+            f = i / trail
+            dx2 = math.sin(time * 9 + i * 1.9 + seed) * r * 0.6 * f
+            cx, cy = x - dx * r * 1.5 * i + px * dx2, y - dy * r * 1.5 * i + py * dx2
+            pygame.draw.circle(surf, edge if i % 2 else body, (int(cx), int(cy)), max(1, int(r * (0.9 - f * 0.5))))
+        spin = time * 14 + seed                             # камень-многогранник, крутится
+        pts = []
+        for k in range(6):
+            a = spin + k * math.pi / 3
+            rr = r * (1.25 if k % 2 else 1.0)
+            pts.append((x + math.cos(a) * rr, y + math.sin(a) * rr))
+        pygame.draw.polygon(surf, INK, [(x + (u - x) * 1.25, y + (v - y) * 1.25) for u, v in pts])
+        pygame.draw.polygon(surf, body, pts)
+        pygame.draw.line(surf, core, pts[0], pts[2], 1)
     else:                                                   # свет: звезда со свечением (сложением)
         for i in range(trail, 0, -1):                       # хвост из искр
             pygame.draw.circle(surf, body if i % 2 else core,
@@ -157,6 +173,15 @@ def draw_hit(surf, x, y, hero, on, age):
             d = size * 1.6 * fade
             pygame.draw.line(layer, (*edge, A), (c + math.cos(a) * d, c + math.sin(a) * d),
                              (c + math.cos(a + 0.4) * d * 0.6, c + math.sin(a + 0.4) * d * 0.6), 2)
+    elif style == "earth":                                  # облако пыли и камешки, падают вниз
+        pygame.draw.circle(layer, (*edge, int(A * 0.5)), (c, c), int(size * (0.4 + 0.9 * k)))
+        pygame.draw.circle(layer, (*body, int(A * 0.7)), (c, c), int(size * (0.3 + 0.7 * k)), 2)
+        for i in range(n):
+            a = i * 2 * math.pi / n + 0.4
+            d = size * (0.3 + 1.2 * k)
+            sx, sy = c + math.cos(a) * d, c + math.sin(a) * d + 14 * k * k
+            pygame.draw.circle(layer, (*INK, A), (int(sx), int(sy)), 3)
+            pygame.draw.circle(layer, (*(core if i % 2 else body), A), (int(sx), int(sy)), 2)
     if on in ("mob", "zombie") and k < 0.9:                 # моб: брызги слизи падают вниз
         goo = rgb(P.get("goo_zombie" if on == "zombie" else "goo_mob"), (120, 100, 160))
         for i in range(5):

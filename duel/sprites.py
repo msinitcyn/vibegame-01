@@ -2,7 +2,7 @@
 
 Источник — текстовый <имя>.sprite (палитра букв и кадры, см. duel/spritefile.py), а если его нет — <имя>.png
 (один кадр idle). Маг нарисован один раз (mage.sprite, ледяные цвета — герой Холод); остальные герои
-получаются заменой цветов (MAGE_RED/GREEN/BLACK/YELLOW_PALETTE в config.py). В игре F5 перечитывает картинки с диска.
+получаются заменой цветов (MAGE_RED/GREEN/BLACK/YELLOW/EARTH_PALETTE в config.py). В игре F5 перечитывает картинки с диска.
 """
 from functools import lru_cache
 
@@ -10,7 +10,7 @@ import pygame
 
 from . import spritefile
 
-from .config import (HERO_COLOR, MAGE_BLACK_PALETTE, MAGE_GREEN_PALETTE, MAGE_RED_PALETTE, MAGE_YELLOW_PALETTE,
+from .config import (HERO_COLOR, MAGE_BLACK_PALETTE, MAGE_EARTH_PALETTE, MAGE_GREEN_PALETTE, MAGE_RED_PALETTE, MAGE_YELLOW_PALETTE,
                      MOB_RANGED_ZOMBIE_PALETTE, MOB_ZOMBIE_PALETTE, SPRITES_DIR)
 
 # во сколько раз спрайт больше диаметра круга попадания (у спрайта есть прозрачные поля)
@@ -23,6 +23,7 @@ VARIANTS = {
     "mage_green": ("mage", MAGE_GREEN_PALETTE),
     "mage_black": ("mage", MAGE_BLACK_PALETTE),
     "mage_yellow": ("mage", MAGE_YELLOW_PALETTE),
+    "mage_earth": ("mage", MAGE_EARTH_PALETTE),
     "mob_zombie": ("mob", MOB_ZOMBIE_PALETTE),
     "mob_ranged_zombie": ("mob_ranged", MOB_RANGED_ZOMBIE_PALETTE),
 }

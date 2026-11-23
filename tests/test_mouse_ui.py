@@ -80,13 +80,13 @@ def test_pick_heroes_with_mouse(game):
     game.settings["aim_mode"] = "move"
     game.open_pick(10)
     redraw(game, game.draw_pick)
-    cards = [h[0] for h in game.hits[:-1]]            # 5 героев × 2 строки (последнее — «←»)
+    cards = [h[0] for h in game.hits[:-1]]            # 6 героев × 2 строки (последнее — «←»)
     game.on_mouse_move(cards[2].center)               # наведение — третий герой у синего
     assert game.pick["blue"]["hero"] == "nature"
     game.on_mouse_button(1)                           # щелчок по выбранному — подтвердить
     assert game.pick["blue"]["ok"]
-    click(game, cards[5 + 4].center)                  # красный — пятый герой: выбрать
-    click(game, cards[5 + 4].center)                  # и подтвердить — партия
+    click(game, cards[6 + 4].center)                  # красный — пятый герой: выбрать
+    click(game, cards[6 + 4].center)                  # и подтвердить — партия
     assert game.state == "play" and game.match.red.hero == "light"
 
 
@@ -121,8 +121,8 @@ def test_own_server_lobby_buttons_and_pick(game):
     click(game, buttons[1][0].center)                 # Играть с ботом
     frames(game, lambda: game.net and game.net_seats.get("blue", {}).get("hero"))
     redraw(game, game.draw_lobby)
-    cards = [h for h in game.hits if h[0].h == 170]   # свой ряд — 5 карточек
-    assert len(cards) == 5
+    cards = [h for h in game.hits if h[0].h == 170]   # свой ряд — 6 карточек
+    assert len(cards) == 6
     click(game, cards[4][0].center)                   # Свет
     frames(game, lambda: game.net_seats["blue"]["hero"] == "light")
     redraw(game, game.draw_lobby)

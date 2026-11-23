@@ -1,0 +1,52 @@
+{
+  "heroes": {
+    "blue": "earth",
+    "red": "fire"
+  },
+  "view": [
+    300,
+    90,
+    600,
+    170
+  ],
+  "length": 5.0,
+  "speed": 0.7,
+  "setup": {
+    "blue": {
+      "x": 380,
+      "y": 130
+    },
+    "red": {
+      "x": 745,
+      "y": 140
+    }
+  },
+  "script": [
+    {
+      "t": 0.0,
+      "who": "blue",
+      "aim_at": "red"
+    },
+    {
+      "t": 0.0,
+      "who": "red",
+      "aim_at": "blue"
+    },
+    {
+      "t": 0.8,
+      "who": "blue",
+      "item": "landswap"
+    },
+    {
+      "t": [
+        1.4,
+        2.8
+      ],
+      "who": "red",
+      "move": [
+        -1,
+        0
+      ]
+    }
+  ]
+}

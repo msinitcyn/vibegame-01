@@ -82,11 +82,12 @@ ITEM_LEVEL = {
     "lasso": 3, "zombies": 3, "icewalk": 3, "sentries": 3, "trees": 3, "immune": 3, "clones": 3,
     "cleanse": 2, "foe_nofire": 2, "foe_noitems": 2, "foe_freeze": 2, "shield": 2, "slowfoe": 2,
     "rapid": 2, "mobswap": 2, "wall": 2, "beam": 2, "invisible": 2,
+    "landswap": 3, "quake": 3, "speedsteal": 2, "firmground": 2,
 }                                # остальные — уровень 1
 LEVEL_WEIGHT = {1: 1.0, 2: 0.7, 3: 0.4, 4: 0.2}      # относительная частота выпадения
 LEVEL_MIN_MOB_HP = {1: 0, 2: 0, 3: 5, 4: 6}         # из моба с меньшим запасом жизней — не выпадает
 # справка: страницы артефактов героев (герои по порядку) и всего страниц
-HELP_TABS = ("mages", "common", "fire", "frost", "nature", "dark", "light", "rules")   # вкладки справки
+HELP_TABS = ("mages", "common", "fire", "frost", "nature", "dark", "light", "earth", "rules")   # вкладки справки
 HELP_BASICS = ("walk", "shoot", "melee", "foe_land")    # вкладка «Маги»: что умеет любой маг (сценки — assets/demos/)
 HELP_PAGES = len(HELP_TABS)
 # артефакт -> герой: выпадает только ему (подобрать может любой)
@@ -94,7 +95,8 @@ HERO_ONLY_ITEMS = {"beam": "light", "clearfoe": "light", "mobpeace": "light", "i
                    "icewalk": "frost", "foe_freeze": "frost", "shield": "frost", "slowfoe": "frost",
                    "trees": "nature", "bear": "nature", "immune": "nature", "sentries": "nature",
                    "lasso": "fire", "firering": "fire", "fastshots": "fire", "rapid": "fire",
-                   "zombies": "dark", "mobswap": "dark", "clones": "dark", "wall": "dark"}
+                   "zombies": "dark", "mobswap": "dark", "clones": "dark", "wall": "dark",
+                   "landswap": "earth", "firmground": "earth", "speedsteal": "earth", "quake": "earth"}
 
 
 
@@ -138,6 +140,12 @@ MAGE_YELLOW_PALETTE = {
     "#f0f8ff": "#fff4b0",        # блик
     "#78e1ff": "#ffffff",        # кристалл -> белая звезда
 }
+MAGE_EARTH_PALETTE = {
+    "#b9d4f0": "#2f6e3c",        # мантия и шляпа — тёмно-зелёные
+    "#6e96cd": "#173f22",        # тень
+    "#f0f8ff": "#6fae6a",        # блик
+    "#78e1ff": "#d89a3c",        # кристалл -> янтарный камень
+}
 MAGE_BLACK_PALETTE = {
     "#b9d4f0": "#3a3046",        # мантия и шляпа — почти чёрные
     "#6e96cd": "#1e1726",        # тень
@@ -147,18 +155,18 @@ MAGE_BLACK_PALETTE = {
 
 # Герои: только вид (правила у всех одинаковые). Сторона поля — blue (слева) / red (справа).
 #   цвет интерфейса и пуль, спрайт мага, фон земли, у какой стороны картинки фона кромка к середине
-HEROES = ("fire", "frost", "nature", "dark", "light")
+HEROES = ("fire", "frost", "nature", "dark", "light", "earth")
 HERO_COLOR = {"fire": (255, 90, 80), "frost": (215, 238, 255), "nature": (110, 225, 100),
-              "dark": (185, 120, 245), "light": (255, 214, 80)}
+              "dark": (185, 120, 245), "light": (255, 214, 80), "earth": (72, 168, 96)}
 HERO_SPRITE = {"fire": "mage_red", "frost": "mage_blue", "nature": "mage_green", "dark": "mage_black",
-               "light": "mage_yellow"}
+               "light": "mage_yellow", "earth": "mage_earth"}
 HERO_LAND = {"fire": ("bg_lava", "right"), "frost": ("bg_ice", "left"), "nature": ("bg_grass", "left"),
-             "dark": ("bg_ash", "left"), "light": ("bg_light", "left")}
+             "dark": ("bg_ash", "left"), "light": ("bg_light", "left"), "earth": ("bg_earth", "left")}
 DEFAULT_HERO = {"blue": "frost", "red": "fire"}      # с кого начинается выбор у каждой стороны
 # кромка земли героя (светлая линия, тёмная полоса) — ею же красятся края полосы мобов
 HERO_EDGE = {"frost": ("#6ea0d7", "#34547c"), "fire": ("#96320f", "#78280e"),
              "nature": ("#5aa046", "#284a22"), "dark": ("#783ca0", "#4e2268"),
-             "light": ("#d2a02a", "#7a5a14")}
+             "light": ("#d2a02a", "#7a5a14"), "earth": ("#8a6a3a", "#3e2c16")}
 
 MUSIC_VOLUME = 0.4
 # музыка подбирается по маске имени файла — новые треки подхватываются сами
@@ -298,10 +306,20 @@ DURATION = {"grow2": 7, "shrink": 7, "freeze": 2.5, "speed": 7, "nofire": 4, "sl
             "raising": 0.6,
             "cloning": 0.6,               # «Двойники»: магический шум, пока появляются (только картинка)               # «Восставшие мертвецы»: сколько видно кольцо оживления
             "bear": 10,                   # «Медведь»: сколько маг — медведь
+            # Земля
+            "landswap": 6,                # «Смена земель»: земли меняются хозяевами (у того, кто применил)
+            "firmground": 8,              # «Твёрдая почва»: арена мобов не жжёт
+            "quickstep": 6, "sapped": 6,  # «Кража скорости»: у Земли быстрее, у соперника медленнее
+            "quake": 3.5,                 # «Толчки»: QUAKE_PULSES раз через QUAKE_EVERY с соперник замирает
             "immune": 6,                  # «Дубовая кора»: артефакты соперника на Природу не действуют
             # улучшения оружия
             "triple": WEAPON_TIME, "wavy": WEAPON_TIME, "rapid": WEAPON_TIME}
 RAPID_FACTOR = 0.4               # пауза между выстрелами x0.4
+SPEEDSTEAL = 0.3                 # «Кража скорости»: соперник медленнее на 30 %, Земля быстрее на 30 %
+QUAKE_PULSES = 3                 # «Толчки»: сколько раз соперник замирает
+QUAKE_EVERY = 1.5                # через сколько секунд
+QUAKE_STUN = 0.5                 # на сколько: ни ходить, ни стрелять, ни бить, ни применять артефакты
+LANDSWAP_FADE = 0.6              # «Смена земель»: сколько секунд земли перетекают одна в другую (картинка)
 SLOW_BULLET_FACTOR = 0.45        # «пули соперника замирают»: мобы, идущие на тебя, и их снаряды медленнее
 STOP_BULLET_FACTOR = 0.0         # …а пули соперника стоят на месте
 FAST_BULLET_FACTOR = 1.6         # «быстрые пули»: твои пули и мобы, идущие на соперника

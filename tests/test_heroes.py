@@ -60,14 +60,14 @@ def test_confirmed_cursor_does_not_move_and_esc(game):
 def test_pick_with_gamepads(game):
     game.pads.pads = [(100, FakePad()), (101, FakePad())]
     open_pick(game, TEST_HP)
-    game.on_pad(101, pygame.CONTROLLER_BUTTON_DPAD_LEFT)     # правый: Огонь -> Свет
+    game.on_pad(101, pygame.CONTROLLER_BUTTON_DPAD_LEFT)     # правый: Огонь -> Земля (последний)
     game.on_pad(100, pygame.CONTROLLER_BUTTON_A)
     game.on_pad(100, pygame.CONTROLLER_BUTTON_X)             # □ — снять выбор
     assert not game.pick["blue"]["ok"] and game.state == "pick"
     game.on_pad(100, pygame.CONTROLLER_BUTTON_A)
     game.on_pad(101, pygame.CONTROLLER_BUTTON_A)
     assert game.state == "play" and game.match.blue.hp == TEST_HP
-    assert {p.id: p.hero for p in game.match.players} == {"blue": "frost", "red": "light"}
+    assert {p.id: p.hero for p in game.match.players} == {"blue": "frost", "red": "earth"}
 
 
 def test_last_choice_remembered_and_restart_keeps_heroes(game):
@@ -126,8 +126,8 @@ def test_pick_with_left_stick(game):
     stick(game, 100, 0)                         # отпустил
     stick(game, 100, 32000)                     # ещё раз -> Тьма
     assert game.pick["blue"]["hero"] == "dark"
-    stick(game, 101, -32000)                    # правый: Огонь -> Свет (по кругу влево)
-    assert game.pick["red"]["hero"] == "light"
+    stick(game, 101, -32000)                    # правый: Огонь -> Земля (по кругу влево)
+    assert game.pick["red"]["hero"] == "earth"
     game.draw_pick()
 
 

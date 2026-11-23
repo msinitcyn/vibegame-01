@@ -10,7 +10,6 @@ from .config import (
     ARENA_DPS,
     ARTIFACT_LIFETIME,
     FOE_LAND_DPS,
-    TOP,
     AMMO_COLOR,
     AMMO_PACK,
     BAD_TEXT,
@@ -490,7 +489,7 @@ class MenuScreensMixin:
         field = self.__dict__.get("_demo_surface")
         if field is None:
             field = self._demo_surface = pygame.Surface((WIDTH, HEIGHT))
-        field.blit(self.field_background(heroes), (0, TOP))
+        self.blit_field(field, snap, heroes)
         draw_field(field, snap, self.tiny)
         vx, vy, vw, vh = demo.data["view"]
         view = pygame.Rect(int(vx), int(vy), int(vw), int(vh)).clip(field.get_rect())
