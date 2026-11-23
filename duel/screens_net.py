@@ -24,6 +24,8 @@ from .config import (
 from .i18n import t as tr
 from .sprites import draw_unit
 
+LOBBY_ROWS = 6                    # строк в колонках лобби (игроки, партии) — ниже чат
+
 
 class NetScreensMixin:
     def draw_entry(self):
@@ -338,7 +340,7 @@ class NetScreensMixin:
             if not items:
                 img = self.small.render(tr("lobby.no_players" if col == 0 else "lobby.no_games"), True, GREY)
                 s.blit(img, (x + 6, y + 8))
-            for i, d in items[:9]:
+            for i, d in items[:LOBBY_ROWS]:
                 if col == 0:
                     status = str(d.get("status"))
                     free = status in ("lobby", "seeking")
@@ -353,6 +355,7 @@ class NetScreensMixin:
                                   color, click=lambda i=i: self.lobby_mouse(i, True),
                                   hover=lambda i=i: self.lobby_mouse(i))
                 y += 40
+        self.draw_lobby_chat(pygame.Rect(30, 432, WIDTH - 60, 152))
         by = HEIGHT - 110
         self.button((WIDTH // 2 - 230, by), tr("lobby.unseek") if self.seeking else tr("lobby.seek"),
                     self.toggle_seek, w=220, color=AMMO_COLOR if self.seeking else None)
@@ -360,12 +363,52 @@ class NetScreensMixin:
         self.button((WIDTH // 2 + 230, by), tr("lobby.warm"), self.start_warmup, w=220)
         if self.lobby_notice:
             img = self.font.render(self.lobby_notice, True, AMMO_COLOR)
-            s.blit(img, img.get_rect(center=(WIDTH // 2, by - 45)))
+            box = img.get_rect(center=(WIDTH // 2, by - 45))
+            pygame.draw.rect(s, (16, 12, 20), box.inflate(20, 10), border_radius=8)
+            s.blit(img, box)
         img = self.small.render(tr("lobby.hint"), True, GREY)
         s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 40)))
         self.back_button()
         self.draw_challenge_popup()
         pygame.display.flip()
+
+    def draw_lobby_chat(self, box):
+        """Чат лобби: последние сообщения (своё имя — золотом), внизу — строка ввода или подсказка.
+        Щелчок по панели — написать."""
+        import time
+        s = self.screen
+        can = self.server_can("lobby_chat")
+        if can and not self.lobby_typing:
+            self.hit(box, lambda: self.open_lobby_chat())
+        on = self.lobby_typing or (can and self.hovered(box))
+        pygame.draw.rect(s, (22, 25, 35), box, border_radius=10)
+        pygame.draw.rect(s, BLUE if on else (60, 64, 80), box, 2 if self.lobby_typing else 1, border_radius=10)
+        img = self.tiny_text.render(tr("lobby.chat_title"), True, GREY)
+        s.blit(img, (box.x + 12, box.y + 6))
+        line_h = 20
+        field = pygame.Rect(box.x + 8, box.bottom - 34, box.w - 16, 26)
+        y = field.top - 6
+        for m in reversed(self.lobby_chat):
+            if y - line_h < box.y + 20:
+                break
+            mine = m.get("from") == self.lobby_you
+            who = self.small.render(str(m.get("name") or "?") + ": ", True, AMMO_COLOR if mine else (140, 200, 255))
+            body = self.small.render(str(m.get("text") or "")[:config.CHAT_MAX], True, (235, 235, 240))
+            s.blit(who, (box.x + 12, y - line_h))
+            s.blit(body, (box.x + 12 + who.get_width(), y - line_h))
+            y -= line_h
+        if not self.lobby_chat:
+            img = self.small.render(tr("lobby.chat_empty"), True, GREY)
+            s.blit(img, img.get_rect(center=(box.centerx, (box.y + field.top) // 2 + 6)))
+        pygame.draw.rect(s, (14, 16, 24), field, border_radius=6)
+        if self.lobby_typing:
+            text = tr("chat.prompt") + ": " + self.lobby_text + ("▌" if int(time.monotonic() * 2) % 2 else " ")
+            img = self.small.render(text, True, WHITE)
+            hint = self.tiny_text.render(tr("lobby.chat_send"), True, GREY)
+            s.blit(hint, hint.get_rect(midright=(field.right - 10, field.centery)))
+        else:
+            img = self.small.render(tr("lobby.chat_hint") if can else tr("lobby.chat_old"), True, GREY)
+        s.blit(img, img.get_rect(midleft=(field.x + 10, field.centery)))
 
     def draw_challenge_popup(self):
         """Окно поверх лобби: входящий вызов (принять / отказаться, сколько осталось) или свой вызов

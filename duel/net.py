@@ -35,6 +35,8 @@
     {"type": "pause"}   {"type": "resume"}               общая пауза; снять может любой — потом отсчёт 3-2-1
     {"type": "test", "do": "give"|"bot", ...}            тестовая команда против бота (см. testcmd.py)
     {"type": "chat", "text": "…"}                        чат; сервер всем в комнате -> {"type": "chat", "from", "name", "text"}
+В лобби сервера: {"type": "lobby_chat", "text"} -> всем в лобби {"type": "lobby_chat", "from": номер, "name", "text"};
+    войдя в лобби, клиент получает {"type": "lobby_chat_log", "lines": [{"from", "name", "text"}, ...]}
     {"type": "ping", "t": время, "stats": {ping, rate, jitter, buf, fps}}
                                                          пинг -> {"type": "pong", "t"}; статистика — в state "stats": {цвет: {...}}
 """
@@ -44,7 +46,7 @@ import socket
 
 # Что умеет сервер сверх протокола (сервер шлёт в hello). Протокол тот же, но старый сервер чего-то
 # из этого не знает — клиент подключается и честно говорит, что не будет работать.
-FEATURES = ("chat", "pause", "stats", "test", "replay", "crash")
+FEATURES = ("chat", "pause", "stats", "test", "replay", "crash", "lobby_chat")
 BASELINE_FEATURES = ("chat", "pause", "stats")     # у серверов 0.7.4, которые ещё не присылали features
 
 

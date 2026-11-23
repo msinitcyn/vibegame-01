@@ -108,3 +108,26 @@ def test_pick_screen_with_unbound_keys(game):
     game.draw_pick()
     game.state = "menu"
 
+
+
+def test_one_player_left_click_walks_own_mage(game):
+    """«Один игрок» (здесь — с ботом): по умолчанию ЛКМ — идти к курсору. Набор клавиш один на оба места,
+    но цель — своему магу, а не последнему перебранному (раньше синий стоял)."""
+    from duel import config
+    game.start(config.TEST_HP, {"blue": "fire", "red": "frost"}, bot=True)
+    game.countdown = 0
+    try:
+        game.test_bot.mode = "stop"
+        game.settings["keys"] = {}
+        game.apply_keys()
+        assert game.keys_net
+        b = game.match.blue
+        target = (b.x + 100, b.y + 60)
+        game.mouse_pos = target
+        game.on_mouse_button(1)
+        game.on_mouse_up(1)
+        for _ in range(240):
+            game.update()
+        assert math.hypot(b.x - target[0], b.y - target[1]) <= game.WALK_ARRIVE + 3
+    finally:
+        game.start()

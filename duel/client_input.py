@@ -196,6 +196,9 @@ class InputMixin:
         if self.chat_typing:
             self.chat_type(text)
             return
+        if self.state == "lobby" and getattr(self, "lobby_typing", False):
+            self.lobby_chat_type(text)
+            return
         if self.state == "entry" and self.entry_row == 0:
             chars = "".join(ch for ch in text if ch.isprintable())
             self.entry_name = (self.entry_name + chars)[:settings.NAME_MAX]
@@ -441,7 +444,10 @@ class InputMixin:
     _DIRS = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
 
     def start_walk(self, pid, code):
-        """Нажата клавиша (или кнопка мыши) «идти к курсору»: цель — под курсором; пока зажата — за курсором."""
+        """Нажата клавиша (или кнопка мыши) «идти к курсору»: цель — под курсором; пока зажата — за курсором.
+        В «Одном игроке» набор клавиш один на оба места — цель всегда своему магу (а не последнему из двух)."""
+        if self.keys_net:
+            pid = getattr(self, "me", None) or self.mouse_button_side() or pid
         if self.mouse_pos is not None:
             self.walk_to, self.walk_pid, self.walk_code = self.mouse_pos, pid, code
             self.walk_hold = True

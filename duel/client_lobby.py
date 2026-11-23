@@ -15,7 +15,7 @@ from . import config
 from . import settings
 from .bot import Bot
 from .commands import Command
-from .config import DEFAULT_HERO, HEROES
+from .config import CHAT_MAX, DEFAULT_HERO, HEROES, LOBBY_CHAT_KEEP
 from .discovery import Finder
 from .i18n import t
 from .match import Match, STEP
@@ -270,6 +270,8 @@ class LobbyMixin:
         self.seeking = False
         self.lobby_notice = notice
         self.notice_until = time.monotonic() + 4 if notice else 0
+        self.lobby_chat = []              # чат лобби: [{"from", "name", "text"}] — историю пришлёт сервер
+        self.lobby_typing, self.lobby_text, self.lobby_swallow = False, "", False
         saved = self.saved_account()
         if not resume:                    # вернулись из партии — уже вошли
             self.enter_lobby()
@@ -372,6 +374,10 @@ class LobbyMixin:
                 return
             elif kind == "full":
                 self.notify(t("lobby.full"))
+            elif kind == "lobby_chat_log":
+                self.lobby_chat = [x for x in msg.get("lines") or [] if isinstance(x, dict)][-LOBBY_CHAT_KEEP:]
+            elif kind == "lobby_chat":
+                self.lobby_chat = (self.lobby_chat + [msg])[-LOBBY_CHAT_KEEP:]
             elif kind == "auth":
                 self.on_auth(msg)
             elif kind == "bye":
@@ -404,7 +410,21 @@ class LobbyMixin:
                 self.lobby_conn.send({"type": "cancel"})
                 self.outgoing = None
             return
+        if self.lobby_typing:                 # пишем в чат лобби: клавиши — в строку
+            if sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER):
+                text = self.lobby_text.strip()
+                if text:
+                    self.lobby_conn.send({"type": "lobby_chat", "text": text[:CHAT_MAX]})
+                self.lobby_typing, self.lobby_text = False, ""
+            elif sc == K.KSCAN_ESCAPE:
+                self.lobby_typing, self.lobby_text = False, ""
+            elif sc == K.KSCAN_BACKSPACE:
+                self.lobby_text = self.lobby_text[:-1]
+            return
         rows = self.lobby_rows()
+        if sc == K.KSCAN_C:
+            self.open_lobby_chat(swallow=True)
+            return
         if sc in (K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE):
             self.leave_net()
         elif sc in (K.KSCAN_UP, K.KSCAN_W):
@@ -419,6 +439,18 @@ class LobbyMixin:
             self.lobby_conn.send({"type": "bot_game"})
         elif sc == K.KSCAN_T:
             self.start_warmup()
+
+    def open_lobby_chat(self, swallow=False):
+        """Написать в чат лобби (C или щелчок по полю). swallow — первая буква — сама C, её не печатаем."""
+        if self.server_can("lobby_chat") and not (self.incoming or self.outgoing):
+            self.lobby_typing, self.lobby_text, self.lobby_swallow = True, "", swallow
+
+    def lobby_chat_type(self, text):
+        if self.lobby_swallow:
+            self.lobby_swallow = False
+            text = text[1:]
+        chars = "".join(ch for ch in text if ch.isprintable())
+        self.lobby_text = (self.lobby_text + chars)[:CHAT_MAX]
 
     def lobby_pick(self, i):
         """Строка лобби: аккаунт — войти/выйти; игрок — вызвать; партия — смотреть."""

@@ -28,6 +28,7 @@ from .room import PIDS, Room, Seat, clean_name
 from .status import Health, serve as serve_status
 from .ws import WS_PORT, WSConn
 from .match import STEP
+from .config import CHAT_GAP, CHAT_MAX, LOBBY_CHAT_KEEP
 
 JOIN_WAIT = 5.0                   # новичок без запроса столько секунд — закрываем
 MAX_PENDING = 16                  # подключений, ещё ничего не попросивших
@@ -81,6 +82,7 @@ class Server:
                 log(f"поиск игр в сети не работает (порт {discovery_port}: {e}) — подключаться по адресу")
         self.newcomers = []           # [(Conn, когда подключился)] — ещё ничего не попросили
         self.lobby = []               # соединения в лобби: смотрят список комнат
+        self.lobby_chat_log = []      # последние сообщения чата лобби (LOBBY_CHAT_KEEP)
         self.rooms = {}               # номер -> Room
         self.next_room = 1
         self.bot = bot                # новые комнаты — сразу с ботом
@@ -155,6 +157,22 @@ class Server:
         games = [r.game_info() for r in sorted(self.rooms.values(), key=lambda r: r.id) if r.conns]
         return {"type": "lobby", "server": self.name, "you": getattr(conn, "member", None),
                 "players": players, "games": games}
+
+    def lobby_chat(self, conn, text, now):
+        """Сообщение в чат лобби: только печатные знаки, не длиннее CHAT_MAX, не чаще CHAT_GAP — всем в лобби."""
+        if not isinstance(text, str) or now - getattr(conn, "last_lobby_chat", -1e9) < CHAT_GAP:
+            return
+        text = "".join(ch for ch in text if ch.isprintable()).strip()[:CHAT_MAX]
+        if not text:
+            return
+        conn.last_lobby_chat = now
+        line = {"from": conn.member, "name": self.player_name(conn, getattr(conn, "wanted_name", "")) or "?",
+                "text": text}
+        self.lobby_chat_log = (self.lobby_chat_log + [line])[-LOBBY_CHAT_KEEP:]
+        for c in self.lobby:
+            if getattr(c, "member", None) is not None and not c.closed:
+                c.send({"type": "lobby_chat", **line})
+        self.log(f"чат лобби {line['name']}: {text}")
 
     def push_lobby(self, conns=None):
         for conn in (self.lobby if conns is None else conns):
@@ -379,6 +397,11 @@ class Server:
                 if conn not in self.lobby:        # сразу участник лобби: следом могут прийти seek, challenge
                     self.lobby.append(conn)
                 self.push_lobby([conn])
+                conn.send({"type": "lobby_chat_log", "lines": self.lobby_chat_log})
+            elif kind == "lobby_chat" and getattr(conn, "member", None) is not None:
+                where = where or "lobby"
+                if conn in self.lobby:
+                    self.lobby_chat(conn, msg.get("text"), now)
             elif kind == "challenge" and getattr(conn, "member", None) is not None:
                 where = where or "lobby"
                 if conn in self.lobby:

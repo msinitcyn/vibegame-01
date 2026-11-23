@@ -557,3 +557,27 @@ def test_public_server_first_and_picked(game, monkeypatch):
     game.on_key(pygame.KSCAN_RETURN)                    # один Enter — к серверу в интернете
     assert opened == [config.PUBLIC_SERVER[1]] and opened[0].startswith("wss://")
     game.draw_join()
+
+
+def test_lobby_chat_typed_sent_and_shown(game):
+    srv = own_server_lobby(game)
+    masha = Bob(srv.port, "Маша")
+    frames(game, lambda: len(game.lobby_players) == 2, keep=(masha,))
+    game.on_key(pygame.KSCAN_C)                    # C — написать (сама «c» не печатается)
+    assert game.lobby_typing
+    game.on_text("c")
+    game.on_text("привет")
+    game.on_key(pygame.KSCAN_F)                    # пока пишем, F — не «ищу соперника»
+    assert not game.seeking and game.lobby_text == "привет"
+    game.on_key(pygame.KSCAN_RETURN)
+    assert not game.lobby_typing
+    frames(game, lambda: game.lobby_chat, keep=(masha,))
+    assert game.lobby_chat[-1]["text"] == "привет"
+    masha.conn.send({"type": "lobby_chat", "text": "привет, папа"})
+    frames(game, lambda: len(game.lobby_chat) == 2, keep=(masha,))
+    game.draw_lobby_screen()
+    game.on_key(pygame.KSCAN_C)
+    game.draw_lobby_screen()
+    game.on_key(pygame.KSCAN_ESCAPE)               # Esc — отмена ввода, а не уход с сервера
+    assert game.state == "lobby" and not game.lobby_typing
+    masha.close()

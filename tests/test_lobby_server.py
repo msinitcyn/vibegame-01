@@ -170,3 +170,18 @@ def test_spectator_of_duel_returns_to_lobby(server):
     assert vanya.last("lobby")["games"][0]["spectators"] == 1
     papa.send({"type": "leave"})
     assert petya.got("room_closed") and masha.got("room_closed")
+
+
+def test_lobby_chat_to_everyone_and_history_for_newcomer(server):
+    papa, masha = Member(server, "Папа"), Member(server, "Маша")
+    papa.send({"type": "lobby_chat", "text": "кто играет?\x07"})
+    got = masha.got("lobby_chat")
+    assert got["name"] == "Папа" and got["text"] == "кто играет?" and got["from"] == papa.id
+    assert papa.got("lobby_chat")["text"] == "кто играет?"        # и себе — видно, что ушло
+    papa.send({"type": "lobby_chat", "text": "слишком быстро"})      # чаще CHAT_GAP — не уходит
+    for _ in range(20):
+        server.step()
+    assert [m["text"] for m in masha.msgs if m["type"] == "lobby_chat"] == ["кто играет?"]
+    vova = Member(server, "Вова")                                   # пришёл позже — видит историю
+    log = vova.got("lobby_chat_log")
+    assert [x["text"] for x in log["lines"]] == ["кто играет?"]
