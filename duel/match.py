@@ -27,6 +27,7 @@ from .commands import Command
 from .config import (
     MOB_LATE_EXTRA,
     GUARDIAN_PETRIFY,
+    RETIRED_ITEMS,
     GUARDIAN_RESPAWN,
     GUARDIAN_SHOT_EVERY,
     GUARDIAN_SPEED,
@@ -768,7 +769,7 @@ class Match:
         if owner:
             pool = [k for k in ITEMS if HERO_ONLY_ITEMS.get(k) == owner.hero]
         else:
-            pool = [k for k in ITEMS if k not in HERO_ONLY_ITEMS and k not in GEAR_ITEMS]
+            pool = [k for k in ITEMS if k not in HERO_ONLY_ITEMS and k not in GEAR_ITEMS and k not in RETIRED_ITEMS]
         kinds = [k for k in pool if max_hp >= LEVEL_MIN_MOB_HP[item_level(k)]] or pool
         weights = [LEVEL_WEIGHT[item_level(k)] for k in kinds]
         return self.rng.choices(kinds, weights)[0]

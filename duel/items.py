@@ -90,7 +90,7 @@ ITEMS = {
 
 # Справка: группы артефактов (экран «Артефакты» в меню). Заголовок — section_title(id).
 HELP_SECTIONS = [
-    ("defense", ["heal", "cleanse", "shrink", "speed"]),
+    ("defense", ["heal", "cleanse", "shrink"]),
     ("weapon", ["triple", "wavy"]),
     ("debuff", ["foe_grow", "foe_nofire", "foe_invert", "foe_noitems"]),
     # артефакты героев — свои страницы справки, по героям

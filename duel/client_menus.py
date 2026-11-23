@@ -152,7 +152,9 @@ class MenusMixin:
         if tab == "mages":
             return list(HELP_BASICS)
         if tab == "common":
-            return [k for sec, ks in HELP_SECTIONS if sec != "hero" for k in ks]
+            return [k for sec, ks in HELP_SECTIONS if sec not in ("hero", "gear") for k in ks]
+        if tab == "gear":                     # «Артефакты мобов»: снаряжение из арены
+            return list(dict(HELP_SECTIONS)["gear"])
         return [k for k in dict(HELP_SECTIONS)["hero"] if HERO_ONLY_ITEMS[k] == tab]
 
     def help_kind(self):

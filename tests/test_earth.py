@@ -183,3 +183,18 @@ def test_landswap_background_crossfades(game):
     m.blue.effects["landswap"] = DURATION["landswap"] - 2          # середина эффекта — земли поменялись
     game.blit_field(surf, snapshot(m))
     assert surf.get_at((100, 400)) != left_before
+
+
+def test_quake_pulses_come_often():
+    assert QUAKE_EVERY <= 1.0 and QUAKE_EVERY > QUAKE_STUN               # чаще, но между толчками можно сделать шаг
+
+
+def test_speed_is_retired_and_gear_has_own_help_tab(game):
+    from duel.config import GEAR_ITEMS, HELP_TABS
+    m = new_match()
+    drops = {m.artifact_kind("neutral", 6) for _ in range(400)}
+    assert "speed" not in drops and "heal" in drops
+    game.help_page = HELP_TABS.index("common")
+    assert "speed" not in game.help_kinds() and not set(GEAR_ITEMS) & set(game.help_kinds())
+    game.help_page = HELP_TABS.index("gear")
+    assert game.help_kinds() == list(GEAR_ITEMS)

@@ -342,7 +342,7 @@ class MenuScreensMixin:
         else:
             self.draw_help_list()
             self.draw_help_focus(kind)
-            note = tr("help.levels") if tab == "common" else "" if tab == "mages" else tr("help.hero_note")
+            note = {"common": tr("help.levels"), "mages": "", "gear": tr("help.gear_note")}.get(tab, tr("help.hero_note"))
             for j, line in enumerate(self.wrap(note, WIDTH - 80, self.small) if note else []):
                 img = self.small.render(line, True, GREY)
                 s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 58 + j * 19)))
@@ -377,6 +377,8 @@ class MenuScreensMixin:
             return tr("help.tab_mages"), (225, 230, 245)
         if tab == "common":
             return tr("help.tab_common"), (200, 205, 220)
+        if tab == "gear":
+            return tr("help.tab_gear"), (230, 205, 120)
         if tab == "rules":
             return tr("help.rules"), (200, 205, 220)
         return tr("hero." + tab), HERO_COLOR[tab]
@@ -384,10 +386,15 @@ class MenuScreensMixin:
     def draw_help_tabs(self):
         """Вкладки сверху: щелчок — открыть."""
         s = self.screen
-        n, gap, x0 = len(HELP_TABS), 8, 90
-        w = (WIDTH - 24 - x0 - gap * (n - 1)) // n
+        n, gap, x0 = len(HELP_TABS), 6, 90
+        # ширина вкладки — по надписи (длинные «Артефакты мобов» шире), всё вместе — во всю строку
+        widths = [self.small.size(self.help_tab_label(tab)[0])[0] + 14 for tab in HELP_TABS]
+        room = WIDTH - 24 - x0 - gap * (n - 1)
+        widths = [w * room / sum(widths) for w in widths]
+        x = float(x0)
         for i, tab in enumerate(HELP_TABS):
-            rect = pygame.Rect(x0 + i * (w + gap), 48, w, 34)
+            rect = pygame.Rect(round(x), 48, round(widths[i]), 34)
+            x += widths[i] + gap
             sel = i == self.help_page
             label, color = self.help_tab_label(tab)
             on = sel or self.hovered(rect)

@@ -32,8 +32,9 @@ def pick(match, p, kind):
 # --- таблица и справка
 
 def test_every_item_in_exactly_one_help_section():
+    from duel.config import RETIRED_ITEMS
     listed = [k for _, kinds in HELP_SECTIONS for k in kinds]
-    assert sorted(listed) == sorted(ITEMS)
+    assert sorted(listed) == sorted(k for k in ITEMS if k not in RETIRED_ITEMS)     # убранные — не в справке
 
 
 @pytest.mark.parametrize("kind", list(ITEMS))
