@@ -589,6 +589,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
                 self.audio.melee()
             elif kind == "hit_mage":              # пуля попала в мага
                 self.audio.hit()
+            elif kind == "dead":                  # маг погиб
+                self.audio.death()
             elif kind == "used":
                 log.info("артефакт: %s → %s", ev[2], ev[1])
                 self.audio.item(ev[2])

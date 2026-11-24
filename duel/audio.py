@@ -9,6 +9,7 @@ from pathlib import Path
 import pygame
 
 from .config import (
+    DEATH_SOUND,
     HIT_SOUND,
     ITEM_SOUNDS,
     LOOP_FADE_MS,
@@ -78,6 +79,7 @@ class Audio:
         self.loop_sounds = {}         # звук-цикл (шаги, чужая земля, ледяная тропа) -> Sound
         self.loops = {}               # (кто, звук) -> Channel: что сейчас звучит циклом
         self.hit_sound = None
+        self.death_sound = None
         self.track = None
         try:
             pygame.mixer.init()
@@ -115,6 +117,7 @@ class Audio:
             if snd:
                 self.loop_sounds[kind] = snd
         self.hit_sound = self.load(*HIT_SOUND, fmt)
+        self.death_sound = self.load(*DEATH_SOUND, fmt)
 
     def load(self, fname, volume, fmt):
         """Звук из assets/sounds с правкой из edits.json (по имени файла без .mp3). Нет файла — None."""
@@ -200,6 +203,11 @@ class Audio:
         """Пуля (или луч) попала в мага."""
         if self.hit_sound:
             self.hit_sound.play()
+
+    def death(self):
+        """Маг погиб."""
+        if getattr(self, "death_sound", None):
+            self.death_sound.play()
 
     def set_loops(self, wanted):
         """Звуки-циклы: wanted — {(откуда, кто, звук)}; новые — включить, пропавшие — плавно выключить."""

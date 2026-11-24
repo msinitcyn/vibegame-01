@@ -309,7 +309,10 @@ class Scene:
         self.t += STEP
         self.run_script()
         m = self.match
-        self.events += m.step(STEP, self.commands())
+        events = m.step(STEP, self.commands())
+        if not self.mortal_players:                   # бессмертные маги не «погибают» — и звука гибели нет
+            events = [e for e in events if e[0] != "dead"]
+        self.events += events
         for unit in self.calm:                        # спокойные мобы не идут и не бьют
             unit.target = None
         if self.mortal_players:                       # маг может погибнуть: партия кончилась — запомнить когда

@@ -254,3 +254,23 @@ def test_game_draws_dead_mage_spirit(game):
     img.fill((200, 50, 50, 255))
     for t in (0.0, 0.2, 1.0, 3.0):
         fx_mage.draw_death(surf, (100, 120), 14, img, t, t)
+
+
+def test_death_event_and_sound_only_when_mage_really_dies(game, monkeypatch):
+    """Гибель — событие «dead» (звук dying.mp3); в сценке с бессмертными магами его нет."""
+    from duel.config import DEATH_SOUND
+    assert DEATH_SOUND[0] == "dying.mp3"
+    played = []
+    monkeypatch.setattr(game.audio, "death", lambda: played.append(1))
+    game.handle_events([("dead", "red")])
+    assert played == [1]
+    st = Stage({"length": 4, "mortal_players": True, "heroes": {"blue": "fire", "red": "frost"},
+                "setup": {"blue": {"x": 400, "y": 222}, "red": {"x": 600, "y": 222, "hp_lost": 14}},
+                "script": [{"t": [0.1, 2.0], "every": 0.3, "do": "fire", "who": "blue", "at": "red"}]})
+    run(st, 1.5)
+    assert ("dead", "red") in [tuple(e[:2]) for e in st.take_events()]
+    st2 = Stage({"length": 4, "heroes": {"blue": "fire", "red": "frost"},
+                 "setup": {"blue": {"x": 400, "y": 222}, "red": {"x": 600, "y": 222, "hp_lost": 14}},
+                 "script": [{"t": [0.1, 2.0], "every": 0.3, "do": "fire", "who": "blue", "at": "red"}]})
+    run(st2, 1.5)
+    assert all(e[0] != "dead" for e in st2.take_events())

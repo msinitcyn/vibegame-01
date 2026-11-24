@@ -526,6 +526,8 @@ class Match:
         self.bury_mobs()
         for p in self.players:
             if p.hp <= 0:
+                if not self.winner:
+                    self.emit("dead", p.id)       # погиб — звук и вылетающий дух
                 self.winner = self.other(p)
 
     def age_terrain(self, dt):
