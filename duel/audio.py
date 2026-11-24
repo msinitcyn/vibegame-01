@@ -17,6 +17,7 @@ from .config import (
     MUSIC_DIR,
     MUSIC_FADE_MS,
     MUSIC_VOLUME,
+    SFX_VOLUME,
     SHOOT_VOLUME,
     SOUNDS_DIR,
 )
@@ -99,7 +100,7 @@ class Audio:
         for who, fname in (("blue", "shoot01.mp3"), ("red", "shoot02.mp3"), ("melee", "shoot03.mp3")):
             try:
                 snd = pygame.mixer.Sound(str(media(SOUNDS_DIR / fname)))
-                snd.set_volume(SHOOT_VOLUME)
+                snd.set_volume(SHOOT_VOLUME * SFX_VOLUME)
                 self.shots[who] = snd
                 self.base[snd] = SHOOT_VOLUME
             except (pygame.error, FileNotFoundError) as e:
@@ -121,12 +122,12 @@ class Audio:
         except (pygame.error, FileNotFoundError) as e:
             print(f"Не загрузился {fname}:", e)
             return None
-        snd.set_volume(volume)
+        snd.set_volume(volume * SFX_VOLUME)
         self.base[snd] = volume
         return snd
 
     def set_volumes(self, music=None, sfx=None):
-        """Громкость из настроек: 0–10, 5 — как задумано (MUSIC_VOLUME, громкости звуков), 0 — тишина."""
+        """Громкость из настроек: 0–10, 5 — как задумано (MUSIC_VOLUME; звуки — свои громкости × SFX_VOLUME), 0 — тишина."""
         if music is not None:
             self.music_level = max(0, min(10, music))
         if sfx is not None:
@@ -135,7 +136,7 @@ class Audio:
             return
         pygame.mixer.music.set_volume(min(1.0, MUSIC_VOLUME * self.music_level / 5))
         for snd, base in self.base.items():
-            snd.set_volume(min(1.0, base * self.sfx_level / 5))
+            snd.set_volume(min(1.0, base * SFX_VOLUME * self.sfx_level / 5))
 
     def movie_music(self, mask):
         """Музыка ролика: файлы по маске в assets/music (нет маски или файлов — тишина)."""

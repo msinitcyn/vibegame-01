@@ -89,6 +89,7 @@ def test_volume_rows(game):
 
 def test_audio_scales_volumes():
     from duel.audio import Audio
+    from duel.config import SFX_VOLUME
     a = Audio()
     if not a.enabled or not a.shots:
         return
@@ -97,4 +98,6 @@ def test_audio_scales_volumes():
     a.set_volumes(0, 0)
     assert snd.get_volume() == 0 and pygame.mixer.music.get_volume() == 0
     a.set_volumes(5, 10)
-    assert abs(snd.get_volume() - min(1.0, base * 2)) < 0.02
+    assert abs(snd.get_volume() - min(1.0, base * SFX_VOLUME * 2)) < 0.02
+    a.set_volumes(5, 5)                                       # обычный уровень — вдвое тише своей громкости
+    assert SFX_VOLUME == 0.5 and abs(snd.get_volume() - base * SFX_VOLUME) < 0.02
