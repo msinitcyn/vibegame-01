@@ -42,6 +42,7 @@ from .config import (
     SELF_RING,
     SHIELD_HITS,
     SHOT_COOLDOWN,
+    WALL_RANGE,
     WALL_TIME,
     WEAPON_TIME,
 )
@@ -124,7 +125,7 @@ def item_help(kind):
         invert=f"{d['invert']:g}", noitems=f"{d['noitems']:g}", triple=f"{d['triple']:.0f}",
         rapid_cd=f"{SHOT_COOLDOWN * RAPID_FACTOR:.1f}", cd=f"{SHOT_COOLDOWN:g}",
         rapid=f"{d['rapid']:.0f}", wavy=f"{d['wavy']:.0f}", clones=CLONE_COUNT,
-        clone_time=f"{CLONE_TIME:.0f}", clone_hp=CLONE_HP, wall_time=f"{WALL_TIME:.0f}",
+        clone_time=f"{CLONE_TIME:.0f}", clone_hp=CLONE_HP, wall_time=f"{WALL_TIME:.0f}", wall_range=WALL_RANGE,
         fastshots=f"{d['fastshots']:g}", mobpeace=f"{d['mobpeace']:g}", invisible=f"{d['invisible']:g}",
         beam_len=BEAM_LENGTH, beam_dmg=BEAM_DAMAGE,
         icewalk=f"{d['icewalk']:g}", ice_life=f"{ICE_LIFE:g}", trees=f"{TREE_TIME:g}", tree_len=TREE_LENGTH,

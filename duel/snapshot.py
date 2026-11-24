@@ -69,7 +69,8 @@ def snapshot(match):
         "ammo_packs": [{"id": a.id, "x": _xy(a.x), "y": _xy(a.y), "life": _t(a.life)}
                        for a in m.ammo_packs],
         "walls": [{"id": w.id, "owner": w.owner.id, "x": _xy(w.x), "y1": _xy(w.y1),
-                   "y2": _xy(w.y2), "life": _t(w.life)} for w in m.walls],
+                   "y2": _xy(w.y2), "cx": _xy(w.cx), "cy": _xy(w.cy), "angle": round(w.angle, 3),
+                   "life": _t(w.life)} for w in m.walls],
         "beams": [{"id": b.id, "owner": b.owner.id, "age": _t(b.age), "pts": [[_xy(x), _xy(y)] for x, y in b.path]}
                   for b in m.beams],
         "ice": [{"id": t.id, "owner": t.owner.id, "x": _xy(t.x), "y": _xy(t.y), "life": _t(t.life)}

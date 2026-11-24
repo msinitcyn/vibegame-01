@@ -85,7 +85,7 @@ ITEM_LEVEL = {
     "lasso": 3, "zombies": 3, "icewalk": 3, "sentries": 3, "trees": 3, "immune": 3, "clones": 3,
     "cleanse": 2, "foe_nofire": 2, "foe_noitems": 2, "foe_freeze": 2, "shield": 2, "slowfoe": 2,
     "rapid": 2, "mobswap": 2, "wall": 2, "beam": 2, "invisible": 2,
-    "landswap": 3, "quake": 3, "speedsteal": 2, "firmground": 2,
+    "landswap": 4, "quake": 3, "speedsteal": 2, "firmground": 2,
 }                                # остальные — уровень 1
 LEVEL_WEIGHT = {1: 1.0, 2: 0.7, 3: 0.4, 4: 0.2}      # относительная частота выпадения
 LEVEL_MIN_MOB_HP = {1: 0, 2: 0, 3: 5, 4: 6}         # из моба с меньшим запасом жизней — не выпадает
@@ -283,7 +283,9 @@ MELEE_FLASH = 0.25               # сколько виден взмах (ани�
 SHOT_FLASH = 0.1                 # сколько видны отдача и вспышка выстрела
 WALK_FPS = 8                     # кадров шага в секунду
 
-WALL_OFFSET = 110                # расстояние от игрока до стены
+WALL_OFFSET = 110                # (прежнее) расстояние от игрока до стены
+WALL_RANGE = 260                 # зеркало — заклинание на область: встаёт под курсором, не дальше этого от мага
+WALL_MIN = 60                    # …и не ближе этого
 WALL_H = 180                     # высота стены
 WALL_W = 10                      # толщина стены
 WALL_TIME = 8.0

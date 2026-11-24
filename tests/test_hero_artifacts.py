@@ -527,6 +527,7 @@ def test_mirror_reflection_is_shown():
     m = Match(seed=1, heroes={"blue": "dark", "red": "fire"})
     b, r = m.blue, m.red
     b.x, b.y, r.x, r.y = 300, TOP + 100, 500, TOP + 100
+    m.blue.reach = 110   # курсор в 110 px перед магом
     m.apply_item(b, "wall")
     from duel.entities import Bullet
     m.bullets = [Bullet(r.x - 60, r.y, -520, 0, r)]

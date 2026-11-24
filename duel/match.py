@@ -27,6 +27,8 @@ from .commands import REACH_FAR, Command
 from .config import (
     MOB_LATE_EXTRA,
     DEATH_TIME,
+    WALL_MIN,
+    WALL_RANGE,
     GUARDIAN_PETRIFY,
     CLEANSE_FX,
     HEAL_FX,
@@ -317,7 +319,7 @@ class Match:
             u.hp = min(u.max_hp, u.hp + HEAL_AMOUNT)
             u.heal_fx = HEAL_FX                   # анимация лечения
         elif kind == "wall":
-            self.walls.append(Wall(p))
+            self.walls.append(Wall(p, self.wall_spot(p)))   # зеркало — под курсор, лицом от мага
         elif kind == "clearfoe":
             for b in self.bullets:
                 if b.owner is foe:
@@ -736,6 +738,12 @@ class Match:
         near = [u for u in allies if math.hypot(u.x - at[0], u.y - at[1]) <= u.radius + ALLY_PICK]
         return min(near, key=lambda u: math.hypot(u.x - at[0], u.y - at[1])) if near else None
 
+    def wall_spot(self, p):
+        """Куда встанет зеркало мага p: по прицелу, под курсор, от WALL_MIN до WALL_RANGE от мага
+        (курсора нет — на всю дальность)."""
+        d = WALL_RANGE if p.reach is None else max(WALL_MIN, min(WALL_RANGE, p.reach))
+        return p.x + math.cos(p.aim) * d, p.y + math.sin(p.aim) * d
+
     def ring_spot(self, p):
         """Куда встанет огненное кольцо мага p: по прицелу, под курсор — центр кольца там, где курсор; курсор
         дальше FIRE_RING_RANGE (или его нет — стик, бот) — на всю дальность. Не за краем поля."""
@@ -1086,7 +1094,7 @@ class Match:
             if s.alive and (self.blocked(s.x, s.y, MOB_SHOT_R) or self.ring_stops(prev_x, prev_y, s.x, s.y)):
                 s.alive = False                   # деревья и огненная стена (изнутри) гасят снаряд
             for w in self.walls:              # зеркало отражает снаряд — он становится пулей хозяина
-                b = w.reflect_shot(s, prev_x) if s.alive else None
+                b = w.reflect_shot(s, (prev_x, prev_y)) if s.alive else None
                 if b:
                     self.bullets.append(b)
             if not s.alive:

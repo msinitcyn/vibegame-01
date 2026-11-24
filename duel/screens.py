@@ -11,6 +11,9 @@ from .config import (
     FIRE_RING_R,
     FIRE_RING_RANGE,
     NEUTRAL_HALF,
+    WALL_H,
+    WALL_MIN,
+    WALL_RANGE,
     SPIRIT_TIME,
     AMMO_COLOR,
     GEAR_ITEMS,
@@ -481,6 +484,16 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
                     pygame.draw.lines(s, (16, 12, 20), False, pts, 4)
                     pygame.draw.lines(s, (255, 140, 60), False, pts, 2)
                 pygame.draw.circle(s, (255, 140, 60), (int(x), int(y)), 3)
+            elif kind == "wall":                  # зеркало: отрезок под курсором, лицом от мага
+                d = max(WALL_MIN, min(WALL_RANGE, self.reach_for(pid)))
+                cx, cy = p["x"] + math.cos(aim) * d, p["y"] + math.sin(aim) * d
+                tx, ty = -math.sin(aim), math.cos(aim)
+                for j in range(-int(WALL_H // 2), int(WALL_H // 2), 14):
+                    a = (cx + tx * j, cy + ty * j)
+                    b = (cx + tx * min(j + 8, WALL_H / 2), cy + ty * min(j + 8, WALL_H / 2))
+                    pygame.draw.line(s, (16, 12, 20), a, b, 5)
+                    pygame.draw.line(s, (220, 230, 255), a, b, 3)
+                pygame.draw.line(s, color, (cx, cy), (cx + math.cos(aim) * 14, cy + math.sin(aim) * 14), 2)
             elif kind == "heal":                  # кого вылечит: союзника под курсором (зомби, двойник) или себя
                 u = self.ally_under_cursor(pid) or p
                 rr = u["r"] + 10

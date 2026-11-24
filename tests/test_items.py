@@ -244,8 +244,10 @@ def test_shield_expires_by_time(match):
 
 def test_walls_do_not_replace_each_other(match):
     b = match.blue
+    match.blue.reach = 110   # курсор в 110 px перед магом
     match.apply_item(b, "wall")
     b.y = 200
+    match.blue.reach = 110   # курсор в 110 px перед магом
     match.apply_item(b, "wall")
     step(match, 1.0)
     assert len(match.walls) == 2
@@ -254,6 +256,7 @@ def test_walls_do_not_replace_each_other(match):
 def test_wall_reflects_foe_bullet(match):
     from duel.config import BULLET_SPEED
     b, r = match.blue, match.red
+    match.blue.reach = 110   # курсор в 110 px перед магом
     match.apply_item(b, "wall")
     w = match.walls[0]
     match.bullets = [Bullet(400, b.y, -BULLET_SPEED, 0, r)]
@@ -266,6 +269,7 @@ def test_wall_reflects_foe_bullet(match):
 def test_own_bullet_passes_own_wall(match):
     from duel.config import BULLET_SPEED
     b = match.blue
+    match.blue.reach = 110   # курсор в 110 px перед магом
     match.apply_item(b, "wall")
     w = match.walls[0]
     shot = Bullet(b.x + 30, b.y, BULLET_SPEED, 0, b)
@@ -279,6 +283,7 @@ def mob_vs_wall(match, wall_y, mob_y, seconds):
     from duel.entities import Mob
     b = match.blue
     b.x, b.y = 80, wall_y
+    match.blue.reach = 110   # курсор в 110 px перед магом
     match.apply_item(b, "wall")
     w = match.walls[0]
     m = Mob(w.x + 120, mob_y, 50)
@@ -503,3 +508,26 @@ def test_shield_absorbs_foe_land(match):
     assert b.hp == MAX_HP and "shield" in b.effects
     step(match, 2.0)
     assert "shield" not in b.effects and b.hp < MAX_HP
+
+
+def test_mirror_is_area_spell_at_cursor_angled_and_resets_bounces(match):
+    """Зеркало — под курсором (не дальше WALL_RANGE), лицом от мага, под углом; отражённая пуля — хозяина,
+    отскоки от стенок — заново."""
+    import math
+    from duel.config import BULLET_SPEED, WALL_RANGE
+    b, r = match.blue, match.red
+    b.x, b.y = 300, 400
+    b.aim, b.reach = math.atan2(-100, 100), math.hypot(100, 100)       # курсор вверх-вправо, 141 px
+    match.apply_item(b, "wall")
+    w = match.walls[0]
+    assert (w.cx, w.cy) == pytest.approx((400, 300), abs=0.5)
+    assert w.angle == pytest.approx(math.atan2(-100, 100), abs=1e-6)  # лицом от мага, наискосок
+    shot = Bullet(500, 300, -BULLET_SPEED, 0, r)                       # пуля соперника слева-направо в зеркало
+    shot.bounces = 3
+    match.bullets = [shot]
+    step(match, 0.3)
+    assert shot.owner is b and shot.bounces == 0 and shot.vy < 0       # отразилась вверх, отскоки — заново
+    b.reach = 900                                                      # курсор далеко — на всю дальность
+    match.apply_item(b, "wall")
+    w2 = match.walls[-1]
+    assert math.hypot(w2.cx - b.x, w2.cy - b.y) == pytest.approx(WALL_RANGE, abs=1)

@@ -394,6 +394,7 @@ def test_wall_reflects_mob_shot_into_owner_bullet(match):
     from duel.entities import Mob, MobShot
     b = match.blue
     b.x, b.y = 100, 300
+    match.blue.reach = 110   # курсор в 110 px перед магом
     match.apply_item(b, "wall")                   # стена между магом и снарядом
     shooter = Mob(450, 300, 5, ranged=True)
     shooter.shot_cd = 99                          # сам больше не стреляет

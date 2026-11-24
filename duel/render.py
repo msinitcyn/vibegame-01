@@ -47,6 +47,7 @@ from .config import (
     SHIELD_FLASH,
     REVEAL_TIME,
     WALL_W,
+    WALL_H,
     WALL_TIME,
     FIRE_RING_TIME,
     CLONE_TIME,
@@ -470,9 +471,19 @@ def draw_mob_shot(surf, s):
 
 
 def draw_wall(surf, w, heroes, time=0.0):
-    """Стена-зеркало: обсидиан с рунами к хозяину, серебряное зеркало к сопернику."""
-    fx_spells.draw_mirror(surf, w["x"], w["y1"], w["y2"], w["life"], WALL_TIME, -DIR[w["owner"]],
-                          side_color(heroes, w["owner"]), time, WALL_W)
+    """Стена-зеркало: обсидиан с рунами к хозяину, серебряное зеркало от него. Под любым углом: рисуется
+    стоячей на своём слое (лицо — вправо) и поворачивается по нормали стены."""
+    color = side_color(heroes, w["owner"])
+    if w.get("angle") is None:                    # старый снимок — стоячая стена
+        fx_spells.draw_mirror(surf, w["x"], w["y1"], w["y2"], w["life"], WALL_TIME, -DIR[w["owner"]],
+                              color, time, WALL_W)
+        return
+    size = int(WALL_H + 80)
+    layer = pygame.Surface((size, size), pygame.SRCALPHA)
+    c = size // 2
+    fx_spells.draw_mirror(layer, c, c - WALL_H / 2, c + WALL_H / 2, w["life"], WALL_TIME, -1, color, time, WALL_W)
+    img = pygame.transform.rotate(layer, -math.degrees(w["angle"]))
+    surf.blit(img, img.get_rect(center=(int(w["cx"]), int(w["cy"]))))
 
 
 def draw_beam(surf, b, heroes, time=0.0):

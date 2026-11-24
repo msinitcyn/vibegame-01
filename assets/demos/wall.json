@@ -23,7 +23,8 @@
   "script": [
     {"t": 0.0, "do": "aim", "who": "blue", "at": "red"},
     {"t": 0.0, "do": "aim", "who": "red", "at": "blue"},
-    {"t": 0.4, "do": "cast", "who": "blue", "item": "wall"},
+    {"t": 0.4, "do": "cast", "who": "blue", "item": "wall", "at": [510, 150]},
+    {"t": 0.45, "do": "aim", "who": "blue", "at": "red"},
     {"t": [1.0, 2.7], "every": 0.55, "do": "fire", "who": "red"},
     {"t": [3.0, 4.8], "every": 0.45, "do": "fire", "who": "blue"}
   ]

@@ -550,8 +550,9 @@ TEXTS = {
         "help.wavy": "Твои пули летят синусоидой {wavy} с — их трудно предугадать.",
         "help.clones": "{clones} двойника — не отличить от тебя: бродят, стреляют, подбирают тебе "
                        "артефакты. По {clone_hp} жизни, живут до {clone_time} с.",
-        "help.wall": "Стена перед тобой на {wall_time} с: пули соперника отражаются и становятся "
-                     "твоими, свои пролетают насквозь. Мобы сквозь неё не проходят.",
+        "help.wall": "Зеркало на {wall_time} с — встаёт под курсором (не дальше {wall_range} px) лицом от тебя, "
+                     "под любым углом: пули соперника отражаются (как от зеркала) и становятся твоими — "
+                     "и снова могут отскакивать от стенок; свои пролетают насквозь. Мобы сквозь него не проходят.",
     },
 
     # ------------------------------------------------------------------ English
@@ -1050,8 +1051,9 @@ TEXTS = {
         "help.wavy": "Your bullets fly in a sine wave for {wavy} s — hard to predict.",
         "help.clones": "{clones} clones look just like you: they roam, shoot and pick up artifacts "
                        "for you. {clone_hp} lives each, up to {clone_time} s.",
-        "help.wall": "A wall in front of you for {wall_time} s: opponent bullets bounce back "
-                     "and become yours, your own fly through. Mobs can't pass it.",
+        "help.wall": "A mirror for {wall_time} s — placed under the cursor (up to {wall_range} px) facing away "
+                     "from you, at any angle: opponent bullets reflect off it and become yours — able to bounce "
+                     "off the walls again; your own fly through. Mobs can't pass it.",
     },
 
     # ------------------------------------------------------------------ suomi
@@ -1551,7 +1553,8 @@ TEXTS = {
         "help.wavy": "Luotisi lentävät aaltoillen {wavy} s — vaikea ennakoida.",
         "help.clones": "{clones} kloonia näyttää aivan sinulta: ne liikkuvat, ampuvat ja poimivat "
                        "sinulle artefakteja. {clone_hp} elämää, elävät enintään {clone_time} s.",
-        "help.wall": "Muuri edessäsi {wall_time} s: vastustajan luodit kimpoavat takaisin "
-                     "ja muuttuvat sinun luodeiksesi, omasi lentävät läpi. Hirviöt eivät pääse läpi.",
+        "help.wall": "Peili {wall_time} s — osoittimen kohdalle (enintään {wall_range} px) poispäin sinusta, "
+                     "missä kulmassa tahansa: vastustajan luodit heijastuvat ja muuttuvat sinun luodeiksesi — "
+                     "ja voivat taas kimmota seinistä; omasi lentävät läpi. Hirviöt eivät pääse läpi.",
     },
 }

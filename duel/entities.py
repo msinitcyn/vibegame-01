@@ -962,51 +962,78 @@ class Beam:
 
 
 class Wall:
-    """Стена перед игроком.
+    """Стена-зеркало — заклинание на область: отрезок длиной WALL_H с центром (cx, cy), повёрнутый лицом
+    от хозяина (нормаль nx, ny — от мага к месту, куда поставил). Лицевая сторона — зеркало: пули соперника,
+    пересёкшие её, отражаются (угол падения — угол отражения), становятся пулями хозяина и снова могут
+    отскочить от стенок поля BULLET_WALL_BOUNCES раз. Свои пули хозяина пролетают насквозь. Мобы сквозь
+    стену не проходят (см. Mob). x, y1, y2 — прямоугольник вокруг (для обхода мобами и старых игр)."""
 
-    Сторона к сопернику — зеркало: пули соперника отражаются и становятся пулями владельца.
-    Свои выстрелы владельца пролетают насквозь. Мобы сквозь стену не проходят (см. Mob).
-    """
-
-    def __init__(self, owner):
+    def __init__(self, owner, at=None):
         self.id = None
         self.owner = owner
-        self.x = owner.x + owner.dir * WALL_OFFSET
+        if at is None:                            # без точки — перед магом, как раньше
+            at = (owner.x + owner.dir * WALL_OFFSET, owner.y)
+        dx, dy = at[0] - owner.x, at[1] - owner.y
+        d = math.hypot(dx, dy)
+        if d < 1e-6:
+            dx, dy, d = float(owner.dir), 0.0, 1.0
+        self.nx, self.ny = dx / d, dy / d          # лицо — от хозяина
+        self.tx, self.ty = -self.ny, self.nx       # вдоль стены
         half = WALL_H / 2
-        cy = max(TOP + half, min(BOTTOM - half, owner.y))
-        self.y1, self.y2 = cy - half, cy + half
+        ex, ey = abs(self.tx) * half, abs(self.ty) * half      # не выходить за поле
+        self.cx = max(ex, min(WIDTH - ex, at[0]))
+        self.cy = max(TOP + ey, min(BOTTOM - ey, at[1]))
+        self.x = self.cx
+        self.y1, self.y2 = self.cy - ey - WALL_W / 2, self.cy + ey + WALL_W / 2
         self.life = WALL_TIME
 
     @property
-    def mirror_face(self):
-        """x лицевой (зеркальной) стороны — к сопернику."""
-        return self.x + self.owner.dir * WALL_W / 2
+    def angle(self):
+        """Куда смотрит зеркало (радианы, нормаль от хозяина)."""
+        return math.atan2(self.ny, self.nx)
 
-    def crossed(self, prev_x, x, y, r):
-        """Пересёк ли за кадр зеркало со стороны соперника (свои выстрелы пролетают насквозь)."""
-        if not (self.y1 - r <= y <= self.y2 + r):
+    def face_dist(self, x, y):
+        """Расстояние до лицевой (зеркальной) плоскости, со знаком: > 0 — со стороны соперника."""
+        return (x - self.cx) * self.nx + (y - self.cy) * self.ny - WALL_W / 2
+
+    def along(self, x, y):
+        return (x - self.cx) * self.tx + (y - self.cy) * self.ty
+
+    def crossed(self, x0, y0, x, y, r):
+        """Пересёк ли за кадр зеркало с лицевой стороны (свои выстрелы — с тыла — пролетают насквозь)."""
+        if abs(self.along(x, y)) > WALL_H / 2 + r:
             return False
-        back = -self.owner.dir                    # знак стороны владельца
-        face = self.mirror_face
-        return (prev_x - face) * back <= 0 < (x - face) * back
+        return self.face_dist(x0, y0) >= 0 > self.face_dist(x, y)
 
-    def hit(self, b, prev_x):
-        """Обрабатывает пулю, если она пересекла стену за этот кадр."""
-        if self.crossed(prev_x, b.x, b.y, BULLET_R):
-            b.x = 2 * self.mirror_face - b.x      # отражаем назад
-            b.vx = -b.vx
+    def mirror_point(self, x, y):
+        f = self.face_dist(x, y)
+        return x - 2 * f * self.nx, y - 2 * f * self.ny
+
+    def mirror_vec(self, vx, vy):
+        k = vx * self.nx + vy * self.ny
+        return vx - 2 * k * self.nx, vy - 2 * k * self.ny
+
+    def hit(self, b, prev_x=None):
+        """Пуля пересекла зеркало за этот кадр — отражается, теперь она хозяина, отскоки — заново."""
+        if self.crossed(b.px, b.py, b.x, b.y, BULLET_R):
+            b.x, b.y = self.mirror_point(b.x, b.y)
+            b.vx, b.vy = self.mirror_vec(b.vx, b.vy)
             b.owner = self.owner                  # теперь это наша пуля
+            b.bounces = 0                         # зеркало — новый запас отскоков от стенок поля
             return True
         return False
 
-    def reflect_shot(self, s, prev_x):
-        """Снаряд моба попал в зеркало — вместо него пуля хозяина стены, летящая обратно.
-        Возвращает Bullet или None."""
-        if not self.crossed(prev_x, s.x, s.y, MOB_SHOT_R):
+    def reflect_shot(self, s, prev):
+        """Снаряд моба попал в зеркало — вместо него пуля хозяина стены, летящая отражённо. Bullet или None."""
+        if not self.crossed(prev[0], prev[1], s.x, s.y, MOB_SHOT_R):
             return None
         s.alive = False
-        return Bullet(2 * self.mirror_face - s.x, s.y, -s.dx * BULLET_SPEED, s.dy * BULLET_SPEED, self.owner)
+        x, y = self.mirror_point(s.x, s.y)
+        vx, vy = self.mirror_vec(s.dx * BULLET_SPEED, s.dy * BULLET_SPEED)
+        return Bullet(x, y, vx, vy, self.owner)
 
     def blocks(self, x, y, r):
         """Пересекает ли круг (x, y, r) стену — для мобов, которым сквозь неё нельзя."""
-        return abs(x - self.x) < WALL_W / 2 + r and self.y1 - r < y < self.y2 + r
+        a = max(-WALL_H / 2, min(WALL_H / 2, self.along(x, y)))
+        px, py = self.cx + self.tx * a, self.cy + self.ty * a
+        return math.hypot(x - px, y - py) < WALL_W / 2 + r
