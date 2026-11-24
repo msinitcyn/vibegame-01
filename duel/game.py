@@ -183,6 +183,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         """Первый запуск: ролик (если ещё не смотрели), потом — туда, куда шли (меню или вопрос об отчётах)."""
         if not self.settings.get("intro_seen") and not self.net:
             self.start_movie(config.INTRO_MOVIE, back=self.state)
+            self.settings["intro_seen"] = True        # показали — больше сам не включается
+            settings.save(self.settings)
 
     def start_movie(self, name, back="menu"):
         """Показать ролик assets/movies/<name>; кончился или Esc — в back."""
@@ -190,9 +192,6 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.movie, self.movie_back = Movie(name), back
         self.state = "movie"
         log.info("ролик: %s", name)
-        if name == config.INTRO_MOVIE and not self.settings.get("intro_seen"):
-            self.settings["intro_seen"] = True        # первый запуск: показали — больше сам не включается
-            settings.save(self.settings)
 
     def end_movie(self):
         self.movie = None

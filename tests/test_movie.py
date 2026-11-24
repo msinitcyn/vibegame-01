@@ -167,3 +167,14 @@ def test_intro_on_first_start_only_and_from_about_tab(game, monkeypatch):
     assert game.state == "movie" and game.movie_back == "help"
     game.on_key(pygame.KSCAN_ESCAPE)
     assert game.state == "help"
+
+
+def test_watching_intro_by_hand_does_not_mark_first_start(game, monkeypatch):
+    """Ролик из «Об игре» (или самопроверки) не трогает отметку первого запуска — её ставит только сам первый запуск."""
+    from duel import settings
+    saved = []
+    monkeypatch.setattr(settings, "save", lambda data: saved.append(dict(data)))
+    game.settings["intro_seen"] = False
+    game.start_movie("intro")
+    assert not game.settings["intro_seen"] and not saved
+    game.end_movie()
