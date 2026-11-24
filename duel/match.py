@@ -668,6 +668,8 @@ class Match:
     def bullet_hits_side(self, b):
         """Пуля и сторона соперника её хозяина (хозяин мог смениться после зеркала): щит, маг, двойники."""
         target = self.other(b.owner)
+        if target.offstage:
+            return                            # маг «за кадром» (сцены): пули его не задевают
         if target.shield_blocks(b):
             b.alive = False                   # щит поглощает пулю
             self.hit_at(b, "shield")
@@ -1014,7 +1016,7 @@ class Match:
                 if s.alive and s.owner is not owner and beam.touches(s.x, s.y, MOB_SHOT_R):
                     s.alive = False
                     self.hit_at(s, "knock", None, owner)
-            if beam.tick(foe, beam.touches(foe.x, foe.y, foe.radius), dt):
+            if not foe.offstage and beam.tick(foe, beam.touches(foe.x, foe.y, foe.radius), dt):
                 if foe.shield_absorb():
                     self.hit_at(beam.head(), "shield", foe, owner)
                 else:
@@ -1052,8 +1054,8 @@ class Match:
             if not s.alive:
                 continue
             for p in list(self.players) + self.clones:     # и двойников: моб мог злиться на двойника
-                if self.hero_of(p) is s.owner or not getattr(p, "alive", True):
-                    continue                  # семя стража не ранит Природу и её двойников
+                if self.hero_of(p) is s.owner or not getattr(p, "alive", True) or getattr(p, "offstage", False):
+                    continue                  # семя стража не ранит Природу и её двойников; «за кадром» — тоже
                 guard = SHIELD_GAP if "shield" in p.effects else 0
                 if math.hypot(s.x - p.x, s.y - p.y) < p.radius + guard + MOB_SHOT_R:
                     s.alive = False

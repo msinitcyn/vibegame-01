@@ -18,7 +18,8 @@
     },
     "red": {
       "x": 900,
-      "y": 640
+      "y": 640,
+      "offstage": true
     },
     "guardians": [
       "blue"

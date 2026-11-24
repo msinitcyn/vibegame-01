@@ -19,7 +19,8 @@
     },
     "red": {
       "x": 900,
-      "y": 600
+      "y": 600,
+      "offstage": true
     },
     "artifacts": [
       {

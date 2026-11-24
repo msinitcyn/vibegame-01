@@ -178,3 +178,21 @@ def test_mobswap_rapid_and_bear_demos():
                 gap = _m.hypot(m.x - b.x, m.y - b.y) - m.radius - b.radius
                 assert m.hp < m.max_hp, (fps, round(gap))  # каждый удар медведя — по мобу, не в воздух
             was = b.melee_flash > 0
+
+
+def test_offstage_player_is_never_hit():
+    """Соперник «за кадром» (offstage): отскочившие от стенок пули сквозь него — звуков попадания в сценке нет."""
+    import glob
+    import os
+    for f in sorted(glob.glob(str(demos.DEMO_DIR / "*.json"))):
+        kind = os.path.basename(f)[:-5]
+        data = demos.load(kind)
+        if not any((data["setup"].get(p) or {}).get("offstage") for p in ("blue", "red")):
+            continue
+        d = demos.Demo(data)
+        hits = []
+        while d.t < d.length - 0.05:
+            d.update(1 / 30)
+            hits += [e for e in d.take_events() if e[0] == "hit_mage"]
+        assert not hits, kind
+    assert demos.load("triple")["heroes"]["blue"] == "fire"      # веер — артефакт Огня

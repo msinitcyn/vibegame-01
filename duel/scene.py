@@ -12,6 +12,7 @@
       "camera": [x, y, w, h],                   // участок поля (расширяется до пропорций кадра, без искажений)
       "setup": {
         "blue": {"x": 400, "y": 150, "hp": 15, "hp_lost": 6, "hidden": true},   // всё, кроме x, y, — по желанию
+        // "offstage": true — маг «за кадром»: не виден, пули, снаряды и лучи его не задевают
         "red": {...},
         "mobs": [{"x": 500, "y": 150, "hp": 3, "ranged": false, "angry": false, "target": "blue"}],
         "artifacts": [{"kind": "heal", "x": 470, "y": 150}],
@@ -129,6 +130,9 @@ class Scene:
             p.hp -= int(spot.get("hp_lost", 0))            # ранен с начала (сценка лечения)
             p.ammo = int(spot.get("ammo", 999))
             if spot.get("hidden"):
+                self.hidden.add(p.id)
+            if spot.get("offstage"):          # соперник «где-то далеко»: не виден, пули сквозь него
+                p.offstage = True
                 self.hidden.add(p.id)
         for a in setup.get("artifacts") or []:
             self.drop(a["kind"], a["x"], a["y"])
