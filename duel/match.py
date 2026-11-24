@@ -200,6 +200,8 @@ class Match:
                     continue
                 if c.aim is not None:     # прицел — до выстрела этого такта
                     p.aim = float(c.aim)
+                if c.reach is not None:   # и до курсора (огненный круг встаёт там)
+                    p.reach = max(0.0, float(c.reach))
                 if c.fire:
                     self.fire(p)
                 if c.melee:
@@ -363,7 +365,7 @@ class Match:
         elif kind == "sentries":              # деревья-стрелки на земле соперника
             for _ in range(SENTRY_COUNT):
                 self.sentries.append(Sentry(p, *foe.random_spot(SENTRY_R + 6)))
-        elif kind == "firering":              # огненное кольцо — на ближайшего героя в радиусе, иначе куда попало
+        elif kind == "firering":              # огненное кольцо — по прицелу, под курсор (не дальше дальности)
             self.rings.append(FireRing(p, self.ring_spot(p), self.players))
         elif kind == "zombies":               # мобы рядом — зомби мага
             self.raise_zombies(p)
@@ -700,19 +702,11 @@ class Match:
         self.bullets = [b for b in self.bullets if b.alive]
 
     def ring_spot(self, p):
-        """Куда встанет огненное кольцо мага p: на ближайшего героя соперника — его самого (если не
-        невидим) или двойника (двойник «принимает удар на себя») — не дальше FIRE_RING_RANGE;
-        никого — в случайное место в этом радиусе."""
-        foe = self.other(p)
-        heroes = [u for u in [foe] + self.clones_of(foe) if not self.hidden(u)]
-        near = [u for u in heroes if math.hypot(u.x - p.x, u.y - p.y) <= FIRE_RING_RANGE]
-        if near:
-            u = min(near, key=lambda u: math.hypot(u.x - p.x, u.y - p.y))
-            return u.x, u.y
-        a = self.rng.uniform(0, 2 * math.pi)
-        d = FIRE_RING_RANGE * math.sqrt(self.rng.random())
-        x = max(FIRE_RING_R, min(WIDTH - FIRE_RING_R, p.x + math.cos(a) * d))
-        y = max(TOP + FIRE_RING_R, min(BOTTOM - FIRE_RING_R, p.y + math.sin(a) * d))
+        """Куда встанет огненное кольцо мага p: по прицелу, под курсор — центр кольца там, где курсор; курсор
+        дальше FIRE_RING_RANGE (или его нет — стик, бот) — на всю дальность. Не за краем поля."""
+        d = FIRE_RING_RANGE if p.reach is None else min(FIRE_RING_RANGE, p.reach)
+        x = max(FIRE_RING_R, min(WIDTH - FIRE_RING_R, p.x + math.cos(p.aim) * d))
+        y = max(TOP + FIRE_RING_R, min(BOTTOM - FIRE_RING_R, p.y + math.sin(p.aim) * d))
         return x, y
 
     def clone_cluster(self, p, born):

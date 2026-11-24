@@ -27,7 +27,8 @@
      "menus": {"blue": bool}, "pauses": {"blue": осталось}, "can_hold": {"blue": bool}}
     {"type": "bye"}                                      сервер закрывается
 В комнате, клиент -> сервер:
-    {"type": "cmd", "move": [dx, dy], "fire": bool, "melee": bool, "slot": int|null, "aim": float}
+    {"type": "cmd", "move": [dx, dy], "fire": bool, "melee": bool, "slot": int|null, "aim": float, "reach": float}
+                                                         reach — до курсора, пикс (огненный круг — там)
     {"type": "ready", "ready": bool}   {"type": "name", "name"}   {"type": "hero", "hero"}
     {"type": "bot"}                                      бот на свободное место (в лобби комнаты)
     {"type": "leave"}                                    вышел из комнаты — снова в лобби сервера

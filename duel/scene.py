@@ -170,10 +170,11 @@ class Scene:
         self.walks[who] = (float(x), float(y), self.t + time)
 
     def aim(self, who, at, time=None):
-        """Прицел на мага ("red") или точку [x, y]."""
+        """Прицел на мага ("red") или точку [x, y] — как курсор: и направление, и расстояние (огненный круг — туда)."""
         p = self.player(who)
         x, y = self._point(at)
         p.aim = math.atan2(y - p.y, x - p.x)
+        p.reach = math.hypot(x - p.x, y - p.y)
 
     def fire(self, who, at=None, time=None):
         if at is not None:

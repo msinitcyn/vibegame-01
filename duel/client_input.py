@@ -5,6 +5,7 @@ import math
 
 import pygame
 
+from .commands import REACH_FAR
 from .platform import WEB
 from . import keys
 from .snapshot import player as snap_player
@@ -539,6 +540,16 @@ class InputMixin:
             p = next((p for p in self.snap.get("players", []) if p["id"] == pid), None)
             if p:
                 self.mouse_pos = (p["x"] + DIR[pid] * 150, p["y"])
+
+    def reach_for(self, pid):
+        """До курсора, пикс (огненный круг встаёт там): этот маг целится мышью — расстояние до перекрестия;
+        иначе (стик, клавиши, прицел «по движению») — REACH_FAR: на всю дальность."""
+        if (not self.aim_by_move() and self.mouse_side() == pid and self.mouse_pos is not None
+                and self.aim_source.get(pid) == "mouse"):
+            p = next((p for p in self.snap.get("players", []) if p["id"] == pid), None)
+            if p:
+                return round(math.hypot(self.mouse_pos[0] - p["x"], self.mouse_pos[1] - p["y"]), 1)
+        return REACH_FAR
 
     def aim_for(self, pid, move=(0, 0)):
         """Прицел игрока на этот такт. Режим «по движению»: куда идёт маг, а стоит — прямо на

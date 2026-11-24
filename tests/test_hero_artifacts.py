@@ -258,9 +258,10 @@ def ring_match():
     b, r = m.blue, m.red
     b.x, b.y, r.x, r.y = 150, TOP + 200, 450, TOP + 300      # соперник в радиусе кольца
     r.hp = 1000
+    b.aim, b.reach = math.atan2(r.y - b.y, r.x - b.x), math.hypot(r.x - b.x, r.y - b.y)   # курсор — на сопернике
     m.apply_item(b, "firering")
     ring = m.rings[0]
-    assert (ring.x, ring.y) == (r.x, r.y) and r in ring.inside and b not in ring.inside
+    assert (ring.x, ring.y) == pytest.approx((r.x, r.y)) and r in ring.inside and b not in ring.inside
     return m, ring, FIRE_RING_R
 
 
@@ -531,22 +532,37 @@ def test_mirror_reflection_is_shown():
     assert any(h[3] == "mirror" for h in m.hits) or m.bullets and m.bullets[0].owner is b
 
 
-def test_ring_goes_to_nearest_hero_in_range_or_random_spot():
-    from duel.config import FIRE_RING_RANGE
+def test_ring_goes_under_cursor_capped_by_range():
+    """Огненный круг — по прицелу, центр под курсором; курсор дальше дальности (или его нет) — на всю дальность."""
+    from duel.commands import REACH_FAR, Command
+    from duel.config import FIRE_RING_R, FIRE_RING_RANGE
     m = new_match()
-    m.set_heroes({"blue": "fire", "red": "dark"})
-    b, r = m.blue, m.red
-    b.x, b.y = 150, TOP + 200
-    r.x, r.y = 450, TOP + 300
-    m.apply_item(r, "clones")
-    c = m.clones_of(r)[0]
-    c.x, c.y = 260, TOP + 220                            # двойник ближе — кольцо на него
+    b = m.blue
+    b.x, b.y = 200, TOP + 300
+    aim = math.atan2(-60, 200)
+    m.step(1 / 60, {"blue": Command(aim=aim, reach=150)})            # курсор в 150 px — кольцо там
     m.apply_item(b, "firering")
-    assert (m.rings[-1].x, m.rings[-1].y) == (c.x, c.y)
-    m2 = new_match()
-    b2, r2 = m2.blue, m2.red
-    b2.x, b2.y, r2.x, r2.y = 150, TOP + 200, 900, TOP + 300   # никого в радиусе — куда попало рядом
-    m2.apply_item(b2, "firering")
-    ring = m2.rings[-1]
-    assert math.hypot(ring.x - b2.x, ring.y - b2.y) <= FIRE_RING_RANGE + 1
-    assert (ring.x, ring.y) != (r2.x, r2.y)
+    ring = m.rings[-1]
+    assert math.hypot(ring.x - b.x, ring.y - b.y) == pytest.approx(150, abs=0.5)
+    assert math.atan2(ring.y - b.y, ring.x - b.x) == pytest.approx(aim)
+    m.step(1 / 60, {"blue": Command(aim=0.0, reach=900)})            # дальше дальности — на всю дальность
+    m.apply_item(b, "firering")
+    assert math.hypot(m.rings[-1].x - b.x, m.rings[-1].y - b.y) == pytest.approx(FIRE_RING_RANGE, abs=0.5)
+    m.step(1 / 60, {"blue": Command(aim=0.0, reach=REACH_FAR)})      # стик — тоже на всю дальность
+    m.apply_item(b, "firering")
+    assert m.rings[-1].x == pytest.approx(b.x + FIRE_RING_RANGE, abs=0.5)
+    b.x, b.y = 900, TOP + 100
+    m.step(1 / 60, {"blue": Command(aim=-math.pi / 2, reach=REACH_FAR)})   # к краю — не за поле
+    m.apply_item(b, "firering")
+    assert m.rings[-1].y >= TOP + FIRE_RING_R
+
+
+def test_client_sends_distance_to_cursor(game):
+    """Целишься мышью — в команде расстояние до перекрестия; стиком — «на всю дальность»."""
+    from duel.commands import REACH_FAR
+    game.start()
+    b = game.snap["players"][0]
+    game.settings["aim_mode"] = "stick"
+    game.on_mouse_move((b["x"] + 120, b["y"] + 50))
+    assert game.reach_for("blue") == pytest.approx(130, abs=1)
+    assert game.reach_for("red") == REACH_FAR

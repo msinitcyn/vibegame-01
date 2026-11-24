@@ -78,7 +78,7 @@ class NetClientMixin:
         self.pending = {pid: Command() for pid in PLAYER_IDS}
         move = self.walk_move(self.me, (max(-1, min(1, dx)), max(-1, min(1, dy))))
         return {"type": "cmd", "move": list(move), "fire": fire, "melee": melee, "slot": slot,
-                "aim": self.aim_for(self.me, move)}
+                "aim": self.aim_for(self.me, move), "reach": self.reach_for(self.me)}
 
     def on_net_message(self, msg, now):
         """Сообщение сервера. None — играем дальше; True/False — net_frame сразу возвращает это."""

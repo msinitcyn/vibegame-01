@@ -31,12 +31,13 @@ KEEP = 50                         # сколько последних повто
 
 
 def pack(c):
-    return [list(c.move), bool(c.fire), bool(c.melee), c.use_slot, c.aim]
+    return [list(c.move), bool(c.fire), bool(c.melee), c.use_slot, c.aim, c.reach]
 
 
 def unpack(row):
-    move, fire, melee, slot, aim = row
-    return Command(move=tuple(move), fire=fire, melee=melee, use_slot=slot, aim=aim)
+    move, fire, melee, slot, aim = row[:5]
+    reach = row[5] if len(row) > 5 else None          # старые повторы — без «до курсора»
+    return Command(move=tuple(move), fire=fire, melee=melee, use_slot=slot, aim=aim, reach=reach)
 
 
 class Recorder:
@@ -56,7 +57,7 @@ class Recorder:
             one_shot = row[1] or row[2] or row[3] is not None
             if one_shot or self.last.get(pid) != row:
                 changed[pid] = row
-            self.last[pid] = [row[0], False, False, None, row[4]]   # разовые нажатия не «держатся»
+            self.last[pid] = [row[0], False, False, None, row[4], row[5]]   # разовые нажатия не «держатся»
         if changed:
             self.ticks.append([self.n, changed])
         self.n += 1
@@ -130,8 +131,9 @@ class Player:
         for pid in ("blue", "red"):
             if pid in now:
                 commands[pid] = unpack(now[pid])
-                move, _, _, _, aim = now[pid]
-                self.held[pid] = [move, False, False, None, aim]
+                move, aim = now[pid][0], now[pid][4]
+                reach = now[pid][5] if len(now[pid]) > 5 else None
+                self.held[pid] = [move, False, False, None, aim, reach]
             elif pid in self.held:
                 commands[pid] = unpack(self.held[pid])
         self.n += 1

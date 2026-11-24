@@ -16,7 +16,7 @@ import secrets
 from . import testcmd
 from .replay import Recorder
 from .bot import Bot
-from .commands import Command
+from .commands import REACH_FAR, Command
 from . import config
 from .config import DEFAULT_HERO, HEROES
 from .match import STEP, Match
@@ -307,6 +307,9 @@ class Room:
                 aim = msg.get("aim")
                 if isinstance(aim, (int, float)) and not isinstance(aim, bool) and math.isfinite(aim):
                     c.aim = float(aim)
+                reach = msg.get("reach")              # до курсора (новые игры; старые не шлют — на всю дальность)
+                if isinstance(reach, (int, float)) and not isinstance(reach, bool) and math.isfinite(reach):
+                    c.reach = max(0.0, min(float(reach), REACH_FAR))
             elif kind == "name":
                 if not getattr(s.conn, "user", None):     # у вошедшего — всегда имя аккаунта
                     s.name = clean_name(msg.get("name"))

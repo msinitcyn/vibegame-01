@@ -639,7 +639,7 @@ class LobbyMixin:
             self.pending = {pid: Command() for pid in PLAYER_IDS}
             move = self.walk_move(self.me, (max(-1, min(1, dx)), max(-1, min(1, dy))))
             commands = {self.me: Command(move=move, fire=fire, melee=melee, use_slot=slot,
-                                         aim=self.aim_for(self.me, move)),
+                                         aim=self.aim_for(self.me, move), reach=self.reach_for(self.me)),
                         other: Command(*self.warm_bot.act())}
             self.rec().tick(commands)
             self.handle_events(self.match.step(STEP, commands))

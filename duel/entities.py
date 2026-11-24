@@ -293,6 +293,7 @@ class Player(Unit):
         self.gear = []                # снаряжение (GEAR_ITEMS) — действует до конца партии
         self.moving = 0               # -1 вверх, +1 вниз, 0 — по вертикали стоит
         self.aim = 0.0 if self.dir > 0 else math.pi    # прицел (радианы): сначала — на соперника
+        self.reach = None             # до курсора, пикс (огненный круг — там); None — на всю дальность
         self.moving_x = 0             # -1 влево, +1 вправо
         self.hit_flash = 0.0
         self.heal_fx = 0.0            # для анимации: только что вылечился

@@ -381,6 +381,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             cmd = self.pending[pid]
             cmd.move = self.walk_move(pid, self.axis(pid, held))
             cmd.aim = self.aim_for(pid, cmd.move)
+            cmd.reach = self.reach_for(pid)
             commands[pid] = cmd
         if self.test_bot:                     # тестовый режим: красным играет бот
             commands["red"] = Command(*self.test_bot.act())
