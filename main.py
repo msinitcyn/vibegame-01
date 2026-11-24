@@ -50,7 +50,7 @@ if __name__ == "__main__":
             from duel.replay import load
             replay = load(args.replay)
         Game(windowed=args.windowed or bool(args.replay), net=net, pad=args.pad, replay=replay,
-             movie=args.movie).run()
+             movie=args.movie, intro=not (net or args.replay or args.movie)).run()
     except Exception as e:
         logs.report_crash(e)
         raise

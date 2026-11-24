@@ -89,7 +89,8 @@ ITEM_LEVEL = {
 LEVEL_WEIGHT = {1: 1.0, 2: 0.7, 3: 0.4, 4: 0.2}      # относительная частота выпадения
 LEVEL_MIN_MOB_HP = {1: 0, 2: 0, 3: 5, 4: 6}         # из моба с меньшим запасом жизней — не выпадает
 # справка: страницы артефактов героев (герои по порядку) и всего страниц
-HELP_TABS = ("mages", "common", "gear", "fire", "frost", "nature", "dark", "light", "earth", "rules")   # вкладки справки
+INTRO_MOVIE = "intro"            # ролик первого запуска (assets/movies/intro); пересмотреть — «Обучение» → «Об игре»
+HELP_TABS = ("about", "mages", "common", "gear", "fire", "frost", "nature", "dark", "light", "earth", "rules")   # вкладки справки
 HELP_BASICS = ("walk", "shoot", "melee", "foe_land")    # вкладка «Маги»: что умеет любой маг (сценки — assets/demos/)
 HELP_PAGES = len(HELP_TABS)
 # артефакт -> герой: выпадает только ему (подобрать может любой)

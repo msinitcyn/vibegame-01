@@ -58,9 +58,10 @@ from .client_net import NetClientMixin
 class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, ChatMixin):
     """Приложение поверх матча: хотсит — оба игрока за одним компьютером."""
 
-    def __init__(self, windowed=False, net=None, pad=0, replay=None, movie=None):
+    def __init__(self, windowed=False, net=None, pad=0, replay=None, movie=None, intro=False):
         """net — (соединение, место от сервера, адрес) для сетевого клиента; pad — номер своего геймпада;
-        replay — данные повтора партии (duel/replay.py): игра только показывает его."""
+        replay — данные повтора партии (duel/replay.py): игра только показывает его; movie — показать ролик;
+        intro — показать ролик первого запуска, если его ещё не смотрели (обычный запуск main.py)."""
         pygame.init()
         self.settings = settings.load()
         set_lang(self.settings["lang"])
@@ -172,8 +173,16 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             self.start_replay(replay)
         elif movie:
             self.start_movie(movie)
-        elif logs.ready() and logs.unsent_crashes() and self.settings.get("crash_reports", "ask") == "ask":
-            self.state = "crash_ask"          # в прошлый раз игра упала — спросить, можно ли отправлять отчёты
+        else:
+            if logs.ready() and logs.unsent_crashes() and self.settings.get("crash_reports", "ask") == "ask":
+                self.state = "crash_ask"      # в прошлый раз игра упала — спросить, можно ли отправлять отчёты
+            if intro:
+                self.first_start_intro()
+
+    def first_start_intro(self):
+        """Первый запуск: ролик (если ещё не смотрели), потом — туда, куда шли (меню или вопрос об отчётах)."""
+        if not self.settings.get("intro_seen") and not self.net:
+            self.start_movie(config.INTRO_MOVIE, back=self.state)
 
     def start_movie(self, name, back="menu"):
         """Показать ролик assets/movies/<name>; кончился или Esc — в back."""
@@ -181,6 +190,9 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.movie, self.movie_back = Movie(name), back
         self.state = "movie"
         log.info("ролик: %s", name)
+        if name == config.INTRO_MOVIE and not self.settings.get("intro_seen"):
+            self.settings["intro_seen"] = True        # первый запуск: показали — больше сам не включается
+            settings.save(self.settings)
 
     def end_movie(self):
         self.movie = None

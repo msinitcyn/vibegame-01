@@ -108,7 +108,8 @@ def test_demo_events_sound_and_music_goes_quiet(game, monkeypatch):
     music = []
     monkeypatch.setattr(game.audio, "music", music.append)
     game.state = "help"
-    game.help_page, game.help_index = 0, 0               # «Маги» → «Ходьба» — есть сценка
+    from duel.config import HELP_TABS
+    game.help_page, game.help_index = HELP_TABS.index("mages"), 0      # «Маги» → «Ходьба» — есть сценка
     game.update_music()
     from duel.config import HELP_TABS
     game.help_page = HELP_TABS.index("rules")            # «Правила» — сценки нет

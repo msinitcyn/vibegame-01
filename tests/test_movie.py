@@ -16,8 +16,8 @@ def run(stage, seconds):
 def test_parse_srt_and_language_fallback():
     subs = parse_srt("1\n00:00:01,500 --> 00:00:03,000\nПривет\nмир\n\n2\r\n00:00:04,000 --> 00:00:05,250\r\nЕщё\r\n")
     assert subs == [(1.5, 3.0, "Привет\nмир"), (4.0, 5.25, "Ещё")]
-    assert load_subs("showcase", "ru")[0][2] == "Спеллганнерс!"
-    assert load_subs("showcase", "de") == load_subs("showcase", "en")        # нет своего языка — английский
+    assert load_subs("intro", "ru")[0][2] == "Спеллганнерс!"
+    assert load_subs("intro", "de") == load_subs("intro", "en")        # нет своего языка — английский
 
 
 def test_fit_camera_keeps_aspect_and_field():
@@ -84,8 +84,8 @@ def test_unknown_script_call_is_ignored():
     run(st, 0.5)                                                          # чужие имена — не вызываются
 
 
-def test_showcase_is_valid():
-    data = movie.load("showcase")
+def test_intro_is_valid():
+    data = movie.load("intro")
     total = 0.0
     for sc in data["scenes"]:
         total += sc["length"]
@@ -99,12 +99,12 @@ def test_showcase_is_valid():
             if "hero" in a:
                 assert a["hero"] in HEROES
     for lang in ("ru", "en", "fi"):
-        subs = load_subs("showcase", lang)
+        subs = load_subs("intro", lang)
         assert len(subs) == 6 and subs[-1][1] <= total
 
 
 def test_movie_plays_scenes_with_transitions_and_subtitles(game):
-    mv = Movie("showcase", lang="fi")
+    mv = Movie("intro", lang="fi")
     kinds, scenes = set(), set()
     seen_sub = False
     while not mv.done:
@@ -123,7 +123,7 @@ def test_movie_plays_scenes_with_transitions_and_subtitles(game):
 
 
 def test_subtitles_white_on_black_at_bottom(game):
-    mv = Movie("showcase", lang="ru")
+    mv = Movie("intro", lang="ru")
     while mv.t < 1.5:
         mv.update(1 / 60)
     mv.render(game, game.screen)
@@ -134,16 +134,36 @@ def test_subtitles_white_on_black_at_bottom(game):
 
 
 def test_game_movie_state_esc_and_end(game):
-    game.start_movie("showcase")
+    game.start_movie("intro")
     assert game.state == "movie"
     game.frame()
     game.on_key(pygame.KSCAN_F5)                                          # перечитать — и сначала
     assert game.state == "movie" and game.movie.t == 0
     game.on_key(pygame.KSCAN_ESCAPE)
     assert game.state == "menu" and game.movie is None
-    game.start_movie("showcase")
+    game.start_movie("intro")
     game.movie.t = game.movie.length                                      # досмотрели
     game.movie.scene_t0 = game.movie.length - game.movie.stage.length
     game.movie.index = len(game.movie.scenes) - 1
     game.movie_frame(0.05)
     assert game.state == "menu"
+
+
+def test_intro_on_first_start_only_and_from_about_tab(game, monkeypatch):
+    from duel import settings
+    from duel.config import HELP_TABS, INTRO_MOVIE
+    saved = []
+    monkeypatch.setattr(settings, "save", lambda data: saved.append(dict(data)))
+    game.state, game.settings["intro_seen"] = "menu", False
+    game.first_start_intro()                                              # первый запуск — ролик, потом меню
+    assert game.state == "movie" and game.movie.name == INTRO_MOVIE and game.movie_back == "menu"
+    assert saved and saved[-1]["intro_seen"] and game.settings["intro_seen"]
+    game.end_movie()
+    game.first_start_intro()                                              # уже смотрели — сам не включается
+    assert game.state == "menu"
+    game.state, game.help_page, game.help_full = "help", HELP_TABS.index("about"), False
+    game.draw_help()
+    game.on_key(pygame.KSCAN_RETURN)                                      # «Смотреть ролик»
+    assert game.state == "movie" and game.movie_back == "help"
+    game.on_key(pygame.KSCAN_ESCAPE)
+    assert game.state == "help"

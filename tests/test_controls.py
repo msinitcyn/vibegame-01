@@ -182,7 +182,8 @@ def test_help_pages(game):
     assert game.help_page == 0
     game.on_key(pygame.KSCAN_LEFT)
     assert game.help_page == HELP_PAGES - 1     # по кругу
-    game.on_key(pygame.KSCAN_RIGHT)
+    game.on_key(pygame.KSCAN_RIGHT)             # снова «Об игре» — там списка нет
+    game.on_key(pygame.KSCAN_RIGHT)             # «Маги»
     game.on_key(pygame.KSCAN_S)                 # второй артефакт вкладки
     assert game.help_index == 1
     game.on_key(pygame.KSCAN_RETURN)            # «Подробнее» — сценка во весь экран

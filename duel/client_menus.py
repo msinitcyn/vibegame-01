@@ -8,7 +8,7 @@ import pygame
 from .platform import WEB
 from . import keys
 from . import settings
-from .config import DEFAULT_HERO, HELP_BASICS, HELP_PAGES, HELP_TABS, HERO_ONLY_ITEMS, HEROES, MAX_HP, TEST_HP
+from .config import DEFAULT_HERO, HELP_BASICS, INTRO_MOVIE, HELP_PAGES, HELP_TABS, HERO_ONLY_ITEMS, HEROES, MAX_HP, TEST_HP
 from .items import HELP_SECTIONS
 from .i18n import get_lang, LANGS, set_lang, t
 from .update import restart as restart_updated
@@ -147,7 +147,7 @@ class MenusMixin:
     def help_kinds(self, page=None):
         """Артефакты вкладки справки (на «Правилах» — ни одного)."""
         tab = HELP_TABS[self.help_page if page is None else page]
-        if tab == "rules":
+        if tab in ("rules", "about"):
             return []
         if tab == "mages":
             return list(HELP_BASICS)
@@ -160,6 +160,10 @@ class MenusMixin:
     def help_kind(self):
         kinds = self.help_kinds()
         return kinds[min(self.help_index, len(kinds) - 1)] if kinds else None
+
+    def watch_intro(self):
+        """«Об игре» → «Смотреть ролик»: ролик первого запуска, потом — обратно сюда."""
+        self.start_movie(INTRO_MOVIE, back="help")
 
     def help_tab(self, page):
         self.help_page, self.help_index, self.help_full = page % HELP_PAGES, 0, False
@@ -174,6 +178,8 @@ class MenusMixin:
         n = len(self.help_kinds())
         if sc in (K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE):
             self.state = "menu"
+        elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE) and HELP_TABS[self.help_page] == "about":
+            self.watch_intro()
         elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE) and n:
             self.help_full = True
         elif sc in (K.KSCAN_W, K.KSCAN_UP, K.KSCAN_S, K.KSCAN_DOWN) and n:

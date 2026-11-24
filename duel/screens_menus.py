@@ -339,6 +339,8 @@ class MenuScreensMixin:
         tab = HELP_TABS[self.help_page]
         if tab == "rules":
             self.draw_help_rules()
+        elif tab == "about":
+            self.draw_help_about()
         else:
             self.draw_help_list()
             self.draw_help_focus(kind)
@@ -373,6 +375,8 @@ class MenuScreensMixin:
             draw_icon(self.screen, kind, center, r)
 
     def help_tab_label(self, tab):
+        if tab == "about":
+            return tr("help.tab_about"), (255, 230, 140)
         if tab == "mages":
             return tr("help.tab_mages"), (225, 230, 245)
         if tab == "common":
@@ -507,6 +511,18 @@ class MenuScreensMixin:
                else pygame.transform.smoothscale(part, box.size))
         self.screen.blit(img, box)
         pygame.draw.rect(self.screen, (90, 96, 120), box.inflate(4, 4), 2, border_radius=6)
+
+    def draw_help_about(self):
+        """«Об игре»: что это за игра и кнопка — пересмотреть ролик первого запуска."""
+        s = self.screen
+        img = self.big.render("Spellgunners", True, (255, 230, 140))
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 190)))
+        y = 260
+        for line in self.wrap(tr("help.about_text"), WIDTH - 260, self.font):
+            img = self.font.render(line, True, WHITE)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, y)))
+            y += 30
+        self.button((WIDTH // 2, y + 50), tr("help.watch_intro"), self.watch_intro, w=320, color=(255, 230, 140))
 
     def draw_help_rules(self):
         s = self.screen

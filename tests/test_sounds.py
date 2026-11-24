@@ -52,7 +52,8 @@ def test_switching_demo_stops_its_sounds(game, monkeypatch):
     monkeypatch.setattr(game.audio, "stop_sounds", lambda: stopped.append(1))
     monkeypatch.setattr(game.audio, "set_loops", loops.append)
     game.state = "help"
-    game.help_page, game.help_index = 0, 0               # «Маги» → «Ходьба»
+    from duel.config import HELP_TABS
+    game.help_page, game.help_index = HELP_TABS.index("mages"), 0      # «Маги» → «Ходьба»
     game.update_sounds()
     n = len(stopped)
     game.demo_snap = {"players": [{"id": "blue", "moving": True, "effects": {}}], "clones": []}
