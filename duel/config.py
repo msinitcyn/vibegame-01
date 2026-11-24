@@ -183,7 +183,8 @@ SHOOT_VOLUME = 0.6
 ITEM_SOUNDS = {"beam": ("sun-ray.mp3", 0.9), "firering": ("fire-ring.mp3", 0.45), "bear": ("bear.mp3", 0.75),
                "zombies": ("zombie.mp3", 0.55), "clones": ("clone.mp3", 0.6), "lasso": ("lasso.mp3", 0.6),
                "foe_freeze": ("frost.mp3", 0.6), "shield": ("ice-shield.mp3", 0.6), "wall": ("mirror.mp3", 0.6),
-               "trees": ("tree-wall.mp3", 0.6)}
+               "trees": ("tree-wall.mp3", 0.6),
+               "triple": ("3shoot-effect.mp3", 0.6)}    # тройной выстрел: выезжают ещё два ствола
 # звуки-циклы: играют, пока это происходит (шаги — маг идёт; чужая земля — горит; ледяная тропа — действует)
 LOOP_SOUNDS = {"steps": ("steps.mp3", 0.5), "enemy-land": ("enemy-land.mp3", 0.35), "ice-road": ("ice-road.mp3", 0.5)}
 LOOP_FADE_MS = 150

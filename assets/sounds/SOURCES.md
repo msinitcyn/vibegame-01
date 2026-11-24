@@ -4,6 +4,7 @@
 
 | Файл в игре | Оригинальное имя | Номер |
 |---|---|---|
+| 3shoot-effect.mp3 | freesound_community-1911-reload-6248.mp3 | 6248 |
 | clone.mp3 | yodguard-dark-magic-1-378650.mp3 | 378650 |
 | enemy-land.mp3 | freesound_community-burning-fire-steam-87118.mp3 | 87118 |
 | frost.mp3 | dragon-studio-frost-spell-impact-499662.mp3 | 499662 |

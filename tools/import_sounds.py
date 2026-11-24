@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parent.parent
 RAW = ROOT / "raw"
 OUT = ROOT / "assets" / "sounds"
 SOURCES = OUT / "SOURCES.md"
+MUSIC = re.compile(r"^(background|backgound|menu)")     # такие назначения — музыка, не звуки
 HEAD = ("# Источники звуков\n\nВсе звуки — с [Pixabay](https://pixabay.com/sound-effects/) по Pixabay Content License "
         "(можно в игре, указывать автора не обязательно). Оригинальное имя файла содержит автора и номер звука.\n\n"
         "| Файл в игре | Оригинальное имя | Номер |\n|---|---|---|\n")
@@ -40,6 +41,9 @@ def main():
     rows = read_rows()
     for f in sorted(RAW.glob("*.*.mp3")):
         purpose, original, number = parse(f.name)
+        if MUSIC.match(purpose):              # музыка (фоновая, меню) — не звук: в assets/music руками
+            print(f"{f.name}: музыка — пропускаю (кладётся в assets/music, источник — assets/music/SOURCES.md)")
+            continue
         target = f"{purpose}.mp3"
         shutil.copyfile(f, OUT / target)
         rows[target] = [target, original, number]

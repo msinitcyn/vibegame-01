@@ -618,7 +618,7 @@ def test_hero_artifacts_travel_and_draw(server, game):
         game.snap = snap
         game.handle_events([tuple(e) for e in s["events"]])
         game.draw()
-    assert set(ITEM_SOUNDS) <= set(played)
+    assert {k for k in ITEM_SOUNDS if k in HERO_ONLY_ITEMS} <= set(played)      # общие (веер) — не в этом тесте
 
 
 # ------------------------------------------------------------------ зрители
