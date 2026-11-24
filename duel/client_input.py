@@ -230,6 +230,8 @@ class InputMixin:
         if self.state == "settings" and self.settings_rows[self.settings_index] == "name":
             chars = "".join(ch for ch in text if ch.isprintable())
             self.set_name((self.settings["name"] + chars)[:settings.NAME_MAX])
+        elif self.state == "settings" and self.settings_rows[self.settings_index] == "replay_dir":
+            self.set_replay_dir(self.settings.get("replay_dir", "") + "".join(ch for ch in text if ch.isprintable()))
 
     def pad_keys(self):
         """Кнопки геймпада в меню-экранах -> клавиши (None — экран не меню, см. on_pad)."""

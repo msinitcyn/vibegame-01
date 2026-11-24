@@ -1,40 +1,72 @@
-"""«Повторы» в главном меню: список записанных партий, просмотр, Esc — обратно в список."""
+"""Повторы — в «Настройки → Дополнительно»: сохранять ли, папка, список записанных партий и просмотр."""
 import pygame
 
-from duel import config, logs
+from duel import config, settings
+from duel.commands import Command
 from duel.match import Match
 from duel.replay import Recorder
 
 
-def write_replay(tuning=None):
+def write_replay(folder, tuning=None):
     m = Match(seed=3, heroes={"blue": "fire", "red": "earth"})
     rec = Recorder(m, "lab", players={"blue": "hard · hero", "red": "easy · rush"}, tuning=tuning or [])
-    from duel.commands import Command
     for _ in range(30):
         c = {"blue": Command(move=(1, 0)), "red": Command()}
         rec.tick(c)
         m.step(1 / 60, c)
-    return rec.save(logs.log_dir(), m)
+    return rec.save(folder, m, sub="")
 
 
-def test_replays_screen_lists_and_plays(game):
-    path = write_replay(["BASE_SPEED=170"])
-    assert "replays" in game.menu
-    game.state = "menu"
-    game.menu_index = game.menu.index("replays")
-    game.menu_select()
-    assert game.state == "replays" and game.replay_list and game.replay_list[0]["path"] == path
+def open_advanced(game):
+    game.state = "settings"
+    game.settings_index = game.settings_rows.index("advanced")
+    game.on_key(pygame.KSCAN_RETURN)
+    assert game.settings_page == "advanced" and game.settings_rows == game.advanced_rows
+
+
+def test_replays_not_in_main_menu(game):
+    assert "replays" not in game.menu
+
+
+def test_advanced_settings_folder_list_and_watch(game, tmp_path):
+    open_advanced(game)
+    game.settings_index = game.settings_rows.index("replay_dir")
+    game.on_text(str(tmp_path))                        # путь набирается в строке
+    assert game.settings["replay_dir"] == str(tmp_path)
+    assert settings.load()["replay_dir"] == str(tmp_path)
+    game.draw_settings()
+    path = write_replay(game.replay_folder(), ["BASE_SPEED=170"])
+    game.settings_index = game.settings_rows.index("replays")
+    game.on_key(pygame.KSCAN_RETURN)
+    assert game.state == "replays" and game.replay_list[0]["path"] == path
     game.draw_replays()
     game.on_key(pygame.KSCAN_RETURN)
-    assert game.replay is not None and game.state == "play"
-    assert game.match.blue.speed == 170                # числа из повтора
-    game.on_key(pygame.KSCAN_ESCAPE)
+    assert game.replay is not None and game.match.blue.speed == 170
+    game.on_key(pygame.KSCAN_ESCAPE)                   # из повтора — в список
     assert game.replay is None and game.state == "replays"
     assert Match(seed=1).blue.speed == config.BASE_SPEED
+    game.on_key(pygame.KSCAN_ESCAPE)                   # из списка — в «Дополнительно»
+    assert game.state == "settings" and game.settings_page == "advanced"
+    game.on_key(pygame.KSCAN_ESCAPE)                   # из «Дополнительно» — на главную страницу настроек
+    assert game.settings_page == "main" and game.settings_rows[game.settings_index] == "advanced"
+    game.settings["replay_dir"] = ""
 
 
-def test_replays_screen_empty_and_back(game):
-    game.open_replays()
-    game.draw_replays()
-    game.on_key(pygame.KSCAN_ESCAPE)
-    assert game.state == "menu"
+def test_save_replays_switch(game):
+    open_advanced(game)
+    game.settings_index = game.settings_rows.index("save_replays")
+    game.on_key(pygame.KSCAN_RETURN)
+    assert game.settings["save_replays"] is False
+    game.on_key(pygame.KSCAN_RETURN)
+    assert game.settings["save_replays"] is True
+    game.close_advanced()
+
+
+def test_replay_dir_backspace(game):
+    open_advanced(game)
+    game.settings_index = game.settings_rows.index("replay_dir")
+    game.settings["replay_dir"] = "/tmp/ab"
+    game.on_key(pygame.KSCAN_BACKSPACE)
+    assert game.settings["replay_dir"] == "/tmp/a"
+    game.settings["replay_dir"] = ""
+    game.close_advanced()

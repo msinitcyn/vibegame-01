@@ -88,4 +88,4 @@ def test_lab_replay_command_picks_games(tmp_path, capsys):
     lab.main(["replay", str(f), "--pair", f"{lab.RU[a]},{lab.RU[b]}", "--out", str(tmp_path)])
     out = capsys.readouterr().out
     assert "разошлась" not in out and ".json.gz" in out
-    assert len(list((tmp_path / "replays").glob("*-lab-*.json.gz"))) == 1
+    assert len(list(tmp_path.glob("*-lab-*.json.gz"))) == 1

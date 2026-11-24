@@ -88,9 +88,11 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.held = set()             # зажатые физические клавиши
         self.pads = Gamepads()
         # пункты меню; подписи — menu_label()
-        self.menu = ["play", "net", "test", "help", "settings"] + ([] if WEB else ["replays"])
+        self.menu = ["play", "net", "test", "help", "settings"]
         self.replay_list, self.replay_index = [], 0       # экран «Повторы»: файлы и выбранный
         self.replay_back = None       # повтор открыт из «Повторов» — Esc возвращает туда, а не закрывает игру
+        self.advanced_rows = ["save_replays", "replay_dir", "replays", "back"]   # «Настройки → Дополнительно»
+        self.settings_page = "main"
         self.paused = False           # пауза в партии (Esc): за одним компьютером матч стоит
         self.pause_index = 0
         self.settings_back = "menu"   # куда вернуться из настроек: в меню или в партию (с паузы)
@@ -126,10 +128,11 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.walk_to = None           # кнопка мыши «идти»: куда идёт маг; walk_hold — кнопка зажата
         self.walk_hold, self.walk_pid, self.walk_code = False, None, None
         self.settings_rows = ["lang", "name", "aim_mode", "aim_stick", "aim_mouse", "bot_level", "music", "sfx", "keys",
-                              "updates", "check_now", "crash_reports", "back"]
-        if WEB:                           # в браузере: прицел «по движению» не бывает, обновлений и отчётов нет
+                              "updates", "check_now", "crash_reports", "advanced", "back"]
+        if WEB:                           # в браузере: прицел «по движению» не бывает, обновлений, отчётов и файлов нет
             self.settings_rows = [r for r in self.settings_rows
-                                  if r not in ("aim_mode", "updates", "check_now", "crash_reports")]
+                                  if r not in ("aim_mode", "updates", "check_now", "crash_reports", "advanced")]
+        self.main_rows = self.settings_rows
         self.keys_col, self.keys_row, self.keys_wait, self.keys_msg = 0, 0, None, None
         self.updater = Updater()          # новая версия: проверка — в run(), по настройке
         self.help_page = self.help_index = 0      # справка: вкладка и артефакт в ней
@@ -373,8 +376,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             return                            # смотрим повтор — это не новая партия
         mode = self.local_mode()
         logs.record_match(self.match.summary(), mode)
-        if logs.ready() and getattr(self, "rec_match", None) is self.match:
-            path = self.recorder.save(logs.log_dir(), self.match)
+        if logs.ready() and getattr(self, "rec_match", None) is self.match and self.settings.get("save_replays", True):
+            path = self.recorder.save(self.replay_folder(), self.match, sub="")
             if path:
                 log.info("повтор: %s", path)
         log.info("партия окончена (%s): победил %s", mode, self.snap["winner"])

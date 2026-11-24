@@ -12,8 +12,24 @@ from .config import DEFAULT_HERO, HELP_BASICS, HELP_LANDS, INTRO_MOVIE, HELP_PAG
 from .items import HELP_SECTIONS
 from .i18n import get_lang, guess_lang, LANGS, set_lang, t
 from .brain import LEVEL_NAMES
-from . import logs
-from .replay import load as replay_load
+from .replay import folder as replay_dir, load as replay_load
+
+PATH_MAX = 400
+
+
+def clipboard_text():
+    """Текст из буфера обмена (Ctrl+V в поле пути) или "" — если буфер недоступен."""
+    try:
+        if hasattr(pygame.scrap, "get_text"):            # pygame-ce
+            text = pygame.scrap.get_text()
+        else:
+            if not pygame.scrap.get_init():
+                pygame.scrap.init()
+            raw = pygame.scrap.get("text/plain;charset=utf-8") or pygame.scrap.get(pygame.SCRAP_TEXT) or b""
+            text = raw.decode("utf-8", "ignore").replace("\0", "") if isinstance(raw, bytes) else str(raw)
+    except Exception:                                    # нет окна, нет буфера, другая система — без вставки
+        return ""
+    return "".join(ch for ch in (text or "").strip() if ch.isprintable())
 from .update import restart as restart_updated
 from .client_common import Controls, PLAYER_IDS
 
@@ -116,7 +132,7 @@ class MenusMixin:
     def menu_label(self, i):
         return {"play": t("menu.two"), "net": t("menu.connect" if WEB else "menu.net"),
                 "test": t("menu.test", hp=TEST_HP), "help": t("menu.help"),
-                "settings": t("menu.settings"), "replays": t("menu.replays"),
+                "settings": t("menu.settings"),
                 "update": t("menu.update", v=self.updater.latest or "")}[self.menu[i]]
 
     def menu_select(self):
@@ -137,15 +153,25 @@ class MenusMixin:
         elif action == "update":
             self.state = "update"
             self.updater.start()
-        elif action == "replays":
-            self.open_replays()
         else:
             self.open_pick(MAX_HP)
 
     # ------------------------------------------------------------------ «Повторы»
 
     def replay_folder(self):
-        return logs.log_dir() / "replays"
+        return replay_dir(self.settings)
+
+    def set_replay_dir(self, path):
+        self.settings["replay_dir"] = path[:PATH_MAX]
+        settings.save(self.settings)
+
+    def open_advanced(self):
+        """«Настройки → Дополнительно»: та же страница настроек, другие строки."""
+        self.settings_page, self.settings_rows, self.settings_index = "advanced", self.advanced_rows, 0
+
+    def close_advanced(self):
+        self.settings_page, self.settings_rows = "main", self.main_rows
+        self.settings_index = self.settings_rows.index("advanced")
 
     def open_replays(self):
         """Экран «Повторы»: записанные партии (новые сверху) — сами пишутся после каждой партии."""
@@ -167,7 +193,7 @@ class MenusMixin:
         K = pygame
         n = len(self.replay_list)
         if sc in (K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE):
-            self.state = "menu"
+            self.state = "settings"               # «Повторы» открываются из «Настройки → Дополнительно»
         elif n and sc in (K.KSCAN_UP, K.KSCAN_W):
             self.replay_index = (self.replay_index - 1) % n
         elif n and sc in (K.KSCAN_DOWN, K.KSCAN_S):
@@ -197,7 +223,11 @@ class MenusMixin:
         self.state = "replays"
 
     def close_settings(self):
-        """Из настроек — туда, откуда пришли: в меню или обратно в партию (на паузу)."""
+        """Из настроек — туда, откуда пришли: в меню или обратно в партию (на паузу); из «Дополнительно» —
+        на главную страницу настроек."""
+        if self.settings_page == "advanced":
+            self.close_advanced()
+            return
         self.state = self.settings_back if self.settings_back == "play" else "menu"
         self.settings_back = "menu"
 
@@ -357,6 +387,18 @@ class MenusMixin:
         На строке «Имя» буквы набирают имя (on_text), строки листаются только стрелками."""
         K = pygame
         row = self.settings_rows[self.settings_index]
+        if row == "replay_dir":                  # путь к папке: набирать, Ctrl+V — вставить, Backspace — стереть
+            if sc == K.KSCAN_ESCAPE:
+                self.close_settings()
+            elif sc == K.KSCAN_BACKSPACE:
+                self.set_replay_dir(self.settings.get("replay_dir", "")[:-1])
+            elif sc == K.KSCAN_V and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                self.set_replay_dir(self.settings.get("replay_dir", "") + clipboard_text())
+            elif sc == K.KSCAN_UP:
+                self.settings_index -= 1
+            elif sc in (K.KSCAN_DOWN, K.KSCAN_RETURN, K.KSCAN_KP_ENTER):
+                self.settings_index += 1
+            return
         if row == "name":
             if sc == K.KSCAN_ESCAPE:
                 self.close_settings()
@@ -408,6 +450,17 @@ class MenusMixin:
         elif row == "keys":
             if sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE, K.KSCAN_D, K.KSCAN_RIGHT):
                 self.open_keys()
+        elif row == "advanced":
+            if sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE, K.KSCAN_D, K.KSCAN_RIGHT):
+                self.open_advanced()
+        elif row == "replays":
+            if sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE, K.KSCAN_D, K.KSCAN_RIGHT):
+                self.open_replays()
+        elif row == "save_replays":
+            if sc in (K.KSCAN_A, K.KSCAN_LEFT, K.KSCAN_D, K.KSCAN_RIGHT, K.KSCAN_RETURN, K.KSCAN_KP_ENTER,
+                      K.KSCAN_SPACE):
+                self.settings["save_replays"] = not self.settings.get("save_replays", True)
+                settings.save(self.settings)
         elif row == "crash_reports":
             if sc in (K.KSCAN_A, K.KSCAN_LEFT, K.KSCAN_D, K.KSCAN_RIGHT, K.KSCAN_RETURN, K.KSCAN_KP_ENTER,
                       K.KSCAN_SPACE):

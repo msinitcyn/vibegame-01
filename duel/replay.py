@@ -18,7 +18,7 @@
 Партии лаборатории баланса (tools/lab.py replay) — тот же формат, режим "lab"; если в них подменены
 параметры, они записаны в "tuning", и воспроизведение подменяет их так же (иначе партия разошлась бы).
 
-Посмотреть: в игре «Повторы» в главном меню, или python main.py --replay ФАЙЛ (пробел — пауза, ←/→ — медленнее/быстрее, ↑ — +10 с, R — сначала).
+Посмотреть: в игре «Настройки → Дополнительно → Смотреть повторы», или python main.py --replay ФАЙЛ (пробел — пауза, ←/→ — медленнее/быстрее, ↑ — +10 с, R — сначала).
 Проверить без окна: python -m duel.replay ФАЙЛ — прогон и сверка итога с записанным.
 """
 import gzip
@@ -76,11 +76,11 @@ class Recorder:
             out["result"] = match.summary()
         return out
 
-    def save(self, folder, match=None):
-        """Записать в folder/replays (старые сверх KEEP — удалить). Возвращает путь или None."""
+    def save(self, folder, match=None, sub="replays"):
+        """Записать в folder/sub (sub="" — прямо в folder; старые сверх KEEP — удалить). Возвращает путь или None."""
         try:
             from .logs import version
-            folder = Path(folder) / "replays"
+            folder = Path(folder) / sub if sub else Path(folder)
             folder.mkdir(parents=True, exist_ok=True)
             name = time.strftime("%Y%m%d-%H%M%S") + f"-{self.head['mode']}-{self.head['seed']}.json.gz"
             path = folder / name
@@ -92,6 +92,14 @@ class Recorder:
             return path
         except OSError:
             return None
+
+
+def folder(cfg=None):
+    """Папка повторов игры: из настроек («Дополнительно → Папка с повторами»), пусто — logs/replays."""
+    from . import logs, settings
+    cfg = settings.load() if cfg is None else cfg
+    custom = (cfg.get("replay_dir") or "").strip()
+    return Path(custom).expanduser() if custom else logs.log_dir() / "replays"
 
 
 def load(path):

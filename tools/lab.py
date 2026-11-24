@@ -7,7 +7,7 @@
     .venv/bin/python tools/lab.py knobs SPEED                        # какие параметры есть (фильтр по имени)
     .venv/bin/python tools/lab.py report --games 600 --json lab.jsonl   # итоги партий — в файл
     .venv/bin/python tools/lab.py replay lab.jsonl --pair земля,свет --winner right --count 3
-                     # эти партии — в повторы: смотреть в игре («Повторы» в главном меню)
+                     # эти партии — в повторы: смотреть в игре («Настройки → Дополнительно → Смотреть повторы»)
 
 Повтор — та же партия заново (всё детерминировано: зерно, герои, боты, числа), записанная как обычный
 повтор игры (режим "lab", в повторе и подменённые числа). Выбор: --pick N (строка файла, с 1), --pair
@@ -365,22 +365,22 @@ def pick_games(rows, a):
 
 def cmd_replay(a):
     """Выбранные партии из файла итогов — заново, с записью повтора в папку повторов игры."""
-    from duel import logs
+    from duel.replay import folder as replay_folder
     rows = [json.loads(line) for line in Path(a.file).read_text(encoding="utf-8").splitlines() if line.strip()]
     chosen = pick_games(rows, a)
     if not chosen:
         print("таких партий в файле нет")
         return []
-    folder = Path(a.out) if a.out else logs.log_dir()
+    folder = Path(a.out) if a.out else replay_folder()       # как в игре: «Настройки → Дополнительно»
     for r in chosen:
         job = {"seed": r["seed"], "heroes": r["heroes"], "limit": r.get("limit", 300.0)}
         job.update({"blue": tuple(r["blue"]), "red": tuple(r["red"]), "set": r.get("set") or []})
         again = play(job, record=True)
-        path = again["recorder"].save(folder, again["match"])
+        path = again["recorder"].save(folder, again["match"], sub="")
         same = "" if again["winner"] == r["winner"] else f"  (!) в файле победил {r['winner']} — партия разошлась"
         a_, b_ = r["heroes"]
         print(f"{RU[a_]} — {RU[b_]}, победил {side_name(again['winner'])}, {again['length']:.0f} с: {path}{same}")
-    print("смотреть: в игре «Повторы» в главном меню (или .venv/bin/python main.py --replay ФАЙЛ)")
+    print("смотреть: в игре «Настройки → Дополнительно → Смотреть повторы» (или .venv/bin/python main.py --replay ФАЙЛ)")
     return chosen
 
 
@@ -415,7 +415,7 @@ def main(argv=None):
     rp.add_argument("--longest", action="store_true")
     rp.add_argument("--shortest", action="store_true")
     rp.add_argument("--count", type=int, default=1, help="сколько партий (по умолчанию одна)")
-    rp.add_argument("--out", help="папка логов (по умолчанию — игры: повторы в её replays/)")
+    rp.add_argument("--out", help="папка повторов (по умолчанию — как в игре, «Настройки → Дополнительно»)")
     a = ap.parse_args(argv)
     if a.mode == "knobs":
         return cmd_knobs(a)

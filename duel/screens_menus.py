@@ -205,7 +205,7 @@ class MenuScreensMixin:
             s.blit(img, img.get_rect(center=(WIDTH // 2, 135 + visible * 46 - 14)))
         img = self.small.render(tr("replays.hint"), True, GREY)
         s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 62)))
-        img = self.tiny_text.render(str(self.replay_folder()), True, GREY)
+        img = self.tiny_text.render(tr("settings.replay_dir_now", path=str(self.replay_folder())), True, GREY)
         s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 36)))
         self.button((70, HEIGHT - 30), "←", lambda: self.on_key(pygame.KSCAN_ESCAPE), w=80)
 
@@ -245,9 +245,15 @@ class MenuScreensMixin:
     def draw_settings(self):
         s = self.screen
         s.fill(BG)
-        img = self.big.render(tr("settings.title"), True, WHITE)
+        title = "settings.advanced_title" if self.settings_page == "advanced" else "settings.title"
+        img = self.big.render(tr(title), True, WHITE)
         s.blit(img, img.get_rect(center=(WIDTH // 2, 92)))
         row = self.settings_rows[self.settings_index]
+        rdir = self.settings.get("replay_dir", "")
+        if row == "replay_dir":
+            rdir += "_" if pygame.time.get_ticks() // 500 % 2 else " "
+        if len(rdir) > 30:
+            rdir = "…" + rdir[-29:]
         name = self.settings.get("name", "")
         if row == "name":
             name += "_" if pygame.time.get_ticks() // 500 % 2 else " "
@@ -264,6 +270,10 @@ class MenuScreensMixin:
                   "updates": f"◀  {tr('settings.updates', v=tr('yes' if self.settings.get('check_updates', True) else 'no'))}  ▶",
                   "check_now": tr("settings.check_now"),
                   "crash_reports": f"◀  {tr('settings.crash', v=tr('yes' if self.settings.get('crash_reports') == 'yes' else 'no'))}  ▶",
+                  "advanced": tr("settings.advanced"),
+                  "save_replays": f"◀  {tr('settings.save_replays', v=tr('yes' if self.settings.get('save_replays', True) else 'no'))}  ▶",
+                  "replay_dir": tr("settings.replay_dir", path=rdir if rdir.strip() else tr("settings.replay_dir_default")),
+                  "replays": tr("settings.replays"),
                   "back": tr("settings.back")}
         step = min(46, (HEIGHT - 230) // len(self.settings_rows))     # строк много — плотнее
         for i, line in enumerate(self.settings_rows):
@@ -281,9 +291,12 @@ class MenuScreensMixin:
             img = self.small.render(self.update_status_text(), True, AMMO_COLOR)
             s.blit(img, img.get_rect(center=(WIDTH // 2, 170 + len(self.settings_rows) * step + 24)))
         hint = ("settings.name_hint" if row == "name" else "settings.crash_hint" if row == "crash_reports"
-                else "settings.hint")
+                else "settings.replay_dir_hint" if row == "replay_dir" else "settings.hint")
         img = self.small.render(tr(hint), True, GREY)
         s.blit(img, img.get_rect(center=(WIDTH // 2, 170 + len(self.settings_rows) * step)))
+        if self.settings_page == "advanced":           # куда пишутся повторы — полностью
+            img = self.tiny_text.render(tr("settings.replay_dir_now", path=str(self.replay_folder())), True, GREY)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 170 + len(self.settings_rows) * step + 30)))
         pygame.display.flip()
 
     def draw_lang_pick(self):
@@ -324,9 +337,9 @@ class MenuScreensMixin:
         «Назад» — в меню; «Имя» — выбрать строку (дальше набирать с клавиатуры)."""
         self.settings_index = i
         row = self.settings_rows[i]
-        if row in ("back", "keys", "check_now"):
+        if row in ("back", "keys", "check_now", "advanced", "replays"):
             self.on_key(pygame.KSCAN_RETURN)
-        elif row != "name":
+        elif row not in ("name", "replay_dir"):
             left = self.ui_mouse is not None and self.ui_mouse[0] < rect.centerx
             self.on_key(pygame.KSCAN_LEFT if left else pygame.KSCAN_RIGHT)
 
