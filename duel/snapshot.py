@@ -55,7 +55,7 @@ def snapshot(match):
             "id": x.id, "x": _xy(x.x), "y": _xy(x.y), "r": _xy(x.radius), "hp": x.hp,
             "max_hp": x.max_hp, "ranged": x.ranged, "facing": x.facing, "flash": _t(x.flash),
             "windup": _t(x.windup), "swing": _t(x.swing), "swing_dir": _t(x.swing_dir), "swing_hit": x.swing_hit,
-            "zombie": _pid(x.zombie_of), "zombie_life": _t(x.zombie_life),
+            "zombie": _pid(x.zombie_of), "zombie_life": _t(x.zombie_life), "heal_fx": _t(x.heal_fx),
             "swap": _t(x.swap), "swap_by": _pid(x.swap_by),
             "swap_dir": None if x.swap_dir is None else round(x.swap_dir, 2),
             "target": _pid(getattr(x.target, "owner", x.target)),     # на двойника — цвет хозяина
@@ -85,7 +85,7 @@ def snapshot(match):
         "rings": [{"id": r.id, "owner": r.owner.id, "x": _xy(r.x), "y": _xy(r.y), "life": _t(r.life)}
                   for r in m.rings],
         "clones": [{"id": c.id, "owner": c.owner.id, "x": _xy(c.x), "y": _xy(c.y), "aim": _t(c.aim),
-                    "r": _xy(c.radius), "life": _t(c.life), "hit_flash": _t(c.hit_flash),
+                    "r": _xy(c.radius), "life": _t(c.life), "hit_flash": _t(c.hit_flash), "heal_fx": _t(c.heal_fx),
                     "effects": _effects(c), "shield_hits": c.shield_hits,
                     "moving": bool(c.moving), "shot": _t(c.shot_flash), "melee_flash": 0.0,
                     "shield_flash": _t(c.shield_flash), "shield_break": _t(c.shield_break),

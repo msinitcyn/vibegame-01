@@ -342,6 +342,7 @@ def draw_clone(surf, c, heroes, owner_p=None, font=None, time=0.0, viewer=None):
     if owner_p is not None:
         draw_hp(surf, c, side_color(heroes, owner), font, owner_p["hp"], owner_p.get("max_hp") or 10,
                 owner_p.get("shield_hits", 0))
+    draw_heal_on(surf, pos, c, time)              # двойника вылечили
     since = CLONE_TIME - c.get("life", CLONE_TIME)
     T = DURATION["cloning"]
     if 0 <= since < T:                            # магический шум — появились
@@ -416,6 +417,15 @@ def draw_mob_attack(surf, m, font):
         pygame.draw.arc(surf, (255, 255, 255), rect.inflate(-4, -4), start + 0.25, stop - 0.25, 2)
 
 
+def draw_heal_on(surf, pos, u, time):
+    """Лечение на союзнике (зомби, двойник): сияние и плюсы, как у мага."""
+    heal = u.get("heal_fx", 0)
+    if heal > 0:
+        k = 1 - heal / HEAL_FX
+        fx_mage.draw_heal_back(surf, pos, u["r"], k)
+        fx_mage.draw_heal_front(surf, pos, u["r"], k, time)
+
+
 def draw_mob(surf, m, font=None, heroes=DEFAULT_HERO):
     pos = _pos(m)
     zombie = m.get("zombie")
@@ -442,6 +452,7 @@ def draw_mob(surf, m, font=None, heroes=DEFAULT_HERO):
     if m.get("swap", 0) > 0 and m.get("swap_by"):  # Тьма перенаправила на соперника
         fx_spells.mobswap(surf, pos, m["r"], 1 - m["swap"] / MOBSWAP_FX, m.get("swap_dir"),
                           side_color(heroes, m["swap_by"]), m["swap"])
+    draw_heal_on(surf, pos, m, pygame.time.get_ticks() / 1000)      # зомби вылечили
     color = (side_color(heroes, zombie) if zombie else
              side_color(heroes, m["target"]) if m["target"] else MOB_IDLE_COLOR)
     fx_mage.draw_hp_bar(surf, pos[0], fx_mage.hp_bar_top(pos[1], m["r"]), m["hp"], m["max_hp"], 0,

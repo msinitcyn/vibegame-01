@@ -23,7 +23,7 @@
 import math
 import random
 
-from .commands import Command
+from .commands import REACH_FAR, Command
 from .config import (
     MOB_LATE_EXTRA,
     GUARDIAN_PETRIFY,
@@ -116,6 +116,7 @@ from .items import BAD_EFFECTS, INSTANT_ITEMS, ITEMS, item_level
 
 NO_AMMO_EVERY = 1.0               # «нет патронов» — не чаще раза в столько секунд партии
 STEP = 1 / 60                     # фиксированный такт матча
+ALLY_PICK = 14                    # курсор не дальше стольких пикселей от края союзника — лечим его
 
 
 class Match:
@@ -307,9 +308,10 @@ class Match:
         if ITEMS[kind][0] == "foe" and "immune" in foe.effects:
             self.emit("immune", foe.id, kind)     # «Дубовая кора»: на Природу не действует
             return
-        if kind == "heal":
-            p.hp = min(p.max_hp, p.hp + HEAL_AMOUNT)
-            p.heal_fx = HEAL_FX                   # анимация лечения
+        if kind == "heal":                    # себя или союзника под курсором (свой зомби, двойник)
+            u = self.ally_at_cursor(p) or p
+            u.hp = min(u.max_hp, u.hp + HEAL_AMOUNT)
+            u.heal_fx = HEAL_FX                   # анимация лечения
         elif kind == "wall":
             self.walls.append(Wall(p))
         elif kind == "clearfoe":
@@ -703,6 +705,21 @@ class Match:
         self.mobs = [m for m in self.mobs if m.alive]
         self.bullets = [b for b in self.bullets if b.alive]
 
+    def cursor_point(self, p):
+        """Где курсор мага p (по прицелу и расстоянию до курсора); None — курсора нет (стик, бот)."""
+        if p.reach is None or p.reach >= REACH_FAR:
+            return None
+        return p.x + math.cos(p.aim) * p.reach, p.y + math.sin(p.aim) * p.reach
+
+    def ally_at_cursor(self, p):
+        """Союзник мага p под курсором — свой зомби или двойник (для лечения); None — курсор не на нём."""
+        at = self.cursor_point(p)
+        if at is None:
+            return None
+        allies = [m for m in self.mobs if m.alive and m.zombie_of is p] + self.clones_of(p)
+        near = [u for u in allies if math.hypot(u.x - at[0], u.y - at[1]) <= u.radius + ALLY_PICK]
+        return min(near, key=lambda u: math.hypot(u.x - at[0], u.y - at[1])) if near else None
+
     def ring_spot(self, p):
         """Куда встанет огненное кольцо мага p: по прицелу, под курсор — центр кольца там, где курсор; курсор
         дальше FIRE_RING_RANGE (или его нет — стик, бот) — на всю дальность. Не за краем поля."""
@@ -958,9 +975,11 @@ class Match:
             m.x, m.y = o.x + (m.x - o.x) / d * ZOMBIE_LEASH, o.y + (m.y - o.y) / d * ZOMBIE_LEASH
 
     def update_zombie(self, m, dt):
-        """Зомби: бьёт мобов, нападающих на хозяина, а если их нет — соперника хозяина."""
+        """Зомби: бьёт мобов, нападающих на хозяина, а если их нет — ближайшего из соперника хозяина и других
+        мобов (не своих зомби); всё — только рядом с хозяином (ZOMBIE_LEASH)."""
         m.zombie_life -= dt
         m.flash = max(0.0, m.flash - dt)
+        m.heal_fx = max(0.0, m.heal_fx - dt)
         m.hit_cd = max(0.0, m.hit_cd - dt)
         m.swing = max(0.0, m.swing - dt)
         if m.zombie_life <= 0:
@@ -970,10 +989,13 @@ class Match:
             return
         owner = m.zombie_of
         near = lambda u: math.hypot(u.x - owner.x, u.y - owner.y) <= ZOMBIE_LEASH     # noqa: E731
+        dist_to = lambda u: math.hypot(u.x - m.x, u.y - m.y)                          # noqa: E731
         attackers = [x for x in self.mobs if x.alive and x.zombie_of is None and x.target is owner and near(x)]
         foe = self.other(owner)
-        target = (min(attackers, key=lambda x: math.hypot(x.x - m.x, x.y - m.y)) if attackers
-                  else foe if near(foe) and not self.hidden(foe) else None)
+        others = [x for x in self.mobs if x.alive and x is not m and x.zombie_of is not owner and near(x)]
+        if near(foe) and not self.hidden(foe) and not foe.offstage:
+            others.append(foe)
+        target = min(attackers or others, key=dist_to) if (attackers or others) else None
         if target is None:                    # целей рядом нет — к хозяину
             m.windup = 0.0
             self.zombie_follow(m, owner, dt)
@@ -990,7 +1012,8 @@ class Match:
             m.swing_hit = dist <= reach + MOB_REACH_EXTRA
             if m.swing_hit:
                 if isinstance(target, Mob):
-                    target.hurt(owner)
+                    # на хозяина и так злятся; посторонний моб от удара зомби на хозяина не злится
+                    target.hurt(owner, anger=target.target is owner)
                 elif not target.shield_absorb():
                     self.hurt_player(target, MOB_DAMAGE)
             return

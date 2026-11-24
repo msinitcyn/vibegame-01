@@ -567,3 +567,38 @@ def test_client_sends_distance_to_cursor(game):
     game.on_mouse_move((b["x"] + 120, b["y"] + 50))
     assert game.reach_for("blue") == pytest.approx(130, abs=1)
     assert game.reach_for("red") == REACH_FAR
+
+
+def test_zombies_attack_other_mobs_nearby_without_angering_them():
+    """Зомби бьют и посторонних мобов рядом с хозяином; моб от удара зомби на хозяина не злится."""
+    m = dark_with_mobs(n=1)
+    b = m.blue
+    m.apply_item(b, "zombies")
+    z = m.mobs[0]
+    other = Mob(b.x + 60, b.y + 40, 6)                    # посторонний спокойный моб рядом
+    m.mobs.append(other)
+    step(m, 4.0)
+    assert other.hp < 6 and other.target is None
+    far = Mob(b.x + 600, b.y, 6)                           # далеко от хозяина — не трогают
+    m.mobs.append(far)
+    step(m, 2.0)
+    assert far.hp == 6 and z.alive
+
+
+def test_heal_goes_to_own_zombie_under_cursor_else_self():
+    from duel.commands import Command
+    from duel.config import HEAL_AMOUNT, ZOMBIE_RISE
+    m = dark_with_mobs(n=1)
+    b = m.blue
+    m.apply_item(b, "zombies")
+    z = m.mobs[0]
+    step(m, ZOMBIE_RISE + 0.1)
+    z.hp = 2
+    b.hp = 5
+    dx, dy = z.x - b.x, z.y - b.y
+    m.step(1 / 60, {"blue": Command(aim=math.atan2(dy, dx), reach=math.hypot(dx, dy))})   # курсор на зомби
+    m.apply_item(b, "heal")
+    assert z.hp == min(z.max_hp, 2 + HEAL_AMOUNT) and b.hp == 5 and z.heal_fx > 0
+    m.step(1 / 60, {"blue": Command(aim=0.0, reach=5)})       # курсор на себе — лечит себя
+    m.apply_item(b, "heal")
+    assert b.hp == 5 + HEAL_AMOUNT

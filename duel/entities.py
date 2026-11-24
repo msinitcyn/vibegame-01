@@ -566,8 +566,9 @@ class Clone(Unit):
                 self.effects[name] = t
         self.shield_hits = owner.shield_hits if "shield" in self.effects else 0
         self.x, self.y = owner.random_spot(self.radius + 4)      # на своей земле, мимо арены
-        self.hp = CLONE_HP
+        self.hp = self.max_hp = CLONE_HP
         self.hit_flash = 0.0
+        self.heal_fx = 0.0            # для анимации: только что вылечен
         self.shot_flash = 0.0
         self.aim = 0.0 if owner.dir > 0 else math.pi
         self.aim_jitter = 0.0
@@ -599,6 +600,7 @@ class Clone(Unit):
             return []
         self.tick_effects(dt)
         self.hit_flash = max(0.0, self.hit_flash - dt)
+        self.heal_fx = max(0.0, self.heal_fx - dt)
         self.shot_flash = max(0.0, self.shot_flash - dt)
         self.turn_timer -= dt
         if self.turn_timer <= 0:
@@ -684,6 +686,7 @@ class Mob:
         self.swap_by = None           # кто перенаправил (цвет)
         self.swap_dir = None          # куда теперь идёт (радианы) или None — успокоился
         self.immortal = False         # сцены «Обучения» и роликов: жизни кончились — снова полные (не гибнет)
+        self.heal_fx = 0.0            # для анимации: зомби вылечили
 
     def redirect(self, caster, target):
         """Тьма перенаправила моба на target (None — на него «Мир с мобами»: просто успокоился)."""
@@ -691,12 +694,14 @@ class Mob:
         self.swap, self.swap_by = MOBSWAP_FX, caster
         self.swap_dir = None if target is None else math.atan2(target.y - self.y, target.x - self.x)
 
-    def hurt(self, attacker, damage=1):
-        """Попадание: моб злится на того, кто ударил (маг или двойник)."""
+    def hurt(self, attacker, damage=1, anger=True):
+        """Попадание: моб злится на того, кто ударил (маг или двойник); anger=False — не злится (удар зомби)."""
         self.hp -= damage
         self.flash = 0.12
         hero = getattr(attacker, "owner", attacker)
-        if "mobpeace" in hero.effects:        # «Мир с мобами» хозяина: не злит
+        if not anger:
+            pass
+        elif "mobpeace" in hero.effects:        # «Мир с мобами» хозяина: не злит
             if self.target is attacker:
                 self.target = None
         elif "firmground" in hero.effects:    # «Твёрдая почва»: Земля для мобов свой — не злит, злой бьёт дальше

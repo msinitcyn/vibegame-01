@@ -39,6 +39,8 @@ from .icons import draw_ammo_icon, draw_icon
 from .items import EFFECT_ICON, ITEMS, WEAPON_ITEMS
 from .render import draw_field
 from .snapshot import player as snap_player
+from .commands import REACH_FAR
+from .match import ALLY_PICK
 from .sprites import draw_unit, sprite_image
 from .screens_menus import MenuScreensMixin
 from .screens_net import NetScreensMixin
@@ -434,6 +436,16 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
 
     AIM_PREVIEW = {"beam": BEAM_LENGTH, "trees": 300}    # выбран артефакт по прицелу — пунктир такой длины
 
+    def ally_under_cursor(self, pid):
+        """Свой зомби или двойник под перекрестием мыши (как сервер выберет, кого лечить) или None."""
+        if self.reach_for(pid) >= REACH_FAR or self.mouse_pos is None:
+            return None
+        mx, my = self.mouse_pos
+        allies = ([m for m in self.snap.get("mobs", []) if m.get("zombie") == pid] +
+                  [c for c in self.snap.get("clones", []) if c.get("owner") == pid])
+        near = [u for u in allies if math.hypot(u["x"] - mx, u["y"] - my) <= u["r"] + ALLY_PICK]
+        return min(near, key=lambda u: math.hypot(u["x"] - mx, u["y"] - my)) if near else None
+
     def draw_armed_previews(self, s):
         """Выбранный (ещё не применённый) артефакт — видно только себе, куда он пойдёт: огненный круг — контур
         кольца (центр под курсором, не дальше дальности), луч и стена деревьев — пунктир по прицелу."""
@@ -461,6 +473,16 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
                     pygame.draw.lines(s, (16, 12, 20), False, pts, 4)
                     pygame.draw.lines(s, (255, 140, 60), False, pts, 2)
                 pygame.draw.circle(s, (255, 140, 60), (int(x), int(y)), 3)
+            elif kind == "heal":                  # кого вылечит: союзника под курсором (зомби, двойник) или себя
+                u = self.ally_under_cursor(pid) or p
+                rr = u["r"] + 10
+                for i in range(0, 24, 2):
+                    a0 = (i + t * 3) * 2 * math.pi / 24
+                    a1 = a0 + 2 * math.pi / 24
+                    pa = (u["x"] + math.cos(a0) * rr, u["y"] + math.sin(a0) * rr)
+                    pb = (u["x"] + math.cos(a1) * rr, u["y"] + math.sin(a1) * rr)
+                    pygame.draw.line(s, (16, 12, 20), pa, pb, 4)
+                    pygame.draw.line(s, (255, 110, 140), pa, pb, 2)
             elif kind in self.AIM_PREVIEW:
                 length = self.AIM_PREVIEW[kind]
                 for j in range(0, int(length), 18):  # пунктир по прицелу

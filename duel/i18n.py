@@ -479,7 +479,7 @@ TEXTS = {
 
         "help.shield": "Гасит {shield_hits} пуль или держится {shield} с — что кончится раньше. "
                        "В статусе видно, сколько ударов и секунд осталось.",
-        "help.heal": "+{heal} жизни, когда применишь. Ложится в инвентарь, как другие артефакты, — можно приберечь.",
+        "help.heal": "+{heal} жизни, когда применишь. Ложится в инвентарь, как другие артефакты, — можно приберечь. Наведи курсор на своего зомби или двойника — вылечишь его.",
         "help.shrink": "Ты меньше в 2 раза на {shrink} с — в тебя труднее попасть.",
         "help.speed": "Движение ×1,8 на {speed} с: легче уворачиваться и собирать артефакты.",
         "item.mobpeace": "мир с мобами",
@@ -505,7 +505,7 @@ TEXTS = {
         "help.trees": "По прицелу вырастает стена деревьев {tree_len} px на {trees} с — сквозь неё не пройти никому, кроме тебя; пули и снаряды гаснут.",
         "help.lasso": "{lasso} с соперника тянет к тебе огненной верёвкой — быстрее, чем он бегает: не вырваться, бег прочь только замедляет.",
         "item.zombies": "восставшие мертвецы",
-        "help.zombies": "До {zmax} мобов в кольце {zr} px вокруг тебя становятся твоими зомби на {ztime} с — бьют мобов, что идут на тебя, иначе соперника, и принимают на себя весь твой урон.",
+        "help.zombies": "До {zmax} мобов в кольце {zr} px вокруг тебя становятся твоими зомби на {ztime} с — бьют мобов, что идут на тебя, а нет таких — ближайшего рядом с тобой: соперника или любого моба; и принимают на себя весь твой урон.",
         "item.bear": "медведь",
         "item.firering": "огненный круг",
         "help.bear": "На {bear} с ты — большой быстрый медведь с {bear_hp} жизнями: не стреляешь, но ближний удар дальше и сильнее. Когда время выйдет — ты снова маг там, где превратился, со своими прежними жизнями. Убьют медведя — погибнешь.",
@@ -978,7 +978,7 @@ TEXTS = {
 
         "help.shield": "Blocks {shield_hits} bullets or lasts {shield} s — whichever ends first. "
                        "Hits and seconds left are shown in the status.",
-        "help.heal": "+{heal} lives when you use it. Goes to the inventory like other artifacts — you can save it for later.",
+        "help.heal": "+{heal} lives when you use it. Goes to the inventory like other artifacts — you can save it for later. Point the cursor at your zombie or clone to heal it instead.",
         "help.shrink": "You are 2× smaller for {shrink} s — harder to hit.",
         "help.speed": "Movement ×1.8 for {speed} s: easier to dodge and collect artifacts.",
         "item.mobpeace": "mob truce",
@@ -1004,7 +1004,7 @@ TEXTS = {
         "help.trees": "A {tree_len} px wall of trees grows along your aim for {trees} s — nobody but you passes, bullets and shots stop.",
         "help.lasso": "For {lasso} s a fiery rope drags the opponent to you — faster than they run: no escape, running away only slows it.",
         "item.zombies": "rise of the dead",
-        "help.zombies": "Up to {zmax} mobs within {zr} px become your zombies for {ztime} s — they fight mobs coming at you, otherwise the opponent, and take all damage meant for you.",
+        "help.zombies": "Up to {zmax} mobs within {zr} px become your zombies for {ztime} s — they fight mobs coming at you, otherwise whoever is nearest to you — the opponent or any mob — and take all damage meant for you.",
         "item.bear": "bear",
         "item.firering": "ring of fire",
         "help.bear": "For {bear} s you are a big fast bear with {bear_hp} lives: no shooting, but a longer, stronger melee. When the time is up you are a mage again where you transformed, with your old lives. If the bear is killed, you die.",
@@ -1478,7 +1478,7 @@ TEXTS = {
 
         "help.shield": "Torjuu {shield_hits} luotia tai kestää {shield} s — kumpi loppuu ensin. "
                        "Jäljellä olevat osumat ja sekunnit näkyvät tilarivillä.",
-        "help.heal": "+{heal} elämää, kun käytät sen. Menee varastoon kuten muutkin artefaktit — voit säästää sen.",
+        "help.heal": "+{heal} elämää, kun käytät sen. Menee varastoon kuten muutkin artefaktit — voit säästää sen. Osoita zombiesi tai kaksoisolentoasi — parannat sen.",
         "help.shrink": "Olet 2× pienempi {shrink} s — sinuun on vaikeampi osua.",
         "help.speed": "Liike ×1,8 {speed} s: helpompi väistää ja kerätä artefakteja.",
         "item.mobpeace": "aselepo hirviöiden kanssa",
@@ -1504,7 +1504,7 @@ TEXTS = {
         "help.trees": "Tähtäyksen suuntaan kasvaa {tree_len} px puumuuri {trees} s ajaksi — kukaan muu kuin sinä ei pääse läpi, luodit pysähtyvät.",
         "help.lasso": "{lasso} s tulinen köysi vetää vastustajaa sinua kohti — nopeammin kuin hän juoksee: karkuun ei pääse, juokseminen vain hidastaa.",
         "item.zombies": "kuolleiden nousu",
-        "help.zombies": "Enintään {zmax} hirviötä {zr} px säteellä muuttuu zombeiksesi {ztime} s ajaksi — ne taistelevat sinua kohti tulevia hirviöitä tai vastustajaa vastaan ja ottavat kaiken vahinkosi.",
+        "help.zombies": "Enintään {zmax} hirviötä {zr} px säteellä muuttuu zombeiksesi {ztime} s ajaksi — ne taistelevat sinua kohti tulevia hirviöitä, muuten lähintä lähelläsi — vastustajaa tai mitä tahansa hirviötä — ja ottavat kaiken vahinkosi.",
         "item.bear": "karhu",
         "item.firering": "tulirengas",
         "help.bear": "{bear} s olet iso nopea karhu, jolla on {bear_hp} elämää: et ammu, mutta lähilyönti ulottuu kauemmas ja on vahvempi. Kun aika loppuu, olet taas velho siinä, missä muutuit, entisillä elämilläsi. Jos karhu kuolee, kuolet.",
