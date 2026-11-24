@@ -109,7 +109,7 @@ def test_intro_is_valid():
                 assert a["hero"] in HEROES
     for lang in ("ru", "en", "fi"):
         subs = load_subs("intro", lang)
-        assert len(subs) == 6 and subs[-1][1] <= total
+        assert len(subs) == 7 and subs[-1][1] <= total
 
 
 def test_movie_plays_scenes_with_transitions_and_subtitles(game):
@@ -222,3 +222,35 @@ def test_sword_demo_mob_dies_and_drops_artifact():
                 seen.append(hp)
         dropped = dropped or bool(d.match.artifacts)
     assert seen[:3] == [6, 4, 2] and dropped and len(d.match.mobs) < 2
+
+
+def test_scene_mage_can_die_and_spirit_flies():
+    """Сцена «Побеждай»: маг погибает, в снимке — сколько он мёртв (тело и дух), пули и вспышки не висят."""
+    st = Stage({"length": 4, "mortal_players": True, "heroes": {"blue": "fire", "red": "frost"},
+                "setup": {"blue": {"x": 400, "y": 222}, "red": {"x": 600, "y": 222, "hp_lost": 14}},
+                "script": [{"t": [0.1, 2.0], "every": 0.3, "do": "fire", "who": "blue", "at": "red"}]})
+    run(st, 1.5)
+    assert st.match.winner is st.match.blue and st.dead_at is not None
+    assert not st.match.bullets and not st.match.hits
+    red = next(p for p in st.snapshot()["players"] if p["id"] == "red")
+    run(st, 0.5)
+    red2 = next(p for p in st.snapshot()["players"] if p["id"] == "red")
+    assert 0 <= red["dead"] < red2["dead"]
+
+
+def test_game_draws_dead_mage_spirit(game):
+    """В партии проигравший погибает красиво: тело и вылетающий дух (рисуется без ошибок)."""
+    game.start()
+    game.countdown = 0
+    game.match.red.hp = 0
+    game.update()
+    game.frame()
+    assert game.snap["winner"] == "blue" and game.win_time
+    game.draw()
+    from duel.fx import mage as fx_mage
+    import pygame as pg
+    surf = pg.Surface((200, 200))
+    img = pg.Surface((30, 30), pg.SRCALPHA)
+    img.fill((200, 50, 50, 255))
+    for t in (0.0, 0.2, 1.0, 3.0):
+        fx_mage.draw_death(surf, (100, 120), 14, img, t, t)

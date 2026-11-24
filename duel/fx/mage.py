@@ -476,3 +476,45 @@ def draw_cleanse_front(surf, pos, r, k, time):
         if (i + int(time * 14)) % 2:
             pygame.draw.circle(layer, (*light, int(230 * (1 - k))), (int(c + math.cos(a) * d), int(c + math.sin(a) * d)), 2)
     surf.blit(layer, layer.get_rect(center=(int(pos[0]), int(pos[1]))))
+
+
+def draw_death(surf, pos, r, img, since, time):
+    """Гибель мага (since — секунд после смерти): тело лежит (повёрнуто, темнее), из него вылетает дух —
+    светлый силуэт мага поднимается, покачиваясь и тая; в начале — вспышка и кольцо, за духом — искры."""
+    P = params("spirit")
+    T = float(P.get("time", 2.4))
+    col = rgb(P.get("color"), (180, 220, 255))
+    spark = rgb(P.get("spark"), (255, 255, 255))
+    x, y = pos
+    body = pygame.transform.rotate(img, 90 if img.get_width() else 0)        # лежит
+    body = body.copy()
+    body.fill((70, 70, 80), special_flags=pygame.BLEND_RGB_MULT)            # темнее
+    body.set_alpha(int(P.get("corpse_alpha", 150)))
+    surf.blit(body, body.get_rect(center=(int(x), int(y + r * 0.45))))
+    k = min(1.0, since / T)
+    if since < 0.35:                                                         # вспышка в миг смерти
+        q = since / 0.35
+        halo(surf, pos, r, col, (1 - q) * 0.9)
+        layer = pygame.Surface((int(r * 8), int(r * 8)), pygame.SRCALPHA)
+        c = layer.get_width() // 2
+        pygame.draw.circle(layer, (*spark, int(220 * (1 - q))), (c, c), int(r * (1 + 2 * q)), 3)
+        surf.blit(layer, layer.get_rect(center=(int(x), int(y))))
+    if k >= 1:
+        return
+    ghost = img.copy()                                                       # дух: светлый силуэт мага
+    ghost.fill((0, 0, 0), special_flags=pygame.BLEND_RGB_MULT)
+    ghost.fill(col, special_flags=pygame.BLEND_RGB_ADD)
+    ghost.set_alpha(int(220 * (1 - k) ** 1.2))
+    gy = y - ease_out(k) * float(P.get("rise", 110))
+    gx = x + math.sin(since * 5) * float(P.get("sway", 10)) * k
+    halo(surf, (gx, gy), r * 0.8, col, 0.5 * (1 - k))
+    surf.blit(ghost, ghost.get_rect(center=(int(gx), int(gy))))
+    for i in range(7):                                                       # искры тянутся за духом
+        q = (since * 1.8 + i / 7) % 1.0
+        sx = gx + math.sin(i * 2.3 + since * 3) * r * 0.6
+        sy = gy + r * 0.6 + q * r * 1.6
+        a = int(230 * (1 - q) * (1 - k))
+        if a > 10:
+            dot = pygame.Surface((4, 4), pygame.SRCALPHA)
+            pygame.draw.circle(dot, (*spark, a), (2, 2), 2)
+            surf.blit(dot, (int(sx) - 2, int(sy) - 2))

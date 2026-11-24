@@ -19,6 +19,7 @@
         "guardians": ["blue"]                   // стражи арены этих сторон остаются
       },
       "mortal_mobs": true,                      // мобы гибнут (и роняют артефакты); иначе — бессмертны
+      "mortal_players": true,                   // маг может погибнуть (дух вылетает); иначе — жизни восстанавливаются
       "script": [                               // вызовы API сцены (методы Scene из API) по времени
         {"t": 0.5, "do": "cast", "who": "blue", "item": "lasso"},
         {"t": [1, 3], "every": 0.35, "do": "fire", "who": "red", "at": "blue"},
@@ -120,6 +121,8 @@ class Scene:
         m.mobs, m.artifacts, m.ammo_packs = [], [], []
         self.match = m
         self.mortal = bool(d.get("mortal_mobs"))
+        self.mortal_players = bool(d.get("mortal_players"))   # маг может погибнуть (сцена «Побеждай»)
+        self.dead_at = None                   # когда погиб маг (время сцены)
         self.lands = tuple(d["lands"]) if d.get("lands") else None
         self.hidden = set()
         self.vanishing = {}                   # кто исчезает: с какого времени
@@ -309,10 +312,15 @@ class Scene:
         self.events += m.step(STEP, self.commands())
         for unit in self.calm:                        # спокойные мобы не идут и не бьют
             unit.target = None
-        for p in m.players:                           # маг не гибнет: кончились жизни — снова полные
-            if p.hp <= 0:
-                p.hp = p.max_hp
-        m.winner = None
+        if self.mortal_players:                       # маг может погибнуть: партия кончилась — запомнить когда
+            if m.winner and self.dead_at is None:
+                self.dead_at = self.t
+                m.bullets, m.mob_shots, m.hits = [], [], []   # партия встала — пули и вспышки не висят
+        else:
+            for p in m.players:                       # маг не гибнет: кончились жизни — снова полные
+                if p.hp <= 0:
+                    p.hp = p.max_hp
+            m.winner = None
         for who, since in list(self.vanishing.items()):
             if self.t - since >= REVEAL_TIME:
                 del self.vanishing[who]
@@ -362,6 +370,10 @@ class Scene:
             if since is not None:
                 p["reveal"] = REVEAL_TIME * min(1.0, (self.t - since) / REVEAL_TIME)
             players.append(p)
+        if self.dead_at is not None:                  # погибший: тело и вылетающий дух
+            for p in players:
+                if p["hp"] <= 0:
+                    p["dead"] = self.t - self.dead_at
         snap["players"] = players
         return snap
 

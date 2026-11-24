@@ -185,6 +185,9 @@ def draw_player(surf, p, heroes, viewer=None, time=0.0, font=None):
     pid = p["id"]
     aim = p.get("aim")
     facing = DIR[pid] if aim is None else (1 if math.cos(aim) >= 0 else -1)   # лицом к прицелу
+    if p.get("dead") is not None:                  # погиб: тело лежит, вылетает дух (секунды — «dead»)
+        fx_mage.draw_death(surf, pos, p["r"], mage_image(p, heroes), p["dead"], time)
+        return
     bear = "bear" in p.get("effects", {})
     effects = p.get("effects", {})
     if "quake" in effects:                         # «Толчки»: трясёт, под ногами — трещины

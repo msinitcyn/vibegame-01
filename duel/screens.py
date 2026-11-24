@@ -498,7 +498,12 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         # кто смотрит: None — за одним компьютером (видно всё), "" — зритель по сети
         viewer = (getattr(self, "me", None) or "") if (self.net or getattr(self, "warmup", False)) and not self.watching \
             else ("" if self.watching else None)
-        draw_field(s, self.snap, self.tiny, viewer)
+        snap = self.snap
+        if snap.get("winner") and self.win_time:       # проигравший погиб: тело и вылетающий дух
+            dead = (pygame.time.get_ticks() - self.win_time) / 1000
+            snap = {**snap, "players": [{**p, "dead": dead} if p["id"] != snap["winner"] and p.get("hp", 1) <= 0
+                                        else p for p in snap["players"]]}
+        draw_field(s, snap, self.tiny, viewer)
         self.draw_armed_previews(s)
         target = getattr(self, "walk_to", None)
         if target:                                     # «идти к курсору»: куда идёт маг — ромбик на земле
