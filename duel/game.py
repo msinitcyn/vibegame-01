@@ -169,6 +169,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         if net:
             self.enter_net(*net)
         self.shaker = Shake()         # тряска поля на больших заклинаниях
+        self.armed = {}               # выбранный (первым нажатием) артефакт: игрок -> (ячейка, артефакт); только у себя
         self.movie = None             # идущий ролик (duel/movie.py) и куда вернуться после
         self.movie_back = "menu"
         if replay:

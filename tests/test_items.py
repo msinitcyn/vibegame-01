@@ -64,14 +64,17 @@ def test_pickup_goes_to_inventory_and_used_by_slot(match):
     assert b.items[0] is None and "shield" in b.effects
 
 
-def test_full_inventory_goes_to_queue_heal_is_instant(match):
+def test_full_inventory_goes_to_queue_heal_too(match):
     b = match.blue
     b.items = ["speed"] * 4
     pick(match, b, "wall")
     assert match.artifacts == [] and b.queue == ["wall"]      # подобран — в очередь
     b.hp = 4
-    pick(match, b, "heal")
-    assert b.hp == 4 + HEAL_AMOUNT and b.queue == ["wall"]
+    pick(match, b, "heal")                                     # лечение — тоже в инвентарь, не сразу
+    assert b.hp == 4 and b.queue == ["wall", "heal"]
+    b.items[0] = "heal"
+    match.use_item(b, 0)
+    assert b.hp == 4 + HEAL_AMOUNT
 
 
 def test_freed_slot_takes_first_from_queue(match):

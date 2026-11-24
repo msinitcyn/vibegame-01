@@ -16,6 +16,7 @@ from .config import (
     MUSIC,
     MUSIC_DIR,
     MUSIC_FADE_MS,
+    MUSIC_GAIN,
     MUSIC_VOLUME,
     SFX_VOLUME,
     SHOOT_VOLUME,
@@ -134,9 +135,14 @@ class Audio:
             self.sfx_level = max(0, min(10, sfx))
         if not self.enabled:
             return
-        pygame.mixer.music.set_volume(min(1.0, MUSIC_VOLUME * self.music_level / 5))
+        self.apply_music_volume()
         for snd, base in self.base.items():
             snd.set_volume(min(1.0, base * SFX_VOLUME * self.sfx_level / 5))
+
+    def apply_music_volume(self):
+        """Громкость музыки: уровень из настроек × MUSIC_VOLUME × громкость этого трека (MUSIC_GAIN)."""
+        gain = MUSIC_GAIN.get(Path(self.track).stem, 1.0) if self.track else 1.0
+        pygame.mixer.music.set_volume(min(1.0, MUSIC_VOLUME * gain * self.music_level / 5))
 
     def movie_music(self, mask):
         """Музыка ролика: файлы по маске в assets/music (нет маски или файлов — тишина)."""
@@ -173,6 +179,7 @@ class Audio:
         self.track = random.choice(choices)
         try:
             pygame.mixer.music.load(self.track)
+            self.apply_music_volume()             # у трека может быть своя громкость
             # в игре и в ролике — по одному треку, потом следующий (вперемешку); в меню — один по кругу
             pygame.mixer.music.play(0 if self.kind in ("game", "movie") else -1, fade_ms=MUSIC_FADE_MS)
         except pygame.error as e:

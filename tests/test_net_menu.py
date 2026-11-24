@@ -488,7 +488,11 @@ def test_red_uses_1234_and_sees_1234(game):
         assert [game.slot_key("blue", i) for i in range(4)] == [""] * 4
         red = srv.room.match.red
         red.items = ["speed", None, None, None]
-        game.on_key(pygame.KSCAN_1)                   # клавиша рядом с WASD — по сети, за красного
+        from duel.snapshot import player as snap_player
+        frames(game, lambda: (snap_player(game.snap, "red") or {}).get("items", [None])[0] == "speed", keep=(masha,))
+        game.on_key(pygame.KSCAN_1)                   # клавиша рядом с WASD — по сети, за красного: выбрать
+        assert game.armed.get("red") == (0, "speed") and "speed" not in red.effects
+        game.on_key(pygame.KSCAN_1)                   # ещё раз — применить
         frames(game, lambda: "speed" in red.effects, keep=(masha,))
         game.draw()
         masha.close()

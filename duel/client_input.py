@@ -6,6 +6,8 @@ import math
 import pygame
 
 from .commands import REACH_FAR
+from .i18n import t
+from .items import item_name, ring_color
 from .platform import WEB
 from . import keys
 from .snapshot import player as snap_player
@@ -127,19 +129,26 @@ class InputMixin:
                 self.restart()
                 self.countdown = float(config.COUNTDOWN)
         if not self.snap["winner"]:
-            # нажатия копятся в команду и применяются в ближайшем такте матча
+            # нажатия копятся в команду и применяются в ближайшем такте матча. В «Одном игроке» (сеть, разминка,
+            # бот) — своему магу, и одно нажатие — одно действие (набор клавиш там один на оба места: иначе
+            # двойное нажатие ячейки сработало бы за одно)
+            own = self.own_pid() if self.net_keys_mode() else None
+            actions = []
             for pid, c in self.controls.items():
+                who = own or pid
                 if sc in c.fire:
-                    self.press(pid, "fire")
+                    actions.append((who, "fire", None))
                 if sc in c.melee:
-                    self.press(pid, "melee")
+                    actions.append((who, "melee", None))
                 for i, ks in enumerate(c.items):
                     if sc in ks:
-                        self.press(pid, "slot", i)
+                        actions.append((who, "slot", i))
                 if sc in c.aim:
                     self.reset_aim(pid)
                 if sc in c.walk:
                     self.start_walk(pid, sc)
+            for a in dict.fromkeys(actions):      # без повторов, по порядку
+                self.press(*a)
 
     def quit_match(self):
         """Выйти из партии: разминка — в лобби, по сети — из комнаты, за одним компьютером — в меню."""
@@ -361,7 +370,51 @@ class InputMixin:
         elif action == "melee":
             cmd.melee = True
         elif action == "slot":
-            cmd.use_slot = slot
+            self.slot_press(pid, slot)
+
+    def own_pid(self):
+        """Свой маг в «Одном игроке»: по сети и в разминке — свой цвет, с ботом — синий."""
+        me = getattr(self, "me", None)
+        return me if me in ("blue", "red") else "blue"
+
+    # ------------------------------------------------------------------ артефакты: выбрать, потом применить
+
+    def slot_press(self, pid, slot):
+        """Ячейка артефакта: первое нажатие — выбрать (видно только тебе: подсветка ячейки, куда встанет
+        заклинание), второе той же ячейки — применить; другая ячейка — выбрать её."""
+        p = snap_player(self.snap, pid)
+        items = p.get("items", []) if p else []
+        kind = items[slot] if 0 <= slot < len(items) else None
+        if kind is None:
+            self.armed.pop(pid, None)
+            return
+        if self.armed.get(pid) == (slot, kind):
+            self.pending[pid].use_slot = slot     # второе нажатие — применить
+            self.armed.pop(pid, None)
+            return
+        self.armed[pid] = (slot, kind)
+        self.popup(t("popup.armed", item=item_name(kind)), pid, ring_color(kind))
+
+    def armed_slot(self, pid):
+        """Выбранная ячейка игрока pid или None (артефакт в ней сменился или пропал — выбор снимается)."""
+        a = self.armed.get(pid)
+        if a is None:
+            return None
+        p = snap_player(self.snap, pid)
+        items = p.get("items", []) if p else []
+        slot, kind = a
+        if slot >= len(items) or items[slot] != kind or self.snap.get("winner"):
+            self.armed.pop(pid, None)
+            return None
+        return slot
+
+    def my_pids(self):
+        """Чьи выборы артефактов видны на этом экране: по сети — только свой маг, за одним компьютером — оба."""
+        if getattr(self, "watching", False):
+            return []
+        if self.net or getattr(self, "warmup", False):
+            return [self.own_pid()]
+        return ["blue", "red"]
 
     def aim_by_move(self):
         """Прицел «по движению» (стик и мышь не целятся) — только у двоих за одним компьютером и только если

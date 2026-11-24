@@ -302,7 +302,7 @@ def test_former_common_items_belong_to_heroes():
     from duel.match import Match
     owners = {"shield": "frost", "foe_freeze": "frost", "slowfoe": "frost",
               "clearfoe": "light", "mobpeace": "light",
-              "fastshots": "fire", "rapid": "fire",
+              "triple": "fire", "rapid": "fire",
               "mobswap": "dark", "clones": "dark", "wall": "dark"}
     for hero in ("fire", "frost", "nature", "dark", "light"):
         seen = set()
@@ -482,7 +482,8 @@ def test_level_by_mob_hp():
 
 def test_heavy_items_are_rarer():
     fat = drops("fire", 6, 3000)
-    assert fat["firering"] < fat["lasso"] < fat["fastshots"]       # личные: чем тяжелее, тем реже
+    assert fat["firering"] < fat["lasso"] < fat["triple"]          # личные: чем тяжелее, тем реже
+    assert fat["fastshots"] == 0                                    # «быстрые пули» убраны
     assert fat["heal"] == 0                                         # на земле героя — только артефакты его стихии
 
 

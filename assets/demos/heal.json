@@ -9,7 +9,7 @@
     320,
     160
   ],
-  "length": 3.2,
+  "length": 3.6,
   "speed": 0.8,
   "setup": {
     "blue": {
@@ -31,6 +31,7 @@
   },
   "script": [
     {"t": 0.0, "do": "aim", "who": "blue", "at": [700, 150]},
-    {"t": [0.4, 1.6], "do": "move", "who": "blue", "dir": [1, 0]}
+    {"t": [0.4, 1.6], "do": "move", "who": "blue", "dir": [1, 0]},
+    {"t": 2.0, "do": "use", "who": "blue", "item": "heal"}
   ]
 }

@@ -7,6 +7,9 @@ import math
 import pygame
 
 from .config import (
+    BEAM_LENGTH,
+    FIRE_RING_R,
+    FIRE_RING_RANGE,
     NEUTRAL_HALF,
     AMMO_COLOR,
     GEAR_ITEMS,
@@ -35,6 +38,7 @@ from .fx import earth as fx_earth
 from .icons import draw_ammo_icon, draw_icon
 from .items import EFFECT_ICON, ITEMS, WEAPON_ITEMS
 from .render import draw_field
+from .snapshot import player as snap_player
 from .sprites import draw_unit, sprite_image
 from .screens_menus import MenuScreensMixin
 from .screens_net import NetScreensMixin
@@ -165,9 +169,14 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
             left = pid == "blue"
             has_pad = self.pad_of(pid) is not None      # ромб кнопок — у того, у кого геймпад
             rects, x0, inv_w = self.inventory_rects(left, has_pad)
+            armed = self.armed_slot(pid) if pid in self.my_pids() else None
             for i, (kind, rect) in enumerate(zip(p["items"], rects)):
                 pygame.draw.rect(s, (22, 24, 34), rect, border_radius=6)
                 pygame.draw.rect(s, color if kind else GREY, rect, 1, border_radius=6)
+                if i == armed:                    # выбран (первое нажатие) — золотая мигающая рамка
+                    k = 0.5 + 0.5 * math.sin(pygame.time.get_ticks() / 120)
+                    gold = (255, int(200 + 40 * k), 80)
+                    pygame.draw.rect(s, gold, rect.inflate(4, 4), 3, border_radius=8)
                 if kind:
                     draw_icon(s, kind, rect.center, rect.w // 2 - 4)
                     if "noitems" in p["effects"] and kind != "cleanse":
@@ -423,6 +432,44 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         return (pygame.transform.scale(part, size) if rect.w <= size[0]
                 else pygame.transform.smoothscale(part, size))
 
+    AIM_PREVIEW = {"beam": BEAM_LENGTH, "trees": 300}    # выбран артефакт по прицелу — пунктир такой длины
+
+    def draw_armed_previews(self, s):
+        """Выбранный (ещё не применённый) артефакт — видно только себе, куда он пойдёт: огненный круг — контур
+        кольца (центр под курсором, не дальше дальности), луч и стена деревьев — пунктир по прицелу."""
+        for pid in self.my_pids():
+            slot = self.armed_slot(pid)
+            p = snap_player(self.snap, pid)
+            if slot is None or not p:
+                continue
+            kind = p["items"][slot]
+            aim = p.get("aim") or 0.0
+            color = self.side_color(pid)
+            t = pygame.time.get_ticks() / 1000
+            if kind == "firering":
+                reach = self.reach_for(pid)
+                d = min(FIRE_RING_RANGE, reach)
+                x = max(FIRE_RING_R, min(WIDTH - FIRE_RING_R, p["x"] + math.cos(aim) * d))
+                y = max(TOP + FIRE_RING_R, min(BOTTOM - FIRE_RING_R, p["y"] + math.sin(aim) * d))
+                n = 28
+                for i in range(n):                 # пунктирный круг, бегущий по кругу
+                    if i % 2:
+                        continue
+                    a0 = (i + t * 4) * 2 * math.pi / n
+                    a1 = a0 + 2 * math.pi / n
+                    pts = [(x + math.cos(a) * FIRE_RING_R, y + math.sin(a) * FIRE_RING_R) for a in (a0, (a0 + a1) / 2, a1)]
+                    pygame.draw.lines(s, (16, 12, 20), False, pts, 4)
+                    pygame.draw.lines(s, (255, 140, 60), False, pts, 2)
+                pygame.draw.circle(s, (255, 140, 60), (int(x), int(y)), 3)
+            elif kind in self.AIM_PREVIEW:
+                length = self.AIM_PREVIEW[kind]
+                for j in range(0, int(length), 18):  # пунктир по прицелу
+                    k0 = j + (t * 60) % 18
+                    a = (p["x"] + math.cos(aim) * (p["r"] + k0), p["y"] + math.sin(aim) * (p["r"] + k0))
+                    b = (p["x"] + math.cos(aim) * (p["r"] + k0 + 9), p["y"] + math.sin(aim) * (p["r"] + k0 + 9))
+                    pygame.draw.line(s, (16, 12, 20), a, b, 4)
+                    pygame.draw.line(s, color, a, b, 2)
+
     def draw(self):
         s = self.screen
         self.blit_field(s, self.snap)
@@ -430,6 +477,7 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         viewer = (getattr(self, "me", None) or "") if (self.net or getattr(self, "warmup", False)) and not self.watching \
             else ("" if self.watching else None)
         draw_field(s, self.snap, self.tiny, viewer)
+        self.draw_armed_previews(s)
         target = getattr(self, "walk_to", None)
         if target:                                     # «идти к курсору»: куда идёт маг — ромбик на земле
             x, y = int(target[0]), int(target[1])

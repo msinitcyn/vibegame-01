@@ -41,8 +41,8 @@ FIELD = (0, TOP, WIDTH, HEIGHT - TOP)         # поле без верхней �
 DIRS8 = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
 
 # методы Scene, которые может вызывать сценарий
-API = ("move", "walk_to", "aim", "fire", "melee", "cast", "teleport", "appear", "vanish", "hero", "mob", "drop",
-       "gear", "camera", "follow", "shake", "speed")
+API = ("move", "walk_to", "aim", "fire", "melee", "cast", "use", "teleport", "appear", "vanish", "hero", "mob",
+       "drop", "gear", "camera", "follow", "shake", "speed")
 
 
 def ease(k):
@@ -190,6 +190,14 @@ class Scene:
         if at is not None:
             self.aim(who, at)
         self.match.apply_item(self.player(who), item)
+
+    def use(self, who, item=None, slot=None, time=None):
+        """Применить артефакт из инвентаря, как игрок (ячейка slot или та, где лежит item)."""
+        p = self.player(who)
+        if slot is None and item in p.items:
+            slot = p.items.index(item)
+        if slot is not None:
+            self.pending[who].use_slot = int(slot)
 
     def teleport(self, who, x, y, time=None):
         p = self.player(who)

@@ -385,7 +385,7 @@ TEXTS = {
         "name.bot": "Бот",
         "settings.hint": "W/S — выбор,  A/D или Enter — изменить,  Esc — назад",
 
-        "help.tab_mages": "Маги",
+        "help.tab_mages": "Основы",
         "basic.walk": "Ходьба",
         "basic.walk_help": "W/A/S/D (у правого игрока — стрелки), левый стик (а «идти к курсору» можно назначить кнопке мыши в «Клавишах»): маг идёт в любую сторону, по диагонали не быстрее. На чужой земле и в арене мобов — медленнее.",
         "basic.shoot": "Выстрел",
@@ -406,6 +406,7 @@ TEXTS = {
         "land.earth": "Земля Земли",
         "help.lands_note": "Артефакты выпадают из мобов, погибших на земле, — у каждой земли свои. Выбери землю: щелчок или Enter; назад — Esc.",
         "movie.skip": "Esc — пропустить",
+        "popup.armed": "{item}: ещё раз — применить",
         "help.tab_about": "Об игре",
         "help.about_text": "Дуэль магов со стволами: стреляй, руби, выбивай артефакты из мобов и колдуй. И помни: чужая земля жжёт!",
         "help.watch_intro": "Смотреть ролик",
@@ -478,7 +479,7 @@ TEXTS = {
 
         "help.shield": "Гасит {shield_hits} пуль или держится {shield} с — что кончится раньше. "
                        "В статусе видно, сколько ударов и секунд осталось.",
-        "help.heal": "+{heal} жизни сразу при подборе, в инвентарь не кладётся.",
+        "help.heal": "+{heal} жизни, когда применишь. Ложится в инвентарь, как другие артефакты, — можно приберечь.",
         "help.shrink": "Ты меньше в 2 раза на {shrink} с — в тебя труднее попасть.",
         "help.speed": "Движение ×1,8 на {speed} с: легче уворачиваться и собирать артефакты.",
         "item.mobpeace": "мир с мобами",
@@ -884,7 +885,7 @@ TEXTS = {
         "name.bot": "Bot",
         "settings.hint": "W/S — move,  A/D or Enter — change,  Esc — back",
 
-        "help.tab_mages": "Mages",
+        "help.tab_mages": "Basics",
         "basic.walk": "Walking",
         "basic.walk_help": "W/A/S/D (arrows for the right player), the left stick (“walk to cursor” can be put on a mouse button in Keys): the mage walks in any direction, no faster diagonally. Slower on the enemy land and in the mob arena.",
         "basic.shoot": "Shooting",
@@ -905,6 +906,7 @@ TEXTS = {
         "land.earth": "Earth land",
         "help.lands_note": "Artifacts drop from mobs that die on a land — each land has its own. Pick a land: click or Enter; back — Esc.",
         "movie.skip": "Esc — skip",
+        "popup.armed": "{item}: again to use",
         "help.tab_about": "About",
         "help.about_text": "A duel of mages with guns: shoot, slash, knock artifacts out of mobs and cast spells. And remember: enemy land burns!",
         "help.watch_intro": "Watch the intro",
@@ -976,7 +978,7 @@ TEXTS = {
 
         "help.shield": "Blocks {shield_hits} bullets or lasts {shield} s — whichever ends first. "
                        "Hits and seconds left are shown in the status.",
-        "help.heal": "+{heal} lives right on pickup, doesn't go to the inventory.",
+        "help.heal": "+{heal} lives when you use it. Goes to the inventory like other artifacts — you can save it for later.",
         "help.shrink": "You are 2× smaller for {shrink} s — harder to hit.",
         "help.speed": "Movement ×1.8 for {speed} s: easier to dodge and collect artifacts.",
         "item.mobpeace": "mob truce",
@@ -1382,7 +1384,7 @@ TEXTS = {
         "name.bot": "Botti",
         "settings.hint": "W/S — liiku,  A/D tai Enter — vaihda,  Esc — takaisin",
 
-        "help.tab_mages": "Velhot",
+        "help.tab_mages": "Perusteet",
         "basic.walk": "Kävely",
         "basic.walk_help": "W/A/S/D (oikealla pelaajalla nuolet), vasen tikku (”kävele osoittimeen” voi asettaa hiiren napille Näppäimissä): velho kävelee mihin suuntaan tahansa, vinottain ei nopeammin. Vieraalla alueella ja areenalla hitaammin.",
         "basic.shoot": "Ampuminen",
@@ -1403,6 +1405,7 @@ TEXTS = {
         "land.earth": "Maan maa",
         "help.lands_note": "Artefaktit putoavat maalla kaatuvista hirviöistä — jokaisella maalla omansa. Valitse maa: napsauta tai Enter; takaisin — Esc.",
         "movie.skip": "Esc — ohita",
+        "popup.armed": "{item}: uudestaan — käytä",
         "help.tab_about": "Pelistä",
         "help.about_text": "Aseistettujen velhojen kaksintaistelu: ammu, lyö, pudota artefakteja hirviöistä ja loitsi. Ja muista: vieras maa polttaa!",
         "help.watch_intro": "Katso intro",
@@ -1475,7 +1478,7 @@ TEXTS = {
 
         "help.shield": "Torjuu {shield_hits} luotia tai kestää {shield} s — kumpi loppuu ensin. "
                        "Jäljellä olevat osumat ja sekunnit näkyvät tilarivillä.",
-        "help.heal": "+{heal} elämää heti poimittaessa, ei mene varastoon.",
+        "help.heal": "+{heal} elämää, kun käytät sen. Menee varastoon kuten muutkin artefaktit — voit säästää sen.",
         "help.shrink": "Olet 2× pienempi {shrink} s — sinuun on vaikeampi osua.",
         "help.speed": "Liike ×1,8 {speed} s: helpompi väistää ja kerätä artefakteja.",
         "item.mobpeace": "aselepo hirviöiden kanssa",

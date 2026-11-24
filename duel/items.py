@@ -91,12 +91,11 @@ ITEMS = {
 # Справка: группы артефактов (экран «Артефакты» в меню). Заголовок — section_title(id).
 HELP_SECTIONS = [
     ("defense", ["heal", "cleanse", "shrink"]),
-    ("weapon", ["triple", "wavy"]),
     ("debuff", ["foe_grow", "foe_nofire", "foe_invert", "foe_noitems"]),
     # артефакты героев — свои страницы справки, по героям
     ("gear", ["boots", "armor", "gun", "sword"]),
     ("hero", ["beam", "clearfoe", "mobpeace", "invisible", "icewalk", "foe_freeze", "shield", "slowfoe",
-              "trees", "bear", "immune", "sentries", "lasso", "firering", "fastshots", "rapid",
+              "trees", "bear", "immune", "sentries", "lasso", "firering", "triple", "rapid",
               "zombies", "mobswap", "clones", "wall", "landswap", "firmground", "speedsteal", "quake"]),
 ]
 
@@ -145,7 +144,7 @@ ATTACK_ITEMS = WEAPON_ITEMS + ("clones", "wall", "fastshots", "beam", "trees", "
 # эффект на игроке -> артефакт, чей значок показывать в статусе (если имена различаются)
 EFFECT_ICON = {"lassoed": "lasso", "raising": "zombies", "cloning": "clones", "grow2": "foe_grow", "freeze": "foe_freeze", "nofire": "foe_nofire",
                "invert": "foe_invert", "noitems": "foe_noitems", "quickstep": "speedsteal", "sapped": "speedsteal"}
-INSTANT_ITEMS = ("heal",)                                  # срабатывают при подборе, минуя инвентарь
+INSTANT_ITEMS = ()                                  # срабатывают при подборе, минуя инвентарь
 # дебаффы: снимаются только временем или очищением, ничем другим
 BAD_EFFECTS = ("grow2", "freeze", "nofire", "invert", "noitems", "sapped", "quake")
 

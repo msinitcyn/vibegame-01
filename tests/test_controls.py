@@ -67,8 +67,12 @@ def test_keyboard_fire_and_items(game):
     game.update(DT)                             # нажатия применяются в ближайшем такте
     assert [x.owner for x in game.match.bullets] == [b, r]
     r.items = ["speed"] * 4
+    game.refresh_snap()
     for sc in (pygame.KSCAN_9, pygame.KSCAN_0, pygame.KSCAN_MINUS, pygame.KSCAN_EQUALS):
-        game.on_key(sc)
+        game.on_key(sc)                         # первое нажатие — выбрать
+        game.update(DT)
+        assert r.items.count(None) < 4 and "speed" in r.items
+        game.on_key(sc)                         # второе — применить
         game.update(DT)
     assert r.items == [None] * 4
 
@@ -138,8 +142,11 @@ def test_pads_fire_and_items(game):
     game.update(DT)
     assert [x.owner for x in game.match.bullets] == [b, r]
     r.items = ["speed"] * 4
+    game.refresh_snap()
     for btn in PAD_ITEM_BUTTONS:
-        game.on_pad(101, btn)
+        game.on_pad(101, btn)                   # выбрать
+        game.update(DT)
+        game.on_pad(101, btn)                   # применить
         game.update(DT)
     assert r.items == [None] * 4
 

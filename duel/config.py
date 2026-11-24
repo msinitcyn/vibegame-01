@@ -97,7 +97,7 @@ HELP_PAGES = len(HELP_TABS)
 HERO_ONLY_ITEMS = {"beam": "light", "clearfoe": "light", "mobpeace": "light", "invisible": "light",
                    "icewalk": "frost", "foe_freeze": "frost", "shield": "frost", "slowfoe": "frost",
                    "trees": "nature", "bear": "nature", "immune": "nature", "sentries": "nature",
-                   "lasso": "fire", "firering": "fire", "fastshots": "fire", "rapid": "fire",
+                   "lasso": "fire", "firering": "fire", "triple": "fire", "rapid": "fire",
                    "zombies": "dark", "mobswap": "dark", "clones": "dark", "wall": "dark",
                    "landswap": "earth", "firmground": "earth", "speedsteal": "earth", "quake": "earth"}
 
@@ -173,6 +173,7 @@ HERO_EDGE = {"frost": ("#6ea0d7", "#34547c"), "fire": ("#96320f", "#78280e"),
              "light": ("#d2a02a", "#7a5a14"), "earth": ("#8a6a3a", "#3e2c16")}
 
 MUSIC_VOLUME = 0.2                # громкость музыки при уровне 5 (было 0,4 — жаловались, что громко)
+MUSIC_GAIN = {"menu-01": 0.5}     # громкость отдельных треков (имя файла без .mp3): трек меню громкий сам по себе
 SFX_VOLUME = 0.35                # все звуки (выстрелы, удары, артефакты, шаги) при уровне 5 — во столько раз от своих громкостей
 # музыка подбирается по маске имени файла — новые треки подхватываются сами
 MUSIC = {
@@ -300,7 +301,7 @@ GEAR_RING = (225, 190, 110)      # золотая рамка — снаряже�
 # Снаряжение — пассивные артефакты: своя ячейка у каждого, действует всю партию, повтор ничего не даёт.
 # Выпадают только в арене мобов (и только они).
 GEAR_ITEMS = ("boots", "armor", "gun", "sword")
-RETIRED_ITEMS = ("speed",)        # убраны из игры: не выпадают и не показываются в справке (эффект и /give остались)
+RETIRED_ITEMS = ("speed", "fastshots", "wavy")   # убраны из игры: не выпадают и не в справке (эффект и /give остались)
 GEAR_SPEED = 1.17                # ботинки: скорость ×1,17 (120 -> 140: быстрее мобов)
 GEAR_HP = 2                      # броня: +2 к запасу жизней (и сразу +2 жизни)
 GEAR_FIRE = 0.8                  # автомат: пауза между выстрелами ×0,8 (0,35 -> 0,28: чаще мобов)

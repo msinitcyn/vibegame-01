@@ -39,8 +39,8 @@ def test_run_gives_and_checks():
     assert testcmd.run(m, bot, "blue", {"do": "give", "kind": "beam", "to": "foe"})
     assert "beam" in m.red.items
     m.blue.hp = 5
-    testcmd.run(m, bot, "blue", {"do": "give", "kind": "heal"})   # лечение — сразу, как при подборе
-    assert m.blue.hp > 5 and "heal" not in m.blue.items
+    testcmd.run(m, bot, "blue", {"do": "give", "kind": "heal"})   # лечение — в инвентарь, как при подборе
+    assert m.blue.hp == 5 and "heal" in m.blue.items
     assert not testcmd.run(m, bot, "blue", {"do": "give", "kind": "nuke"})
     assert not testcmd.run(m, bot, "blue", {"do": "bot", "mode": "dance"})
     assert not testcmd.run(m, bot, "blue", {"do": "bot", "use": 7})
