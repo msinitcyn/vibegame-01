@@ -11,13 +11,18 @@ from pathlib import Path
 # DUEL_WEB=1 — вести себя как в браузере на компьютере (проверить сборку tools/build_web.py без браузера)
 WEB = sys.platform == "emscripten" or os.environ.get("DUEL_WEB") == "1"
 
+# Расширения склеены из кусков нарочно: pygbag при упаковке заменяет в коде .py все строки «.mp3» на «.ogg» —
+# тогда замена .mp3 → .ogg стала бы «.ogg → .ogg» и маски из файлов данных (ролики) не переводились бы.
+MP3 = ".m" + "p3"
+OGG = ".o" + "gg"
+
 
 def media(path):
     """Путь к звуку: в браузере — .ogg рядом вместо .mp3 (mp3 там ненадёжен), на компьютере — как есть."""
     p = Path(path)
-    return p.with_suffix(".ogg") if WEB and p.suffix == ".mp3" else p
+    return p.with_suffix(OGG) if WEB and p.suffix == MP3 else p
 
 
 def media_mask(mask):
     """Маска файлов музыки: в браузере *.ogg вместо *.mp3."""
-    return mask.replace(".mp3", ".ogg") if WEB else mask
+    return mask.replace(MP3, OGG) if WEB else mask

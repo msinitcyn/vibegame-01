@@ -96,6 +96,8 @@ def test_aim_by_move_only_for_two_on_one_computer(game, monkeypatch):
 
 def test_web_menu_labels(game, monkeypatch):
     from duel import client_menus, screens_menus
+    from duel.i18n import set_lang
+    set_lang("ru")                                  # подписи проверяются по-русски — не зависеть от прошлых тестов
     game.state = "menu"
     game.hits = []
     game.draw_menu()
@@ -164,3 +166,16 @@ def test_web_entry_starts_like_desktop():
     from pathlib import Path
     text = (Path(__file__).resolve().parent.parent / "web" / "main.py").read_text(encoding="utf-8")
     assert "intro=True" in text
+
+
+def test_mp3_to_ogg_survives_pygbag_rewrite(monkeypatch):
+    """pygbag при упаковке меняет в .py все строки «.mp3» на «.ogg»: перевод масок (ролик: background-*.mp3 из
+    movie.json) не должен на них опираться — иначе в браузере он стал бы «.ogg → .ogg», и ролик без музыки."""
+    import re
+    from pathlib import Path
+    from duel import platform
+    src = (Path(platform.__file__)).read_text(encoding="utf-8")
+    code = "\n".join(line.split("#")[0] for line in src.splitlines() if not line.strip().startswith(("#", '"""')))
+    assert not re.search(r"[\"']\.mp3[\"']", code)
+    monkeypatch.setattr(platform, "WEB", True)
+    assert platform.media_mask("background-*.mp3") == "background-*.ogg"

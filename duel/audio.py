@@ -3,7 +3,7 @@
 import array
 import json
 import random
-from .platform import WEB, media, media_mask
+from .platform import MP3, OGG, WEB, media, media_mask
 from pathlib import Path
 
 import pygame
@@ -23,6 +23,17 @@ from .config import (
     SHOOT_VOLUME,
     SOUNDS_DIR,
 )
+
+def music_files(mask):
+    """Треки по маске в assets/music. В браузере лежат .ogg (их делает сборка), на компьютере — .mp3:
+    пробуем маску для этой платформы, потом и .ogg, и .mp3 — что найдётся (в браузере перевод маски
+    однажды не сработал, и ролик остался без музыки)."""
+    for m in dict.fromkeys([media_mask(mask), mask.replace(MP3, OGG), mask.replace(OGG, MP3)]):
+        files = sorted(MUSIC_DIR.glob(m))
+        if files:
+            return files
+    return []
+
 
 MUSIC_END = pygame.USEREVENT + 1     # событие «трек закончился»
 
@@ -87,7 +98,7 @@ class Audio:
             print("Звук отключён:", e)
             return
         self.enabled = True
-        self.tracks = {k: sorted(MUSIC_DIR.glob(media_mask(mask))) for k, mask in MUSIC.items()}
+        self.tracks = {k: music_files(mask) for k, mask in MUSIC.items()}
         for k, files in self.tracks.items():
             if not files:
                 print(f"Нет музыки «{k}» ({MUSIC[k]})")
@@ -149,7 +160,10 @@ class Audio:
 
     def movie_music(self, mask):
         """Музыка ролика: файлы по маске в assets/music (нет маски или файлов — тишина)."""
-        files = sorted(MUSIC_DIR.glob(media_mask(mask))) if (self.enabled and mask) else []
+        mask = str(mask) if mask else None        # всегда обычная строка (в браузере пришло нечто «как строка»)
+        same = next((k for k, m in MUSIC.items() if media_mask(m) == media_mask(mask) and self.tracks.get(k)), None)
+        # та же маска, что у музыки игры (фоновые) — те же треки, что нашлись при запуске
+        files = list(self.tracks[same]) if same else (music_files(mask) if (self.enabled and mask) else [])
         if not files:
             self.music("quiet")
             return
