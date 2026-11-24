@@ -10,6 +10,7 @@
     160
   ],
   "length": 3.8,
+  "mortal_mobs": true,
   "setup": {
     "blue": {
       "x": 470,

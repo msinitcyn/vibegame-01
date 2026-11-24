@@ -207,3 +207,18 @@ def test_intro_plays_background_tracks_shuffled(game, monkeypatch):
     game.end_movie()
     game.update_music()
     assert a.kind == "menu" and a.track.name.startswith("menu-")           # меню — своя музыка, как была
+
+
+def test_sword_demo_mob_dies_and_drops_artifact():
+    """Сценка «удар мечом»: удар — 2 жизни; моб гибнет и роняет артефакт (как в игре)."""
+    from duel import demos
+    d = demos.Demo(demos.load("melee"))
+    seen, dropped = [], False
+    while d.t < d.length - 0.1:
+        d.update(1 / 60)
+        if d.match.mobs:
+            hp = d.match.mobs[0].hp
+            if not seen or seen[-1] != hp:
+                seen.append(hp)
+        dropped = dropped or bool(d.match.artifacts)
+    assert seen[:3] == [6, 4, 2] and dropped and len(d.match.mobs) < 2
