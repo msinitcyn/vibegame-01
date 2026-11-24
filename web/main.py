@@ -18,7 +18,7 @@ from duel.game import Game
 
 async def main():
     pygame.init()
-    game = Game(windowed=True)
+    game = Game(windowed=True, intro=True)    # как обычный запуск: выбор языка (если не выбран), ролик, меню
     await game.run_web()
 
 

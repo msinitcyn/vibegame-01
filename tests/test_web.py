@@ -135,3 +135,32 @@ def test_browser_conn_reads_hello_through_js(monkeypatch):
     assert set(vars(fresh)) <= set(vars(conn))           # все поля Conn есть и у браузерного
     js.inbox.append(base64.b64encode(json.dumps({"type": "hello", "proto": 8}).encode() + b"\n").decode())
     assert [m["type"] for m in conn.recv()] == ["hello"]
+
+
+def test_browser_settings_live_in_local_storage(monkeypatch):
+    """В браузере настройки — в localStorage (переживают перезагрузку): язык выбран, галка ролика снята."""
+    from duel import settings
+
+    class Store(dict):
+        def getItem(self, k):
+            return self.get(k)
+
+        def setItem(self, k, v):
+            self[k] = v
+
+    store = Store()
+    monkeypatch.setattr(settings, "_browser_storage", lambda: store)
+    assert settings.load()["lang_chosen"] is False              # первый заход — спросить язык
+    data = settings.load()
+    data.update(lang="fi", lang_chosen=True, intro_on_start=False)
+    settings.save(data)
+    assert settings.WEB_KEY in store
+    again = settings.load()                                      # «перезагрузили страницу»
+    assert again["lang"] == "fi" and again["lang_chosen"] and again["intro_on_start"] is False
+
+
+def test_web_entry_starts_like_desktop():
+    """Браузерная версия запускается как обычная: выбор языка (если не выбран), ролик, меню."""
+    from pathlib import Path
+    text = (Path(__file__).resolve().parent.parent / "web" / "main.py").read_text(encoding="utf-8")
+    assert "intro=True" in text

@@ -3,6 +3,7 @@
 t("ключ", **числа) — строка на текущем языке. Нет перевода — берётся русская.
 Числа подставляются через {имя}, например t("popup.ammo", n=20).
 """
+import sys
 
 LANGS = {"ru": "Русский", "en": "English", "fi": "Suomi"}
 DEFAULT_LANG = "ru"
@@ -16,6 +17,12 @@ def guess_lang():
     import os
     names = {"russian": "ru", "finnish": "fi", "english": "en"}
     cands = [os.environ.get(k, "") for k in ("LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE")]
+    if sys.platform == "emscripten":                  # браузер: язык из его настроек
+        try:
+            import platform as js
+            cands.insert(0, str(js.window.navigator.language or ""))
+        except Exception:
+            pass
     try:
         cands.append(locale.getlocale()[0] or "")
     except (ValueError, TypeError):
