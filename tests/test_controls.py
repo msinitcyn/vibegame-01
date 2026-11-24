@@ -224,3 +224,36 @@ def test_pick_uses_players_own_keys_and_ignores_mouse_jitter(game):
     finally:
         game.settings["keys"] = {}
         game.apply_keys()
+
+
+def test_artifacts_tab_lands_grid(game):
+    """«Обучение» → «Артефакты»: квадратики земель; Enter или щелчок — артефакты земли, A/D — соседняя, Esc — назад."""
+    from duel.config import HELP_LANDS, HELP_TABS
+    game.state = "help"
+    game.help_tab(HELP_TABS.index("artifacts"))
+    assert game.help_land is None and game.help_kinds() == []
+    game.hits = []
+    game.draw_help()
+    tiles = [h for h in game.hits if h[0].w == 214]
+    assert len(tiles) == len(HELP_LANDS) == 8
+    game.on_key(pygame.KSCAN_D)                 # «Земля мобов»
+    game.on_key(pygame.KSCAN_S)                 # ряд ниже — «Земля Тьмы»
+    assert HELP_LANDS[game.land_index] == "dark"
+    game.on_key(pygame.KSCAN_RETURN)
+    assert game.help_land == "dark" and "zombies" in game.help_kinds()
+    game.draw_help()
+    game.on_key(pygame.KSCAN_D)                 # соседняя земля
+    assert game.help_land == "light"
+    game.on_key(pygame.KSCAN_ESCAPE)            # к квадратикам, не в меню
+    assert game.state == "help" and game.help_land is None
+    game.hits = []
+    game.draw_help()
+    tile = [h for h in game.hits if h[0].w == 214][HELP_LANDS.index("fire")]
+    game.on_mouse_move(tile[0].center)
+    game.on_mouse_button(1)                     # щелчок — «Земля Огня»
+    assert game.help_land == "fire" and "lasso" in game.help_kinds()
+    game.on_key(pygame.KSCAN_ESCAPE)
+    game.land_index = 0
+    game.on_key(pygame.KSCAN_A)                 # левее первой земли — предыдущая вкладка
+    assert HELP_TABS[game.help_page] == "mages"
+    game.state = "menu"

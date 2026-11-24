@@ -10,6 +10,7 @@ import pygame
 from .config import (
     DURATION,
     GUARDIAN_PETRIFY,
+    CLEANSE_FX,
     HEAL_FX,
     WEAPON_TIME,
     ZOMBIE_RISE,
@@ -212,6 +213,10 @@ def draw_player(surf, p, heroes, viewer=None, time=0.0, font=None):
     heal_k = 1 - heal / HEAL_FX if heal > 0 else None
     if heal_k is not None:                         # лечение: сияние и кольцо — под магом
         fx_mage.draw_heal_back(surf, pos, p["r"], heal_k)
+    clean = p.get("cleanse_fx", 0)
+    clean_k = 1 - clean / CLEANSE_FX if clean > 0 else None
+    if clean_k is not None:                        # очищение: мятное сияние — под магом
+        fx_mage.draw_cleanse_back(surf, pos, p["r"], clean_k)
     if bear:
         draw_bear(surf, p, heroes, pos, facing, time)
     else:
@@ -244,6 +249,8 @@ def draw_player(surf, p, heroes, viewer=None, time=0.0, font=None):
     draw_effects(surf, p, time)
     if heal_k is not None:                         # …а плюсы и искры — поверх
         fx_mage.draw_heal_front(surf, pos, p["r"], heal_k, time)
+    if clean_k is not None:                        # …волна, слетающие хлопья, кольцо — поверх
+        fx_mage.draw_cleanse_front(surf, pos, p["r"], clean_k, time)
     if "cloning" in p["effects"]:                 # двойники появляются — магический шум и на маге
         fx_mage.draw_clone_noise(surf, pos, p["r"], max(0.0, 1 - p["effects"]["cloning"] / DURATION["cloning"]), time, 7)
     draw_hp(surf, p, side_color(heroes, pid), font,

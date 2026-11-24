@@ -8,7 +8,7 @@ import pygame
 from .platform import WEB
 from . import keys
 from . import settings
-from .config import DEFAULT_HERO, HELP_BASICS, INTRO_MOVIE, HELP_PAGES, HELP_TABS, HERO_ONLY_ITEMS, HEROES, MAX_HP, TEST_HP
+from .config import DEFAULT_HERO, HELP_BASICS, HELP_LANDS, INTRO_MOVIE, HELP_PAGES, HELP_TABS, HERO_ONLY_ITEMS, HEROES, MAX_HP, TEST_HP
 from .items import HELP_SECTIONS
 from .i18n import get_lang, guess_lang, LANGS, set_lang, t
 from .update import restart as restart_updated
@@ -151,11 +151,24 @@ class MenusMixin:
             return []
         if tab == "mages":
             return list(HELP_BASICS)
-        if tab == "common":
+        return self.land_items(getattr(self, "help_land", None))      # «Артефакты»: внутри земли
+
+    @staticmethod
+    def land_items(land):
+        """Артефакты земли: нейтральная — общие, мобов (арена) — снаряжение, земля героя — его; None — ни одного
+        (на «Артефактах» сначала квадратики земель)."""
+        if land is None:
+            return []
+        if land == "neutral":
             return [k for sec, ks in HELP_SECTIONS if sec not in ("hero", "gear") for k in ks]
-        if tab == "gear":                     # «Артефакты мобов»: снаряжение из арены
+        if land == "arena":
             return list(dict(HELP_SECTIONS)["gear"])
-        return [k for k in dict(HELP_SECTIONS)["hero"] if HERO_ONLY_ITEMS[k] == tab]
+        return [k for k in dict(HELP_SECTIONS)["hero"] if HERO_ONLY_ITEMS[k] == land]
+
+    def open_land(self, land):
+        """«Артефакты»: квадратик земли нажат — её артефакты."""
+        self.help_land, self.help_index, self.help_full = land, 0, False
+        self.land_index = HELP_LANDS.index(land)
 
     def help_kind(self):
         kinds = self.help_kinds()
@@ -165,10 +178,15 @@ class MenusMixin:
 
     def open_lang_pick(self, then_intro=False):
         """Самый первый запуск: выбрать язык (потом его можно сменить в настройках); then_intro — потом ролик."""
-        codes = list(LANGS)
+        codes = self.lang_order()
         self.lang_index = codes.index(guess_lang()) if guess_lang() in codes else codes.index("en")
         self.lang_back, self.lang_then_intro = self.state, then_intro
         self.state = "lang_pick"
+
+    LANG_ORDER = ("en", "ru", "fi")       # порядок на экране выбора языка
+
+    def lang_order(self):
+        return [c for c in self.LANG_ORDER if c in LANGS] + [c for c in LANGS if c not in self.LANG_ORDER]
 
     def lang_pick_key(self, sc):
         K = pygame
@@ -178,7 +196,7 @@ class MenusMixin:
         elif sc in (K.KSCAN_DOWN, K.KSCAN_S, K.KSCAN_RIGHT, K.KSCAN_D, K.KSCAN_TAB):
             self.lang_index = (self.lang_index + 1) % n
         elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
-            self.choose_lang(list(LANGS)[self.lang_index])
+            self.choose_lang(self.lang_order()[self.lang_index])
 
     def choose_lang(self, code):
         """Язык выбран: сохранить, всё — на нём; дальше — ролик (если надо) и меню."""
@@ -198,6 +216,7 @@ class MenusMixin:
     def help_tab(self, page):
         self.help_page, self.help_index, self.help_full = page % HELP_PAGES, 0, False
         self.about_row = 0
+        self.help_land = None                 # «Артефакты» — с квадратиков земель
 
     def help_key(self, sc):
         """Справка: W/S — артефакт, A/D — вкладка, Enter — подробнее (сценка во весь экран), Esc — назад."""
@@ -207,6 +226,17 @@ class MenusMixin:
                 self.help_full = False
             return
         n = len(self.help_kinds())
+        tab = HELP_TABS[self.help_page]
+        land = getattr(self, "help_land", None)
+        if tab == "artifacts" and land is None and self.lands_key(sc):
+            return
+        if tab == "artifacts" and land is not None and sc in (K.KSCAN_A, K.KSCAN_LEFT, K.KSCAN_D, K.KSCAN_RIGHT):
+            i = (HELP_LANDS.index(land) + (-1 if sc in (K.KSCAN_A, K.KSCAN_LEFT) else 1)) % len(HELP_LANDS)
+            self.open_land(HELP_LANDS[i])     # внутри земли A/D — соседняя земля
+            return
+        if sc in (K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE) and tab == "artifacts" and land is not None:
+            self.help_land, self.help_full = None, False      # из земли — к квадратикам
+            return
         if sc in (K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE):
             self.state = "menu"
         elif HELP_TABS[self.help_page] == "about" and sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
@@ -223,6 +253,32 @@ class MenusMixin:
             self.help_index = (self.help_index + step) % n
         elif sc in (K.KSCAN_A, K.KSCAN_LEFT, K.KSCAN_D, K.KSCAN_RIGHT):
             self.help_tab(self.help_page + (-1 if sc in (K.KSCAN_A, K.KSCAN_LEFT) else 1))
+
+    LAND_COLS = 4                         # «Артефакты»: квадратиков земель в ряду
+
+    def lands_key(self, sc):
+        """Квадратики земель: стрелки и WASD — выбор (за краем — соседняя вкладка), Enter — открыть.
+        True — клавиша съедена."""
+        K = pygame
+        i = getattr(self, "land_index", 0)
+        n, cols = len(HELP_LANDS), self.LAND_COLS
+        if sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
+            self.open_land(HELP_LANDS[i])
+        elif sc in (K.KSCAN_A, K.KSCAN_LEFT):
+            if i == 0:
+                return False                  # левее первого — предыдущая вкладка
+            self.land_index = i - 1
+        elif sc in (K.KSCAN_D, K.KSCAN_RIGHT):
+            if i == n - 1:
+                return False                  # правее последнего — следующая вкладка
+            self.land_index = i + 1
+        elif sc in (K.KSCAN_W, K.KSCAN_UP):
+            self.land_index = i - cols if i >= cols else i
+        elif sc in (K.KSCAN_S, K.KSCAN_DOWN):
+            self.land_index = min(n - 1, i + cols)
+        else:
+            return False
+        return True
 
     def crash_answer(self, yes):
         """Ответ на «Отправлять отчёты о падениях?» — запомнить и в меню."""

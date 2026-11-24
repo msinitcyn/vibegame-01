@@ -30,7 +30,8 @@ def test_lasso_pulls_runner_back():
 
 def test_help_page_with_demo_draws(game):
     from duel.config import HELP_TABS
-    game.state, game.help_page, game.help_full = "help", HELP_TABS.index("fire"), False
+    game.state, game.help_page, game.help_full = "help", HELP_TABS.index("artifacts"), False
+    game.open_land("fire")
     game.help_index = game.help_kinds().index("lasso")
     game.hits = []
     game.draw_help()

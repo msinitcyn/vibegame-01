@@ -91,6 +91,11 @@ def sprite(name, size, flip=False, white=False, alpha=255, frame="idle"):
     return img
 
 
+def sprite_size(name):
+    """Размер исходной картинки (w, h)."""
+    return _base(name).get_size()
+
+
 @lru_cache(maxsize=None)
 def sprite_image(name, size):
     """Картинка (например, фон) растянутая до size=(w, h) по пикселям."""

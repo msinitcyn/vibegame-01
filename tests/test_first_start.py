@@ -5,7 +5,7 @@ import pygame
 
 from duel import settings
 from duel.config import HEAL_FX, ITEM_SOUNDS
-from duel.i18n import LANGS, get_lang, set_lang
+from duel.i18n import get_lang, set_lang
 from tests.conftest import DT, new_match
 
 
@@ -27,9 +27,10 @@ def test_language_pick_then_intro_then_menu(game, monkeypatch):
     assert game.state == "lang_pick"
     game.hits = []
     game.draw_lang_pick()
-    codes = list(LANGS)
-    game.lang_index = codes.index("en")
-    game.on_key(pygame.KSCAN_UP)                                         # выше English — Русский
+    codes = game.lang_order()
+    assert codes == ["en", "ru", "fi"]                                   # English, Русский, Suomi
+    game.lang_index = 0
+    game.on_key(pygame.KSCAN_DOWN)                                       # ниже English — Русский
     game.on_key(pygame.KSCAN_RETURN)
     try:
         assert get_lang() == "ru" and saved[-1]["lang"] == "ru" and saved[-1]["lang_chosen"]
@@ -84,3 +85,35 @@ def test_heal_demo_picks_up_and_heals():
         d.update(1 / 60)
         healed = healed or (b.hp > hp0 and b.heal_fx > 0)
     assert hp0 < b.max_hp and healed
+
+
+def test_cleanse_shows_animation_and_has_sound(game):
+    from duel.config import CLEANSE_FX
+    from duel.snapshot import snapshot
+    from duel.render import draw_field
+    m = new_match()
+    b = m.blue
+    m.apply_item(m.red, "foe_freeze")
+    m.apply_item(b, "cleanse")
+    assert "freeze" not in b.effects and b.cleanse_fx == CLEANSE_FX and ITEM_SOUNDS["cleanse"][0] == "cleanse.mp3"
+    surf = pygame.Surface((1000, 724))
+    for _ in range(round(0.6 / DT)):
+        m.step(DT, {})
+        draw_field(surf, snapshot(m), game.tiny)
+    assert 0 < snapshot(m)["players"][0]["cleanse_fx"] < CLEANSE_FX
+
+
+def test_hp_bar_is_solid_with_number_inside(game):
+    """Полоска жизней — без делений: внутри неё одна заливка; число — внутри полоски."""
+    from duel.fx import mage as fx_mage, params
+    P = params("hpbar")
+    surf = pygame.Surface((200, 60))
+    surf.fill((0, 0, 0))
+    fx_mage.draw_hp_bar(surf, 100, 20, 10, 15, 0, (0, 200, 0), False, None)
+    w, h = int(P["width"]), int(P["height"])
+    x0 = 100 - w // 2
+    row = [surf.get_at((x, 20 + h - 2))[:3] for x in range(x0 + 2, x0 + round(w * 10 / 15) - 2)]
+    assert set(row) == {(0, 200, 0)}                                     # сплошная заливка, без промежутков
+    fx_mage.draw_hp_bar(surf, 100, 20, 10, 15, 0, (0, 200, 0), False, game.tiny)
+    white = [(x, y) for x in range(x0, x0 + w) for y in range(20, 20 + h) if surf.get_at((x, y))[:3] == (255, 255, 255)]
+    assert white                                                         # цифры — внутри полоски

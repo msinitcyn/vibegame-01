@@ -139,48 +139,37 @@ def draw_triple(surf, pos, r, facing, opened, shot=0.0):
 
 
 def draw_hp_bar(surf, cx, top, hp, max_hp, shield, color, flash, font=None):
-    """Полоска над головой: секция — жизнь (больше max_sections — секция на несколько), после жизней — синие
-    секции зарядов щита (щит гасит удары первым); слева — число жизней. flash — только что ранен:
-    потерянная секция вспыхивает белым."""
+    """Полоска над головой — сплошная (без делений: они путали), заполнена по доле жизней; число жизней —
+    внутри полоски. Заряды щита — голубой кусок справа (щит гасит удары первым). flash — только что ранен:
+    потерянная доля вспыхивает белым."""
     P = params("hpbar")
     max_hp = max(1, int(max_hp))
-    group = math.ceil(max_hp / int(P.get("max_sections", 10)))
-    n = math.ceil(max_hp / group)
-    ns = math.ceil(max(0, shield) / group)
-    gap = int(P.get("gap", 1))
-    sw = int(P.get("section_w", 4))
-    total = n + ns
-    width = total * (sw + gap) - gap
-    if width < int(P.get("min_width", 34)):
-        sw = max(sw, (int(P.get("min_width", 34)) + gap) // total - gap)
-        width = total * (sw + gap) - gap
-    h = int(P.get("height", 5))
-    x0 = int(cx - width / 2)
-    pygame.draw.rect(surf, INK, (x0 - 2, top - 2, width + 4, h + 4))
+    width = int(P.get("width", 40))
+    h = int(P.get("height", 10))
+    sw = int(P.get("shield_w", 5)) * max(0, int(shield))
+    total = width + (sw + 1 if sw else 0)
+    x0 = int(cx - total / 2)
+    pygame.draw.rect(surf, INK, (x0 - 2, top - 2, total + 4, h + 4), border_radius=3)
     empty = rgb(P.get("empty_color"), (42, 36, 50))
+    pygame.draw.rect(surf, empty, (x0, top, width, h), border_radius=2)
     low = hp <= int(P.get("low_at", 3)) and max_hp > 3
     fill = rgb(P.get("low_color"), (255, 90, 80)) if low else color
-    lost = hp // group if flash else -1
-    for i in range(n):
-        x = x0 + i * (sw + gap)
-        if i * group < hp:
-            c = fill
-        elif i == lost:
-            c = (255, 255, 255)
-        else:
-            c = empty
-        pygame.draw.rect(surf, c, (x, top, sw, h))
-        if i * group < hp:                                    # блик сверху
-            pygame.draw.line(surf, tuple(min(255, v + 70) for v in c), (x, top), (x + sw - 1, top))
-    sc = rgb(P.get("shield_color"), (60, 156, 255))
-    for j in range(ns):
-        x = x0 + (n + j) * (sw + gap)
-        pygame.draw.rect(surf, sc, (x, top, sw, h))
-        pygame.draw.line(surf, (220, 240, 255), (x, top), (x + sw - 1, top))           # блик стёклышка
-    if font is not None:
+    k = max(0.0, min(1.0, hp / max_hp))
+    fw = round(width * k)
+    if flash and hp < max_hp:                                  # только что ранен: потерянное — белым
+        lost = round(width * min(1.0, (hp + 1) / max_hp))
+        pygame.draw.rect(surf, (255, 255, 255), (x0, top, lost, h), border_radius=2)
+    if fw > 0:
+        pygame.draw.rect(surf, fill, (x0, top, fw, h), border_radius=2)
+        pygame.draw.line(surf, tuple(min(255, v + 70) for v in fill), (x0 + 1, top), (x0 + fw - 2, top))   # блик
+    if sw:
+        sc = rgb(P.get("shield_color"), (60, 156, 255))
+        pygame.draw.rect(surf, sc, (x0 + width + 1, top, sw, h), border_radius=2)
+        pygame.draw.line(surf, (220, 240, 255), (x0 + width + 2, top), (x0 + width + sw - 2, top))
+    if font is not None:                                       # число — внутри, белое с тёмной обводкой
         txt = str(hp)
         img = font.render(txt, True, (255, 255, 255))
-        rect = img.get_rect(midright=(x0 - 4, top + h // 2))
+        rect = img.get_rect(center=(x0 + width // 2, top + h // 2 + int(P.get("text_dy", 0))))
         shadow = font.render(txt, True, INK)
         for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, 1), (-1, 1), (1, -1)):
             surf.blit(shadow, rect.move(dx, dy))
@@ -445,4 +434,57 @@ def draw_heal_front(surf, pos, r, k, time):
         d = r * (1.1 + 0.6 * k)
         if (i + int(time * 12)) % 3:
             pygame.draw.circle(layer, (*light, int(220 * (1 - k))), (int(c + math.cos(a) * d), int(c + math.sin(a) * d)), 2)
+    surf.blit(layer, layer.get_rect(center=(int(pos[0]), int(pos[1]))))
+
+
+def draw_cleanse_back(surf, pos, r, k):
+    """Очищение, под магом: мятное сияние (светится — цвет прибавляется к полю). k — 0..1."""
+    P = params("cleanse")
+    col = rgb(P.get("color"), (180, 255, 216))
+    size = int(r * 6 + 20)
+    c = size // 2
+    glow = min(1.0, k / 0.15) * (1 - k) ** 1.3
+    a = float(P.get("glow_alpha", 140)) / 255
+    layer = pygame.Surface((size, size))
+    for i in range(4, 0, -1):
+        w = a * glow * (0.3 + 0.17 * (4 - i))
+        pygame.draw.circle(layer, tuple(int(v * w) for v in col), (c, c), int(r * (0.8 + 0.3 * i)))
+    surf.blit(layer, layer.get_rect(center=(int(pos[0]), int(pos[1]))), special_flags=pygame.BLEND_RGB_ADD)
+
+
+def draw_cleanse_front(surf, pos, r, k, time):
+    """Очищение, поверх мага: светлая волна сверху вниз, тёмные хлопья слетают и тают, кольцо сжимается к магу."""
+    P = params("cleanse")
+    col = rgb(P.get("color"), (180, 255, 216))
+    light = rgb(P.get("light"), (255, 255, 255))
+    soot = rgb(P.get("soot"), (58, 42, 74))
+    size = int(r * 7 + 40)
+    layer = pygame.Surface((size, size), pygame.SRCALPHA)
+    c = size // 2
+    q = min(1.0, k / 0.55)                                    # волна: сверху (над шляпой) вниз (к ногам)
+    if q < 1:
+        y = c - r * 1.4 + q * r * 2.6
+        half = r * 1.05 * math.sin(math.pi * (0.15 + 0.7 * q))
+        for dy, a in ((0, 255), (-3, 120), (3, 120), (-6, 50)):
+            pygame.draw.line(layer, (*(light if dy == 0 else col), int(a * (1 - q * 0.6))),
+                             (c - half, y + dy), (c + half, y + dy), 2 if dy == 0 else 1)
+    n = int(P.get("flakes", 10))
+    for i in range(n):                                        # тёмные хлопья — смытое — разлетаются и тают
+        f = k * 1.3 - (i % 4) * 0.06
+        if not 0 < f < 1:
+            continue
+        a = i * 2 * math.pi / n + 0.3
+        d = r * (0.5 + 1.8 * ease_out(f))
+        x, y = c + math.cos(a) * d, c + math.sin(a) * d - f * r * 0.6
+        s = max(1, int(r * float(P.get("flake_size", 0.22)) * (1 - f * 0.5)))
+        pygame.draw.circle(layer, (*soot, int(230 * (1 - f))), (int(x), int(y)), s + 1)
+        pygame.draw.circle(layer, (*col, int(120 * (1 - f))), (int(x), int(y)), max(1, s - 1))
+    rr = r * (float(P.get("ring_from", 2.6)) - (float(P.get("ring_from", 2.6)) - 1.0) * ease_out(k))
+    pygame.draw.circle(layer, (*col, int(150 * (1 - k))), (c, c), int(rr) + 2, max(1, int(4 * (1 - k)) + 1))
+    pygame.draw.circle(layer, (*light, int(220 * (1 - k))), (c, c), int(rr), max(1, int(3 * (1 - k)) + 1))
+    for i in range(6):                                        # искры мерцают
+        a = i * math.pi / 3 + time * 2.5
+        d = r * (1.2 + 0.3 * math.sin(time * 7 + i))
+        if (i + int(time * 14)) % 2:
+            pygame.draw.circle(layer, (*light, int(230 * (1 - k))), (int(c + math.cos(a) * d), int(c + math.sin(a) * d)), 2)
     surf.blit(layer, layer.get_rect(center=(int(pos[0]), int(pos[1]))))

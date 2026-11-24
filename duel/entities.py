@@ -296,6 +296,7 @@ class Player(Unit):
         self.moving_x = 0             # -1 влево, +1 вправо
         self.hit_flash = 0.0
         self.heal_fx = 0.0            # для анимации: только что вылечился
+        self.cleanse_fx = 0.0         # …только что очистился
 
     @property
     def speed(self):
@@ -331,6 +332,7 @@ class Player(Unit):
         self.cooldown = max(0.0, self.cooldown - dt)
         self.hit_flash = max(0.0, self.hit_flash - dt)
         self.heal_fx = max(0.0, self.heal_fx - dt)
+        self.cleanse_fx = max(0.0, self.cleanse_fx - dt)
         self.melee_cd = max(0.0, self.melee_cd - dt)
         self.melee_flash = max(0.0, self.melee_flash - dt)
         self.shot_flash = max(0.0, self.shot_flash - dt)

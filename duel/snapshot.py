@@ -43,6 +43,7 @@ def snapshot(match):
             "exposed": _t(p.exposed),
             "items": list(p.items), "queue": list(p.queue), "gear": list(p.gear),
             "hit_flash": _t(p.hit_flash), "melee_flash": _t(p.melee_flash), "heal_fx": _t(p.heal_fx),
+            "cleanse_fx": _t(p.cleanse_fx),
             "moving": bool(p.moving or p.moving_x), "shot": _t(p.shot_flash),
             "burn": m.danger(p)[1],      # чья стихия жжёт (герой или "arena") или None
         } for p in m.players],

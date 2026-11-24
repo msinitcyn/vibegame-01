@@ -189,15 +189,18 @@ def test_quake_pulses_come_often():
     assert QUAKE_EVERY <= 1.0 and QUAKE_EVERY > QUAKE_STUN               # чаще, но между толчками можно сделать шаг
 
 
-def test_speed_is_retired_and_gear_has_own_help_tab(game):
+def test_speed_is_retired_and_gear_is_mob_land(game):
     from duel.config import GEAR_ITEMS, HELP_TABS
     m = new_match()
     drops = {m.artifact_kind("neutral", 6) for _ in range(400)}
     assert "speed" not in drops and "heal" in drops
-    game.help_page = HELP_TABS.index("common")
+    game.help_page = HELP_TABS.index("artifacts")
+    game.open_land("neutral")
     assert "speed" not in game.help_kinds() and not set(GEAR_ITEMS) & set(game.help_kinds())
-    game.help_page = HELP_TABS.index("gear")
+    game.open_land("arena")                                              # «Земля мобов» — снаряжение
     assert game.help_kinds() == list(GEAR_ITEMS)
+    game.open_land("earth")
+    assert game.help_kinds() == ["landswap", "firmground", "speedsteal", "quake"]
 
 
 def test_firmground_removes_foe_land_slow_but_not_burn():
@@ -208,3 +211,13 @@ def test_firmground_removes_foe_land_slow_but_not_burn():
     assert m.ground_slow(b) == FOE_LAND_SLOW
     m.apply_item(b, "firmground")
     assert m.ground_slow(b) == 1.0 and m.danger(b)[0] == FOE_LAND_DPS    # не замедляет, но жжёт
+
+
+def test_firmground_removes_arena_slow_too():
+    from duel.config import ARENA_SLOW
+    m = earth_match()
+    b = m.blue
+    b.x, b.y = ARENA
+    assert m.ground_slow(b) == ARENA_SLOW
+    m.apply_item(b, "firmground")
+    assert m.ground_slow(b) == 1.0

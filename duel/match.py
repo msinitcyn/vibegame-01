@@ -27,6 +27,7 @@ from .commands import Command
 from .config import (
     MOB_LATE_EXTRA,
     GUARDIAN_PETRIFY,
+    CLEANSE_FX,
     HEAL_FX,
     RETIRED_ITEMS,
     GUARDIAN_RESPAWN,
@@ -375,6 +376,7 @@ class Match:
         elif kind == "beam":                  # летящий луч по прицелу
             self.beams.append(Beam(p))
         elif kind == "cleanse":
+            p.cleanse_fx = CLEANSE_FX             # анимация очищения
             for u in [p] + self.clones_of(p):
                 for e in BAD_EFFECTS:
                     u.effects.pop(e, None)
@@ -450,14 +452,14 @@ class Match:
     def ground_slow(self, p):
         """Замедление земли под магом. «Ледяная тропа» — земля Холода на время: на чужой тропе — как на чужой
         земле (медленнее, и жжёт — см. danger); с действующей тропой или на своём следе чужая земля не
-        замедляет. «Твёрдая почва» Земли снимает замедление чужой земли (и чужой тропы). Арена замедляет всегда."""
+        замедляет. «Твёрдая почва» Земли снимает замедление чужой земли (и чужой тропы) и арены мобов. Иначе арена замедляет всегда."""
         firm = "firmground" in p.effects
         if self.on_trail(p, self.other(p)):
             return 1.0 if firm else FOE_LAND_SLOW
         zone = zone_at(p.x, p.y)
         if zone == self.foe_zone_of(p):
             return 1.0 if (firm or "icewalk" in p.effects or self.on_trail(p, p)) else FOE_LAND_SLOW
-        return ARENA_SLOW if zone == "arena" else 1.0
+        return ARENA_SLOW if zone == "arena" and not firm else 1.0
 
     def danger(self, p):
         """Опасная земля под магом: (жизней в секунду, чья стихия жжёт — герой или "arena") или (0, None).

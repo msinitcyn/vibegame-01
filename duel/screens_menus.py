@@ -17,7 +17,9 @@ from .config import (
     BLUE,
     GREY,
     HEIGHT,
+    HELP_LANDS,
     HELP_TABS,
+    HERO_LAND,
     HERO_COLOR,
     HERO_SPRITE,
     HEROES,
@@ -43,7 +45,7 @@ from .render import draw_field
 from .snapshot import snapshot
 from .icons import draw_icon
 from .items import item_help, item_name, ITEMS
-from .sprites import draw_unit
+from .sprites import draw_unit, sprite_image, sprite_size
 
 
 class MenuScreensMixin:
@@ -222,25 +224,21 @@ class MenuScreensMixin:
         pygame.display.flip()
 
     def draw_lang_pick(self):
-        """Самый первый запуск: выбор языка — названия языков на них самих; ↑/↓, Enter, мышь."""
+        """Самый первый запуск: выбор языка — три кнопки, названия языков на них самих; ↑/↓, Enter, мышь."""
         from .i18n import LANGS
         s = self.screen
         s.fill(BG)
-        img = self.big.render("Spellgunners", True, (255, 230, 140))
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 130)))
-        img = self.font.render("Language  ·  Язык  ·  Kieli", True, (200, 205, 220))
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 200)))
-        for i, (code, name) in enumerate(LANGS.items()):
+        codes = self.lang_order()
+        for i, code in enumerate(codes):
+            name = LANGS[code]
             rect = pygame.Rect(0, 0, 360, 56)
-            rect.center = (WIDTH // 2, 290 + i * 74)
+            rect.center = (WIDTH // 2, HEIGHT // 2 + (i - (len(codes) - 1) / 2) * 74)
             self.hit(rect, lambda code=code: self.choose_lang(code), lambda i=i: setattr(self, "lang_index", i))
             sel = i == self.lang_index
             pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=12)
             pygame.draw.rect(s, (255, 230, 140) if sel else (60, 64, 80), rect, 3 if sel else 1, border_radius=12)
             img = self.font.render(name, True, WHITE if sel else (200, 205, 220))
             s.blit(img, img.get_rect(center=rect.center))
-        img = self.small.render("↑/↓  ·  Enter", True, GREY)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 60)))
         pygame.display.flip()
 
     def draw_crash_ask(self):
@@ -355,23 +353,29 @@ class MenuScreensMixin:
             self.draw_help_full(kind)
             pygame.display.flip()
             return
-        img = self.font.render(tr("help.title"), True, WHITE)
+        tab = HELP_TABS[self.help_page]
+        land = getattr(self, "help_land", None) if tab == "artifacts" else None
+        title = tr("help.title") + (f"  ·  {tr('land.' + land)}" if land else "")
+        img = self.font.render(title, True, WHITE if not land else self.land_color(land))
         s.blit(img, img.get_rect(center=(WIDTH // 2, 24)))
         self.draw_help_tabs()
-        tab = HELP_TABS[self.help_page]
         if tab == "rules":
             self.draw_help_rules()
         elif tab == "about":
             self.draw_help_about()
+        elif tab == "artifacts" and land is None:
+            self.draw_lands()
         else:
             self.draw_help_list()
             self.draw_help_focus(kind)
-            note = {"common": tr("help.levels"), "mages": "", "gear": tr("help.gear_note")}.get(tab, tr("help.hero_note"))
+            note = ("" if tab == "mages" else tr("help.levels") if land == "neutral" else
+                    tr("help.gear_note") if land == "arena" else tr("help.hero_note"))
             for j, line in enumerate(self.wrap(note, WIDTH - 80, self.small) if note else []):
                 img = self.small.render(line, True, GREY)
                 s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 58 + j * 19)))
-        hint = self.small.render(tr("help.keys"), True, GREY)
-        s.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 16)))
+        if not (tab == "artifacts" and land is None):      # на квадратиках земель своя подсказка
+            hint = self.small.render(tr("help.keys_land" if land else "help.keys"), True, GREY)
+            s.blit(hint, hint.get_rect(center=(WIDTH // 2, HEIGHT - 16)))
         self.back_button()
         pygame.display.flip()
 
@@ -401,13 +405,65 @@ class MenuScreensMixin:
             return tr("help.tab_about"), (255, 230, 140)
         if tab == "mages":
             return tr("help.tab_mages"), (225, 230, 245)
-        if tab == "common":
-            return tr("help.tab_common"), (200, 205, 220)
-        if tab == "gear":
-            return tr("help.tab_gear"), (230, 205, 120)
-        if tab == "rules":
-            return tr("help.rules"), (200, 205, 220)
-        return tr("hero." + tab), HERO_COLOR[tab]
+        if tab == "artifacts":
+            return tr("help.tab_artifacts"), (230, 205, 120)
+        return tr("help.rules"), (200, 205, 220)
+
+    @staticmethod
+    def land_color(land):
+        return HERO_COLOR[land] if land in HERO_COLOR else (230, 205, 120) if land == "arena" else (200, 205, 220)
+
+    def land_picture(self, land, size):
+        """Кусок текстуры земли для квадратика: земля героя, арена мобов или камень нейтральной полосы."""
+        cache = self.__dict__.setdefault("_land_pics", {})
+        key = (land, size)
+        if key not in cache:
+            w, h = size
+            if land == "neutral":                  # нейтральная полоса — серые плиты кладкой, как на поле
+                img = pygame.Surface(size)
+                img.fill((58, 58, 66))
+                for yy in range(0, h, 24):
+                    off = 0 if (yy // 24) % 2 == 0 else 24
+                    pygame.draw.line(img, (46, 46, 54), (0, yy), (w, yy), 2)
+                    for xx in range(-off, w, 48):
+                        pygame.draw.line(img, (46, 46, 54), (xx, yy), (xx, yy + 24), 2)
+            else:
+                name = "bg_arena" if land == "arena" else HERO_LAND[land][0]
+                bw, bh = sprite_size(name)                  # по пропорциям картинки: ширина — во весь квадратик
+                sh = max(h, round(w * bh / bw))
+                src = sprite_image(name, (w, sh))
+                img = src.subsurface(pygame.Rect(0, (sh - h) // 2, w, h)).copy()
+            cache[key] = img
+        return cache[key]
+
+    def draw_lands(self):
+        """«Артефакты»: квадратики земель (текстура, название, значки её артефактов); щелчок — артефакты земли."""
+        s = self.screen
+        cols, gap = self.LAND_COLS, 18
+        w, h = 214, 200
+        x0 = (WIDTH - cols * w - (cols - 1) * gap) // 2
+        for i, land in enumerate(HELP_LANDS):
+            rect = pygame.Rect(x0 + (i % cols) * (w + gap), 104 + (i // cols) * (h + gap), w, h)
+            self.hit(rect, lambda land=land: self.open_land(land), lambda i=i: setattr(self, "land_index", i))
+            sel = i == getattr(self, "land_index", 0)
+            s.blit(self.land_picture(land, rect.size), rect)
+            shade = pygame.Surface((w, 64), pygame.SRCALPHA)
+            shade.fill((10, 10, 16, 190))
+            s.blit(shade, (rect.x, rect.bottom - 64))
+            color = self.land_color(land)
+            name = tr("land." + land)
+            font = self.font if self.font.size(name)[0] <= w - 20 else self.small
+            img = font.render(name, True, color)
+            s.blit(img, img.get_rect(midleft=(rect.x + 12, rect.bottom - 44)))
+            kinds = self.land_items(land)
+            r = 11 if len(kinds) <= 8 else 8
+            for j, kind in enumerate(kinds[:12]):          # значки артефактов земли
+                draw_icon(s, kind, (rect.x + 20 + j * (2 * r + 4), rect.bottom - 17), r)
+            pygame.draw.rect(s, color if sel else (60, 64, 80), rect, 4 if sel else 1, border_radius=6)
+        note = tr("help.lands_note")
+        for j, line in enumerate(self.wrap(note, WIDTH - 80, self.small)):
+            img = self.small.render(line, True, GREY)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 58 + j * 19)))
 
     def draw_help_tabs(self):
         """Вкладки сверху: щелчок — открыть."""
