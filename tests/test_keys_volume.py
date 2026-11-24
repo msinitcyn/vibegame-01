@@ -96,8 +96,11 @@ def test_audio_scales_volumes():
     snd = a.shots["blue"]
     base = a.base[snd]
     a.set_volumes(0, 0)
-    assert snd.get_volume() == 0 and pygame.mixer.music.get_volume() == 0
+    assert a.volume_of(snd) == 0 and pygame.mixer.music.get_volume() == 0
     a.set_volumes(5, 10)
-    assert abs(snd.get_volume() - min(1.0, base * SFX_VOLUME * 2)) < 0.02
+    assert abs(a.volume_of(snd) - min(1.0, base * SFX_VOLUME * 2)) < 0.02
     a.set_volumes(5, 5)                                       # обычный уровень — заметно тише своей громкости
-    assert SFX_VOLUME < 0.5 and abs(snd.get_volume() - base * SFX_VOLUME) < 0.02
+    assert SFX_VOLUME < 0.5 and abs(a.volume_of(snd) - base * SFX_VOLUME) < 0.02
+    ch = a.play(snd)                                          # громкость — на канале (в браузере звук её не помнит)
+    if ch is not None:
+        assert abs(ch.get_volume() - a.volume_of(snd)) < 0.02 and snd.get_volume() == 1.0

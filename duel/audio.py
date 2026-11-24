@@ -103,8 +103,7 @@ class Audio:
         for who, fname in (("blue", "shoot01.mp3"), ("red", "shoot02.mp3"), ("melee", "shoot03.mp3")):
             try:
                 snd = pygame.mixer.Sound(str(media(SOUNDS_DIR / fname)))
-                snd.set_volume(SHOOT_VOLUME * SFX_VOLUME)
-                self.shots[who] = snd
+                self.shots[who] = snd             # громкость — на канале при проигрывании (play)
                 self.base[snd] = SHOOT_VOLUME
             except (pygame.error, FileNotFoundError) as e:
                 print(f"Не загрузился {fname}:", e)
@@ -126,8 +125,7 @@ class Audio:
         except (pygame.error, FileNotFoundError) as e:
             print(f"Не загрузился {fname}:", e)
             return None
-        snd.set_volume(volume * SFX_VOLUME)
-        self.base[snd] = volume
+        self.base[snd] = volume               # громкость — на канале при проигрывании (play)
         return snd
 
     def set_volumes(self, music=None, sfx=None):
@@ -139,8 +137,10 @@ class Audio:
         if not self.enabled:
             return
         self.apply_music_volume()
-        for snd, base in self.base.items():
-            snd.set_volume(min(1.0, base * SFX_VOLUME * self.sfx_level / 5))
+        for key, channel in self.loops.items():   # звучащие циклы — сразу с новой громкостью
+            snd = self.loop_sounds.get(key[-1])
+            if snd is not None:
+                channel.set_volume(self.volume_of(snd))
 
     def apply_music_volume(self):
         """Громкость музыки: уровень из настроек × MUSIC_VOLUME × громкость этого трека (MUSIC_GAIN)."""
@@ -183,8 +183,14 @@ class Audio:
         try:
             pygame.mixer.music.load(self.track)
             self.apply_music_volume()             # у трека может быть своя громкость
-            # в игре и в ролике — по одному треку, потом следующий (вперемешку); в меню — один по кругу
-            pygame.mixer.music.play(0 if self.kind in ("game", "movie") else -1, fade_ms=MUSIC_FADE_MS)
+            # в игре и в ролике — по одному треку, потом следующий (вперемешку); в меню — один по кругу.
+            # В браузере без плавного начала: там нарастание уводит громкость на полную
+            loops = 0 if self.kind in ("game", "movie") else -1
+            if WEB:
+                pygame.mixer.music.play(loops)
+            else:
+                pygame.mixer.music.play(loops, fade_ms=MUSIC_FADE_MS)
+            self.apply_music_volume()             # и после начала: браузер громкость до play() не помнит
         except pygame.error as e:
             print(f"Не играет {self.track.name}:", e)
 
@@ -193,21 +199,36 @@ class Audio:
         if self.enabled and self.kind in ("game", "movie") and not pygame.mixer.music.get_busy():
             self.play_next()
 
+    def volume_of(self, snd):
+        """Громкость звука сейчас: его громкость × SFX_VOLUME × уровень из настроек."""
+        return min(1.0, self.base.get(snd, 1.0) * SFX_VOLUME * self.sfx_level / 5)
+
+    def play(self, snd, **kw):
+        """Проиграть звук с нужной громкостью. Громкость ставится и на канал: в браузере громкость
+        самого звука не действует — без этого всё звучало на полную."""
+        channel = snd.play(**kw)
+        if channel is not None:
+            try:
+                channel.set_volume(self.volume_of(snd))
+            except (pygame.error, AttributeError):
+                pass
+        return channel
+
     def item(self, kind):
         """Звук применённого артефакта (если у него есть свой)."""
         snd = self.items.get(kind)
         if snd:
-            snd.play()
+            self.play(snd)
 
     def hit(self):
         """Пуля (или луч) попала в мага."""
         if self.hit_sound:
-            self.hit_sound.play()
+            self.play(self.hit_sound)
 
     def death(self):
         """Маг погиб."""
         if getattr(self, "death_sound", None):
-            self.death_sound.play()
+            self.play(self.death_sound)
 
     def set_loops(self, wanted):
         """Звуки-циклы: wanted — {(откуда, кто, звук)}; новые — включить, пропавшие — плавно выключить."""
@@ -219,7 +240,7 @@ class Audio:
         for key in wanted:
             snd = self.loop_sounds.get(key[-1])
             if snd and key not in self.loops:
-                channel = snd.play(loops=-1, fade_ms=LOOP_FADE_MS)
+                channel = self.play(snd, loops=-1, fade_ms=0 if WEB else LOOP_FADE_MS)
                 if channel:
                     self.loops[key] = channel
 
@@ -235,4 +256,4 @@ class Audio:
     def shoot(self, who):
         snd = self.shots.get(who)
         if snd:
-            snd.play()
+            self.play(snd)
