@@ -360,11 +360,11 @@ DUEL_WEB=1 .venv/bin/python build/web-src/main.py   # то же без брау�
 | Файлы | Когда играет |
 |---|---|
 | `assets/music/menu-*.mp3` | меню и справка, по кругу |
-| `assets/music/background-*.mp3` | игра: все треки по очереди, вперемешку; кончился один — начинается другой |
+| `assets/music/background-*.mp3` | игра и ролик при старте (`intro`): треки вперемешку; кончился один — начинается другой |
 | `assets/sounds/shoot01.mp3` / `shoot02.mp3` | выстрел синего / красного |
 | `assets/sounds/shoot03.mp3` | ближний удар |
 
-Громкость — `MUSIC_VOLUME`, `SHOOT_VOLUME`.
+Громкость — `MUSIC_VOLUME`, `SHOOT_VOLUME`. Откуда треки — `assets/music/SOURCES.md` (музыку из `raw/` кладём сюда руками: `tools/import_sounds.py` — только для звуков).
 
 ## Ролики
 

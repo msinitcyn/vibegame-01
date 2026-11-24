@@ -180,3 +180,21 @@ def test_intro_at_start_unless_unchecked_and_from_about_tab(game, monkeypatch):
     assert game.state == "movie" and game.movie_back == "help"
     game.on_key(pygame.KSCAN_ESCAPE)
     assert game.state == "help"
+
+
+def test_intro_plays_background_tracks_shuffled(game, monkeypatch):
+    """Ролик intro: фоновые треки (те же, что в игре), вперемешку — кончился один, начинается другой."""
+    a = game.audio
+    if not a.enabled:
+        pytest.skip("нет аудио")
+    assert movie.load("intro")["music"] == "background-*.mp3"
+    game.start_movie("intro")
+    game.update_music()
+    first = a.track
+    assert a.kind == "movie" and first.name.startswith("background-") and len(a.tracks["movie"]) >= 6
+    monkeypatch.setattr(pygame.mixer.music, "get_busy", lambda: False)
+    a.on_music_end()                                                      # трек кончился — следующий, другой
+    assert a.track != first and a.track.name.startswith("background-")
+    game.end_movie()
+    game.update_music()
+    assert a.kind == "menu" and a.track.name.startswith("menu-")           # меню — своя музыка, как была

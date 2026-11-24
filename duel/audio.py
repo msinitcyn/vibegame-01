@@ -172,14 +172,14 @@ class Audio:
         self.track = random.choice(choices)
         try:
             pygame.mixer.music.load(self.track)
-            # в игре — по одному треку, потом следующий; в меню — один по кругу
-            pygame.mixer.music.play(0 if self.kind == "game" else -1, fade_ms=MUSIC_FADE_MS)
+            # в игре и в ролике — по одному треку, потом следующий (вперемешку); в меню — один по кругу
+            pygame.mixer.music.play(0 if self.kind in ("game", "movie") else -1, fade_ms=MUSIC_FADE_MS)
         except pygame.error as e:
             print(f"Не играет {self.track.name}:", e)
 
     def on_music_end(self):
         # событие приходит и когда мы сами меняем трек — тогда музыка уже снова играет
-        if self.enabled and self.kind == "game" and not pygame.mixer.music.get_busy():
+        if self.enabled and self.kind in ("game", "movie") and not pygame.mixer.music.get_busy():
             self.play_next()
 
     def item(self, kind):
