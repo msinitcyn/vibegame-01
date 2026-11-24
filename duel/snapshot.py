@@ -42,7 +42,7 @@ def snapshot(match):
             "shield_flash": _t(p.shield_flash), "shield_break": _t(p.shield_break), "reveal": _t(p.reveal),
             "exposed": _t(p.exposed),
             "items": list(p.items), "queue": list(p.queue), "gear": list(p.gear),
-            "hit_flash": _t(p.hit_flash), "melee_flash": _t(p.melee_flash),
+            "hit_flash": _t(p.hit_flash), "melee_flash": _t(p.melee_flash), "heal_fx": _t(p.heal_fx),
             "moving": bool(p.moving or p.moving_x), "shot": _t(p.shot_flash),
             "burn": m.danger(p)[1],      # чья стихия жжёт (герой или "arena") или None
         } for p in m.players],

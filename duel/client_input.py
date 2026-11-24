@@ -56,6 +56,9 @@ class InputMixin:
         if self.state == "crash_ask":
             self.crash_ask_key(sc)
             return
+        if self.state == "lang_pick":
+            self.lang_pick_key(sc)
+            return
         if self.state == "menu":
             self.menu_key(sc)
             return
@@ -231,6 +234,8 @@ class InputMixin:
             return {**ok, **back}
         if self.state == "movie":                  # ролик: любая «назад» — пропустить
             return back
+        if self.state == "lang_pick":              # выбор языка: вверх-вниз и ✕
+            return {**up, **ok}
         if self.state in ("help", "settings", "keys"):
             return {**up, **sides, **ok, **back}
         if self.state in ("entry", "entering"):

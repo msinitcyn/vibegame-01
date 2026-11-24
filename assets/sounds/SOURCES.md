@@ -8,6 +8,7 @@
 | clone.mp3 | yodguard-dark-magic-1-378650.mp3 | 378650 |
 | enemy-land.mp3 | freesound_community-burning-fire-steam-87118.mp3 | 87118 |
 | frost.mp3 | dragon-studio-frost-spell-impact-499662.mp3 | 499662 |
+| healing.mp3 | benkirb-shine-8-268901.mp3 | 268901 |
 | hit-into-body.mp3 | u_68csiaifb5-bulletimpact4-442720.mp3 | 442720 |
 | ice-road.mp3 | freesound_community-water-freezing-29329.mp3 | 29329 |
 | ice-shield.mp3 | daviddumaisaudio-magical-spell-cast-190272.mp3 | 190272 |

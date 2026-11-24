@@ -10,6 +10,7 @@ import pygame
 from .config import (
     DURATION,
     GUARDIAN_PETRIFY,
+    HEAL_FX,
     WEAPON_TIME,
     ZOMBIE_RISE,
     MOBSWAP_FX,
@@ -207,6 +208,10 @@ def draw_player(surf, p, heroes, viewer=None, time=0.0, font=None):
         a = float(fx.params("sword").get("reach_ring_alpha", 90)) if not bear else 220
         pygame.draw.circle(ring, (*side_color(heroes, pid), int(a * k)), (c, c), radius + reach, 3)
         surf.blit(ring, ring.get_rect(center=pos))
+    heal = p.get("heal_fx", 0)
+    heal_k = 1 - heal / HEAL_FX if heal > 0 else None
+    if heal_k is not None:                         # лечение: сияние и кольцо — под магом
+        fx_mage.draw_heal_back(surf, pos, p["r"], heal_k)
     if bear:
         draw_bear(surf, p, heroes, pos, facing, time)
     else:
@@ -237,6 +242,8 @@ def draw_player(surf, p, heroes, viewer=None, time=0.0, font=None):
     if "icewalk" in p["effects"]:                 # «Ледяная тропа»: снежинки у ног
         fx_spells.snow_at_feet(surf, pos, p["r"], time)
     draw_effects(surf, p, time)
+    if heal_k is not None:                         # …а плюсы и искры — поверх
+        fx_mage.draw_heal_front(surf, pos, p["r"], heal_k, time)
     if "cloning" in p["effects"]:                 # двойники появляются — магический шум и на маге
         fx_mage.draw_clone_noise(surf, pos, p["r"], max(0.0, 1 - p["effects"]["cloning"] / DURATION["cloning"]), time, 7)
     draw_hp(surf, p, side_color(heroes, pid), font,

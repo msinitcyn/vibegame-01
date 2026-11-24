@@ -18,7 +18,8 @@ DEFAULTS = {"lang": "en", "name": "", "last_address": "localhost",
             "keys": {},                           # изменённые клавиши: {"blue": {"fire": скан-код}, ...}
             "crash_reports": "ask",               # отчёты о падениях серверу: "ask" — спросить, "yes", "no"
             "last_update_check": None,            # {"at": время, "result": "latest"|"new"|"offline", "v"}
-            "intro_on_start": True}               # ролик (assets/movies/intro) при каждом запуске — галка в «Об игре»
+            "intro_on_start": True,
+            "lang_chosen": False}                 # язык выбран (на экране выбора при первом запуске или в настройках)               # ролик (assets/movies/intro) при каждом запуске — галка в «Об игре»
 VOLUME_LEVELS = (0, 10)
 AIM_MODES = ("move", "stick")
 AIM_LEVELS = (1, 10)
@@ -42,7 +43,10 @@ OBSOLETE = ("intro_seen",)        # больше не нужны — при за
 def load():
     data = dict(DEFAULTS)
     try:
-        data.update(json.loads(path().read_text(encoding="utf-8")))
+        saved = json.loads(path().read_text(encoding="utf-8"))
+        data.update(saved)
+        if "lang" in saved and "lang_chosen" not in saved:
+            data["lang_chosen"] = True            # настройки от прошлых версий: язык уже был — не спрашиваем
     except (OSError, ValueError):
         pass
     for key in OBSOLETE:

@@ -1,0 +1,15 @@
+{
+  "heroes": {"blue": "nature", "red": "fire"},
+  "view": [320, 86, 320, 160],
+  "length": 3.2,
+  "speed": 0.8,
+  "setup": {
+    "blue": {"x": 380, "y": 150, "hp_lost": 6},
+    "red": {"x": 900, "y": 600},
+    "artifacts": [{"kind": "heal", "x": 480, "y": 150}]
+  },
+  "script": [
+    {"t": 0.0, "who": "blue", "aim_at": [700, 150]},
+    {"t": [0.4, 1.6], "who": "blue", "move": [1, 0]}
+  ]
+}

@@ -27,6 +27,7 @@ from .commands import Command
 from .config import (
     MOB_LATE_EXTRA,
     GUARDIAN_PETRIFY,
+    HEAL_FX,
     RETIRED_ITEMS,
     GUARDIAN_RESPAWN,
     GUARDIAN_SHOT_EVERY,
@@ -305,6 +306,7 @@ class Match:
             return
         if kind == "heal":
             p.hp = min(p.max_hp, p.hp + HEAL_AMOUNT)
+            p.heal_fx = HEAL_FX                   # анимация лечения
         elif kind == "wall":
             self.walls.append(Wall(p))
         elif kind == "clearfoe":

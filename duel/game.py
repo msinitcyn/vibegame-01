@@ -176,7 +176,9 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         else:
             if logs.ready() and logs.unsent_crashes() and self.settings.get("crash_reports", "ask") == "ask":
                 self.state = "crash_ask"      # в прошлый раз игра упала — спросить, можно ли отправлять отчёты
-            if intro:
+            if intro and not self.settings.get("lang_chosen"):
+                self.open_lang_pick(then_intro=True)      # самый первый запуск: язык, потом ролик
+            elif intro:
                 self.first_start_intro()
 
     def first_start_intro(self):
@@ -511,6 +513,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             self.draw_crash_ask()
         elif self.state == "movie":
             self.movie_frame(dt)
+        elif self.state == "lang_pick":
+            self.draw_lang_pick()
         else:
             return False
         return True

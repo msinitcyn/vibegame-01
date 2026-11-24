@@ -10,7 +10,7 @@ from . import keys
 from . import settings
 from .config import DEFAULT_HERO, HELP_BASICS, INTRO_MOVIE, HELP_PAGES, HELP_TABS, HERO_ONLY_ITEMS, HEROES, MAX_HP, TEST_HP
 from .items import HELP_SECTIONS
-from .i18n import get_lang, LANGS, set_lang, t
+from .i18n import get_lang, guess_lang, LANGS, set_lang, t
 from .update import restart as restart_updated
 from .client_common import Controls, PLAYER_IDS
 
@@ -161,6 +161,36 @@ class MenusMixin:
         kinds = self.help_kinds()
         return kinds[min(self.help_index, len(kinds) - 1)] if kinds else None
 
+    # ------------------------------------------------------------------ выбор языка при первом запуске
+
+    def open_lang_pick(self, then_intro=False):
+        """Самый первый запуск: выбрать язык (потом его можно сменить в настройках); then_intro — потом ролик."""
+        codes = list(LANGS)
+        self.lang_index = codes.index(guess_lang()) if guess_lang() in codes else codes.index("en")
+        self.lang_back, self.lang_then_intro = self.state, then_intro
+        self.state = "lang_pick"
+
+    def lang_pick_key(self, sc):
+        K = pygame
+        n = len(LANGS)
+        if sc in (K.KSCAN_UP, K.KSCAN_W, K.KSCAN_LEFT, K.KSCAN_A):
+            self.lang_index = (self.lang_index - 1) % n
+        elif sc in (K.KSCAN_DOWN, K.KSCAN_S, K.KSCAN_RIGHT, K.KSCAN_D, K.KSCAN_TAB):
+            self.lang_index = (self.lang_index + 1) % n
+        elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
+            self.choose_lang(list(LANGS)[self.lang_index])
+
+    def choose_lang(self, code):
+        """Язык выбран: сохранить, всё — на нём; дальше — ролик (если надо) и меню."""
+        self.settings["lang"], self.settings["lang_chosen"] = code, True
+        settings.save(self.settings)
+        set_lang(code)
+        pygame.display.set_caption(t("title"))
+        self.apply_keys()
+        self.state = self.lang_back
+        if self.lang_then_intro:
+            self.first_start_intro()
+
     def watch_intro(self):
         """«Об игре» → «Смотреть ролик»: ролик первого запуска, потом — обратно сюда."""
         self.start_movie(INTRO_MOVIE, back="help")
@@ -281,7 +311,7 @@ class MenusMixin:
     def set_language(self, code):
         """Сменить язык сразу и запомнить его между запусками."""
         set_lang(code)
-        self.settings["lang"] = get_lang()
+        self.settings["lang"], self.settings["lang_chosen"] = get_lang(), True
         settings.save(self.settings)
         pygame.display.set_caption(t("title"))
 

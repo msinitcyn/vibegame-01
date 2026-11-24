@@ -17,6 +17,7 @@
       ]
     }
 
+В "setup" можно положить артефакты: "artifacts": [{"kind": "heal", "x": 470, "y": 150}] (подбираются, как в игре).
 В "setup" можно поставить и мобов: "mobs": [{"x": 500, "y": 200, "hp": 6, "ranged": false}] —
 они спокойные: их можно бить, но они не нападают (чтобы сценка была чистой); "angry": true — злятся, как в игре
 ("target": "blue" — сразу идут на этого мага). Ни маги, ни мобы в сценке не погибают — жизни восстанавливаются.
@@ -28,7 +29,7 @@ import math
 
 from .commands import Command
 from .config import ASSETS, MAX_HP
-from .entities import Mob
+from .entities import Artifact, Mob
 from .match import STEP, Match
 
 DEMO_DIR = ASSETS / "demos"
@@ -98,6 +99,9 @@ class Demo:
             p.x = float(spot.get("x", p.x))
             p.y = float(spot.get("y", p.y))
             p.hp = p.max_hp = int(spot.get("hp", MAX_HP))     # в сценке никто не погибает (см. update)
+            p.hp -= int(spot.get("hp_lost", 0))                # ранен с начала (сценка лечения)
+        for a in (d.get("setup") or {}).get("artifacts") or []:   # артефакты на поле: {"kind", "x", "y"}
+            m.artifacts.append(Artifact(float(a["x"]), a["kind"], float(a["y"])))
         self.calm = []
         for mob in (d.get("setup") or {}).get("mobs") or []:
             unit = Mob(float(mob["x"]), float(mob["y"]), int(mob.get("hp", 3)), ranged=bool(mob.get("ranged", False)))

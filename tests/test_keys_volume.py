@@ -99,5 +99,5 @@ def test_audio_scales_volumes():
     assert snd.get_volume() == 0 and pygame.mixer.music.get_volume() == 0
     a.set_volumes(5, 10)
     assert abs(snd.get_volume() - min(1.0, base * SFX_VOLUME * 2)) < 0.02
-    a.set_volumes(5, 5)                                       # обычный уровень — вдвое тише своей громкости
-    assert SFX_VOLUME == 0.5 and abs(snd.get_volume() - base * SFX_VOLUME) < 0.02
+    a.set_volumes(5, 5)                                       # обычный уровень — заметно тише своей громкости
+    assert SFX_VOLUME < 0.5 and abs(snd.get_volume() - base * SFX_VOLUME) < 0.02

@@ -9,6 +9,28 @@ DEFAULT_LANG = "ru"
 _lang = DEFAULT_LANG
 
 
+def guess_lang():
+    """Язык системы, если он есть в игре (ru_RU.UTF-8 -> ru; на Windows — Russian_Russia), иначе английский.
+    Только чтобы подсветить строку на экране выбора языка при первом запуске."""
+    import locale
+    import os
+    names = {"russian": "ru", "finnish": "fi", "english": "en"}
+    cands = [os.environ.get(k, "") for k in ("LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE")]
+    try:
+        cands.append(locale.getlocale()[0] or "")
+    except (ValueError, TypeError):
+        pass
+    for c in cands:
+        c = c.lower()
+        for code in LANGS:
+            if c[:2] == code:
+                return code
+        for name, code in names.items():
+            if c.startswith(name):
+                return code
+    return "en"
+
+
 def set_lang(code):
     global _lang
     _lang = code if code in LANGS else DEFAULT_LANG
@@ -372,7 +394,7 @@ TEXTS = {
         "basic.melee_help": "E (у правого — правый Shift) или правая кнопка мыши, L1/L2: удар мечом по всем рядом — {melee} урона, без патронов, раз в {melee_cd} с.",
         "basic.foe_land": "Чужая земля",
         "basic.foe_land_help": "На земле соперника маг горит стихией хозяина земли: у Огня — огнём, у Холода — морозом, у Природы — ядом, у Тьмы — тьмой, у Света — святым светом. Это {dps} жизни в секунду; в арене мобов маг так же горит сиреневым огнём — {arena_dps} жизнь в секунду. Щит гасит этот урон (каждая жизнь — один заряд), а «Ледяная тропа» спасает совсем.",
-        "help.tab_common": "Общие",
+        "help.tab_common": "Нейтральная земля",
         "help.tab_gear": "Артефакты мобов",
         "movie.skip": "Esc — пропустить",
         "help.tab_about": "Об игре",
@@ -862,7 +884,7 @@ TEXTS = {
         "basic.melee_help": "E (right Shift for the right player) or the right mouse button, L1/L2: a sword strike at everyone nearby — {melee} damage, no ammo, once per {melee_cd} s.",
         "basic.foe_land": "Enemy land",
         "basic.foe_land_help": "On the opponent's land the mage burns with the land owner's element: fire for Fire, frost for Frost, poison for Nature, darkness for Dark, holy light for Light. That is {dps} lives per second; in the mob arena the mage burns with violet fire too — {arena_dps} life per second. A shield absorbs it (one charge per life), and the Ice path saves you completely.",
-        "help.tab_common": "Common",
+        "help.tab_common": "Neutral land",
         "help.tab_gear": "Mob artifacts",
         "movie.skip": "Esc — skip",
         "help.tab_about": "About",
@@ -1351,7 +1373,7 @@ TEXTS = {
         "basic.melee_help": "E (oikealla oikea Shift) tai hiiren oikea, L1/L2: miekanisku kaikkiin lähellä oleviin — {melee} vahinkoa, ilman panoksia, kerran {melee_cd} s:ssa.",
         "basic.foe_land": "Vieras alue",
         "basic.foe_land_help": "Vastustajan alueella velho palaa alueen omistajan elementillä: Tulen alueella tulella, Pakkasen pakkasella, Luonnon myrkyllä, Pimeyden pimeydellä, Valon pyhällä valolla. Se vie {dps} elämää sekunnissa; hirviöareenalla velho palaa samoin violetilla tulella — {arena_dps} elämä sekunnissa. Kilpi imee sen (yksi lataus per elämä), ja Jääpolku suojaa kokonaan.",
-        "help.tab_common": "Yleiset",
+        "help.tab_common": "Neutraali maa",
         "help.tab_gear": "Hirviöiden artefaktit",
         "movie.skip": "Esc — ohita",
         "help.tab_about": "Pelistä",

@@ -391,3 +391,58 @@ def draw_rapid(surf, pos, r, facing, since, time, shot=0.0):
             pygame.draw.line(layer, (*core, a), (c + math.cos(ang) * d0, c + math.sin(ang) * d0),
                              (c + math.cos(ang) * d1, c + math.sin(ang) * d1), 2)
     surf.blit(layer, layer.get_rect(center=(int(pos[0]), int(pos[1]))))
+
+
+def draw_heal_back(surf, pos, r, k):
+    """Лечение, под магом: розовое сияние вспыхивает и гаснет, расходится кольцо. k — 0..1."""
+    P = params("heal")
+    col = rgb(P.get("color"), (255, 90, 120))
+    light = rgb(P.get("light"), (255, 210, 220))
+    size = int(r * 6 + 20)
+    c = size // 2
+    glow = min(1.0, k / 0.2) * (1 - k)                        # быстро вспыхивает, медленно гаснет
+    a = float(P.get("glow_alpha", 120)) / 255
+    light_layer = pygame.Surface((size, size))                # сияние светится: цвет прибавляется к полю
+    for i in range(4, 0, -1):
+        w = a * glow * (0.3 + 0.17 * (4 - i))
+        pygame.draw.circle(light_layer, tuple(int(v * w) for v in col), (c, c), int(r * (0.8 + 0.3 * i)))
+    surf.blit(light_layer, light_layer.get_rect(center=(int(pos[0]), int(pos[1]))), special_flags=pygame.BLEND_RGB_ADD)
+    layer = pygame.Surface((size, size), pygame.SRCALPHA)
+    rr = r * (1.0 + (float(P.get("ring_to", 2.4)) - 1.0) * ease_out(k))
+    pygame.draw.circle(layer, (*light, int(230 * (1 - k))), (c, c), int(rr), max(1, int(4 * (1 - k))))
+    surf.blit(layer, layer.get_rect(center=(int(pos[0]), int(pos[1]))))
+
+
+def _cross(surf, x, y, s, col, alpha):
+    """Плюс с тёмной обводкой."""
+    w = max(2, int(s * 0.38))
+    for color, grow in ((INK, 2), (col, 0)):
+        pygame.draw.rect(surf, (*color, alpha), (int(x - s / 2 - grow), int(y - w / 2 - grow), int(s + 2 * grow), w + 2 * grow))
+        pygame.draw.rect(surf, (*color, alpha), (int(x - w / 2 - grow), int(y - s / 2 - grow), w + 2 * grow, int(s + 2 * grow)))
+
+
+def draw_heal_front(surf, pos, r, k, time):
+    """Лечение, поверх мага: плюсы всплывают вверх и тают, вокруг — искры."""
+    P = params("heal")
+    col = rgb(P.get("color"), (255, 90, 120))
+    light = rgb(P.get("light"), (255, 210, 220))
+    n = int(P.get("crosses", 6))
+    rise = float(P.get("rise", 2.4))
+    size = int(r * 6 + 40)
+    layer = pygame.Surface((size, size), pygame.SRCALPHA)
+    c = size // 2
+    for i in range(n):
+        q = k * 1.25 - i * 0.05                               # плюсы взлетают чуть по очереди
+        if not 0 < q < 1:
+            continue
+        x = c + math.cos(i * 2 * math.pi / n + 0.4) * r * (0.7 + 0.3 * (i % 2))
+        y = c + r * 0.6 - ease_out(q) * r * rise * (0.8 + 0.2 * (i % 3))
+        s = r * float(P.get("cross_size", 0.42)) * (0.7 + 0.6 * math.sin(math.pi * min(1.0, q * 1.5)))
+        alpha = int(255 * (1 - q) ** 0.7)
+        _cross(layer, x, y, s, col if i % 2 else light, alpha)
+    for i in range(8):                                        # искры по кругу, мерцают
+        a = i * math.pi / 4 + time * 3
+        d = r * (1.1 + 0.6 * k)
+        if (i + int(time * 12)) % 3:
+            pygame.draw.circle(layer, (*light, int(220 * (1 - k))), (int(c + math.cos(a) * d), int(c + math.sin(a) * d)), 2)
+    surf.blit(layer, layer.get_rect(center=(int(pos[0]), int(pos[1]))))

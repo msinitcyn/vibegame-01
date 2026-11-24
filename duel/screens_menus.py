@@ -221,6 +221,28 @@ class MenuScreensMixin:
         s.blit(img, img.get_rect(center=(WIDTH // 2, 170 + len(self.settings_rows) * step)))
         pygame.display.flip()
 
+    def draw_lang_pick(self):
+        """Самый первый запуск: выбор языка — названия языков на них самих; ↑/↓, Enter, мышь."""
+        from .i18n import LANGS
+        s = self.screen
+        s.fill(BG)
+        img = self.big.render("Spellgunners", True, (255, 230, 140))
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 130)))
+        img = self.font.render("Language  ·  Язык  ·  Kieli", True, (200, 205, 220))
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 200)))
+        for i, (code, name) in enumerate(LANGS.items()):
+            rect = pygame.Rect(0, 0, 360, 56)
+            rect.center = (WIDTH // 2, 290 + i * 74)
+            self.hit(rect, lambda code=code: self.choose_lang(code), lambda i=i: setattr(self, "lang_index", i))
+            sel = i == self.lang_index
+            pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=12)
+            pygame.draw.rect(s, (255, 230, 140) if sel else (60, 64, 80), rect, 3 if sel else 1, border_radius=12)
+            img = self.font.render(name, True, WHITE if sel else (200, 205, 220))
+            s.blit(img, img.get_rect(center=rect.center))
+        img = self.small.render("↑/↓  ·  Enter", True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 60)))
+        pygame.display.flip()
+
     def draw_crash_ask(self):
         """В прошлый раз игра упала: можно ли отправлять отчёты о падениях серверу."""
         s = self.screen
