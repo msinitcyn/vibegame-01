@@ -522,7 +522,26 @@ class MenuScreensMixin:
             img = self.font.render(line, True, WHITE)
             s.blit(img, img.get_rect(center=(WIDTH // 2, y)))
             y += 30
-        self.button((WIDTH // 2, y + 50), tr("help.watch_intro"), self.watch_intro, w=320, color=(255, 230, 140))
+        row = getattr(self, "about_row", 0)
+        self.button((WIDTH // 2, y + 50), tr("help.watch_intro"), self.watch_intro, w=320,
+                    color=(255, 230, 140) if row == 0 else None)
+        # галка «Показывать при старте»: щелчок или ↓ и Enter
+        on = self.settings.get("intro_on_start", True)
+        label = self.font.render(tr("help.intro_on_start"), True, WHITE if row == 1 else (200, 205, 220))
+        box = pygame.Rect(0, 0, 24, 24)
+        total = box.w + 12 + label.get_width()
+        box.topleft = (WIDTH // 2 - total // 2, y + 100)
+        area = pygame.Rect(box.x - 10, box.y - 8, total + 20, box.h + 16)
+        self.hit(area, self.toggle_intro_on_start, lambda: setattr(self, "about_row", 1))
+        if row == 1 or self.hovered(area):
+            pygame.draw.rect(s, (40, 46, 66), area, border_radius=8)
+            pygame.draw.rect(s, (255, 230, 140), area, 2, border_radius=8)
+        pygame.draw.rect(s, (20, 22, 30), box, border_radius=4)
+        pygame.draw.rect(s, (200, 205, 220), box, 2, border_radius=4)
+        if on:
+            pygame.draw.lines(s, (120, 220, 140), False,
+                              [(box.x + 5, box.centery), (box.x + 10, box.bottom - 6), (box.right - 5, box.y + 5)], 4)
+        s.blit(label, label.get_rect(midleft=(box.right + 12, box.centery)))
 
     def draw_help_rules(self):
         s = self.screen

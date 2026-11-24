@@ -61,7 +61,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
     def __init__(self, windowed=False, net=None, pad=0, replay=None, movie=None, intro=False):
         """net — (соединение, место от сервера, адрес) для сетевого клиента; pad — номер своего геймпада;
         replay — данные повтора партии (duel/replay.py): игра только показывает его; movie — показать ролик;
-        intro — показать ролик первого запуска, если его ещё не смотрели (обычный запуск main.py)."""
+        intro — обычный запуск main.py: показать ролик, если стоит галка «Показывать при старте»."""
         pygame.init()
         self.settings = settings.load()
         set_lang(self.settings["lang"])
@@ -180,11 +180,15 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
                 self.first_start_intro()
 
     def first_start_intro(self):
-        """Первый запуск: ролик (если ещё не смотрели), потом — туда, куда шли (меню или вопрос об отчётах)."""
-        if not self.settings.get("intro_seen") and not self.net:
+        """Запуск игры: ролик (если в «Об игре» стоит галка «Показывать при старте»), потом — туда, куда шли
+        (меню или вопрос об отчётах о падениях)."""
+        if self.settings.get("intro_on_start", True) and not self.net:
             self.start_movie(config.INTRO_MOVIE, back=self.state)
-            self.settings["intro_seen"] = True        # показали — больше сам не включается
-            settings.save(self.settings)
+
+    def toggle_intro_on_start(self):
+        """Галка «Показывать при старте» на вкладке «Об игре»."""
+        self.settings["intro_on_start"] = not self.settings.get("intro_on_start", True)
+        settings.save(self.settings)
 
     def start_movie(self, name, back="menu"):
         """Показать ролик assets/movies/<name>; кончился или Esc — в back."""

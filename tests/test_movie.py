@@ -149,32 +149,34 @@ def test_game_movie_state_esc_and_end(game):
     assert game.state == "menu"
 
 
-def test_intro_on_first_start_only_and_from_about_tab(game, monkeypatch):
+def test_intro_at_start_unless_unchecked_and_from_about_tab(game, monkeypatch):
     from duel import settings
     from duel.config import HELP_TABS, INTRO_MOVIE
     saved = []
     monkeypatch.setattr(settings, "save", lambda data: saved.append(dict(data)))
-    game.state, game.settings["intro_seen"] = "menu", False
-    game.first_start_intro()                                              # первый запуск — ролик, потом меню
+    game.state, game.settings["intro_on_start"] = "menu", True
+    game.first_start_intro()                                              # запуск — ролик, потом меню
     assert game.state == "movie" and game.movie.name == INTRO_MOVIE and game.movie_back == "menu"
-    assert saved and saved[-1]["intro_seen"] and game.settings["intro_seen"]
     game.end_movie()
-    game.first_start_intro()                                              # уже смотрели — сам не включается
-    assert game.state == "menu"
+    game.first_start_intro()                                              # и при следующем запуске — тоже
+    assert game.state == "movie" and not saved                            # сам ролик настройки не трогает
+    game.end_movie()
     game.state, game.help_page, game.help_full = "help", HELP_TABS.index("about"), False
+    game.help_tab(game.help_page)
     game.draw_help()
+    game.on_key(pygame.KSCAN_DOWN)                                        # на галку
+    game.on_key(pygame.KSCAN_RETURN)                                      # снять
+    assert game.settings["intro_on_start"] is False and saved[-1]["intro_on_start"] is False
+    game.state = "menu"
+    game.first_start_intro()
+    assert game.state == "menu"                                           # сняли — сразу меню
+    game.state = "help"
+    box = next(h for h in game.hits if h[0].h == 40 and h[0].w > 200 and h[0].y > 350)
+    game.on_mouse_move(box[0].center)
+    game.on_mouse_button(1)                                               # щелчок — снова поставить
+    assert game.settings["intro_on_start"] is True
+    game.on_key(pygame.KSCAN_UP)
     game.on_key(pygame.KSCAN_RETURN)                                      # «Смотреть ролик»
     assert game.state == "movie" and game.movie_back == "help"
     game.on_key(pygame.KSCAN_ESCAPE)
     assert game.state == "help"
-
-
-def test_watching_intro_by_hand_does_not_mark_first_start(game, monkeypatch):
-    """Ролик из «Об игре» (или самопроверки) не трогает отметку первого запуска — её ставит только сам первый запуск."""
-    from duel import settings
-    saved = []
-    monkeypatch.setattr(settings, "save", lambda data: saved.append(dict(data)))
-    game.settings["intro_seen"] = False
-    game.start_movie("intro")
-    assert not game.settings["intro_seen"] and not saved
-    game.end_movie()

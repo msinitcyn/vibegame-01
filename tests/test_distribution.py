@@ -44,7 +44,7 @@ def test_settings_defaults_have_address(monkeypatch, tmp_path):
                                "aim_stick": 6, "aim_mouse": 5, "aim_mode": "stick", "check_updates": True,
                                "accounts": {}, "recent_servers": [], "music_volume": 5, "sfx_volume": 5,
                                "keys": {}, "crash_reports": "ask", "last_update_check": None,
-                               "intro_seen": False}
+                               "intro_on_start": True}
 
 
 def test_icon():

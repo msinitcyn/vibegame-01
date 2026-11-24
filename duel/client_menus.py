@@ -167,6 +167,7 @@ class MenusMixin:
 
     def help_tab(self, page):
         self.help_page, self.help_index, self.help_full = page % HELP_PAGES, 0, False
+        self.about_row = 0
 
     def help_key(self, sc):
         """Справка: W/S — артефакт, A/D — вкладка, Enter — подробнее (сценка во весь экран), Esc — назад."""
@@ -178,8 +179,13 @@ class MenusMixin:
         n = len(self.help_kinds())
         if sc in (K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE):
             self.state = "menu"
-        elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE) and HELP_TABS[self.help_page] == "about":
-            self.watch_intro()
+        elif HELP_TABS[self.help_page] == "about" and sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
+            if getattr(self, "about_row", 0) == 1:
+                self.toggle_intro_on_start()      # «Об игре»: Enter на галке — снять / поставить
+            else:
+                self.watch_intro()
+        elif HELP_TABS[self.help_page] == "about" and sc in (K.KSCAN_W, K.KSCAN_UP, K.KSCAN_S, K.KSCAN_DOWN):
+            self.about_row = 0 if sc in (K.KSCAN_W, K.KSCAN_UP) else 1
         elif sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE) and n:
             self.help_full = True
         elif sc in (K.KSCAN_W, K.KSCAN_UP, K.KSCAN_S, K.KSCAN_DOWN) and n:

@@ -18,7 +18,7 @@ DEFAULTS = {"lang": "en", "name": "", "last_address": "localhost",
             "keys": {},                           # изменённые клавиши: {"blue": {"fire": скан-код}, ...}
             "crash_reports": "ask",               # отчёты о падениях серверу: "ask" — спросить, "yes", "no"
             "last_update_check": None,            # {"at": время, "result": "latest"|"new"|"offline", "v"}
-            "intro_seen": False}                  # ролик первого запуска уже показан
+            "intro_on_start": True}               # ролик (assets/movies/intro) при каждом запуске — галка в «Об игре»
 VOLUME_LEVELS = (0, 10)
 AIM_MODES = ("move", "stick")
 AIM_LEVELS = (1, 10)
@@ -36,12 +36,17 @@ def path(system=None):
     return base / "duel" / "settings.json"
 
 
+OBSOLETE = ("intro_seen",)        # больше не нужны — при загрузке выбрасываются
+
+
 def load():
     data = dict(DEFAULTS)
     try:
         data.update(json.loads(path().read_text(encoding="utf-8")))
     except (OSError, ValueError):
         pass
+    for key in OBSOLETE:
+        data.pop(key, None)
     return data
 
 
