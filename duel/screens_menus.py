@@ -208,6 +208,7 @@ class MenuScreensMixin:
         img = self.tiny_text.render(tr("settings.replay_dir_now", path=str(self.replay_folder())), True, GREY)
         s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 36)))
         self.button((70, HEIGHT - 30), "←", lambda: self.on_key(pygame.KSCAN_ESCAPE), w=80)
+        pygame.display.flip()
 
     def draw_replay_row(self, r, rect, sel):
         """Строка повтора: когда, режим, герои (цветом), кто победил, сколько длилась."""

@@ -88,3 +88,16 @@ def test_click_selects_then_second_click_watches(game, tmp_path):
     assert game.replay is not None
     game.close_replay()
     game.settings["replay_dir"] = ""
+
+
+def test_menu_screens_show_frame(game, monkeypatch):
+    """Каждый экран меню выводит кадр на дисплей (иначе картинка застывает — «Повторы» так и висели)."""
+    flips = []
+    monkeypatch.setattr(pygame.display, "flip", lambda: flips.append(1))
+    for state, prep in (("replays", game.open_replays), ("settings", None), ("menu", None), ("help", None)):
+        if prep:
+            prep()
+        game.state = state
+        flips.clear()
+        game.screen_frame(1 / 60)
+        assert flips, state
