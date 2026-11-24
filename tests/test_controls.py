@@ -82,7 +82,7 @@ def test_menu_keys(game):
     game.state = "menu"
     game.menu_index = 0
     # режимов против компьютера в хотсите нет; сетевая игра — пункты 2 и 3
-    assert game.menu == ["play", "net", "test", "help", "settings"]
+    assert game.menu == ["play", "net", "test", "help", "settings", "replays"]
     game.on_key(pygame.KSCAN_RETURN)
     assert game.state == "pick"                 # сначала выбор героев
     game.on_key(pygame.KSCAN_SPACE)

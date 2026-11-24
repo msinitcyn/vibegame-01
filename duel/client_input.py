@@ -74,6 +74,9 @@ class InputMixin:
         if self.state == "help":
             self.help_key(sc)
             return
+        if self.state == "replays":
+            self.replays_key(sc)
+            return
         if self.state == "settings":
             self.settings_key(sc)
             return
@@ -252,7 +255,7 @@ class InputMixin:
             return {**up, **ok, **back}
         if self.state == "account":                # имя и пароль — с клавиатуры; □/○ — назад
             return back
-        if self.state == "join":
+        if self.state in ("join", "replays"):
             return {**up, **ok, **back}
         if self.state == "lobby":                  # △ — ищу соперника, Share — разминка
             return {**up, **ok, **back, B.CONTROLLER_BUTTON_Y: B.KSCAN_F, B.CONTROLLER_BUTTON_BACK: B.KSCAN_T}

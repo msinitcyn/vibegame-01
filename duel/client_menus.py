@@ -12,6 +12,8 @@ from .config import DEFAULT_HERO, HELP_BASICS, HELP_LANDS, INTRO_MOVIE, HELP_PAG
 from .items import HELP_SECTIONS
 from .i18n import get_lang, guess_lang, LANGS, set_lang, t
 from .brain import LEVEL_NAMES
+from . import logs
+from .replay import load as replay_load
 from .update import restart as restart_updated
 from .client_common import Controls, PLAYER_IDS
 
@@ -114,7 +116,7 @@ class MenusMixin:
     def menu_label(self, i):
         return {"play": t("menu.two"), "net": t("menu.connect" if WEB else "menu.net"),
                 "test": t("menu.test", hp=TEST_HP), "help": t("menu.help"),
-                "settings": t("menu.settings"),
+                "settings": t("menu.settings"), "replays": t("menu.replays"),
                 "update": t("menu.update", v=self.updater.latest or "")}[self.menu[i]]
 
     def menu_select(self):
@@ -135,8 +137,64 @@ class MenusMixin:
         elif action == "update":
             self.state = "update"
             self.updater.start()
+        elif action == "replays":
+            self.open_replays()
         else:
             self.open_pick(MAX_HP)
+
+    # ------------------------------------------------------------------ «Повторы»
+
+    def replay_folder(self):
+        return logs.log_dir() / "replays"
+
+    def open_replays(self):
+        """Экран «Повторы»: записанные партии (новые сверху) — сами пишутся после каждой партии."""
+        self.state = "replays"
+        self.replay_index = 0
+        self.replay_list = []
+        for path in sorted(self.replay_folder().glob("*.json.gz"), reverse=True):
+            try:
+                data = replay_load(path)
+            except (OSError, ValueError, EOFError):
+                continue
+            res = data.get("result") or {}
+            self.replay_list.append({"path": path, "mode": data.get("mode", ""), "heroes": data.get("heroes") or {},
+                                     "winner": res.get("winner"), "time": res.get("time", data.get("length", 0) / 60),
+                                     "players": data.get("players") or {}, "tuning": data.get("tuning") or [],
+                                     "stamp": path.name[:13]})
+
+    def replays_key(self, sc):
+        K = pygame
+        n = len(self.replay_list)
+        if sc in (K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE):
+            self.state = "menu"
+        elif n and sc in (K.KSCAN_UP, K.KSCAN_W):
+            self.replay_index = (self.replay_index - 1) % n
+        elif n and sc in (K.KSCAN_DOWN, K.KSCAN_S):
+            self.replay_index = (self.replay_index + 1) % n
+        elif n and sc in (K.KSCAN_PAGEUP, K.KSCAN_PAGEDOWN):
+            self.replay_index = max(0, min(n - 1, self.replay_index + (10 if sc == K.KSCAN_PAGEDOWN else -10)))
+        elif n and sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
+            self.watch_replay(self.replay_index)
+
+    def watch_replay(self, i):
+        """Открыть повтор из списка; Esc в нём — обратно в список."""
+        self.replay_index = i
+        try:
+            data = replay_load(self.replay_list[i]["path"])
+        except (OSError, ValueError, EOFError, KeyError) as e:
+            self.menu_message = str(e)
+            return
+        self.replay_back = "replays"
+        self.start_replay(data)
+
+    def close_replay(self):
+        """Из повтора — в список повторов (подменённые лабораторией числа — вернуть)."""
+        if self.replay:
+            self.replay.close()
+        self.replay, self.replay_back = None, None
+        self.popups, self.win_time = [], 0
+        self.state = "replays"
 
     def close_settings(self):
         """Из настроек — туда, откуда пришли: в меню или обратно в партию (на паузу)."""

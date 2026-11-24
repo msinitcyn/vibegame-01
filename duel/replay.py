@@ -9,12 +9,16 @@
      "heroes": {"blue": "fire", "red": "frost"}, "players": {...},
      "ticks": [[такт, {"blue": [[dx, dy], fire, melee, slot, aim], ...}], ...],   # только изменившиеся
      "actions": [[такт, цвет, {"do": "give", ...}], ...],                         # тестовые команды
-     "result": {...summary() в конце...}}
+     "result": {...summary() в конце...},
+     "tuning": ["BASE_SPEED=140", ...]}                                            # лаборатория: другие числа
 
 Команда такта пишется, только если отличается от прошлой у этого игрока (идёт — не пишем каждый такт);
 выстрел, удар и ячейка — разовые, поэтому такт с ними пишется всегда.
 
-Посмотреть: python main.py --replay ФАЙЛ (пробел — пауза, ←/→ — медленнее/быстрее, ↑ — +10 с, R — сначала).
+Партии лаборатории баланса (tools/lab.py replay) — тот же формат, режим "lab"; если в них подменены
+параметры, они записаны в "tuning", и воспроизведение подменяет их так же (иначе партия разошлась бы).
+
+Посмотреть: в игре «Повторы» в главном меню, или python main.py --replay ФАЙЛ (пробел — пауза, ←/→ — медленнее/быстрее, ↑ — +10 с, R — сначала).
 Проверить без окна: python -m duel.replay ФАЙЛ — прогон и сверка итога с записанным.
 """
 import gzip
@@ -22,7 +26,7 @@ import json
 import time
 from pathlib import Path
 
-from . import testcmd
+from . import testcmd, tuning
 from .commands import Command
 from .match import STEP, Match
 
@@ -101,10 +105,13 @@ class Player:
     def __init__(self, data):
         self.data = data
         self.length = int(data.get("length", 0))
+        self.undo = None
         self.restart()
 
     def restart(self):
         d = self.data
+        if self.undo is None:                 # числа партии (лаборатория) — до создания матча
+            self.undo = tuning.apply(tuning.parse(d.get("tuning") or []))
         self.match = Match(int(d.get("hp", 10)), int(d["seed"]), d.get("heroes"))
         self.n = 0
         self.ti = self.ai = 0
@@ -144,11 +151,19 @@ class Player:
             self.step()
         return self.match
 
+    def close(self):
+        """Вернуть подменённые параметры (повтор закрыт)."""
+        if self.undo:
+            self.undo()
+            self.undo = None
+
 
 def check(path):
     """Прогнать повтор без окна и сравнить итог с записанным. Возвращает (совпало, текст)."""
     data = load(path)
-    m = Player(data).run()
+    player = Player(data)
+    m = player.run()
+    player.close()
     got, want = m.summary(), data.get("result")
     if want is None:
         return True, f"записанного итога нет; прогон: победил {got['winner']}, {got['time']} с"

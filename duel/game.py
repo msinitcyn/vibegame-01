@@ -88,7 +88,9 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.held = set()             # зажатые физические клавиши
         self.pads = Gamepads()
         # пункты меню; подписи — menu_label()
-        self.menu = ["play", "net", "test", "help", "settings"]
+        self.menu = ["play", "net", "test", "help", "settings"] + ([] if WEB else ["replays"])
+        self.replay_list, self.replay_index = [], 0       # экран «Повторы»: файлы и выбранный
+        self.replay_back = None       # повтор открыт из «Повторов» — Esc возвращает туда, а не закрывает игру
         self.paused = False           # пауза в партии (Esc): за одним компьютером матч стоит
         self.pause_index = 0
         self.settings_back = "menu"   # куда вернуться из настроек: в меню или в партию (с паузы)
@@ -328,6 +330,9 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         K = pygame
         r = self.replay
         if sc == K.KSCAN_ESCAPE:
+            if self.replay_back:
+                self.close_replay()
+                return
             pygame.event.post(pygame.event.Event(pygame.QUIT))
         elif sc == K.KSCAN_SPACE:
             self.replay_paused = not self.replay_paused
@@ -499,6 +504,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             self.draw_menu()
         elif self.state == "help":
             self.draw_help()
+        elif self.state == "replays":
+            self.draw_replays()
         elif self.state in ("keys", "settings"):
             if self.settings_back == "play":
                 self.background_play(dt)      # настройки с паузы: сеть и лобби живут дальше

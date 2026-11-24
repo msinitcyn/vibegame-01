@@ -49,7 +49,7 @@ def test_lab_game_result_and_report(capsys):
 
 
 def test_lab_overrides_apply_inside_game():
-    job = lab.jobs_for(1, ("normal", "hero"), ("normal", "hero"), tuning.parse(["MAX_HP=1"]), 60, 5)[0]
+    job = lab.jobs_for(1, ("normal", "hero"), ("normal", "hero"), ["MAX_HP=1"], 60, 5)[0]
     r = lab.play(job)
     assert r["length"] < 40                 # с одной жизнью партия короткая
     assert Match(seed=1).blue.hp == config.MAX_HP
@@ -59,3 +59,33 @@ def test_hero_pairs_cover_every_ordered_pair():
     import random
     pairs = lab.hero_pairs(60, random.Random(1))
     assert len(set(pairs)) == 30 and all(a != b for a, b in pairs)
+
+
+def test_lab_game_saved_as_replay_plays_the_same(tmp_path):
+    """Партия лаборатории (и с подменёнными числами) — в повтор; повтор даёт тот же итог, числа потом — прежние."""
+    from duel.replay import Player, load
+    job = lab.jobs_for(1, ("hard", "hero"), ("easy", "rush"), ["MAX_HP=5", "BASE_SPEED=150"], 120, 9)[0]
+    r = lab.play(job, record=True)
+    path = r["recorder"].save(tmp_path, r["match"])
+    data = load(path)
+    assert data["mode"] == "lab" and data["tuning"] == ["MAX_HP=5", "BASE_SPEED=150"]
+    assert data["players"]["blue"] == "hard · hero"
+    p = Player(data)
+    assert p.match.blue.max_hp == 5
+    m = p.run()
+    p.close()
+    assert getattr(m.winner, "id", m.winner) == (r["winner"] if r["winner"] != "timeout" else None)
+    assert round(m.match_time, 1) == r["length"]
+    assert config.MAX_HP != 5 and Match(seed=1).blue.speed == config.BASE_SPEED
+
+
+def test_lab_replay_command_picks_games(tmp_path, capsys):
+    import json
+    rows = [lab.play(j) for j in lab.jobs_for(3, ("normal", "hero"), ("normal", "hero"), [], 90, 4)]
+    f = tmp_path / "games.jsonl"
+    f.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
+    a, b = rows[1]["heroes"]
+    lab.main(["replay", str(f), "--pair", f"{lab.RU[a]},{lab.RU[b]}", "--out", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert "разошлась" not in out and ".json.gz" in out
+    assert len(list((tmp_path / "replays").glob("*-lab-*.json.gz"))) == 1

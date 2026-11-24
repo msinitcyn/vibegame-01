@@ -38,7 +38,7 @@ class Controls:
 
 # экраны (Game.state): лобби сервера — с соединением в лобби; меню — без партии на экране
 LOBBY_STATES = ("lobby", "account", "entry", "entering")
-MENU_STATES = ("menu", "help", "settings", "keys", "pick", "join", "crash_ask", "lang_pick") + LOBBY_STATES
+MENU_STATES = ("menu", "help", "settings", "keys", "pick", "join", "crash_ask", "lang_pick", "replays") + LOBBY_STATES
 
 PLAYER_IDS = ("blue", "red")      # первый геймпад — синий, второй — красный
 

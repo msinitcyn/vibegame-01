@@ -5,6 +5,13 @@
     .venv/bin/python tools/lab.py strats --level all --games 40      # есть ли выигрышная стратегия на уровне
     .venv/bin/python tools/lab.py sweep BASE_SPEED=110,126,140 --games 300   # как параметр меняет игру
     .venv/bin/python tools/lab.py knobs SPEED                        # какие параметры есть (фильтр по имени)
+    .venv/bin/python tools/lab.py report --games 600 --json lab.jsonl   # итоги партий — в файл
+    .venv/bin/python tools/lab.py replay lab.jsonl --pair земля,свет --winner right --count 3
+                     # эти партии — в повторы: смотреть в игре («Повторы» в главном меню)
+
+Повтор — та же партия заново (всё детерминировано: зерно, герои, боты, числа), записанная как обычный
+повтор игры (режим "lab", в повторе и подменённые числа). Выбор: --pick N (строка файла, с 1), --pair
+левый,правый (по-русски или fire/frost…), --winner left|right|draw, --comeback, --longest, --shortest.
 
 Любой режим: --set ИМЯ=знач (несколько раз; таблицы — ITEM_LEVEL.landswap=3) — партии с другими числами;
 --workers N — сколько процессов (по умолчанию все ядра); --json файл — сырые итоги партий.
@@ -35,6 +42,7 @@ from duel.brain import LEVELS, STRATEGIES, SmartBot  # noqa: E402
 from duel.commands import Command  # noqa: E402
 from duel.config import HEROES  # noqa: E402
 from duel.match import STEP, Match  # noqa: E402
+from duel.replay import Recorder  # noqa: E402
 
 SAMPLE = 0.5                       # раз в столько секунд — снимок жизней (для камбэков)
 COMEBACK_HP = 5                    # отставал на столько жизней и победил — камбэк
@@ -42,9 +50,9 @@ COMEBACK_HP = 5                    # отставал на столько жиз
 
 # ------------------------------------------------------------------ одна партия (в рабочем процессе)
 
-def play(job):
-    """Партия по заданию; итог — словарь (что нужно для отчёта)."""
-    undo = tuning.apply(job.get("overrides") or {})
+def play(job, record=False):
+    """Партия по заданию; итог — словарь (что нужно для отчёта); record — и запись повтора (r["recorder"])."""
+    undo = tuning.apply(tuning.parse(job.get("set")))
     try:
         heroes = job["heroes"]
         m = Match(seed=job["seed"], heroes={"blue": heroes[0], "red": heroes[1]})
@@ -53,8 +61,15 @@ def play(job):
         lows = {"blue": 0, "red": 0}           # самое большое отставание по жизням у каждой стороны
         first = {}
         every = int(SAMPLE / STEP)
+        rec = None
+        if record:
+            names = {pid: f"{job[pid][0]} · {job[pid][1]}" for pid in ("blue", "red")}
+            rec = Recorder(m, "lab", players=names, tuning=list(job.get("set") or []))
         for tick in range(int(job["limit"] / STEP)):
-            m.step(STEP, {pid: Command(*b.act()) for pid, b in bots.items()})
+            commands = {pid: Command(*b.act()) for pid, b in bots.items()}
+            if rec:
+                rec.tick(commands)
+            m.step(STEP, commands)
             for p in m.players:
                 o = m.other(p)
                 if "gear" not in first and p.gear:
@@ -72,7 +87,9 @@ def play(job):
         return {"seed": job["seed"], "winner": w or "timeout", "length": round(m.match_time, 1),
                 "heroes": heroes, "blue": job["blue"], "red": job["red"], "behind": lows, "first": first,
                 "used": {pid: m.stats[pid]["used"] for pid in ("blue", "red")},
-                "gear": {p.id: len(p.gear) for p in m.players}, "tag": job.get("tag")}
+                "gear": {p.id: len(p.gear) for p in m.players}, "tag": job.get("tag"),
+                "set": list(job.get("set") or []), "limit": job["limit"],
+                **({"recorder": rec, "match": m} if rec else {})}
     finally:
         undo()
 
@@ -97,9 +114,10 @@ def hero_pairs(n, rng):
     return out
 
 
-def jobs_for(n, blue, red, overrides, limit, seed, tag=None):
+def jobs_for(n, blue, red, sets, limit, seed, tag=None):
+    """Задания партий; sets — подмена чисел строками ["ИМЯ=знач", …] (так же пишется в итоги и повтор)."""
     rng = random.Random(seed)
-    return [{"seed": seed * 100000 + i, "heroes": h, "blue": blue, "red": red, "overrides": overrides,
+    return [{"seed": seed * 100000 + i, "heroes": h, "blue": blue, "red": red, "set": list(sets or []),
              "limit": limit, "tag": tag} for i, h in enumerate(hero_pairs(n, rng))]
 
 
@@ -185,6 +203,18 @@ def report(rs, title):
                 cells.append(f"{100 * p:6.0f}%{flag}")
         print(f"  {a:7}" + "".join(cells))
 
+    print("\nпо сторонам: «левый-правый-побед у левого» и наоборот (синий — левый):")
+    side_w, side_n = Counter(), Counter()
+    for r in d:
+        side_n[tuple(r["heroes"])] += 1
+        side_w[tuple(r["heroes"])] += r["winner"] == "blue"
+    for a in HEROES:
+        for b in HEROES:
+            if a == b:
+                continue
+            x, y = (a, b), (b, a)
+            print(f"  {RU[a]}-{RU[b]}-{left(side_w[x], side_n[x])}-{RU[b]}-{RU[a]}-{left(side_w[y], side_n[y])}"
+                  f"   (n={side_n[x]}/{side_n[y]})")
     print(f"\nкамбэки: победил, отставая на {COMEBACK_HP}+ жизней — {100 * m['comeback']:.0f}% побед")
     print("снежный ком (побеждает тот, кто первым…):")
     names = {"gear": "надел снаряжение", "item": "подобрал артефакт", "blood": "ранил соперника"}
@@ -207,20 +237,27 @@ def report(rs, title):
         print(f"  {kind:12} {rate(used_w[kind], used_n[kind])}  применений {times[kind]}")
 
 
+RU = {"fire": "огонь", "frost": "лёд", "nature": "природа", "dark": "тьма", "light": "свет", "earth": "земля"}
+
+
+def left(w, n):
+    return f"{100 * w / n:.0f}%" if n else "—"
+
+
 def other(pid):
     return "red" if pid == "blue" else "blue"
 
 
 # ------------------------------------------------------------------ режимы
 
-def cmd_report(a, overrides):
+def cmd_report(a):
     spec = (a.level, a.strategy)
-    rs = run(jobs_for(a.games, spec, spec, overrides, a.limit, a.seed), a.workers)
-    report(rs, f"уровень {a.level}, стратегия {a.strategy}" + (f", {fmt(overrides)}" if overrides else ""))
+    rs = run(jobs_for(a.games, spec, spec, a.set, a.limit, a.seed), a.workers)
+    report(rs, f"уровень {a.level}, стратегия {a.strategy}" + (f", {', '.join(a.set)}" if a.set else ""))
     return rs
 
 
-def cmd_strats(a, overrides):
+def cmd_strats(a):
     levels = list(LEVELS) if a.level == "all" else [a.level]
     names = list(STRATEGIES)
     all_rs = []
@@ -232,9 +269,9 @@ def cmd_strats(a, overrides):
                     continue
                 # каждая пара — за обе стороны поровну (перекос сторон не путать со стратегией)
                 half = max(1, a.games // 2)
-                jobs += jobs_for(half, (level, s1), (level, s2), overrides, a.limit, a.seed + 7 * i + j, (s1, s2))
+                jobs += jobs_for(half, (level, s1), (level, s2), a.set, a.limit, a.seed + 7 * i + j, (s1, s2))
                 if s1 != s2:
-                    jobs += jobs_for(half, (level, s2), (level, s1), overrides, a.limit, a.seed + 1000 + 7 * i + j,
+                    jobs += jobs_for(half, (level, s2), (level, s1), a.set, a.limit, a.seed + 1000 + 7 * i + j,
                                      (s2, s1))
         rs = run(jobs, a.workers)
         all_rs += rs
@@ -271,16 +308,15 @@ def cmd_strats(a, overrides):
     return all_rs
 
 
-def cmd_sweep(a, overrides):
+def cmd_sweep(a):
     name, _, values = a.param.partition("=")
     rows, all_rs = [], []
     for v in values.split(","):
-        ov = {**overrides, **tuning.parse([f"{name}={v}"])}
         spec = (a.level, a.strategy)
-        rs = run(jobs_for(a.games, spec, spec, ov, a.limit, a.seed, v), a.workers)
+        rs = run(jobs_for(a.games, spec, spec, [*a.set, f"{name}={v}"], a.limit, a.seed, v), a.workers)
         all_rs += rs
         rows.append((v, metrics(rs)))
-    print(f"\n=== {name}: уровень {a.level}, по {a.games} партий" + (f", {fmt(overrides)}" if overrides else ""))
+    print(f"\n=== {name}: уровень {a.level}, по {a.games} партий" + (f", {', '.join(a.set)}" if a.set else ""))
     heroes = list(HEROES)
     print(f"{'значение':>10} {'длит.':>6} {'90%':>5} {'синий':>6} {'камбэк':>7} {'снаряж.':>8} {'1-я кровь':>9}"
           f" {'разброс':>8} " + " ".join(f"{h[:6]:>6}" for h in heroes))
@@ -304,8 +340,52 @@ def cmd_knobs(a):
             print(f"  {k:28} {t}")
 
 
-def fmt(overrides):
-    return ", ".join(f"{'.'.join(k) if isinstance(k, tuple) else k}={v}" for k, v in overrides.items())
+HERO_BY_NAME = {**{h: h for h in HEROES}, **{v: k for k, v in RU.items()}, "лед": "frost"}
+
+
+def pick_games(rows, a):
+    """Строки итогов по выбору: --pick, --pair, --winner, --comeback, --longest/--shortest; не больше --count."""
+    if a.pick:
+        return [rows[n - 1] for n in a.pick if 0 < n <= len(rows)]
+    out = rows
+    if a.pair:
+        pair = [HERO_BY_NAME.get(x.strip().lower()) for x in a.pair.split(",")]
+        if len(pair) != 2 or None in pair:
+            raise SystemExit(f"--pair: два героя через запятую ({', '.join(RU.values())})")
+        out = [r for r in out if list(r["heroes"]) == pair]
+    if a.winner:
+        want = {"left": "blue", "right": "red"}.get(a.winner, a.winner)
+        out = [r for r in out if r["winner"] == want]
+    if a.comeback:
+        out = [r for r in out if r["winner"] in ("blue", "red") and r["behind"][r["winner"]] >= COMEBACK_HP]
+    if a.longest or a.shortest:
+        out = sorted(out, key=lambda r: r["length"], reverse=bool(a.longest))
+    return out[:a.count]
+
+
+def cmd_replay(a):
+    """Выбранные партии из файла итогов — заново, с записью повтора в папку повторов игры."""
+    from duel import logs
+    rows = [json.loads(line) for line in Path(a.file).read_text(encoding="utf-8").splitlines() if line.strip()]
+    chosen = pick_games(rows, a)
+    if not chosen:
+        print("таких партий в файле нет")
+        return []
+    folder = Path(a.out) if a.out else logs.log_dir()
+    for r in chosen:
+        job = {"seed": r["seed"], "heroes": r["heroes"], "limit": r.get("limit", 300.0)}
+        job.update({"blue": tuple(r["blue"]), "red": tuple(r["red"]), "set": r.get("set") or []})
+        again = play(job, record=True)
+        path = again["recorder"].save(folder, again["match"])
+        same = "" if again["winner"] == r["winner"] else f"  (!) в файле победил {r['winner']} — партия разошлась"
+        a_, b_ = r["heroes"]
+        print(f"{RU[a_]} — {RU[b_]}, победил {side_name(again['winner'])}, {again['length']:.0f} с: {path}{same}")
+    print("смотреть: в игре «Повторы» в главном меню (или .venv/bin/python main.py --replay ФАЙЛ)")
+    return chosen
+
+
+def side_name(w):
+    return {"blue": "левый", "red": "правый", "draw": "никто (ничья)", "timeout": "никто (не кончилась)"}.get(w, w)
 
 
 def main(argv=None):
@@ -326,14 +406,25 @@ def main(argv=None):
     sw.add_argument("param", help="ИМЯ=знач1,знач2,…")
     kn = sub.add_parser("knobs")
     kn.add_argument("filter", nargs="?")
+    rp = sub.add_parser("replay", help="партии из файла итогов (--json) — в повторы")
+    rp.add_argument("file")
+    rp.add_argument("--pick", type=int, nargs="+", help="номера строк файла (с 1)")
+    rp.add_argument("--pair", help="левый,правый: земля,свет")
+    rp.add_argument("--winner", choices=["left", "right", "draw", "timeout"])
+    rp.add_argument("--comeback", action="store_true", help="победил, отставая на 5+ жизней")
+    rp.add_argument("--longest", action="store_true")
+    rp.add_argument("--shortest", action="store_true")
+    rp.add_argument("--count", type=int, default=1, help="сколько партий (по умолчанию одна)")
+    rp.add_argument("--out", help="папка логов (по умолчанию — игры: повторы в её replays/)")
     a = ap.parse_args(argv)
     if a.mode == "knobs":
         return cmd_knobs(a)
+    if a.mode == "replay":
+        return cmd_replay(a)
     if a.level not in LEVELS and not (a.mode == "strats" and a.level == "all"):
         ap.error(f"уровень: {', '.join(LEVELS)}" + (" или all" if a.mode == "strats" else ""))
-    overrides = tuning.parse(a.set)
-    tuning.apply(overrides)()                    # проверка имён сразу, до тысяч партий
-    rs = {"report": cmd_report, "strats": cmd_strats, "sweep": cmd_sweep}[a.mode](a, overrides)
+    tuning.apply(tuning.parse(a.set))()          # проверка имён сразу, до тысяч партий
+    rs = {"report": cmd_report, "strats": cmd_strats, "sweep": cmd_sweep}[a.mode](a)
     if a.json:
         with open(a.json, "w", encoding="utf-8") as f:
             for r in rs:

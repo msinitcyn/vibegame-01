@@ -4,6 +4,7 @@
 import pygame
 
 from .platform import WEB
+REPLAY_MODES = ("hotseat", "test", "warmup", "net", "net-bot", "lab")
 from .config import (
     SHOT_COOLDOWN,
     HELP_BASICS,
@@ -176,6 +177,70 @@ class MenuScreensMixin:
         s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 40)))
         self.back_button()
         pygame.display.flip()
+
+    def draw_replays(self):
+        """«Повторы»: записанные партии, новые сверху; Enter или щелчок — смотреть."""
+        s = self.screen
+        s.fill(BG)
+        img = self.big.render(tr("replays.title"), True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 70)))
+        rows = self.replay_list
+        if not rows:
+            for k, line in enumerate(tr("replays.empty").split("\n")):
+                img = self.font.render(line, True, GREY)
+                s.blit(img, img.get_rect(center=(WIDTH // 2, 220 + k * 34)))
+        visible = 9
+        top = max(0, min(self.replay_index - visible // 2, len(rows) - visible))
+        for k, r in enumerate(rows[top:top + visible]):
+            i = top + k
+            sel = i == self.replay_index
+            rect = pygame.Rect(0, 0, 880, 40)
+            rect.center = (WIDTH // 2, 135 + k * 46)
+            pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=8)
+            pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=8)
+            self.draw_replay_row(r, rect, sel)
+            self.hit(rect, lambda i=i: self.watch_replay(i), lambda i=i: setattr(self, "replay_index", i))
+        if len(rows) > visible:
+            img = self.tiny_text.render(f"{self.replay_index + 1} / {len(rows)}", True, GREY)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 135 + visible * 46 - 14)))
+        img = self.small.render(tr("replays.hint"), True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 62)))
+        img = self.tiny_text.render(str(self.replay_folder()), True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 36)))
+        self.button((70, HEIGHT - 30), "←", lambda: self.on_key(pygame.KSCAN_ESCAPE), w=80)
+
+    def draw_replay_row(self, r, rect, sel):
+        """Строка повтора: когда, режим, герои (цветом), кто победил, сколько длилась."""
+        s = self.screen
+        st = r["stamp"]                                    # 20261124-1228…
+        when = f"{st[6:8]}.{st[4:6]} {st[9:11]}:{st[11:13]}" if len(st) >= 13 and st[8:9] == "-" else st
+        x = rect.x + 16
+        color = WHITE if sel else GREY
+        mode = r["mode"]
+        parts = [(when, color), (tr("replays.mode." + mode) if mode in REPLAY_MODES else mode, color)]
+        heroes = r["heroes"]
+        for pid in ("blue", "red"):
+            h = heroes.get(pid)
+            name = tr("hero." + h) if h else "?"
+            who = r["players"].get(pid)
+            parts.append((name + (f" ({who})" if who else ""), HERO_COLOR.get(h, color) if h else color))
+        w = r["winner"]
+        win = (tr("win.draw") if w == "draw" else tr("replays.won", side=tr("name." + w)) if w in ("blue", "red")
+               else tr("replays.unfinished"))
+        sec = int(r["time"] or 0)
+        parts += [(win, color), (f"{sec // 60}:{sec % 60:02d}", color)]
+        if r["tuning"]:
+            parts.append(("⚙ " + ", ".join(r["tuning"]), (230, 200, 120)))
+        for k, (text, c) in enumerate(parts):
+            if k:
+                sep = self.small.render("·" if k != 3 else "—", True, GREY)
+                s.blit(sep, sep.get_rect(midleft=(x, rect.centery)))
+                x += sep.get_width() + 10
+            img = self.small.render(text, True, c)
+            if x + img.get_width() > rect.right - 12:
+                break
+            s.blit(img, img.get_rect(midleft=(x, rect.centery)))
+            x += img.get_width() + 10
 
     def draw_settings(self):
         s = self.screen
