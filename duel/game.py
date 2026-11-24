@@ -11,6 +11,7 @@
 """
 
 import math
+import time
 
 import pygame
 
@@ -191,6 +192,25 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         """Галка «Показывать при старте» на вкладке «Об игре»."""
         self.settings["intro_on_start"] = not self.settings.get("intro_on_start", True)
         settings.save(self.settings)
+
+    def start_shake(self, power, seconds):
+        """Тряска поля: сильнее текущей — заменяет её, слабее — не мешает."""
+        now = time.monotonic()
+        if self.shake_power(now) < power:
+            self.shake = (float(power), now, float(seconds))
+
+    def shake_power(self, now=None):
+        """Сила тряски сейчас (затухает к нулю)."""
+        power, since, seconds = getattr(self, "shake", (0.0, 0.0, 0.0))
+        left = seconds - ((now if now is not None else time.monotonic()) - since)
+        return power * left / seconds if left > 0 and seconds else 0.0
+
+    def shake_offset(self):
+        k = self.shake_power()
+        if k <= 0:
+            return 0, 0
+        t = time.monotonic()
+        return int(math.sin(t * 53) * k), int(math.cos(t * 41) * k)
 
     def start_movie(self, name, back="menu"):
         """Показать ролик assets/movies/<name>; кончился или Esc — в back."""
@@ -583,10 +603,12 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
                 self.audio.item(ev[2])
 
     def handle_events(self, events):
-        """События матча → звук и надписи на языке этого игрока."""
+        """События матча → звук, тряска поля и надписи на языке этого игрока."""
         self.event_sounds(events)
         for ev in events:
             kind = ev[0]
+            if kind == "used" and len(ev) > 2 and ev[2] in config.EPIC_SHAKE:
+                self.start_shake(*config.EPIC_SHAKE[ev[2]])       # большое заклинание — поле дрожит
             if kind == "no_ammo":
                 self.popup(t("popup.noammo"), ev[1], BAD_TEXT)
             elif kind == "pickup":

@@ -436,6 +436,12 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
             rect = img.get_rect(center=(int(x), int(y)))
             rect.clamp_ip(pygame.Rect(0, TOP, WIDTH, BOTTOM - TOP))
             s.blit(img, rect)
+        dx, dy = self.shake_offset()
+        if dx or dy:                                   # большое заклинание: поле дрожит (панель сверху — нет)
+            area = pygame.Rect(0, TOP, WIDTH, BOTTOM - TOP)
+            field = s.subsurface(area).copy()
+            s.fill((0, 0, 0), area)
+            s.blit(field, (dx, TOP + dy))
         self.draw_hud()
         self.draw_countdown()
 
