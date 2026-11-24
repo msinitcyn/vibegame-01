@@ -15,7 +15,7 @@ import secrets
 
 from . import testcmd
 from .replay import Recorder
-from .bot import Bot
+from .brain import SmartBot
 from .commands import REACH_FAR, Command
 from . import config
 from .config import DEFAULT_HERO, HEROES
@@ -93,7 +93,7 @@ class Room:
         self.seats = {pid: Seat() for pid in PIDS}
         self.spectators = []          # соединения зрителей: получают снимки, ничего не меняют
         self.bot = bot
-        self.bots = {pid: Bot(i + 1, forward=0.0 if pid == "blue" else math.pi) for i, pid in enumerate(PIDS)}
+        self.bots = {pid: SmartBot(None, pid, "normal", i + 1) for i, pid in enumerate(PIDS)}   # бот на правилах
         self.tick_no = 0              # номер такта комнаты (для плавной анимации у клиентов)
         self.phase = "lobby"
         self.events = []              # события с прошлого снимка
@@ -537,6 +537,7 @@ class Room:
             if self.seats[pid].conn:
                 commands[pid] = self.pending[pid]
             elif pid in bots:
+                self.bots[pid].match = self.match         # партия могла смениться (реванш)
                 commands[pid] = Command(*self.bots[pid].act())
         # нажатия — один раз; направление и прицел держатся до следующей команды клиента
         self.pending = {pid: Command(move=self.pending[pid].move) for pid in PIDS}

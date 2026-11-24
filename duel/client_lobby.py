@@ -2,7 +2,6 @@
 вызовы и поиск соперника, разминка из лобби.
 
 Подмешивается в Game (duel/game.py); состояние — поля Game."""
-import math
 import time
 
 import pygame
@@ -13,7 +12,7 @@ from . import logs
 from .net import FEATURES, is_ws, server_features, version_tuple
 from . import config
 from . import settings
-from .bot import Bot
+from .brain import SmartBot
 from .commands import Command
 from .config import CHAT_MAX, DEFAULT_HERO, HEROES, LOBBY_CHAT_KEEP
 from .discovery import Finder
@@ -592,7 +591,7 @@ class LobbyMixin:
         mine = (getattr(self, "heroes", None) or DEFAULT_HERO).get("blue", DEFAULT_HERO["blue"])
         self.match = Match()
         self.match.set_heroes({me: mine, other: next(h for h in HEROES if h != mine)})
-        self.warm_bot = Bot(7, forward=0.0 if other == "blue" else math.pi)
+        self.warm_bot = SmartBot(self.match, other, self.bot_level(), 7)
         self.chat_system(t("cmd.test_hello", **self.hint_keys()))
         self.warmup = True
         self.lobby_notice = None

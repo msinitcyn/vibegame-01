@@ -10,7 +10,6 @@
     screens*.py       — отрисовка (ScreensMixin)
 """
 
-import math
 
 import pygame
 
@@ -18,7 +17,7 @@ from .platform import WEB
 from . import config
 from . import settings
 from .audio import Audio, MUSIC_END
-from .bot import Bot
+from .brain import LEVEL_NAMES, SmartBot
 from .replay import Player as ReplayPlayer, Recorder
 from . import logs
 from .logs import log
@@ -124,7 +123,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.menu_index = 0
         self.walk_to = None           # кнопка мыши «идти»: куда идёт маг; walk_hold — кнопка зажата
         self.walk_hold, self.walk_pid, self.walk_code = False, None, None
-        self.settings_rows = ["lang", "name", "aim_mode", "aim_stick", "aim_mouse", "music", "sfx", "keys",
+        self.settings_rows = ["lang", "name", "aim_mode", "aim_stick", "aim_mouse", "bot_level", "music", "sfx", "keys",
                               "updates", "check_now", "crash_reports", "back"]
         if WEB:                           # в браузере: прицел «по движению» не бывает, обновлений и отчётов нет
             self.settings_rows = [r for r in self.settings_rows
@@ -183,6 +182,11 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
                 self.open_lang_pick(then_intro=True)      # самый первый запуск: язык, потом ролик
             elif intro:
                 self.first_start_intro()
+
+    def bot_level(self):
+        """Сложность бота из настроек: easy / normal / hard."""
+        level = self.settings.get("bot_level", "normal")
+        return level if level in LEVEL_NAMES else "normal"
 
     def first_start_intro(self):
         """Запуск игры: ролик (если в «Об игре» стоит галка «Показывать при старте»), потом — туда, куда шли
@@ -249,7 +253,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
     def start(self, hp=MAX_HP, heroes=None, bot=False):
         """Новая партия двух игроков (тестовый режим — другое число жизней и бот за красного) — после отсчёта."""
         self.start_hp = hp
-        self.test_bot = Bot(7, forward=math.pi) if bot else None
+        self.test_bot = SmartBot(None, "red", self.bot_level(), 7) if bot else None    # бот на правилах
         if bot:
             self.chat_system(t("cmd.test_hello", **self.hint_keys()))
         self.heroes = dict(heroes or DEFAULT_HERO)
@@ -283,7 +287,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         # без зерна — каждый раз новая партия; герои — выбранные перед партией
         self.match = Match(self.start_hp, seed, getattr(self, "heroes", None))
         if getattr(self, "test_bot", None):   # новая партия — бот снова играет (/bot stop — на одну партию)
-            self.test_bot = Bot(7, forward=math.pi)
+            self.test_bot = SmartBot(self.match, "red", self.bot_level(), 7)
         self.popups = []              # [текст, x, y, время, цвет]
         self.pending = {pid: Command() for pid in PLAYER_IDS}   # нажатия до следующего такта
         self.time_acc = 0.0           # накопленное время кадров для фиксированного такта

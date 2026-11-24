@@ -33,6 +33,7 @@ DEFAULTS = {"lang": "en", "name": "", "last_address": "localhost",
             "keys": {},                           # изменённые клавиши: {"blue": {"fire": скан-код}, ...}
             "crash_reports": "ask",               # отчёты о падениях серверу: "ask" — спросить, "yes", "no"
             "last_update_check": None,            # {"at": время, "result": "latest"|"new"|"offline", "v"}
+            "bot_level": "normal",                # сложность бота: easy / normal / hard
             "intro_on_start": True,               # ролик (assets/movies/intro) при каждом запуске — галка в «Об игре»
             "lang_chosen": False}                 # язык выбран (на экране выбора при первом запуске или в настройках)
 VOLUME_LEVELS = (0, 10)

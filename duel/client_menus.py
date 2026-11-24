@@ -11,6 +11,7 @@ from . import settings
 from .config import DEFAULT_HERO, HELP_BASICS, HELP_LANDS, INTRO_MOVIE, HELP_PAGES, HELP_TABS, HERO_ONLY_ITEMS, HEROES, MAX_HP, TEST_HP
 from .items import HELP_SECTIONS
 from .i18n import get_lang, guess_lang, LANGS, set_lang, t
+from .brain import LEVEL_NAMES
 from .update import restart as restart_updated
 from .client_common import Controls, PLAYER_IDS
 
@@ -322,6 +323,13 @@ class MenusMixin:
                 modes = settings.AIM_MODES
                 self.settings["aim_mode"] = modes[(modes.index(self.settings.get("aim_mode", "move")) + 1)
                                                   % len(modes)]
+                settings.save(self.settings)
+        elif row == "bot_level":                  # сложность бота: лёгкий / обычный / сложный
+            step = {K.KSCAN_A: -1, K.KSCAN_LEFT: -1, K.KSCAN_D: 1, K.KSCAN_RIGHT: 1,
+                    K.KSCAN_RETURN: 1, K.KSCAN_KP_ENTER: 1, K.KSCAN_SPACE: 1}.get(sc)
+            if step:
+                levels = list(LEVEL_NAMES)
+                self.settings["bot_level"] = levels[(levels.index(self.bot_level()) + step) % len(levels)]
                 settings.save(self.settings)
         elif row in ("aim_stick", "aim_mouse"):
             step = {K.KSCAN_A: -1, K.KSCAN_LEFT: -1, K.KSCAN_D: 1, K.KSCAN_RIGHT: 1}.get(sc)
