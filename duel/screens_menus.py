@@ -199,7 +199,7 @@ class MenuScreensMixin:
             pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=8)
             pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=8)
             self.draw_replay_row(r, rect, sel)
-            self.hit(rect, lambda i=i: self.watch_replay(i), lambda i=i: setattr(self, "replay_index", i))
+            self.hit(rect, lambda i=i: self.replay_click(i))     # щелчок — выбрать, ещё щелчок — смотреть
         if len(rows) > visible:
             img = self.tiny_text.render(f"{self.replay_index + 1} / {len(rows)}", True, GREY)
             s.blit(img, img.get_rect(center=(WIDTH // 2, 135 + visible * 46 - 14)))

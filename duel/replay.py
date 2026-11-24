@@ -84,6 +84,10 @@ class Recorder:
             folder.mkdir(parents=True, exist_ok=True)
             name = time.strftime("%Y%m%d-%H%M%S") + f"-{self.head['mode']}-{self.head['seed']}.json.gz"
             path = folder / name
+            k = 2
+            while path.exists():                  # та же секунда и то же зерно — не затирать
+                path = folder / name.replace(".json.gz", f"-{k}.json.gz")
+                k += 1
             data = {**self.data(match), "version": version()}
             with gzip.open(path, "wt", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, separators=(",", ":"))

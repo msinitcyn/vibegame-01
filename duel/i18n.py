@@ -92,7 +92,7 @@ TEXTS = {
         
         "replays.title": "Повторы",
         "replays.empty": "Повторов пока нет.\nОни записываются сами после каждой партии (последние 50).\nПартии лаборатории баланса: tools/lab.py replay",
-        "replays.hint": "↑/↓ — выбрать, Enter — смотреть, Esc — в настройки; в повторе: пробел — пауза, ←/→ — скорость",
+        "replays.hint": "↑/↓ или щелчок — выбрать, Enter или щелчок по выбранной — смотреть, Esc — в настройки",
         "replays.won": "победил {side}",
         "replays.unfinished": "не доиграна",
         "replays.mode.hotseat": "вдвоём",
@@ -618,7 +618,7 @@ TEXTS = {
         
         "replays.title": "Replays",
         "replays.empty": "No replays yet.\nThey are recorded after every match (the last 50 are kept).\nBalance lab matches: tools/lab.py replay",
-        "replays.hint": "↑/↓ — choose, Enter — watch, Esc — to settings; in a replay: space — pause, ←/→ — speed",
+        "replays.hint": "↑/↓ or click — choose, Enter or click the chosen one — watch, Esc — to settings",
         "replays.won": "{side} won",
         "replays.unfinished": "unfinished",
         "replays.mode.hotseat": "two players",
@@ -1143,7 +1143,7 @@ TEXTS = {
         
         "replays.title": "Uusinnat",
         "replays.empty": "Uusintoja ei vielä ole.\nNe tallentuvat itsestään jokaisen ottelun jälkeen (viimeiset 50).\nTasapainolaboratorion ottelut: tools/lab.py replay",
-        "replays.hint": "↑/↓ — valitse, Enter — katso, Esc — asetuksiin; uusinnassa: väli — tauko, ←/→ — nopeus",
+        "replays.hint": "↑/↓ tai napsautus — valitse, Enter tai valitun napsautus — katso, Esc — asetuksiin",
         "replays.won": "{side} voitti",
         "replays.unfinished": "kesken",
         "replays.mode.hotseat": "kaksinpeli",

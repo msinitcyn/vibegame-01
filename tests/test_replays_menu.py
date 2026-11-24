@@ -40,6 +40,9 @@ def test_advanced_settings_folder_list_and_watch(game, tmp_path):
     game.on_key(pygame.KSCAN_RETURN)
     assert game.state == "replays" and game.replay_list[0]["path"] == path
     game.draw_replays()
+    game.on_key(pygame.KSCAN_RETURN)                   # то же нажатие / двойной щелчок — повтор не запускает
+    assert game.state == "replays" and game.replay is None
+    game.replays_opened -= 1000
     game.on_key(pygame.KSCAN_RETURN)
     assert game.replay is not None and game.match.blue.speed == 170
     game.on_key(pygame.KSCAN_ESCAPE)                   # из повтора — в список
@@ -70,3 +73,18 @@ def test_replay_dir_backspace(game):
     assert game.settings["replay_dir"] == "/tmp/a"
     game.settings["replay_dir"] = ""
     game.close_advanced()
+
+
+def test_click_selects_then_second_click_watches(game, tmp_path):
+    game.settings["replay_dir"] = str(tmp_path)
+    write_replay(tmp_path)
+    write_replay(tmp_path)
+    game.open_replays()
+    game.replays_opened -= 1000
+    assert len(game.replay_list) == 2 and game.replay_index == 0
+    game.replay_click(1)                                # первый щелчок — выбрать
+    assert game.replay_index == 1 and game.replay is None
+    game.replay_click(1)                                # второй — смотреть
+    assert game.replay is not None
+    game.close_replay()
+    game.settings["replay_dir"] = ""

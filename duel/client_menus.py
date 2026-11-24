@@ -15,6 +15,7 @@ from .brain import LEVEL_NAMES
 from .replay import folder as replay_dir, load as replay_load
 
 PATH_MAX = 400
+REPLAYS_GUARD_MS = 400            # столько после открытия «Повторов» список не запускает повтор
 
 
 def clipboard_text():
@@ -178,6 +179,7 @@ class MenusMixin:
         self.state = "replays"
         self.replay_index = 0
         self.replay_list = []
+        self.replays_opened = pygame.time.get_ticks()    # первые мгновения нажатия не считаются (двойной щелчок)
         for path in sorted(self.replay_folder().glob("*.json.gz"), reverse=True):
             try:
                 data = replay_load(path)
@@ -200,8 +202,19 @@ class MenusMixin:
             self.replay_index = (self.replay_index + 1) % n
         elif n and sc in (K.KSCAN_PAGEUP, K.KSCAN_PAGEDOWN):
             self.replay_index = max(0, min(n - 1, self.replay_index + (10 if sc == K.KSCAN_PAGEDOWN else -10)))
-        elif n and sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE):
+        elif n and sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE) and self.replays_ready():
             self.watch_replay(self.replay_index)
+
+    def replays_ready(self):
+        """Список только что открыт (тем же нажатием или двойным щелчком) — повтор не запускать."""
+        return pygame.time.get_ticks() - getattr(self, "replays_opened", -10 ** 9) >= REPLAYS_GUARD_MS
+
+    def replay_click(self, i):
+        """Щелчок по строке списка: невыбранная — выбрать, выбранная — смотреть."""
+        if i != self.replay_index:
+            self.replay_index = i
+        elif self.replays_ready():
+            self.watch_replay(i)
 
     def watch_replay(self, i):
         """Открыть повтор из списка; Esc в нём — обратно в список."""
