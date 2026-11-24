@@ -975,8 +975,8 @@ class Match:
             m.x, m.y = o.x + (m.x - o.x) / d * ZOMBIE_LEASH, o.y + (m.y - o.y) / d * ZOMBIE_LEASH
 
     def update_zombie(self, m, dt):
-        """Зомби: бьёт мобов, нападающих на хозяина, а если их нет — ближайшего из соперника хозяина и других
-        мобов (не своих зомби); всё — только рядом с хозяином (ZOMBIE_LEASH)."""
+        """Зомби защищает хозяина: бьёт мобов, которые злы на него (или его двойников) и в радиусе ZOMBIE_LEASH
+        вокруг хозяина; а нет таких — соперника, если тот в этом радиусе. Посторонних мобов не трогает."""
         m.zombie_life -= dt
         m.flash = max(0.0, m.flash - dt)
         m.heal_fx = max(0.0, m.heal_fx - dt)
@@ -989,13 +989,11 @@ class Match:
             return
         owner = m.zombie_of
         near = lambda u: math.hypot(u.x - owner.x, u.y - owner.y) <= ZOMBIE_LEASH     # noqa: E731
-        dist_to = lambda u: math.hypot(u.x - m.x, u.y - m.y)                          # noqa: E731
-        attackers = [x for x in self.mobs if x.alive and x.zombie_of is None and x.target is owner and near(x)]
+        mine = [owner] + self.clones_of(owner)
+        attackers = [x for x in self.mobs if x.alive and x.zombie_of is None and x.target in mine and near(x)]
         foe = self.other(owner)
-        others = [x for x in self.mobs if x.alive and x is not m and x.zombie_of is not owner and near(x)]
-        if near(foe) and not self.hidden(foe) and not foe.offstage:
-            others.append(foe)
-        target = min(attackers or others, key=dist_to) if (attackers or others) else None
+        target = (min(attackers, key=lambda x: math.hypot(x.x - m.x, x.y - m.y)) if attackers
+                  else foe if near(foe) and not self.hidden(foe) and not foe.offstage else None)
         if target is None:                    # целей рядом нет — к хозяину
             m.windup = 0.0
             self.zombie_follow(m, owner, dt)
@@ -1012,8 +1010,7 @@ class Match:
             m.swing_hit = dist <= reach + MOB_REACH_EXTRA
             if m.swing_hit:
                 if isinstance(target, Mob):
-                    # на хозяина и так злятся; посторонний моб от удара зомби на хозяина не злится
-                    target.hurt(owner, anger=target.target is owner)
+                    target.hurt(owner)
                 elif not target.shield_absorb():
                     self.hurt_player(target, MOB_DAMAGE)
             return

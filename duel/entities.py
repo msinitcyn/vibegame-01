@@ -694,14 +694,12 @@ class Mob:
         self.swap, self.swap_by = MOBSWAP_FX, caster
         self.swap_dir = None if target is None else math.atan2(target.y - self.y, target.x - self.x)
 
-    def hurt(self, attacker, damage=1, anger=True):
-        """Попадание: моб злится на того, кто ударил (маг или двойник); anger=False — не злится (удар зомби)."""
+    def hurt(self, attacker, damage=1):
+        """Попадание: моб злится на того, кто ударил (маг или двойник)."""
         self.hp -= damage
         self.flash = 0.12
         hero = getattr(attacker, "owner", attacker)
-        if not anger:
-            pass
-        elif "mobpeace" in hero.effects:        # «Мир с мобами» хозяина: не злит
+        if "mobpeace" in hero.effects:        # «Мир с мобами» хозяина: не злит
             if self.target is attacker:
                 self.target = None
         elif "firmground" in hero.effects:    # «Твёрдая почва»: Земля для мобов свой — не злит, злой бьёт дальше

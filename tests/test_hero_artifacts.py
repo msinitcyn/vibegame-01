@@ -569,20 +569,22 @@ def test_client_sends_distance_to_cursor(game):
     assert game.reach_for("red") == REACH_FAR
 
 
-def test_zombies_attack_other_mobs_nearby_without_angering_them():
-    """Зомби бьют и посторонних мобов рядом с хозяином; моб от удара зомби на хозяина не злится."""
+def test_zombies_guard_owner_only_from_angry_mobs():
+    """Зомби бьют только мобов, злых на хозяина, в радиусе вокруг хозяина — и дальнобойных у края их дальности;
+    посторонних не трогают. Радиус зомби — не меньше дальности дальнобойного моба."""
+    from duel.config import MOB_RANGE, ZOMBIE_LEASH, ZOMBIE_RISE
+    assert ZOMBIE_LEASH >= MOB_RANGE
     m = dark_with_mobs(n=1)
     b = m.blue
     m.apply_item(b, "zombies")
-    z = m.mobs[0]
-    other = Mob(b.x + 60, b.y + 40, 6)                    # посторонний спокойный моб рядом
-    m.mobs.append(other)
-    step(m, 4.0)
-    assert other.hp < 6 and other.target is None
-    far = Mob(b.x + 600, b.y, 6)                           # далеко от хозяина — не трогают
-    m.mobs.append(far)
-    step(m, 2.0)
-    assert far.hp == 6 and z.alive
+    step(m, ZOMBIE_RISE + 0.1)
+    calm = Mob(b.x + 60, b.y + 40, 6)                     # спокойный рядом — не трогают
+    shooter = Mob(b.x + MOB_RANGE - 20, b.y, 6, ranged=True)   # дальнобойный злой — у края своей дальности
+    shooter.target = b
+    m.mobs += [calm, shooter]
+    step(m, 5.0)
+    assert calm.hp == 6 and calm.target is None
+    assert shooter.hp < 6
 
 
 def test_heal_goes_to_own_zombie_under_cursor_else_self():
