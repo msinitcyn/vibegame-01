@@ -35,10 +35,10 @@ DEFAULT_KEYS = {
             "item4": (K.KSCAN_EQUALS, _N)},
     "common": {"pause": (K.KSCAN_P, _N), "chat": (K.KSCAN_T, _N)},
 }
-# «Один игрок» (сеть, разминка, тест с ботом) — мышью: ЛКМ — идти к курсору, ПКМ — стрелять, E — удар вблизи;
-# клавиатура (WASD, пробел) — тоже работает. Настраивается отдельно от «Вдвоём».
-DEFAULT_KEYS["net"] = {**DEFAULT_KEYS["blue"], "fire": (K.KSCAN_SPACE, M_RIGHT), "melee": (K.KSCAN_E, _N),
-                       "walk": (M_LEFT, _N)}
+# «Один игрок» (сеть, разминка, тест с ботом): WASD — ходить, мышь — целиться, ЛКМ / пробел — стрелять,
+# ПКМ / E — удар вблизи (как у левого игрока: пятиться и отстреливаться удобнее, чем «идти к курсору» —
+# его можно назначить в «Клавишах»). Настраивается отдельно от «Вдвоём».
+DEFAULT_KEYS["net"] = dict(DEFAULT_KEYS["blue"])
 GROUP_ACTIONS = {"blue": ACTIONS, "red": ACTIONS, "net": ACTIONS, "common": COMMON_ACTIONS}
 # в каком наборе клавиши не должны повторяться (занятая — меняется местами)
 DOMAINS = {"blue": ("blue", "red", "common"), "red": ("blue", "red", "common"), "net": ("net", "common"),

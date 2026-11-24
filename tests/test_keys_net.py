@@ -79,14 +79,15 @@ def test_bot_test_uses_one_player_set(game):
         game.apply_keys()
 
 
-def test_one_player_mouse_defaults():
-    """«Один игрок»: ЛКМ — идти к курсору, ПКМ — стрелять, E — удар; «Вдвоём» — как раньше."""
+def test_one_player_defaults_wasd_and_mouse():
+    """«Один игрок»: как левый игрок — WASD ходить, ЛКМ/пробел стрелять, ПКМ/E удар; «идти к курсору» не назначено."""
     import pygame
-    from duel import keys
+    from duel import keys, settings
     net, blue = keys.DEFAULT_KEYS["net"], keys.DEFAULT_KEYS["blue"]
-    assert keys.M_LEFT in net["walk"] and keys.M_RIGHT in net["fire"] and pygame.KSCAN_E in net["melee"]
-    assert pygame.KSCAN_SPACE in net["fire"] and keys.M_LEFT not in net["fire"] + net["melee"]
-    assert keys.M_LEFT in blue["fire"] and keys.M_RIGHT in blue["melee"] and blue["walk"] == (None, None)
+    assert net == blue and net["walk"] == (None, None) and pygame.KSCAN_W in net["up"]
+    assert keys.M_LEFT in net["fire"] and pygame.KSCAN_SPACE in net["fire"]
+    assert keys.M_RIGHT in net["melee"] and pygame.KSCAN_E in net["melee"]
+    assert settings.DEFAULTS["aim_mode"] == "stick"                 # целятся мышью
 
 
 def test_custom_key_wins_over_new_default():
