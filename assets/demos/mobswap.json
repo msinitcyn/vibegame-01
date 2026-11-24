@@ -38,24 +38,8 @@
     ]
   },
   "script": [
-    {
-      "t": 0.0,
-      "who": "red",
-      "aim_at": "blue"
-    },
-    {
-      "t": 0.45,
-      "who": "blue",
-      "item": "mobswap"
-    },
-    {
-      "t": [
-        2.3,
-        3.9
-      ],
-      "every": 0.6,
-      "who": "red",
-      "melee": true
-    }
+    {"t": 0.0, "do": "aim", "who": "red", "at": "blue"},
+    {"t": 0.45, "do": "cast", "who": "blue", "item": "mobswap"},
+    {"t": [2.3, 3.9], "every": 0.6, "do": "melee", "who": "red"}
   ]
 }

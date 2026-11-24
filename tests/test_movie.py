@@ -5,7 +5,16 @@ import pytest
 from duel import movie
 from duel.config import HEROES, REVEAL_TIME, TOP, WIDTH
 from duel.items import ITEMS
-from duel.movie import API, ASPECT, FRAME, Movie, Stage, fit_camera, load_subs, parse_srt
+from duel.movie import ASPECT, FRAME, Movie, load_subs, parse_srt
+from duel.scene import API, Scene, fit_view
+
+
+def Stage(data):
+    return Scene(data, ASPECT)
+
+
+def fit_camera(view):
+    return fit_view(view, ASPECT)
 
 
 def run(stage, seconds):

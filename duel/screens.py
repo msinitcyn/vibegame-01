@@ -409,6 +409,20 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
                 surf.blit(swapped, (0, TOP))
                 swapped.set_alpha(None)
 
+    def scene_frame(self, snap, lands, view, size):
+        """Кадр сцены (сценки «Обучения», ролика): поле и фигуры по снимку, участок view (x, y, w, h — уже
+        в пропорциях size) — картинкой size. Крупнее поля — по пикселям (чётко), мельче — сглаженно."""
+        field = self.__dict__.get("_scene_field")
+        if field is None:
+            field = self._scene_field = pygame.Surface((WIDTH, HEIGHT))
+        self.blit_field(field, snap, lands)
+        draw_field(field, snap, self.tiny)
+        x, y, w, h = view
+        rect = pygame.Rect(round(x), round(y), max(1, round(w)), max(1, round(h))).clip(field.get_rect())
+        part = field.subsurface(rect)
+        return (pygame.transform.scale(part, size) if rect.w <= size[0]
+                else pygame.transform.smoothscale(part, size))
+
     def draw(self):
         s = self.screen
         self.blit_field(s, self.snap)

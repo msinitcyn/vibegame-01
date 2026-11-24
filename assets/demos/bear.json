@@ -29,38 +29,9 @@
     ]
   },
   "script": [
-    {
-      "t": 0.0,
-      "who": "blue",
-      "aim_at": [
-        580,
-        170
-      ]
-    },
-    {
-      "t": 0.6,
-      "who": "blue",
-      "item": "bear"
-    },
-    {
-      "t": [
-        1.6,
-        2.35
-      ],
-      "who": "blue",
-      "move": [
-        1,
-        0
-      ]
-    },
-    {
-      "t": [
-        2.4,
-        3.1
-      ],
-      "every": 0.6,
-      "who": "blue",
-      "melee": true
-    }
+    {"t": 0.0, "do": "aim", "who": "blue", "at": [580, 170]},
+    {"t": 0.6, "do": "cast", "who": "blue", "item": "bear"},
+    {"t": [1.6, 2.35], "do": "move", "who": "blue", "dir": [1, 0]},
+    {"t": [2.4, 3.1], "every": 0.6, "do": "melee", "who": "blue"}
   ]
 }

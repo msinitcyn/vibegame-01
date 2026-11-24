@@ -22,33 +22,9 @@
     }
   },
   "script": [
-    {
-      "t": 0.0,
-      "who": "blue",
-      "aim_at": "red"
-    },
-    {
-      "t": [
-        0.2,
-        1.0
-      ],
-      "every": 0.05,
-      "who": "blue",
-      "fire": true
-    },
-    {
-      "t": 1.2,
-      "who": "blue",
-      "item": "rapid"
-    },
-    {
-      "t": [
-        1.6,
-        3.6
-      ],
-      "every": 0.05,
-      "who": "blue",
-      "fire": true
-    }
+    {"t": 0.0, "do": "aim", "who": "blue", "at": "red"},
+    {"t": [0.2, 1.0], "every": 0.05, "do": "fire", "who": "blue"},
+    {"t": 1.2, "do": "cast", "who": "blue", "item": "rapid"},
+    {"t": [1.6, 3.6], "every": 0.05, "do": "fire", "who": "blue"}
   ]
 }

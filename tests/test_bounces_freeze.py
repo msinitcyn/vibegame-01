@@ -101,10 +101,10 @@ def test_firmground_turns_awake_guardians_back_to_statues():
 
 
 def test_demo_view_keeps_box_proportions():
-    from duel.demos import fit_view
-    assert fit_view((340, 90, 640, 150), (632, 316), (0, 84, 1000, 640)) == (340, 84, 640, 320)   # шире — выше
-    assert fit_view((200, 300, 100, 100), (200, 100), (0, 84, 1000, 640)) == (150, 300, 200, 100)  # уже — шире
-    x, y, w, h = fit_view((900, 600, 400, 100), (2, 1), (0, 84, 1000, 640))
+    from duel.scene import fit_view
+    assert fit_view((340, 90, 640, 150), 2.0, (0, 84, 1000, 640)) == (340, 84, 640, 320)   # шире — выше
+    assert fit_view((200, 300, 100, 100), 2.0, (0, 84, 1000, 640)) == (150, 300, 200, 100)  # уже — шире
+    x, y, w, h = fit_view((900, 600, 400, 100), 2.0, (0, 84, 1000, 640))
     assert w == 2 * h and x + w <= 1000 and y + h <= 724                       # за край поля не выходит
 
 

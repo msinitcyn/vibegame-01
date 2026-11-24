@@ -1,14 +1,28 @@
 {
-  "heroes": {"blue": "nature", "red": "fire"},
-  "view": [340, 90, 320, 160],
+  "heroes": {
+    "blue": "nature",
+    "red": "fire"
+  },
+  "view": [
+    340,
+    90,
+    320,
+    160
+  ],
   "length": 5.0,
   "speed": 0.5,
   "setup": {
-    "blue": {"x": 400, "y": 170},
-    "red": {"x": 900, "y": 600}
+    "blue": {
+      "x": 400,
+      "y": 170
+    },
+    "red": {
+      "x": 900,
+      "y": 600
+    }
   },
   "script": [
-    {"t": 0.0, "who": "blue", "aim_at": [700, 170]},
-    {"t": 0.5, "who": "blue", "item": "trees"}
+    {"t": 0.0, "do": "aim", "who": "blue", "at": [700, 170]},
+    {"t": 0.5, "do": "cast", "who": "blue", "item": "trees"}
   ]
 }

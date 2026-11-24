@@ -3,17 +3,30 @@
     "blue": "earth",
     "red": "fire"
   },
-  "view": [220, 290, 420, 210],
+  "view": [
+    220,
+    290,
+    420,
+    210
+  ],
   "length": 6.0,
   "speed": 0.7,
   "setup": {
-    "blue": {"x": 262, "y": 404},
-    "red": {"x": 900, "y": 640},
-    "guardians": ["blue"]
+    "blue": {
+      "x": 262,
+      "y": 404
+    },
+    "red": {
+      "x": 900,
+      "y": 640
+    },
+    "guardians": [
+      "blue"
+    ]
   },
   "script": [
-    {"t": [0.3, 1.2], "who": "blue", "move": [1, 0]},
-    {"t": 2.6, "who": "blue", "item": "firmground"},
-    {"t": [3.6, 5.4], "who": "blue", "move": [1, 0]}
+    {"t": [0.3, 1.2], "do": "move", "who": "blue", "dir": [1, 0]},
+    {"t": 2.6, "do": "cast", "who": "blue", "item": "firmground"},
+    {"t": [3.6, 5.4], "do": "move", "who": "blue", "dir": [1, 0]}
   ]
 }

@@ -21,27 +21,8 @@
     }
   },
   "script": [
-    {
-      "t": 0.0,
-      "who": "blue",
-      "aim_at": [
-        680,
-        170
-      ]
-    },
-    {
-      "t": 0.5,
-      "who": "blue",
-      "item": "triple"
-    },
-    {
-      "t": [
-        1.3,
-        3.6
-      ],
-      "every": 0.55,
-      "who": "blue",
-      "fire": true
-    }
+    {"t": 0.0, "do": "aim", "who": "blue", "at": [680, 170]},
+    {"t": 0.5, "do": "cast", "who": "blue", "item": "triple"},
+    {"t": [1.3, 3.6], "every": 0.55, "do": "fire", "who": "blue"}
   ]
 }

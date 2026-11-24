@@ -11,7 +11,6 @@
 """
 
 import math
-import time
 
 import pygame
 
@@ -46,6 +45,7 @@ from .items import item_name, ITEMS, ring_color
 from .match import Match, STEP
 from .net import PORT
 from .render import DIR
+from .scene import Shake
 from .screens import ScreensMixin
 from .snapshot import player as snap_player, snapshot
 from .update import Updater
@@ -168,6 +168,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.replay = None
         if net:
             self.enter_net(*net)
+        self.shaker = Shake()         # тряска поля на больших заклинаниях
         self.movie = None             # идущий ролик (duel/movie.py) и куда вернуться после
         self.movie_back = "menu"
         if replay:
@@ -194,23 +195,11 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         settings.save(self.settings)
 
     def start_shake(self, power, seconds):
-        """Тряска поля: сильнее текущей — заменяет её, слабее — не мешает."""
-        now = time.monotonic()
-        if self.shake_power(now) < power:
-            self.shake = (float(power), now, float(seconds))
-
-    def shake_power(self, now=None):
-        """Сила тряски сейчас (затухает к нулю)."""
-        power, since, seconds = getattr(self, "shake", (0.0, 0.0, 0.0))
-        left = seconds - ((now if now is not None else time.monotonic()) - since)
-        return power * left / seconds if left > 0 and seconds else 0.0
+        """Тряска поля (большое заклинание) — общий Shake (duel/scene.py), часы — настоящие."""
+        self.shaker.start(power, seconds)
 
     def shake_offset(self):
-        k = self.shake_power()
-        if k <= 0:
-            return 0, 0
-        t = time.monotonic()
-        return int(math.sin(t * 53) * k), int(math.cos(t * 41) * k)
+        return self.shaker.offset()
 
     def start_movie(self, name, back="menu"):
         """Показать ролик assets/movies/<name>; кончился или Esc — в back."""

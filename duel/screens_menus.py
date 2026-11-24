@@ -35,14 +35,11 @@ from .config import (
     WEAPON_MAX,
     WEAPON_TIME,
     WHITE,
-    TOP,
     WIDTH,
 )
 from .i18n import get_lang, LANGS, t as tr
 from . import keys
-from .demos import Demo, fit_view, has_demo, load as load_demo
-from .render import draw_field
-from .snapshot import snapshot
+from .demos import Demo, has_demo, load as load_demo
 from .icons import draw_icon
 from .items import item_help, item_name, ITEMS
 from .sprites import draw_unit, sprite_image, sprite_size
@@ -573,20 +570,9 @@ class MenuScreensMixin:
         demo.update(min(0.1, (now - demo.clock) / 1000))
         demo.clock = now
         self.event_sounds(demo.take_events())     # сценка звучит: выстрелы, удары, артефакты
-        snap = snapshot(demo.match)
+        snap = demo.snapshot()
         self.demo_snap = snap                     # для звуков-циклов сценки (шаги, огонь)
-        heroes = (demo.match.blue.hero, demo.match.red.hero)
-        field = self.__dict__.get("_demo_surface")
-        if field is None:
-            field = self._demo_surface = pygame.Surface((WIDTH, HEIGHT))
-        self.blit_field(field, snap, heroes)
-        draw_field(field, snap, self.tiny)
-        # участок — в пропорциях окошка (иначе широкие сценки сплющиваются), не выше поля (там панель)
-        view = pygame.Rect(fit_view(demo.data["view"], box.size, (0, TOP, WIDTH, HEIGHT - TOP)))
-        part = field.subsurface(view)
-        # крупнее, чем на поле, — по пикселям (чётко, как пиксель-арт); мельче — сглаженно
-        img = (pygame.transform.scale(part, box.size) if box.w >= view.w
-               else pygame.transform.smoothscale(part, box.size))
+        img = self.scene_frame(snap, demo.lands_pair(), demo.cam, box.size)   # участок 2:1 — без искажений
         self.screen.blit(img, box)
         pygame.draw.rect(self.screen, (90, 96, 120), box.inflate(4, 4), 2, border_radius=6)
 

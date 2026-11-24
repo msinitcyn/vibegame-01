@@ -81,22 +81,22 @@ def test_ammo_packs_spawn_on_own_land(game):
 
 def test_epic_spell_shakes_field_not_hud(game, monkeypatch):
     """Большое заклинание (огненный круг, медведь, зомби, смена земель…) — поле дрожит; обычное — нет."""
-    import time as _time
     from duel import config
+    from duel.scene import Shake
     assert {"firering", "bear", "zombies", "landswap"} <= set(config.EPIC_SHAKE)
-    game.shake = (0.0, 0.0, 0.0)
+    now = [100.0]
+    game.shaker = Shake(clock=lambda: now[0])
     game.handle_events([("used", "blue", "heal")])
-    assert game.shake_power() == 0
+    assert game.shaker.power() == 0
     game.handle_events([("used", "red", "firering")])
     power, seconds = config.EPIC_SHAKE["firering"]
-    assert 0 < game.shake_power() <= power
-    t0 = _time.monotonic()
-    monkeypatch.setattr(_time, "monotonic", lambda: t0 + 0.01)
+    assert 0 < game.shaker.power() <= power
     offsets = set()
     for k in range(6):
-        monkeypatch.setattr(_time, "monotonic", lambda k=k: t0 + 0.01 + k * 0.013)
+        now[0] = 100.01 + k * 0.013
         offsets.add(game.shake_offset())
     assert len(offsets) > 1                                               # дрожит
     game.draw()                                                           # и рисуется
-    monkeypatch.setattr(_time, "monotonic", lambda: t0 + seconds + 0.1)
+    now[0] = 100 + seconds + 0.1
     assert game.shake_offset() == (0, 0)                                  # затихло
+    game.shaker = Shake()

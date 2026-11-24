@@ -681,6 +681,7 @@ class Mob:
         self.swap = 0.0               # «Мобы на соперника»: сколько ещё видна анимация перенаправления
         self.swap_by = None           # кто перенаправил (цвет)
         self.swap_dir = None          # куда теперь идёт (радианы) или None — успокоился
+        self.immortal = False         # сцены «Обучения» и роликов: жизни кончились — снова полные (не гибнет)
 
     def redirect(self, caster, target):
         """Тьма перенаправила моба на target (None — на него «Мир с мобами»: просто успокоился)."""
@@ -701,7 +702,10 @@ class Mob:
         else:
             self.target = attacker
         if self.hp <= 0:
-            self.alive = False
+            if self.immortal and self.zombie_of is None:
+                self.hp = self.max_hp             # бессмертный (сцена): снова полные жизни
+            else:
+                self.alive = False
 
     def update(self, dt, speed=1.0, walls=()):
         """Двигается к цели (speed — множитель скорости от «быстрых пуль»/«замедления»).

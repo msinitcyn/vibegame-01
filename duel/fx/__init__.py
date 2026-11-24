@@ -50,6 +50,20 @@ def glow(color, a):
     return tuple(int(v * k) for v in color[:3])
 
 
+def halo(surf, pos, r, color, strength, rings=4):
+    """Светящееся пятно вокруг точки: несколько кругов, цвет прибавляется к тому, что под ним (сияние, не
+    муть). strength — 0..1 (яркость), радиус — до r · (0,8 + 0,3 · rings). Лечение, очищение…"""
+    if strength <= 0:
+        return
+    size = int(r * (1.6 + 0.6 * rings) + 20)
+    c = size // 2
+    layer = pygame.Surface((size, size))
+    for i in range(rings, 0, -1):
+        w = strength * (0.3 + 0.17 * (rings - i))
+        pygame.draw.circle(layer, tuple(int(v * min(1.0, w)) for v in color[:3]), (c, c), int(r * (0.8 + 0.3 * i)))
+    surf.blit(layer, layer.get_rect(center=(int(pos[0]), int(pos[1]))), special_flags=pygame.BLEND_RGB_ADD)
+
+
 def star(surf, center, rays, length, inner, color, turn=0.0, width=2):
     cx, cy = center
     for i in range(rays):

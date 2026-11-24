@@ -34,29 +34,8 @@
     ]
   },
   "script": [
-    {
-      "t": 0.0,
-      "who": "blue",
-      "aim_at": [
-        580,
-        170
-      ]
-    },
-    {
-      "t": 0.8,
-      "who": "blue",
-      "item": "zombies"
-    },
-    {
-      "t": [
-        2.6,
-        3.4
-      ],
-      "who": "blue",
-      "move": [
-        1,
-        0
-      ]
-    }
+    {"t": 0.0, "do": "aim", "who": "blue", "at": [580, 170]},
+    {"t": 0.8, "do": "cast", "who": "blue", "item": "zombies"},
+    {"t": [2.6, 3.4], "do": "move", "who": "blue", "dir": [1, 0]}
   ]
 }

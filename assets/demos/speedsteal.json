@@ -22,40 +22,9 @@
     }
   },
   "script": [
-    {
-      "t": 0.0,
-      "who": "red",
-      "aim_at": [
-        700,
-        166
-      ]
-    },
-    {
-      "t": 0.2,
-      "who": "blue",
-      "item": "speedsteal"
-    },
-    {
-      "t": [
-        0.5,
-        2.7
-      ],
-      "who": "blue",
-      "move": [
-        1,
-        0
-      ]
-    },
-    {
-      "t": [
-        0.5,
-        2.7
-      ],
-      "who": "red",
-      "move": [
-        1,
-        0
-      ]
-    }
+    {"t": 0.0, "do": "aim", "who": "red", "at": [700, 166]},
+    {"t": 0.2, "do": "cast", "who": "blue", "item": "speedsteal"},
+    {"t": [0.5, 2.7], "do": "move", "who": "blue", "dir": [1, 0]},
+    {"t": [0.5, 2.7], "do": "move", "who": "red", "dir": [1, 0]}
   ]
 }

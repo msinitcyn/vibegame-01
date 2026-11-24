@@ -1,16 +1,30 @@
 {
-  "heroes": {"blue": "dark", "red": "fire"},
-  "view": [340, 90, 320, 160],
+  "heroes": {
+    "blue": "dark",
+    "red": "fire"
+  },
+  "view": [
+    340,
+    90,
+    320,
+    160
+  ],
   "length": 5.4,
   "setup": {
-    "blue": {"x": 400, "y": 170},
-    "red": {"x": 620, "y": 170}
+    "blue": {
+      "x": 400,
+      "y": 170
+    },
+    "red": {
+      "x": 620,
+      "y": 170
+    }
   },
   "script": [
-    {"t": 0.0, "who": "blue", "aim_at": "red"},
-    {"t": 0.0, "who": "red", "aim_at": "blue"},
-    {"t": 0.4, "who": "blue", "item": "wall"},
-    {"t": [1.0, 2.7], "every": 0.55, "who": "red", "fire": true},
-    {"t": [3.0, 4.8], "every": 0.45, "who": "blue", "fire": true}
+    {"t": 0.0, "do": "aim", "who": "blue", "at": "red"},
+    {"t": 0.0, "do": "aim", "who": "red", "at": "blue"},
+    {"t": 0.4, "do": "cast", "who": "blue", "item": "wall"},
+    {"t": [1.0, 2.7], "every": 0.55, "do": "fire", "who": "red"},
+    {"t": [3.0, 4.8], "every": 0.45, "do": "fire", "who": "blue"}
   ]
 }

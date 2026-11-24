@@ -5,7 +5,7 @@ import math
 import pygame
 
 from ..sprites import sprite_px
-from . import INK, ease_out, params, rgb
+from . import INK, ease_out, halo, params, rgb
 
 
 def hand(pos, r, facing):
@@ -387,15 +387,10 @@ def draw_heal_back(surf, pos, r, k):
     P = params("heal")
     col = rgb(P.get("color"), (255, 90, 120))
     light = rgb(P.get("light"), (255, 210, 220))
+    glow = min(1.0, k / 0.2) * (1 - k)                        # быстро вспыхивает, медленно гаснет
+    halo(surf, pos, r, col, float(P.get("glow_alpha", 120)) / 255 * glow)
     size = int(r * 6 + 20)
     c = size // 2
-    glow = min(1.0, k / 0.2) * (1 - k)                        # быстро вспыхивает, медленно гаснет
-    a = float(P.get("glow_alpha", 120)) / 255
-    light_layer = pygame.Surface((size, size))                # сияние светится: цвет прибавляется к полю
-    for i in range(4, 0, -1):
-        w = a * glow * (0.3 + 0.17 * (4 - i))
-        pygame.draw.circle(light_layer, tuple(int(v * w) for v in col), (c, c), int(r * (0.8 + 0.3 * i)))
-    surf.blit(light_layer, light_layer.get_rect(center=(int(pos[0]), int(pos[1]))), special_flags=pygame.BLEND_RGB_ADD)
     layer = pygame.Surface((size, size), pygame.SRCALPHA)
     rr = r * (1.0 + (float(P.get("ring_to", 2.4)) - 1.0) * ease_out(k))
     pygame.draw.circle(layer, (*light, int(230 * (1 - k))), (c, c), int(rr), max(1, int(4 * (1 - k))))
@@ -441,15 +436,8 @@ def draw_cleanse_back(surf, pos, r, k):
     """Очищение, под магом: мятное сияние (светится — цвет прибавляется к полю). k — 0..1."""
     P = params("cleanse")
     col = rgb(P.get("color"), (180, 255, 216))
-    size = int(r * 6 + 20)
-    c = size // 2
     glow = min(1.0, k / 0.15) * (1 - k) ** 1.3
-    a = float(P.get("glow_alpha", 140)) / 255
-    layer = pygame.Surface((size, size))
-    for i in range(4, 0, -1):
-        w = a * glow * (0.3 + 0.17 * (4 - i))
-        pygame.draw.circle(layer, tuple(int(v * w) for v in col), (c, c), int(r * (0.8 + 0.3 * i)))
-    surf.blit(layer, layer.get_rect(center=(int(pos[0]), int(pos[1]))), special_flags=pygame.BLEND_RGB_ADD)
+    halo(surf, pos, r, col, float(P.get("glow_alpha", 140)) / 255 * glow)
 
 
 def draw_cleanse_front(surf, pos, r, k, time):
