@@ -122,7 +122,8 @@ class Scene:
         self.match = m
         self.mortal = bool(d.get("mortal_mobs"))
         self.mortal_players = bool(d.get("mortal_players"))   # маг может погибнуть (сцена «Побеждай»)
-        self.dead_at = None                   # когда погиб маг (время сцены)
+        self.dead_at = None                   # когда партия сцены встала (итог)
+        self.death_seen = {}                  # погибший маг -> время сцены, когда погиб (для анимации духа)
         self.lands = tuple(d["lands"]) if d.get("lands") else None
         self.hidden = set()
         self.vanishing = {}                   # кто исчезает: с какого времени
@@ -321,9 +322,9 @@ class Scene:
                 m.bullets, m.mob_shots, m.hits = [], [], []   # партия встала — пули и вспышки не висят
         else:
             for p in m.players:                       # маг не гибнет: кончились жизни — снова полные
-                if p.hp <= 0:
-                    p.hp = p.max_hp
-            m.winner = None
+                if p.hp <= 0 or p.dead_at is not None:
+                    p.hp, p.dead_at = p.max_hp, None
+            m.winner, m.end_at = None, None
         for who, since in list(self.vanishing.items()):
             if self.t - since >= REVEAL_TIME:
                 del self.vanishing[who]
@@ -373,10 +374,11 @@ class Scene:
             if since is not None:
                 p["reveal"] = REVEAL_TIME * min(1.0, (self.t - since) / REVEAL_TIME)
             players.append(p)
-        if self.dead_at is not None:                  # погибший: тело и вылетающий дух
-            for p in players:
-                if p["hp"] <= 0:
-                    p["dead"] = self.t - self.dead_at
+        for p in players:                             # погибший: сколько летит дух — по часам сцены (партия встаёт)
+            if p.get("dead") is None:
+                self.death_seen.pop(p["id"], None)
+            else:
+                p["dead"] = self.t - self.death_seen.setdefault(p["id"], self.t - p["dead"])
         snap["players"] = players
         return snap
 

@@ -235,7 +235,8 @@ def test_bear_defeated_kills_the_mage():
     b.hp = 3
     m.apply_item(b, "bear")
     m.hurt_player(b, BEAR_HP)
-    step(m)
+    from duel.config import DEATH_TIME
+    step(m, DEATH_TIME + 0.1)                            # дух улетает — потом итог
     assert b.hp <= 0 and "bear" not in b.effects and m.winner is m.red
 
 

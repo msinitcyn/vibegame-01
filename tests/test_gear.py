@@ -1,5 +1,6 @@
 """Снаряжение — пассивные артефакты: ботинки, броня, автомат, меч. Своя ячейка, повтор ничего не даёт,
 выпадают только в арене мобов."""
+import pytest
 from duel import config, testcmd
 from duel.config import ARENA, GEAR_ITEMS
 from duel.entities import Artifact
@@ -13,27 +14,32 @@ def pick(m, p, kind):
 
 
 def test_boots_gun_sword_armor():
+    """Снаряжение складывается до GEAR_STACK раз, каждый стак — абсолютная прибавка."""
     m = Match(seed=1)
     b = m.blue
     speed, hp, max_hp = b.speed, b.hp, b.max_hp
     pick(m, b, "boots")
-    assert b.speed == speed * config.GEAR_SPEED and b.gear == ["boots"] and None not in b.items[:0]
+    assert b.speed == pytest.approx(speed + config.GEAR_SPEED) and b.gear == ["boots"]
     assert all(k is None for k in b.items)                   # в ячейки артефактов не попадает
+    pick(m, b, "boots")
+    assert b.speed == pytest.approx(speed + 2 * config.GEAR_SPEED)      # второй стак
     pick(m, b, "armor")
-    assert (b.hp, b.max_hp) == (hp + config.GEAR_HP, max_hp + config.GEAR_HP)
-    pick(m, b, "armor")                                       # второй раз — ничего, но пропал
-    assert b.max_hp == max_hp + config.GEAR_HP and not m.artifacts and b.gear.count("armor") == 1
-    pick(m, b, "gun")
+    pick(m, b, "armor")
+    assert (b.hp, b.max_hp) == (hp + 2 * config.GEAR_HP, max_hp + 2 * config.GEAR_HP)
+    for _ in range(config.GEAR_STACK + 2):                   # больше GEAR_STACK — не берётся, но пропадает
+        pick(m, b, "gun")
+    assert b.gear.count("gun") == config.GEAR_STACK and not m.artifacts
     b.cooldown = 0
     b.shoot()
-    assert abs(b.cooldown - config.SHOT_COOLDOWN * config.GEAR_FIRE) < 1e-9
+    assert b.cooldown == pytest.approx(max(config.MIN_SHOT_COOLDOWN,
+                                           config.SHOT_COOLDOWN - config.GEAR_STACK * config.GEAR_FIRE))
     pick(m, b, "sword")
     r = m.red
     r.x, r.y = b.x + b.radius + r.radius + config.MELEE_RANGE + config.GEAR_REACH - 1, b.y
     hp_r = r.hp
     m.melee(b)
     assert r.hp < hp_r                                        # достал дальше обычного
-    assert snapshot(m)["players"][0]["gear"] == ["boots", "armor", "gun", "sword"]
+    assert snapshot(m)["players"][0]["gear"].count("boots") == 2
 
 
 def test_gear_drops_only_in_arena():

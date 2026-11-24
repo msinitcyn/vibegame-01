@@ -482,7 +482,7 @@ def draw_death(surf, pos, r, img, since, time):
     """Гибель мага (since — секунд после смерти): тело лежит (повёрнуто, темнее), из него вылетает дух —
     светлый силуэт мага поднимается, покачиваясь и тая; в начале — вспышка и кольцо, за духом — искры."""
     P = params("spirit")
-    T = float(P.get("time", 2.4))
+    T = float(P.get("time", 1.6))
     col = rgb(P.get("color"), (180, 220, 255))
     spark = rgb(P.get("spark"), (255, 255, 255))
     x, y = pos

@@ -230,12 +230,12 @@ def test_scene_mage_can_die_and_spirit_flies():
                 "setup": {"blue": {"x": 400, "y": 222}, "red": {"x": 600, "y": 222, "hp_lost": 14}},
                 "script": [{"t": [0.1, 2.0], "every": 0.3, "do": "fire", "who": "blue", "at": "red"}]})
     run(st, 1.5)
-    assert st.match.winner is st.match.blue and st.dead_at is not None
-    assert not st.match.bullets and not st.match.hits
     red = next(p for p in st.snapshot()["players"] if p["id"] == "red")
     run(st, 0.5)
     red2 = next(p for p in st.snapshot()["players"] if p["id"] == "red")
-    assert 0 <= red["dead"] < red2["dead"]
+    assert red["dead"] is not None and 0 <= red["dead"] < red2["dead"]      # дух летит и после итога
+    assert st.match.winner is st.match.blue and st.dead_at is not None
+    assert not st.match.bullets and not st.match.hits
 
 
 def test_game_draws_dead_mage_spirit(game):
@@ -244,8 +244,17 @@ def test_game_draws_dead_mage_spirit(game):
     game.countdown = 0
     game.match.red.hp = 0
     game.update()
+    assert game.snap["players"][1]["dead"] is not None and not game.snap["winner"]   # сначала гибель
+    game.draw()
+    from duel.config import DEATH_TIME
+    for _ in range(round(DEATH_TIME * 60) + 2):
+        game.update()
     game.frame()
-    assert game.snap["winner"] == "blue" and game.win_time
+    assert game.snap["winner"] == "blue" and game.win_time                            # итог через полсекунды
+    assert not game.death_shown()                                                     # а надпись — когда дух улетит
+    game.draw()
+    game.death_seen = {pid: t - 10_000 for pid, t in game.death_seen.items()}
+    assert game.death_shown()
     game.draw()
     from duel.fx import mage as fx_mage
     import pygame as pg

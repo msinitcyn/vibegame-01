@@ -11,6 +11,7 @@ from .config import (
     FIRE_RING_R,
     FIRE_RING_RANGE,
     NEUTRAL_HALF,
+    SPIRIT_TIME,
     AMMO_COLOR,
     GEAR_ITEMS,
     ARENA,
@@ -280,9 +281,16 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         for kind in GEAR_ITEMS:
             icon = pygame.Surface((2 * r + 2, 2 * r + 2), pygame.SRCALPHA)
             draw_icon(icon, kind, (r + 1, r + 1), r, level=False)
-            if kind not in have:
+            n = list(have).count(kind)
+            if not n:
                 icon.set_alpha(50)                # пустое место — бледный силуэт: что сюда встанет
             surf.blit(icon, (x, cy - r - 1))
+            if n > 1:                             # стаки: число в углу
+                num = self.tiny.render(str(n), True, (255, 230, 140))
+                shade = self.tiny.render(str(n), True, (16, 12, 20))
+                at = (x + 2 * r - num.get_width() + 2, cy + r - num.get_height() + 3)
+                surf.blit(shade, (at[0] + 1, at[1] + 1))
+                surf.blit(num, at)
             x += 2 * r + gap
         return surf
 
@@ -492,18 +500,34 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
                     pygame.draw.line(s, (16, 12, 20), a, b, 4)
                     pygame.draw.line(s, color, a, b, 2)
 
+    def death_clock(self, snap):
+        """Сколько секунд назад погиб маг — по своим часам: партия встаёт через DEATH_TIME после гибели
+        (итог), а дух улетает дольше (SPIRIT_TIME). Снимок с полем «dead» — для рисования."""
+        seen = self.__dict__.setdefault("death_seen", {})
+        now = pygame.time.get_ticks()
+        out = []
+        for p in snap.get("players", []):
+            if p.get("dead") is None:
+                seen.pop(p["id"], None)           # жив (новая партия) — часы сначала
+                out.append(p)
+            else:
+                t0 = seen.setdefault(p["id"], now)
+                out.append({**p, "dead": (now - t0) / 1000})
+        return {**snap, "players": out}
+
+    def death_shown(self):
+        """Анимации гибели доиграли — можно показывать, кто победил."""
+        seen = self.__dict__.get("death_seen", {})
+        now = pygame.time.get_ticks()
+        return all((now - t0) / 1000 >= SPIRIT_TIME for t0 in seen.values())
+
     def draw(self):
         s = self.screen
         self.blit_field(s, self.snap)
         # кто смотрит: None — за одним компьютером (видно всё), "" — зритель по сети
         viewer = (getattr(self, "me", None) or "") if (self.net or getattr(self, "warmup", False)) and not self.watching \
             else ("" if self.watching else None)
-        snap = self.snap
-        if snap.get("winner") and self.win_time:       # проигравший погиб: тело и вылетающий дух
-            dead = (pygame.time.get_ticks() - self.win_time) / 1000
-            snap = {**snap, "players": [{**p, "dead": dead} if p["id"] != snap["winner"] and p.get("hp", 1) <= 0
-                                        else p for p in snap["players"]]}
-        draw_field(s, snap, self.tiny, viewer)
+        draw_field(s, self.death_clock(self.snap), self.tiny, viewer)   # погибший — тело и вылетающий дух
         self.draw_armed_previews(s)
         target = getattr(self, "walk_to", None)
         if target:                                     # «идти к курсору»: куда идёт маг — ромбик на земле
@@ -534,12 +558,15 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         self.draw_hud()
         self.draw_countdown()
 
-        if self.snap["winner"]:
+        if self.snap["winner"] and self.death_shown():   # сначала дух улетает, потом — кто победил
             shade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
             shade.fill((0, 0, 0, 150))
             s.blit(shade, (0, 0))
             w = self.snap["winner"]
-            t = self.big.render(tr("win", name=self.player_label(w)), True, self.side_color(w))
+            if w == "draw":                            # погибли оба, пока улетал дух первого
+                t = self.big.render(tr("win.draw"), True, WHITE)
+            else:
+                t = self.big.render(tr("win", name=self.player_label(w)), True, self.side_color(w))
             s.blit(t, t.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 20)))
             hint = tr("win.hint")
             if getattr(self, "warmup", False):

@@ -134,3 +134,29 @@ def test_pick_up_on_foe_land(match):
     b.x, b.y = 700, TOP + 40
     match.step(DT)
     assert "speed" in b.items and b.ammo == START_AMMO + AMMO_PACK
+
+
+def test_death_animation_first_then_winner_or_draw():
+    """Погиб маг — сначала анимация (DEATH_TIME, партия идёт), потом итог; погиб и второй — ничья."""
+    from duel.config import DEATH_TIME
+    from tests.conftest import DT, new_match, step
+    m = new_match()
+    m.red.hp = 0
+    events = m.step(DT, {})
+    assert ("dead", "red") in [tuple(e[:2]) for e in events] and m.winner is None
+    step(m, DEATH_TIME - 0.2)
+    assert m.winner is None and m.red.dead_at is not None
+    x = m.red.x
+    from duel.commands import Command
+    m.step(DT, {"red": Command(move=(1, 0), fire=True)})                # погибший ничего не делает
+    assert m.red.x == x and not [b for b in m.bullets if b.owner is m.red]
+    step(m, 0.3)
+    assert m.winner is m.blue
+    m2 = new_match()
+    m2.red.hp = 0
+    step(m2, DEATH_TIME / 2)
+    m2.blue.hp = 0                                                      # второй погиб в те же полсекунды
+    step(m2, DEATH_TIME)
+    assert m2.winner == "draw"
+    from duel.snapshot import snapshot
+    assert snapshot(m2)["winner"] == "draw"

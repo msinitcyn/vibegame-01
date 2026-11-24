@@ -64,23 +64,28 @@ def test_land_burn_does_not_thaw_freeze():
     assert b.hp < 15 and "freeze" in b.effects
 
 
-def test_firmground_mobs_do_not_get_angry_and_guardians_sleep():
+def test_firmground_guardians_sleep():
     m = new_match()
     m.set_heroes({"blue": "earth", "red": "fire"})
     b = m.blue
     m.apply_item(b, "firmground")
-    calm = Mob(400, 300)
-    angry = Mob(420, 300)
-    angry.target = b
-    calm.hurt(b)
-    angry.hurt(b)
-    assert calm.target is None and angry.target is b     # спокойный не злится, злой — по-прежнему
     b.x, b.y = ARENA
     step(m, 0.5)
     assert not any(g.awake for g in m.guardians if g.side == "blue")
     del b.effects["firmground"]
     step(m)
     assert any(g.awake for g in m.guardians if g.side == "blue")
+
+
+def test_firmground_breaks_when_earth_attacks_a_mob():
+    """Земля под «Твёрдой почвой» ударила моба — почва слетает, моб злится как обычно."""
+    m = new_match()
+    m.set_heroes({"blue": "earth", "red": "fire"})
+    b = m.blue
+    m.apply_item(b, "firmground")
+    calm = Mob(400, 300)
+    calm.hurt(b)
+    assert "firmground" not in b.effects and calm.target is b
 
 
 def test_firmground_turns_awake_guardians_back_to_statues():

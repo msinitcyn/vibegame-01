@@ -35,7 +35,7 @@ def state_of(m):
         return sorted((k, r6(t)) for k, t in u.effects.items())
     return {
         "time": r6(m.match_time), "wave": m.mob_wave, "next_wave": r6(m.next_wave),
-        "winner": m.winner.dir if m.winner else None,
+        "winner": getattr(m.winner, "dir", m.winner) if m.winner else None,      # маг или "draw"
         "players": [(r6(p.x), r6(p.y), p.hp, p.ammo, r6(p.cooldown), r6(p.melee_cd), eff(p),
                      p.shield_hits, list(p.items), list(p.queue)) for p in m.players],
         "bullets": [(r6(b.x), r6(b.y), r6(b.vx), r6(b.vy), b.owner.dir, r6(b.wave_amp))

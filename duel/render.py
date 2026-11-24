@@ -206,7 +206,7 @@ def draw_player(surf, p, heroes, viewer=None, time=0.0, font=None):
     if p["melee_flash"] > 0:                       # докуда достаёт удар — бледное кольцо
         k = min(1.0, p["melee_flash"] / MELEE_FLASH)
         radius = int(p["r"])
-        reach = MELEE_RANGE + (BEAR_REACH if bear else 0) + (GEAR_REACH if "sword" in p.get("gear", ()) else 0)
+        reach = MELEE_RANGE + (BEAR_REACH if bear else 0) + GEAR_REACH * list(p.get("gear", ())).count("sword")
         ring = pygame.Surface((2 * (radius + reach) + 4,) * 2, pygame.SRCALPHA)
         c = ring.get_width() // 2
         a = float(fx.params("sword").get("reach_ring_alpha", 90)) if not bear else 220

@@ -26,6 +26,7 @@ import random
 from .commands import REACH_FAR, Command
 from .config import (
     MOB_LATE_EXTRA,
+    DEATH_TIME,
     GUARDIAN_PETRIFY,
     CLEANSE_FX,
     HEAL_FX,
@@ -87,6 +88,7 @@ from .config import (
     EXPOSE_CAST,
     EXPOSE_SHOT,
     GEAR_HP,
+    GEAR_STACK,
     GEAR_ITEMS,
     GEAR_REACH,
     MOB_COUNT,
@@ -152,7 +154,8 @@ class Match:
         self.mob_wave = 0             # сколько волн мобов уже пришло
         self.next_wave = MOB_DELAY    # когда придёт следующая (секунды партии)
         self.wave_interval = MOB_EVERY
-        self.winner = None
+        self.winner = None                    # маг или "draw" (погибли оба)
+        self.end_at = None                    # погиб маг: когда кончится анимация и будет итог
         self.drops = True             # мобы роняют артефакты (тестовая команда /drops off выключает)
         # статистика партии для баланса (logs/matches.jsonl, tools/balance.py): только счётчики, без случайностей
         self.stats = {p.id: {"picked": {}, "used": {}, "shots": 0, "damage_taken": 0} for p in self.players}
@@ -197,7 +200,7 @@ class Match:
             # нажатия — раньше движения, как и раньше при обработке клавиш перед кадром
             for p in self.players:
                 c = commands.get(p.id)
-                if c is None:
+                if c is None or p.dead_at is not None:      # погибший больше ничего не делает
                     continue
                 if c.aim is not None:     # прицел — до выстрела этого такта
                     p.aim = float(c.aim)
@@ -240,7 +243,7 @@ class Match:
         p.expose(EXPOSE_SHOT)
         self.emit("melee", p.id)
         bear = "bear" in p.effects            # медведь бьёт дальше и сильнее
-        reach = MELEE_RANGE + (BEAR_REACH if bear else 0) + (GEAR_REACH if "sword" in p.gear else 0)
+        reach = MELEE_RANGE + (BEAR_REACH if bear else 0) + GEAR_REACH * p.gear.count("sword")
         damage = BEAR_MELEE_DAMAGE if bear else MELEE_DAMAGE
         for m in self.mobs:
             if m.zombie_of is p:
@@ -289,8 +292,9 @@ class Match:
                 c.apply(effect)
 
     def take_gear(self, p, kind):
-        """Снаряжение — в свою ячейку до конца партии; уже есть — ничего (артефакт просто пропадает)."""
-        if kind in p.gear:
+        """Снаряжение — в свою ячейку до конца партии, складывается до GEAR_STACK раз; больше — ничего
+        (артефакт просто пропадает)."""
+        if p.gear.count(kind) >= GEAR_STACK:
             return
         p.gear.append(kind)
         if kind == "armor":                   # броня: запас жизней больше, и сразу столько же жизней
@@ -410,7 +414,9 @@ class Match:
     def hurt_player(self, p, n, hit=True):
         """Маг теряет n жизней (щит проверяется до этого). Пока у него есть зомби — урон
         получает зомби («Восставшие мертвецы»). hit — попадание (пуля, удар, снаряд), а не горение:
-        попадания растапливают заморозку."""
+        попадания растапливают заморозку. Погибший больше урона не получает."""
+        if p.dead_at is not None:
+            return
         if hit:
             p.struck()
         zombies = self.zombies_of(p)
@@ -524,11 +530,17 @@ class Match:
         self.update_clones(dt)
         self.update_bullets(dt)
         self.bury_mobs()
-        for p in self.players:
-            if p.hp <= 0:
-                if not self.winner:
-                    self.emit("dead", p.id)       # погиб — звук и вылетающий дух
-                self.winner = self.other(p)
+        for p in self.players:                # погиб — звук и вылетающий дух; партия идёт, пока дух улетает
+            if p.hp <= 0 and p.dead_at is None:
+                p.dead_at = self.match_time
+                self.emit("dead", p.id)
+        dead = [p for p in self.players if p.dead_at is not None]
+        if dead and not self.winner:
+            if self.end_at is None:
+                self.end_at = self.match_time + DEATH_TIME
+            if self.match_time >= self.end_at - 1e-9:      # анимация кончилась — итог
+                alive = [p for p in self.players if p.dead_at is None]
+                self.winner = alive[0] if len(alive) == 1 else "draw"   # погибли оба — ничья
 
     def age_terrain(self, dt):
         """Стена деревьев растёт и стареет, лёд тает, огненные круги догорают."""
@@ -544,6 +556,8 @@ class Match:
 
     def update_player(self, p, dt, move):
         """Маг за такт: движение, конец медведя, лассо, границы, ледяной след, урон земли и огня."""
+        if p.dead_at is not None:             # погиб — лежит, пока улетает дух
+            return
         p.ground_slow = self.ground_slow(p)
         p.update(dt, move)
         if p.bear_saved is not None and "bear" not in p.effects:
@@ -672,8 +686,8 @@ class Match:
     def bullet_hits_side(self, b):
         """Пуля и сторона соперника её хозяина (хозяин мог смениться после зеркала): щит, маг, двойники."""
         target = self.other(b.owner)
-        if target.offstage:
-            return                            # маг «за кадром» (сцены): пули его не задевают
+        if target.offstage or target.dead_at is not None:
+            return                            # маг «за кадром» (сцены) или погибший: пули его не задевают
         if target.shield_blocks(b):
             b.alive = False                   # щит поглощает пулю
             self.hit_at(b, "shield")
@@ -840,7 +854,8 @@ class Match:
                     self.leash(m)
                 p = None
             else:
-                if m.target is not None and (self.hidden(m.target) or not getattr(m.target, "alive", True)):
+                if m.target is not None and (self.hidden(m.target) or not getattr(m.target, "alive", True)
+                                             or getattr(m.target, "dead_at", None) is not None):
                     m.target = None           # невидимку не видно, двойник исчез — моб теряет цель
                 p = m.update(dt, self.chaser_speed(m.target) if m.target else 1.0, self.walls)
             if self.blocked(m.x, m.y, m.radius):      # сквозь деревья не пройти: шаг по одной оси или стоять
@@ -900,7 +915,8 @@ class Match:
             g.petrify = max(0.0, g.petrify - dt)
             target = self.player(g.side)
             # «Твёрдая почва»: для стражей Земля — свой: не просыпаются, проснувшиеся снова каменеют
-            awake = in_arena(target.x, target.y) and not self.hidden(target) and "firmground" not in target.effects
+            awake = (in_arena(target.x, target.y) and not self.hidden(target) and "firmground" not in target.effects
+                     and target.dead_at is None)
             if g.awake and not awake:
                 g.petrify = GUARDIAN_PETRIFY
             g.awake = awake

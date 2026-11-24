@@ -68,6 +68,7 @@ from .config import (
     CLONE_SHOT_EVERY,
     EXPOSE_SHOT,
     GEAR_FIRE,
+    MIN_SHOT_COOLDOWN,
     GEAR_SPEED,
     CLONE_SPEED,
     CLONE_TIME,
@@ -285,6 +286,7 @@ class Player(Unit):
         self.melee_flash = 0.0        # сколько ещё виден взмах
         self.shot_flash = 0.0         # сколько ещё видны отдача и вспышка выстрела
         self.bear_saved = None        # «Медведь»: жизни мага до превращения
+        self.dead_at = None           # когда погиб (время партии); None — жив
         self.bear_at = None           # …и где он превратился (туда вернётся маг)
         self.ring_t = 0.0             # сколько стоит у огненной стены с последнего урона
         self.reset_effects()
@@ -308,8 +310,8 @@ class Player(Unit):
         slow = getattr(self, "ground_slow", None)
         if slow is None:
             slow = FOE_LAND_SLOW if zone == self.foe_zone else ARENA_SLOW if zone == "arena" else 1.0
-        boots = GEAR_SPEED if "boots" in self.gear else 1.0
-        return BASE_SPEED * self.speed_mult * slow * boots
+        boots = GEAR_SPEED * self.gear.count("boots")          # ботинки: + за каждый стак
+        return (BASE_SPEED + boots) * self.speed_mult * slow
 
     @property
     def foe_zone(self):
@@ -374,8 +376,8 @@ class Player(Unit):
         if not self.can_fire or self.cooldown > 0 or self.ammo <= 0:
             return []
         self.ammo -= 1                # веер тоже тратит один патрон
-        self.cooldown = (SHOT_COOLDOWN * (RAPID_FACTOR if "rapid" in self.effects else 1)
-                         * (GEAR_FIRE if "gun" in self.gear else 1))
+        base = SHOT_COOLDOWN - GEAR_FIRE * self.gear.count("gun")             # автомат: минус за каждый стак
+        self.cooldown = max(MIN_SHOT_COOLDOWN, base * (RAPID_FACTOR if "rapid" in self.effects else 1))
         self.shot_flash = SHOT_FLASH
         # пуля летит по прицелу; движение на направление не влияет
         return make_bullets(self, self.x, self.y, self.aim, self.radius,
@@ -702,8 +704,9 @@ class Mob:
         if "mobpeace" in hero.effects:        # «Мир с мобами» хозяина: не злит
             if self.target is attacker:
                 self.target = None
-        elif "firmground" in hero.effects:    # «Твёрдая почва»: Земля для мобов свой — не злит, злой бьёт дальше
-            pass
+        elif "firmground" in hero.effects:    # «Твёрдая почва»: Земля напала на моба — почва слетает, моб злится
+            del hero.effects["firmground"]
+            self.target = attacker
         else:
             self.target = attacker
         if self.hp <= 0:

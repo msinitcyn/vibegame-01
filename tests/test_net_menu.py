@@ -209,6 +209,8 @@ def test_rematch_and_to_lobby_buttons(game):
     frames(game, lambda: not game.net_waiting, keep=(masha,))
     srv.room.match.red.hp = 0
     frames(game, lambda: game.snap["winner"], keep=(masha,))
+    game.draw()
+    game.death_seen = {pid: t - 10_000 for pid, t in game.death_seen.items()}   # дух улетел (не ждём вживую)
     game.hits = []
     game.draw()                                    # кнопки «Реванш» и «В лобби»
     labels = len([h for h in game.hits if h[0].h == 40])
@@ -244,7 +246,9 @@ def test_warmup_esc_and_win_again(game):
     game.on_key(pygame.KSCAN_T)
     assert game.warmup
     game.match.red.hp = 0
-    game.warm_frame(1 / 30)
+    from duel.config import DEATH_TIME
+    for _ in range(round(DEATH_TIME * 30) + 3):       # дух улетает — потом итог
+        game.warm_frame(1 / 30)
     assert game.snap["winner"] == "blue"
     game.on_key(pygame.KSCAN_R)                   # ещё разминка
     assert game.warmup and not game.snap["winner"]

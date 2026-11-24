@@ -47,7 +47,9 @@ def test_rematch_counts_down_again(game, three):
     game.start()
     game.countdown = 0
     game.match.red.hp = 0
-    game.update(STEP)
+    from duel.config import DEATH_TIME
+    for _ in range(round(DEATH_TIME / STEP) + 2):      # дух улетает — потом итог
+        game.update(STEP)
     assert game.snap["winner"]
     game.on_key(pygame.KSCAN_R)
     assert game.countdown == 3.0 and not game.snap["winner"]
