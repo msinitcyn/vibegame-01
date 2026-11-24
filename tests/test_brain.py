@@ -1,6 +1,7 @@
 """Бот на правилах (duel/brain.py): играет лучше случайного, уклоняется, лечится, не стоит на чужой земле."""
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 
 from duel.brain import LEVELS, SmartBot
@@ -101,3 +102,18 @@ def test_bot_level_setting_cycles_and_saves(game):
     assert game.settings["bot_level"] == "hard" and game.bot_level() == "hard"
     game.on_key(pygame.KSCAN_D)
     assert game.bot_level() == "easy"
+
+
+def test_weak_bot_sometimes_picks_not_best_option():
+    """Слабый бот не всегда выбирает лучшее дело (softmax), сильный — всегда."""
+    opts = [(1.0, "duel", None), (0.8, "farm", None), (0.3, "home", None)]
+    hard, easy = SmartBot(None, "blue", "hard", 1), SmartBot(None, "blue", "easy", 1)
+    assert {hard.choose(opts)[1] for _ in range(200)} == {"duel"}
+    picks = Counter(easy.choose(opts)[1] for _ in range(2000))
+    assert picks["duel"] > picks["farm"] > picks["home"] > 0
+
+
+def test_strategy_overrides_hero_style():
+    m = Match(seed=1, heroes={"blue": "frost", "red": "fire"})
+    assert SmartBot(m, "blue", strategy="rush").style(m.blue)["aggro"] == 1.0
+    assert SmartBot(m, "blue").style(m.blue)["range"] == 340

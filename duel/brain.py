@@ -22,15 +22,17 @@ STEP = 1 / 60
 DIRS = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
 
 # уровни: реакция (с), разброс прицела (рад), раз в сколько секунд решение, поворот прицела (рад/с),
-# с какой вероятностью применит артефакт, когда «пора», и насколько далеко вперёд видит угрозы
+# с какой вероятностью применит артефакт, когда «пора», насколько далеко вперёд видит угрозы и «температура»
+# выбора: 0 — всегда лучшее по оценке, больше — чаще не лучшее (слабый игрок не всегда видит лучший ход)
 LEVELS = {
     "easy":   {"reaction": 0.35, "aim_sigma": math.radians(14), "think": 0.25, "turn": 5.0, "items": 0.5,
-               "dodge_horizon": 0.45},
+               "dodge_horizon": 0.45, "temperature": 0.35},
     "normal": {"reaction": 0.25, "aim_sigma": math.radians(8), "think": 0.15, "turn": 8.0, "items": 0.8,
-               "dodge_horizon": 0.6},
+               "dodge_horizon": 0.6, "temperature": 0.12},
     "hard":   {"reaction": 0.17, "aim_sigma": math.radians(4), "think": 0.10, "turn": 12.0, "items": 1.0,
-               "dodge_horizon": 0.75},
+               "dodge_horizon": 0.75, "temperature": 0.0},
 }
+STICK = 0.2                       # прежнее дело — с прибавкой: без неё слабый бот дёргался бы между делами
 LEVEL_NAMES = tuple(LEVELS)
 
 # стиль героя: агрессия (0..1 — как охотно идёт в бой), фарм (как охотно бьёт мобов), дистанция боя (пикс)
@@ -43,6 +45,15 @@ STYLES = {
     "earth":  {"aggro": 0.7, "farm": 0.6, "range": 300},
 }
 DEFAULT_STYLE = {"aggro": 0.6, "farm": 0.6, "range": 320}
+
+# стратегии (для лаборатории баланса: есть ли выигрышная): поверх стиля героя; "hero" — стиль героя как есть
+STRATEGIES = {
+    "hero":   {},
+    "rush":   {"aggro": 1.0, "farm": 0.0, "range": 170},       # сразу давит соперника, мобов не трогает
+    "kite":   {"aggro": 0.8, "farm": 0.2, "range": 460},       # бой с самой дальней дистанции
+    "farm":   {"aggro": 0.15, "farm": 1.0},                    # сначала мобы и артефакты, бой — потом
+    "turtle": {"aggro": 0.1, "farm": 0.2, "range": 480},       # сидит у себя, бьёт подходящих
+}
 FIRE_DIST = 560                   # дальше — не стреляет (пуля долго летит, легко уклониться)
 FIRE_DIST_LOW = 300               # патронов мало — только вблизи
 LOW_AMMO = 6
@@ -53,9 +64,10 @@ FOE_TARGETED = {"foe_grow", "foe_freeze", "foe_nofire", "foe_invert", "foe_noite
 
 
 class SmartBot:
-    def __init__(self, match=None, pid="red", level="normal", seed=7):
+    def __init__(self, match=None, pid="red", level="normal", seed=7, strategy="hero"):
         self.match, self.pid = match, pid
         self.level = level if level in LEVELS else "normal"
+        self.strategy = strategy if strategy in STRATEGIES else "hero"
         self.rng = random.Random(seed)
         self.mode = "play"
         self.walk = True              # /bot stand — не ходит
@@ -154,7 +166,18 @@ class SmartBot:
     # ------------------------------------------------------------------ решения
 
     def style(self, me):
-        return STYLES.get(me.hero, DEFAULT_STYLE)
+        return {**STYLES.get(me.hero, DEFAULT_STYLE), **STRATEGIES[self.strategy]}
+
+    def choose(self, options):
+        """Выбор дела: лучшее по оценке (прежнее — с прибавкой STICK); с «температурой» — случайно, но
+        хорошее вероятнее (softmax): так ошибается человек — не «всегда третье», а «иногда не лучшее»."""
+        scored = [(s + (STICK if g == self.goal else 0.0), g, d) for s, g, d in options]
+        temp = self.L["temperature"]
+        if temp <= 0 or len(scored) == 1:
+            return max(scored, key=lambda o: o[0])
+        top = max(s for s, _, _ in scored)
+        weights = [math.exp((s - top) / temp) for s, _, _ in scored]
+        return self.rng.choices(scored, weights)[0]
 
     def decide(self, me, foe, threats):
         """Раз в think секунд: что делать (уклониться, отступить, подобрать, фарм, бой) и куда идти."""
@@ -190,8 +213,7 @@ class SmartBot:
             options.append((0.5 + st["aggro"] * 0.7 - (0.5 if low else 0.0), "duel", foe))
         if not options:
             options.append((0.1, "home", self.home_point(me)))
-        options.sort(key=lambda o: -o[0])
-        _, goal, data = options[0]
+        _, goal, data = self.choose(options)
         self.goal = goal
         if goal in ("pickup", "ammo", "home"):
             self.move = self.step_toward(me, data)

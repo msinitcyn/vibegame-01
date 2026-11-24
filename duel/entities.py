@@ -276,7 +276,8 @@ class Player(Unit):
         self.dir = direction          # +1 стреляет вправо, -1 влево
         self.reset()
 
-    def reset(self, hp=MAX_HP):
+    def reset(self, hp=None):
+        hp = MAX_HP if hp is None else hp       # по умолчанию — из конфига в момент вызова (лаборатория крутит)
         self.x = self.start_x
         self.y = (TOP + BOTTOM) / 2
         self.hp = self.max_hp = hp
@@ -665,7 +666,8 @@ class Mob:
     кто попал последним, и бьёт при касании. Дальнобойный (ranged) вместо этого держится
     на расстоянии и стреляет снарядами. Артефакты не берёт, эффекты на него не действуют."""
 
-    def __init__(self, x, y, hp=MOB_HP, ranged=False):
+    def __init__(self, x, y, hp=None, ranged=False):
+        hp = MOB_HP if hp is None else hp
         self.id = None
         self.x, self.y = x, y
         self.hp = self.max_hp = hp

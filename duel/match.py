@@ -124,7 +124,8 @@ ALLY_PICK = 14                    # курсор не дальше стольк�
 
 
 class Match:
-    def __init__(self, hp=MAX_HP, seed=None, heroes=None):
+    def __init__(self, hp=None, seed=None, heroes=None):
+        hp = MAX_HP if hp is None else hp
         self.seed = random.randrange(2 ** 32) if seed is None else seed
         self.rng = random.Random(self.seed)
         self.last_id = 0
