@@ -55,8 +55,10 @@ STRATEGIES = {
     "turtle": {"aggro": 0.1, "farm": 0.2, "range": 480},       # сидит у себя, бьёт подходящих
 }
 FIRE_DIST = 560                   # дальше — не стреляет (пуля долго летит, легко уклониться)
-FIRE_DIST_LOW = 300               # патронов мало — только вблизи
+FIRE_DIST_LOW = 300               # последний патрон — только ближе этого
+FIRE_PER_AMMO = 4                 # каждый патрон — на столько пикселей дальше (20 патронов — 380, 65 — предел 560)
 LOW_AMMO = 6
+AMMO_PLENTY = 40                  # столько патронов — «хватает», за дальней пачкой не идёт
 
 SELF_COMBAT = {"triple", "rapid", "shield", "shrink", "clones", "sentries", "trees", "beam", "zombies", "bear",
                "firmground", "icewalk", "invisible", "slowfoe", "clearfoe", "speedsteal"}
@@ -158,7 +160,7 @@ class SmartBot:
             reach = reach_override
         fire = self.shoot and self.target is not None and me.cooldown <= 0 and me.ammo > 0 and \
             abs(self.angle_diff(aim, me.aim)) < 0.25 and reach is not None and \
-            reach < (FIRE_DIST if me.ammo > LOW_AMMO else FIRE_DIST_LOW)     # далеко — патроны не тратит
+            reach < self.fire_dist(me)                # далеко — патроны не тратит
         melee = self.melee_ready(me)
         move = self.move if self.walk else (0, 0)
         return move, fire, melee, slot, aim, reach
@@ -198,10 +200,11 @@ class SmartBot:
         art = self.nearest_safe(me, [(a.x, a.y) for a in m.artifacts], 320)
         if art:
             options.append((1.2 - math.hypot(art[0] - me.x, art[1] - me.y) / 600, "pickup", art))
-        if me.ammo < 6:
-            pack = self.nearest_safe(me, [(a.x, a.y) for a in m.ammo_packs], 500)
-            if pack:
-                options.append((1.5, "ammo", pack))
+        pack = self.nearest_safe(me, [(a.x, a.y) for a in m.ammo_packs if a.life > 0], 600)
+        if pack:                                      # патроны: рядом — берёт всегда, далеко — когда мало
+            d = math.hypot(pack[0] - me.x, pack[1] - me.y)
+            need = 1.0 - min(me.ammo, AMMO_PLENTY) / AMMO_PLENTY
+            options.append((max(0.5 + 1.2 * need - d / 700, 1.4 if d < 140 else 0.0), "ammo", pack))
         angry = [x for x in m.mobs if x.alive and x.zombie_of is None and x.target is me]
         calm = [x for x in m.mobs if x.alive and x.zombie_of is None and x.target is None
                 and self.safe_spot(me, x.x, x.y) and math.hypot(x.x - me.x, x.y - me.y) < 520]
@@ -372,6 +375,10 @@ class SmartBot:
         turn = self.L["turn"] * STEP
         self.aim += max(-turn, min(turn, self.angle_diff(want, self.aim)))
         return self.aim, reach
+
+    def fire_dist(self, me):
+        """Дальше этого не стреляет: патронов мало — подпускает ближе (издалека пуля — мимо: от неё уходят)."""
+        return min(FIRE_DIST, FIRE_DIST_LOW + FIRE_PER_AMMO * me.ammo)
 
     def melee_ready(self, me):
         """Вблизи — меч: соперник или злой моб у самого мага."""
