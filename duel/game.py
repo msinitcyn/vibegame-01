@@ -58,7 +58,7 @@ from .client_net import NetClientMixin
 class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, ChatMixin):
     """Приложение поверх матча: хотсит — оба игрока за одним компьютером."""
 
-    def __init__(self, windowed=False, net=None, pad=0, replay=None):
+    def __init__(self, windowed=False, net=None, pad=0, replay=None, movie=None):
         """net — (соединение, место от сервера, адрес) для сетевого клиента; pad — номер своего геймпада;
         replay — данные повтора партии (duel/replay.py): игра только показывает его."""
         pygame.init()
@@ -166,10 +166,36 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.replay = None
         if net:
             self.enter_net(*net)
+        self.movie = None             # идущий ролик (duel/movie.py) и куда вернуться после
+        self.movie_back = "menu"
         if replay:
             self.start_replay(replay)
+        elif movie:
+            self.start_movie(movie)
         elif logs.ready() and logs.unsent_crashes() and self.settings.get("crash_reports", "ask") == "ask":
             self.state = "crash_ask"          # в прошлый раз игра упала — спросить, можно ли отправлять отчёты
+
+    def start_movie(self, name, back="menu"):
+        """Показать ролик assets/movies/<name>; кончился или Esc — в back."""
+        from .movie import Movie
+        self.movie, self.movie_back = Movie(name), back
+        self.state = "movie"
+        log.info("ролик: %s", name)
+
+    def end_movie(self):
+        self.movie = None
+        self.audio.stop_sounds()
+        self.state = self.movie_back
+
+    def movie_frame(self, dt):
+        """Кадр ролика: сцены идут, звучат, рисуются; кончился — назад."""
+        self.movie.update(dt)
+        self.event_sounds(self.movie.take_events())
+        if self.movie.done:
+            self.end_movie()
+            return
+        self.movie.render(self, self.screen)
+        pygame.display.flip()
 
     def toggle_fullscreen(self):
         """F11: окно <-> полный экран. Окно пересоздаётся на том мониторе, где оно сейчас: просто
@@ -468,6 +494,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
                 self.draw_account()
         elif self.state == "crash_ask":
             self.draw_crash_ask()
+        elif self.state == "movie":
+            self.movie_frame(dt)
         else:
             return False
         return True
@@ -623,7 +651,9 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         if demo != self.sound_demo:
             self.audio.stop_sounds()
             self.sound_demo, self.demo_snap = demo, None
-        if self.state == "play" and not self.snap.get("winner") and not (self.paused and not self.net):
+        if self.state == "movie" and self.movie and self.movie.last_snap:
+            want = self.loop_keys(self.movie.last_snap, "movie")
+        elif self.state == "play" and not self.snap.get("winner") and not (self.paused and not self.net):
             want = self.loop_keys(self.snap, "play")
         elif demo and has_demo(demo) and self.demo_snap is not None:
             want = self.loop_keys(self.demo_snap, "demo")
@@ -632,6 +662,9 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.audio.set_loops(want)
 
     def update_music(self):
+        if self.state == "movie" and self.movie:
+            self.audio.movie_music(self.movie.music)
+            return
         in_menu = self.state in MENU_STATES or self.net_waiting
         if self.state == "help" and has_demo(self.help_kind() or ""):
             self.audio.music("quiet")         # идёт сценка — музыки нет, слышны её звуки

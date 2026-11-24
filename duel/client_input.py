@@ -42,6 +42,14 @@ class InputMixin:
         if sc == pygame.KSCAN_F11:
             self.toggle_fullscreen()
             self.held.clear()
+        if self.state == "movie":                 # ролик: Esc — пропустить; F5 — перечитать и сначала
+            if sc == pygame.KSCAN_ESCAPE:
+                self.end_movie()
+            elif sc == pygame.KSCAN_F5 and self.movie:
+                from . import movie
+                movie.reload_all()
+                self.start_movie(self.movie.name, self.movie_back)
+            return
         if getattr(self, "replay", None):         # повтор партии: только просмотр
             self.replay_key(sc)
             return
@@ -221,6 +229,8 @@ class InputMixin:
             return {**up, **ok, B.CONTROLLER_BUTTON_START: B.KSCAN_RETURN}
         if self.state == "update":
             return {**ok, **back}
+        if self.state == "movie":                  # ролик: любая «назад» — пропустить
+            return back
         if self.state in ("help", "settings", "keys"):
             return {**up, **sides, **ok, **back}
         if self.state in ("entry", "entering"):

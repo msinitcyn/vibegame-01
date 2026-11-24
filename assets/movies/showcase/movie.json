@@ -1,0 +1,98 @@
+{
+  "_": "Пример ролика — что умеет движок (duel/movie.py): сцены, камера, появление и смена магов, мобы и артефакты, заклинания, тряска, переходы, субтитры subs.<язык>.srt.",
+  "transition": "fade",
+  "scenes": [
+    {
+      "length": 3.6,
+      "heroes": {"blue": "fire", "red": "frost"},
+      "lands": ["fire", "frost"],
+      "camera": [0, 84, 1000, 640],
+      "setup": {"blue": {"x": 430, "y": 150, "hidden": true}, "red": {"x": 570, "y": 150, "hidden": true}},
+      "script": [
+        {"t": 0.0, "do": "camera", "view": [330, 90, 340, 120], "time": 2.0},
+        {"t": 0.0, "do": "aim", "who": "blue", "at": "red"},
+        {"t": 0.0, "do": "aim", "who": "red", "at": "blue"},
+        {"t": 0.4, "do": "appear", "who": "blue"},
+        {"t": 0.7, "do": "appear", "who": "red"},
+        {"t": 1.4, "do": "hero", "who": "blue", "hero": "nature"},
+        {"t": 1.6, "do": "hero", "who": "red", "hero": "dark"},
+        {"t": 2.3, "do": "hero", "who": "blue", "hero": "light"},
+        {"t": 2.5, "do": "hero", "who": "red", "hero": "earth"},
+        {"t": 3.0, "do": "vanish", "who": "blue"},
+        {"t": 3.0, "do": "vanish", "who": "red"}
+      ]
+    },
+    {
+      "length": 3.4,
+      "transition": "flash",
+      "heroes": {"blue": "fire", "red": "frost"},
+      "camera": [320, 84, 380, 180],
+      "setup": {"blue": {"x": 360, "y": 150}, "red": {"x": 640, "y": 150}},
+      "script": [
+        {"t": [0.2, 3.2], "every": 0.35, "do": "fire", "who": "blue", "at": "red"},
+        {"t": [0.35, 3.2], "every": 0.4, "do": "fire", "who": "red", "at": "blue"},
+        {"t": [0.3, 1.0], "do": "move", "who": "red", "dir": [0, 1]},
+        {"t": [1.0, 2.2], "do": "move", "who": "red", "dir": [0, -1]},
+        {"t": [0.8, 1.4], "do": "move", "who": "blue", "dir": [0, 1]}
+      ]
+    },
+    {
+      "length": 2.8,
+      "transition": "wipe",
+      "heroes": {"blue": "nature", "red": "dark"},
+      "camera": [400, 95, 200, 112],
+      "setup": {"blue": {"x": 478, "y": 150}, "red": {"x": 522, "y": 150}},
+      "script": [
+        {"t": 0.0, "do": "gear", "who": "blue", "kind": "sword"},
+        {"t": 0.0, "do": "gear", "who": "red", "kind": "sword"},
+        {"t": [0.3, 2.6], "every": 0.6, "do": "melee", "who": "blue"},
+        {"t": [0.6, 2.6], "every": 0.6, "do": "melee", "who": "red"},
+        {"t": [0.3, 2.6], "every": 0.6, "do": "shake", "power": 4, "time": 0.25}
+      ]
+    },
+    {
+      "length": 4.2,
+      "transition": "dissolve",
+      "heroes": {"blue": "light", "red": "earth"},
+      "camera": [330, 84, 360, 170],
+      "mortal_mobs": true,
+      "setup": {"blue": {"x": 380, "y": 150}, "red": {"x": 900, "y": 600},
+                "mobs": [{"x": 540, "y": 125, "hp": 1}, {"x": 580, "y": 155, "hp": 1}, {"x": 540, "y": 185, "hp": 1}]},
+      "script": [
+        {"t": 0.3, "do": "fire", "who": "blue", "at": [540, 125]},
+        {"t": 0.7, "do": "fire", "who": "blue", "at": [580, 155]},
+        {"t": 1.1, "do": "fire", "who": "blue", "at": [540, 185]},
+        {"t": 1.9, "do": "walk_to", "who": "blue", "x": 540, "y": 125},
+        {"t": 2.7, "do": "walk_to", "who": "blue", "x": 580, "y": 155},
+        {"t": 3.3, "do": "walk_to", "who": "blue", "x": 540, "y": 185}
+      ]
+    },
+    {
+      "length": 3.6,
+      "transition": "flash",
+      "heroes": {"blue": "fire", "red": "frost"},
+      "camera": [300, 84, 400, 200],
+      "setup": {"blue": {"x": 380, "y": 150}, "red": {"x": 620, "y": 150}},
+      "script": [
+        {"t": 0.3, "do": "cast", "who": "blue", "item": "lasso"},
+        {"t": [0.4, 1.6], "do": "move", "who": "red", "dir": [1, 0]},
+        {"t": 1.7, "do": "cast", "who": "red", "item": "foe_freeze"},
+        {"t": 1.9, "do": "shake", "power": 5, "time": 0.4},
+        {"t": 2.4, "do": "cast", "who": "blue", "item": "firering"},
+        {"t": 2.5, "do": "shake", "power": 7, "time": 0.6}
+      ]
+    },
+    {
+      "length": 4.0,
+      "transition": "fade",
+      "heroes": {"blue": "nature", "red": "fire"},
+      "camera": [540, 84, 360, 200],
+      "setup": {"blue": {"x": 640, "y": 150}, "red": {"x": 900, "y": 600}},
+      "script": [
+        {"t": 0.3, "do": "walk_to", "who": "blue", "x": 820, "y": 150, "time": 1.6},
+        {"t": 0.3, "do": "follow", "who": "blue", "w": 360},
+        {"t": 2.2, "do": "walk_to", "who": "blue", "x": 620, "y": 150, "time": 1.8}
+      ]
+    }
+  ]
+}

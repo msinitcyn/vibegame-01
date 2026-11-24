@@ -137,6 +137,17 @@ class Audio:
         for snd, base in self.base.items():
             snd.set_volume(min(1.0, base * self.sfx_level / 5))
 
+    def movie_music(self, mask):
+        """Музыка ролика: файлы по маске в assets/music (нет маски или файлов — тишина)."""
+        files = sorted(MUSIC_DIR.glob(media_mask(mask))) if (self.enabled and mask) else []
+        if not files:
+            self.music("quiet")
+            return
+        if self.tracks.get("movie") != files:
+            self.tracks["movie"] = files
+            self.kind = None                  # другой ролик — начать заново
+        self.music("movie")
+
     def music(self, kind):
         """Включить музыку нужного вида (menu / game; quiet — плавно выключить); если она уже играет — ничего не делать."""
         if not self.enabled or kind == self.kind:

@@ -71,6 +71,7 @@ def heroes_of(snap):
     for p in snap.get("players", []):
         if p.get("hero"):
             out[p["id"]] = p["hero"]
+    out.update(snap.get("heroes") or {})          # ролики: маг спрятан, а цвета его стороны нужны
     return out
 
 

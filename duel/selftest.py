@@ -35,6 +35,12 @@ def run(seconds=None):
     g.draw_join()
     g.close_finder()
 
+    g.start_movie("showcase")                     # ролик: файлы сценария и субтитров есть в сборке, сцены идут
+    for _ in range(90):
+        g.movie_frame(1 / 30)
+    assert g.state == "movie" and g.movie.t > 2.5
+    g.end_movie()
+
     rng = random.Random(1)
     g.start()
     games = 0
