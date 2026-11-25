@@ -624,3 +624,89 @@ def draw_peace_flag(surf, x, y, k, time):
     inner = [(10, 7), (23, 9 + wave), (23, 16 + wave), (10, 14)]
     pygame.draw.polygon(layer, (250, 250, 245, alpha), inner)
     surf.blit(layer, (int(x - 8), int(y - 34 - rise)))
+
+
+def draw_deflect(surf, kind, src, dst, r, k, time):
+    """«Дубовая кора» отбила заклинание: значок летит от кастовавшего, бьётся о кору (вспышка, щепки) и
+    отскакивает назад, кувыркаясь и тая. k — 0..1 (DEFLECT_FX)."""
+    from ..icons import draw_icon
+    from ..items import ITEMS
+    P = params("oak")
+    bark = rgb(P.get("bark"), (122, 82, 48))
+    light = rgb(P.get("light"), (176, 132, 79))
+    sx, sy = src
+    tx, ty = dst
+    dx, dy = tx - sx, ty - sy
+    dist = math.hypot(dx, dy) or 1.0
+    ux, uy = dx / dist, dy / dist
+    ring = r + float(P.get("gap", 12))
+    hit = (tx - ux * ring, ty - uy * ring)                               # где заклинание встречает кору
+    hit_at = 0.45
+    color = ITEMS.get(kind, ("", (255, 255, 255)))[1]
+    if k < hit_at:                                                       # летит к коре, с хвостом
+        q = (k / hit_at) ** 1.4
+        x, y = sx + (hit[0] - sx) * q, sy + (hit[1] - sy) * q
+        trail = pygame.Surface((80, 80), pygame.SRCALPHA)
+        for j in range(5):
+            pygame.draw.circle(trail, (*color[:3], 40 + j * 25), (int(40 - ux * (5 - j) * 6), int(40 - uy * (5 - j) * 6)),
+                               4 + j)
+        surf.blit(trail, (int(x - 40), int(y - 40)))
+        draw_icon(surf, kind, (int(x), int(y)), 11, level=False)
+        return
+    q = (k - hit_at) / (1 - hit_at)
+    if q < 0.35:                                                         # удар о кору: вспышка и щепки
+        f = q / 0.35
+        layer = pygame.Surface((int(ring * 2 + 60),) * 2, pygame.SRCALPHA)
+        c = layer.get_width() // 2
+        pygame.draw.circle(layer, (*light, int(230 * (1 - f))), (c, c), int(ring + 4 * f), max(1, int(6 * (1 - f))))
+        hx, hy = c + (hit[0] - tx), c + (hit[1] - ty)
+        pygame.draw.circle(layer, (255, 240, 200, int(220 * (1 - f))), (int(hx), int(hy)), int(6 + 10 * f))
+        for j in range(6):                                               # щепки
+            a = math.atan2(-uy, -ux) + (j - 2.5) * 0.45
+            d = 6 + 26 * ease_out(f)
+            pygame.draw.rect(layer, (*bark, int(240 * (1 - f))),
+                             (int(hx + math.cos(a) * d) - 2, int(hy + math.sin(a) * d) - 1, 4, 3))
+        surf.blit(layer, layer.get_rect(center=(int(tx), int(ty))))
+    # отскок: назад и вверх по дуге, кувыркается и тает
+    back = 70 * ease_out(q)
+    x = hit[0] - ux * back
+    y = hit[1] - uy * back - math.sin(math.pi * q) * 30
+    size = max(4, int(11 * (1 - 0.4 * q)))
+    icon = pygame.Surface((size * 2 + 6,) * 2, pygame.SRCALPHA)
+    draw_icon(icon, kind, (size + 3, size + 3), size, level=False)
+    icon = pygame.transform.rotate(icon, q * 540)
+    icon.set_alpha(int(255 * (1 - q) ** 0.8))
+    surf.blit(icon, icon.get_rect(center=(int(x), int(y))))
+
+
+def draw_nofire(surf, pos, r, since, left, time):
+    """«Соперник не стреляет»: облачко над магом со значком перечёркнутого автомата; появляется с отскоком,
+    чуть покачивается, в конце тает. Автомат у мага остаётся — мечом махать можно."""
+    pop = min(1.0, since / 0.25)
+    scale = 0.6 + 0.4 * ease_out(pop) + 0.08 * math.sin(min(1.0, since / 0.35) * math.pi)
+    alpha = int(255 * min(1.0, max(0.0, left) / 0.4))
+    if alpha <= 0:
+        return
+    w, h = int(46 * scale), int(30 * scale)
+    layer = pygame.Surface((w + 12, h + 16), pygame.SRCALPHA)
+    cx, cy = (w + 12) // 2, (h + 10) // 2
+    puffs = [(-0.32, 0.1, 0.3), (0.0, -0.12, 0.36), (0.32, 0.08, 0.3), (0.0, 0.22, 0.32)]
+    for outline in (True, False):                                         # облачко: тёмный контур, белое
+        for px, py, pr in puffs:
+            rr = int(pr * w * (1.0 if not outline else 1.0) + (2 if outline else 0))
+            pygame.draw.circle(layer, (*INK, alpha) if outline else (245, 245, 250, alpha),
+                               (int(cx + px * w), int(cy + py * h)), rr)
+    pygame.draw.circle(layer, (*INK, alpha), (int(cx - w * 0.42), int(cy + h * 0.55)), max(2, int(3 * scale)))
+    pygame.draw.circle(layer, (245, 245, 250, alpha), (int(cx - w * 0.42), int(cy + h * 0.55)), max(1, int(2 * scale)))
+    g = scale                                                            # автоматик внутри
+    gun = [(cx - 11 * g, cy - 2 * g), (cx + 9 * g, cy - 2 * g), (cx + 9 * g, cy + 1 * g),
+           (cx - 3 * g, cy + 1 * g), (cx - 5 * g, cy + 6 * g), (cx - 9 * g, cy + 6 * g), (cx - 7 * g, cy + 1 * g),
+           (cx - 11 * g, cy + 1 * g)]
+    pygame.draw.polygon(layer, (70, 74, 86, alpha), gun)
+    red = (215, 50, 50, alpha)
+    rr = int(10 * g)
+    pygame.draw.circle(layer, red, (int(cx), int(cy + 1)), rr, max(2, int(2.5 * g)))
+    off = rr * 0.7
+    pygame.draw.line(layer, red, (cx - off, cy + 1 + off), (cx + off, cy + 1 - off), max(2, int(2.5 * g)))
+    bob = math.sin(time * 2.4) * 1.5
+    surf.blit(layer, layer.get_rect(center=(int(pos[0] + r * 2.1), int(pos[1] - r * 2.5 + bob))))   # выше и правее полоски жизней

@@ -620,3 +620,34 @@ def test_oak_bark_animation_draws_through_its_life():
     for since in (0.0, 0.2, 0.5, 2.0, total - 0.3, total - 0.01):
         fx_mage.draw_oak_bark(surf, (150, 150), 14, since, total - since, since)
     assert surf.get_bounding_rect().w > 0
+
+
+def test_oak_bark_removes_lasso_and_nofire_and_deflects_new_spells():
+    """Кора снимает уже наложенные заклинания (и лассо), а новые — отскакивают (видно в снимке)."""
+    from duel.config import DEFLECT_FX
+    from duel.snapshot import snapshot
+    m = new_match()
+    b, r = m.blue, m.red
+    b.hero = "nature"
+    m.apply_item(r, "lasso")
+    m.apply_item(r, "foe_nofire")
+    assert "lassoed" in b.effects and "nofire" in b.effects
+    m.apply_item(b, "immune")
+    assert "lassoed" not in b.effects and "nofire" not in b.effects
+    m.apply_item(r, "lasso")
+    assert "lassoed" not in b.effects
+    snap = snapshot(m)
+    assert snap["deflects"] and snap["deflects"][0]["kind"] == "lasso" and snap["deflects"][0]["to"] == "blue"
+    step(m, DEFLECT_FX + 0.1)
+    assert not snapshot(m)["deflects"]
+
+
+def test_deflect_and_nofire_pictures_draw():
+    import pygame
+    from duel.fx import mage as fx_mage
+    surf = pygame.Surface((400, 300), pygame.SRCALPHA)
+    for k in (0.1, 0.44, 0.5, 0.7, 0.99):
+        fx_mage.draw_deflect(surf, "lasso", (350, 150), (100, 150), 14, k, k)
+    for since in (0.0, 0.1, 1.0, 3.9):
+        fx_mage.draw_nofire(surf, (100, 150), 14, since, 4 - since, since)
+    assert surf.get_bounding_rect().w > 0

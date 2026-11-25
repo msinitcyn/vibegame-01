@@ -16,6 +16,7 @@ from .config import (
     ZOMBIE_RISE,
     MOBSWAP_FX,
     PEACE_FX,
+    DEFLECT_FX,
     ZOMBIE_TIME,
     SHOT_FLASH,
     WALK_FPS,
@@ -105,11 +106,8 @@ def draw_effects(surf, u, time=0.0):
                               u.get("shield_hits", 0), u.get("shield_flash", 0) / SHIELD_FLASH, time)
     if u.get("shield_break", 0) > 0:              # щит лопнул — осколки
         fx_mage.draw_shield_break(surf, pos, u["r"], SHIELD_GAP, 1 - u["shield_break"] / (SHIELD_FLASH * 1.5))
-    if "nofire" in effects:
-        d = int(r * 0.7)
-        cx, cy = pos
-        pygame.draw.line(surf, (30, 30, 30), (cx - d, cy - d), (cx + d, cy + d), 4)
-        pygame.draw.line(surf, (30, 30, 30), (cx - d, cy + d), (cx + d, cy - d), 4)
+    if "nofire" in effects:                       # не стреляет — облачко с перечёркнутым автоматом над магом
+        fx_mage.draw_nofire(surf, pos, u["r"], since_start("nofire", effects["nofire"]), effects["nofire"], time)
 
 
 def draw_hp(surf, u, color, font, hp=None, max_hp=None, shield=None, scale=1.0):
@@ -628,5 +626,10 @@ def draw_field(surf, snap, font, viewer=None):
             fx_spells.beam_cast(surf, owner, aim, b["age"] / cast, side_color(heroes, b["owner"]))
     for m in snap["mobs"]:                # замахи и удары мобов — поверх магов, чтобы были видны
         draw_mob_attack(surf, m, font)
+    for d in snap.get("deflects", []):     # «Дубовая кора» отбила заклинание: летит, бьётся о кору, отскакивает
+        target = by_id.get(d["to"])
+        if target is not None:
+            fx_mage.draw_deflect(surf, d["kind"], (d["x"], d["y"]), _pos(target), target["r"], d["age"] / DEFLECT_FX,
+                                 snap.get("time", 0))
     for h in snap.get("hits", []):        # попадания пуль — поверх всех
         fx_bullets.draw_hit(surf, h["x"], h["y"], heroes[h["owner"]], h["on"], h["age"])

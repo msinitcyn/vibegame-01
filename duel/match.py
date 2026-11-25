@@ -27,6 +27,7 @@ from .commands import REACH_FAR, Command
 from .config import (
     MOB_LATE_EXTRA,
     PEACE_FX,
+    DEFLECT_FX,
     DEATH_TIME,
     WALL_MIN,
     WALL_RANGE,
@@ -149,6 +150,7 @@ class Match:
         self.beams = []               # «Луч света»
         self.ice = []                 # «Ледяная тропа»: куски следа
         self.hits = []                # попадания пуль для анимации: [x, y, чья пуля, во что, сколько прошло]
+        self.deflects = []            # «Дубовая кора» отбила: [артефакт, откуда x, y, в кого, сколько прошло] (картинка)
         self.trees = []               # «Стена деревьев»
         self.rings = []               # «Огненный круг»
         self.sentries = []            # «Лесные стражи»
@@ -315,6 +317,7 @@ class Match:
         foe = self.other(p)
         if ITEMS[kind][0] == "foe" and "immune" in foe.effects:
             self.emit("immune", foe.id, kind)     # «Дубовая кора»: на Природу не действует
+            self.deflects.append([kind, p.x, p.y, foe, 0.0])   # заклинание летит и отскакивает от коры
             return
         if kind == "heal":                    # себя или союзника под курсором (свой зомби, двойник)
             u = self.ally_at_cursor(p) or p
@@ -556,6 +559,9 @@ class Match:
         for ring in self.rings:
             ring.life -= dt
         self.rings = [r for r in self.rings if r.life > 0]
+        for d in self.deflects:
+            d[4] += dt
+        self.deflects = [d for d in self.deflects if d[4] < DEFLECT_FX]
 
     def update_player(self, p, dt, move):
         """Маг за такт: движение, конец медведя, лассо, границы, ледяной след, урон земли и огня."""

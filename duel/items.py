@@ -149,7 +149,7 @@ EFFECT_ICON = {"lassoed": "lasso", "raising": "zombies", "cloning": "clones", "g
                "invert": "foe_invert", "noitems": "foe_noitems", "quickstep": "speedsteal", "sapped": "speedsteal"}
 INSTANT_ITEMS = ()                                  # срабатывают при подборе, минуя инвентарь
 # дебаффы: снимаются только временем или очищением, ничем другим
-BAD_EFFECTS = ("grow2", "freeze", "nofire", "invert", "noitems", "sapped", "quake")
+BAD_EFFECTS = ("grow2", "freeze", "nofire", "invert", "noitems", "sapped", "quake", "lassoed")   # снимают очищение и кора
 
 
 def ring_color(kind):

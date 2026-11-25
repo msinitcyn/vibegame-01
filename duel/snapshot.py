@@ -50,6 +50,8 @@ def snapshot(match):
         } for p in m.players],
         "bullets": [{"id": b.id, "x": _xy(b.x), "y": _xy(b.y), "owner": b.owner.id,
                      "a": round(math.atan2(b.vy, b.vx), 2)} for b in m.bullets],
+        "deflects": [{"kind": k, "x": _xy(x), "y": _xy(y), "to": to.id, "age": _t(age)}
+                     for k, x, y, to, age in m.deflects],
         "hits": [{"x": _xy(u.x if u is not None else x), "y": _xy(u.y if u is not None else y),
                   "owner": o.id, "on": what, "age": _t(age)} for x, y, o, what, age, u in m.hits],
         "mobs": [{

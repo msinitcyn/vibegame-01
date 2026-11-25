@@ -1,15 +1,16 @@
 {
   "heroes": {"blue": "nature", "red": "fire"},
-  "view": [320, 86, 380, 180],
-  "length": 4.4,
+  "view": [300, 86, 440, 200],
+  "length": 5.0,
   "speed": 0.7,
-  "setup": {"blue": {"x": 400, "y": 150}, "red": {"x": 620, "y": 150}},
+  "setup": {"blue": {"x": 360, "y": 160}, "red": {"x": 680, "y": 160}},
   "script": [
     {"t": 0.0, "do": "aim", "who": "blue", "at": "red"},
     {"t": 0.0, "do": "aim", "who": "red", "at": "blue"},
-    {"t": 0.3, "do": "cast", "who": "red", "item": "foe_grow"},
-    {"t": 1.2, "do": "cast", "who": "blue", "item": "immune"},
-    {"t": 2.3, "do": "cast", "who": "red", "item": "foe_freeze"},
-    {"t": [2.6, 4.2], "every": 0.5, "do": "fire", "who": "red", "at": "blue"}
+    {"t": 0.3, "do": "cast", "who": "red", "item": "foe_nofire"},
+    {"t": 0.9, "do": "cast", "who": "red", "item": "lasso"},
+    {"t": 1.35, "do": "cast", "who": "blue", "item": "immune"},
+    {"t": 2.6, "do": "cast", "who": "red", "item": "lasso"},
+    {"t": 3.7, "do": "cast", "who": "red", "item": "foe_freeze"}
   ]
 }
