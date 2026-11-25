@@ -132,7 +132,7 @@ class MenusMixin:
             self.menu_select()
 
     def menu_label(self, i):
-        return {"play": t("menu.two"), "net": t("menu.connect" if WEB else "menu.net"),
+        return {"play": t("menu.two"), "team": t("menu.team"), "net": t("menu.connect" if WEB else "menu.net"),
                 "test": t("menu.test"), "help": t("menu.help"),
                 "settings": t("menu.settings"),
                 "update": t("menu.update", v=self.updater.latest or "")}[self.menu[i]]
@@ -149,7 +149,9 @@ class MenusMixin:
             self.settings_back = "menu"
             self.settings_index = 0
         elif action == "test":
-            self.open_pick(MAX_HP, bot=True)     # обычная партия; больше жизней — /hp в консоли
+            self.open_pick(MAX_HP, bot=True)
+        elif action == "team":
+            self.open_seats()     # обычная партия; больше жизней — /hp в консоли
         elif action == "net":
             self.open_join()                  # в браузере — только адрес сервера (WebSocket)
         elif action == "update":

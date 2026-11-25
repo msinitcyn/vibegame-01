@@ -85,7 +85,8 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         подписываем 1–4 (рядом с WASD) у себя, у соперника и у зрителя — ничего."""
         if self.net:
             return self.key_names["blue"][i] if pid == self.me else ""
-        return self.key_names[pid][i]
+        layout = self.pid_layout(pid)
+        return self.key_names[layout][i] if layout else ""
 
     def draw_countdown(self):
         """Отсчёт перед партией: крупная цифра 3 – 2 – 1 по центру поля, потом «В бой!»."""
@@ -170,11 +171,12 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         pygame.draw.rect(s, (30, 33, 45), (0, 0, WIDTH, HUD_H))
         pygame.draw.line(s, GREY, (0, HUD_H), (WIDTH, HUD_H), 2)
         self.draw_wave_timer()
-        # 2×2: на панели — ведущие команд (blue, red), у имени — возрождения команды; напарники — на поле
-        for i_player, p in enumerate(q for q in self.snap["players"] if q["id"] in ("blue", "red")):
+        # 2×2: на панели — по магу от команды (человек, если есть), у имени — возрождения команды; другие — на поле
+        shown = self.hud_pids()
+        for i_player, p in enumerate(q for q in self.snap["players"] if q["id"] in shown):
             pid = p["id"]
             color = self.side_color(pid)
-            left = pid == "blue"
+            left = (p.get("team") or pid) == "blue"
             has_pad = self.pad_of(pid) is not None      # ромб кнопок — у того, у кого геймпад
             rects, x0, inv_w = self.inventory_rects(left, has_pad)
             armed = self.armed_slot(pid) if pid in self.my_pids() else None
@@ -273,6 +275,36 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
                 pygame.draw.arc(bg, light, ring, start, stop, 3)
             self._field_bg = cached = (heroes, bg)
         return cached[1]
+
+    def hud_pids(self):
+        """Чьи артефакты на панели: 1×1 — оба; 2×2 — от каждой команды человек (ведущий, если оба) или ведущий."""
+        players = self.snap["players"]
+        if len(players) <= 2:
+            return [p["id"] for p in players]
+        humans = set(self.my_pids())
+        out = []
+        for team in ("blue", "red"):
+            ids = [p["id"] for p in players if (p.get("team") or p["id"]) == team]
+            out.append(next((i for i in ids if i in humans), ids[0]))
+        return out
+
+    def draw_mate_items(self, s):
+        """2×2: артефакты магов, которых нет на панели, — строкой значков под магом."""
+        shown = self.hud_pids()
+        for p in self.snap["players"]:
+            if p["id"] in shown or p.get("out") or p.get("dead") is not None:
+                continue
+            items = p.get("items") or []
+            r, gap = 9, 3
+            x0 = p["x"] - (len(items) * (2 * r + gap) - gap) / 2 + r
+            y = p["y"] + p["r"] + 16
+            for i, kind in enumerate(items):
+                c = (round(x0 + i * (2 * r + gap)), round(y))
+                pygame.draw.circle(s, (22, 24, 34), c, r + 1)
+                if kind:
+                    draw_icon(s, kind, c, r)
+                else:
+                    pygame.draw.circle(s, GREY, c, r, 1)
 
     def name_line(self, p, color):
         """Первая строка статуса: имя и снаряжение (4 значка: надетое — ярко в золотой рамке, нет — бледно)."""
@@ -596,6 +628,8 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         if getattr(self, "addons", None):                # слои аддонов — поверх поля, под интерфейсом
             self.addons.draw_field(s, self.snap, viewer or None, self.tiny)
         self.draw_armed_previews(s)
+        if len(self.snap["players"]) > 2:
+            self.draw_mate_items(s)
         target = getattr(self, "walk_to", None)
         if target:                                     # «идти к курсору»: куда идёт маг — ромбик на земле
             x, y = int(target[0]), int(target[1])

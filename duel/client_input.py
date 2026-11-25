@@ -92,6 +92,9 @@ class InputMixin:
         if self.state == "pick":
             self.pick_key(sc)
             return
+        if self.state == "seats":
+            self.seats_key(sc)
+            return
         if self.state == "join":
             self.join_key(sc)
             return
@@ -146,8 +149,10 @@ class InputMixin:
             # двойное нажатие ячейки сработало бы за одно)
             own = self.own_pid() if self.net_keys_mode() else None
             actions = []
-            for pid, c in self.controls.items():
-                who = own or pid
+            for layout, c in self.controls.items():
+                pid = who = own or self.layout_pid(layout)
+                if who is None:                   # 2×2: раскладка никому не досталась
+                    continue
                 if sc in c.fire:
                     actions.append((who, "fire", None))
                 if sc in c.melee:
@@ -274,7 +279,7 @@ class InputMixin:
             return {**up, **ok, **back}
         if self.state == "lobby":                  # △ — ищу соперника, Share — разминка
             return {**up, **ok, **back, B.CONTROLLER_BUTTON_Y: B.KSCAN_F, B.CONTROLLER_BUTTON_BACK: B.KSCAN_T}
-        if self.state == "pick":
+        if self.state in ("pick", "seats"):
             return None                            # у каждого геймпада — своя строка выбора (on_pad)
         if self.watching:                          # зритель: только выход
             return back
@@ -292,6 +297,9 @@ class InputMixin:
         pid = self.pad_side(i)        # чей это геймпад (в меню — неважно)
         B = pygame
         back = (B.CONTROLLER_BUTTON_X, B.CONTROLLER_BUTTON_B)
+        if self.state == "seats":
+            self.seats_pad(i, btn)
+            return
         if self.state == "pick":          # геймпад игрока — его строка выбора
             if pid is None:
                 return
@@ -341,6 +349,8 @@ class InputMixin:
         он у правого игрока (левый — клавиатура и мышь), при двух — первый у левого, второй у правого."""
         if self.net:
             return self.me if i == self.pad_index else None
+        if self.local_seats():
+            return self.seats.get(f"pad:{i}")
         n = len(self.pads.pads)
         if n >= 2:
             return PLAYER_IDS[i] if i < len(PLAYER_IDS) else None
@@ -372,12 +382,30 @@ class InputMixin:
                 out.add(("pad", pid, "right"))
         return out
 
+    def local_seats(self):
+        """Места «2 vs 2» за этим компьютером ({устройство: маг}) или None."""
+        seats = getattr(self, "seats", None)
+        return seats if seats and not self.net and self.state not in ("seats",) else None
+
+    def layout_pid(self, layout):
+        """Каким магом управляет раскладка клавиатуры ("blue" — левая с мышью, "red" — правая)."""
+        seats = self.local_seats()
+        return seats.get("kb:" + layout) if seats else layout
+
+    def pid_layout(self, pid):
+        """Чья раскладка у мага pid (None — у него только геймпад или он бот)."""
+        seats = self.local_seats()
+        if not seats:
+            return pid if pid in self.controls else None
+        return next((d[3:] for d, p in seats.items() if p == pid and d.startswith("kb:")), None)
+
     def axis(self, pid, held):
         """Куда тянут зажатые клавиши (и геймпад) игрока pid: (dx, dy), каждое -1, 0 или 1."""
-        c = self.controls[pid]
+        layout = self.pid_layout(pid)
+        c = self.controls[layout] if layout else None
 
         def on(direction):
-            return any(k in held for k in getattr(c, direction)) or ("pad", pid, direction) in held
+            return (c is not None and any(k in held for k in getattr(c, direction))) or ("pad", pid, direction) in held
         return on("right") - on("left"), on("down") - on("up")
 
     def press(self, pid, action, slot=None):
@@ -439,6 +467,8 @@ class InputMixin:
             return []
         if self.net or getattr(self, "warmup", False):
             return [self.own_pid()]
+        if self.local_seats():
+            return self.human_pids()
         return ["blue", "red"]
 
     def aim_by_move(self):
@@ -447,6 +477,7 @@ class InputMixin:
         if self.settings.get("aim_mode", "move") != "move":
             return False
         return not (self.net or self.warmup or getattr(self, "lobby_conn", None) or getattr(self, "test_bot", None)
+                    or self.local_seats()
                     or getattr(self, "replay", None) or WEB)
 
     def mouse_side(self):
@@ -456,6 +487,8 @@ class InputMixin:
             return None
         if self.net:
             return self.me
+        if self.local_seats():                    # 2×2: мышь — у левой раскладки
+            return self.layout_pid("blue")
         return "blue" if len(self.pads.pads) < 2 else None
 
     def mouse_factor(self):
@@ -467,6 +500,8 @@ class InputMixin:
         за одним компьютером — левый, если геймпадов меньше двух."""
         if self.net:
             return self.me
+        if self.local_seats():
+            return self.layout_pid("blue")
         return "blue" if len(self.pads.pads) < 2 else None
 
     def in_ui(self):

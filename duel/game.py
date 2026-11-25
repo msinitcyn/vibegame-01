@@ -25,6 +25,7 @@ from .logs import log
 from .commands import Command
 from .client_addons import AddonsMixin
 from .client_recent import RecentMixin
+from .client_seats import SeatsMixin
 from .client_chat import ChatMixin
 from .demos import has_demo
 from .config import (
@@ -58,7 +59,8 @@ from .client_menus import MenusMixin
 from .client_net import NetClientMixin
 
 
-class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, ChatMixin, AddonsMixin, RecentMixin):
+class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, ChatMixin, AddonsMixin, RecentMixin,
+           SeatsMixin):
     """Приложение поверх матча: хотсит — оба игрока за одним компьютером."""
 
     def __init__(self, windowed=False, net=None, pad=0, replay=None, movie=None, intro=False, test_2v2=False):
@@ -91,7 +93,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.held = set()             # зажатые физические клавиши
         self.pads = Gamepads()
         # пункты меню; подписи — menu_label()
-        self.menu = ["play", "net", "test", "help", "settings"]
+        self.menu = ["play", "team", "net", "test", "help", "settings"]
         self.replay_list, self.replay_index = [], 0       # экран «Повторы»: файлы и выбранный
         self.replay_back = None       # повтор открыт из «Повторов» — Esc возвращает туда, а не закрывает игру
         self.advanced_rows = ["save_replays", "replay_dir", "replays", "addons", "back"]   # «Настройки → Дополнительно»
@@ -269,11 +271,13 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
     def players(self):
         return self.match.players
 
-    def start(self, hp=MAX_HP, heroes=None, bot=False, mode="1v1"):
+    def start(self, hp=MAX_HP, heroes=None, bot=False, mode="1v1", seats=None):
         """Новая партия двух игроков (тестовый режим — другое число жизней и бот за красного) — после отсчёта.
-        mode="2v2" — команды по двое: ведущими (blue, red) играют люди как в 1×1, напарниками — боты."""
+        mode="2v2" — команды по двое; seats — {устройство: маг} с экрана мест (остальные маги — боты);
+        без seats ведущими (blue, red) играют люди как в 1×1, напарниками — боты."""
         self.start_hp = hp
         self.mode = mode
+        self.seats = seats
         self.test_bot = make_game_bot(None, "red", self.bot_level(), 7) if bot else None   # на правилах или ИИ
         if bot:
             self.chat_system(t("cmd.test_hello", **self.hint_keys()))
@@ -290,7 +294,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         if self.countdown <= 0:
             return False
         self.countdown -= dt
-        self.pending = {pid: Command() for pid in PLAYER_IDS}
+        self.pending = self.fresh_pending()
         if self.countdown <= 0:
             self.countdown = 0.0
             self.go_flash = GO_FLASH
@@ -310,10 +314,12 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         if getattr(self, "test_bot", None):   # новая партия — бот снова играет (/bot stop — на одну партию)
             self.test_bot = make_game_bot(self.match, "red", self.bot_level(), 7)
         # 2×2: напарники ведущих — боты на правилах
-        self.mates = {p.id: SmartBot(self.match, p.id, self.bot_level() if self.bot_level() in LEVEL_NAMES else "normal", 11 + i)
-                      for i, p in enumerate(self.match.players) if p.id not in PLAYER_IDS}
+        humans = self.human_pids()
+        level = self.bot_level() if self.bot_level() in LEVEL_NAMES else "normal"
+        self.mates = {p.id: SmartBot(self.match, p.id, level, 11 + i) for i, p in enumerate(self.match.players)
+                      if p.id not in humans and not (p.id == "red" and getattr(self, "test_bot", None))}
         self.popups = []              # [текст, x, y, время, цвет]
-        self.pending = {pid: Command() for pid in PLAYER_IDS}   # нажатия до следующего такта
+        self.pending = self.fresh_pending()   # нажатия до следующего такта
         self.time_acc = 0.0           # накопленное время кадров для фиксированного такта
         self.win_time = 0
         self.stick_aim = {}           # плавный прицел стиком начинается заново с новой партией
@@ -401,6 +407,16 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
                 log.info("повтор: %s", path)
         log.info("партия окончена (%s): победил %s", mode, self.snap["winner"])
 
+    def human_pids(self):
+        """Маги, которыми управляют люди за этим компьютером: с экрана мест «2 vs 2» — севшие, иначе — оба."""
+        seats = getattr(self, "seats", None)
+        return [p for p in ("blue", "blue2", "red", "red2") if p in seats.values()] if seats else list(PLAYER_IDS)
+
+    def fresh_pending(self):
+        """Пустые команды до следующего такта — для каждого мага партии (2×2 — четверо)."""
+        m = getattr(self, "match", None)
+        return {pid: Command() for pid in ([p.id for p in m.players] if m else PLAYER_IDS)}
+
     def refresh_snap(self):
         """Снимок матча — экран и надписи читают только его (как будет у клиента в сети)."""
         self.snap = snapshot(self.match)
@@ -409,7 +425,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         """Один такт матча с текущим вводом; события → звук и надписи."""
         held = self.held | self.pad_held()
         commands = {}
-        for pid in PLAYER_IDS:
+        for pid in self.human_pids():
             cmd = self.pending[pid]
             cmd.move = self.walk_move(pid, self.axis(pid, held))
             cmd.aim = self.aim_for(pid, cmd.move)
@@ -419,7 +435,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             commands["red"] = Command(*self.test_bot.act())
         for pid, b in getattr(self, "mates", {}).items():     # 2×2: напарники-боты
             commands[pid] = Command(*b.act())
-        self.pending = {pid: Command() for pid in PLAYER_IDS}
+        self.pending = self.fresh_pending()
         self.rec().tick(commands)
         events = self.match.step(dt, commands)
         self.refresh_snap()
@@ -549,6 +565,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
                 self.draw_settings()
         elif self.state == "pick":
             self.draw_pick()
+        elif self.state == "seats":
+            self.draw_seats()
         elif self.state == "join":
             self.poll_connecting()            # браузер: подключение идёт без ожидания
             if self.finder:
