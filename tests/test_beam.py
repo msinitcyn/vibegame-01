@@ -6,7 +6,7 @@ from duel.config import BULLET_WALL_BOUNCES
 import pytest
 
 from duel.commands import Command
-from duel.config import BEAM_DAMAGE, BEAM_LENGTH, BEAM_SPEED, BOTTOM, MAX_HP, SHIELD_HITS, TOP, WIDTH
+from duel.config import BEAM_DAMAGE, BEAM_LENGTH, BEAM_SPEED, BOTTOM, MAX_HP, SHIELD_HITS, TOP
 from duel.entities import Artifact, Mob
 from duel.match import Match
 from tests.conftest import DT, new_match, step
