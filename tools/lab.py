@@ -40,7 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from duel import tuning  # noqa: E402
 from duel.brain import LEVELS, STRATEGIES, SmartBot  # noqa: E402
 from duel.commands import Command  # noqa: E402
-from duel.config import HEROES  # noqa: E402
+from duel.config import HEROES, MAX_HP  # noqa: E402
 from duel.match import STEP, Match  # noqa: E402
 from duel.replay import Recorder, lab_root, read_index, summary as replay_summary, write_index  # noqa: E402
 
@@ -93,6 +93,7 @@ def play(job, record=False):
                 "heroes": heroes, "blue": job["blue"], "red": job["red"], "behind": lows, "first": first,
                 "used": {pid: m.stats[pid]["used"] for pid in ("blue", "red")},
                 "gear": {p.id: len(p.gear) for p in m.players}, "tag": job.get("tag"),
+                "hp": {p.id: max(0, p.hp) for p in m.players},
                 "set": list(job.get("set") or []), "limit": job["limit"],
                 **({"recorder": rec, "match": m} if record else {})}
     finally:
@@ -257,6 +258,7 @@ def report(rs, title):
             x, y = (a, b), (b, a)
             print(f"  {RU[a]}-{RU[b]}-{left(side_w[x], side_n[x])}-{RU[b]}-{RU[a]}-{left(side_w[y], side_n[y])}"
                   f"   (n={side_n[x]}/{side_n[y]})")
+    close_report(d)
     print(f"\nкамбэки: победил, отставая на {COMEBACK_HP}+ жизней — {100 * m['comeback']:.0f}% побед")
     print("снежный ком (побеждает тот, кто первым…):")
     names = {"gear": "надел снаряжение", "item": "подобрал артефакт", "blood": "ранил соперника"}
@@ -277,6 +279,26 @@ def report(rs, title):
                 times[kind] += k
     for kind in sorted(used_n, key=lambda k: -used_w[k] / used_n[k]):
         print(f"  {kind:12} {rate(used_w[kind], used_n[kind])}  применений {times[kind]}")
+
+
+BLOWOUT = 10                       # у победителя осталось столько жизней и больше — разгром
+
+
+def close_report(d):
+    """Насколько ровные партии: сколько жизней осталось у победителя; кто разносит."""
+    rows = [(r["heroes"][0 if r["winner"] == "blue" else 1], r["hp"][r["winner"]]) for r in d if "hp" in r]
+    if not rows:
+        return
+    n = len(rows)
+    print(f"\nнасколько ровные (жизней у победителя в конце, из {MAX_HP}): в среднем {sum(h for _, h in rows) / n:.1f}")
+    for name, lo, hi in (("на волоске 1–3", 1, 3), ("4–6", 4, 6), ("7–9", 7, 9), (f"разгром {BLOWOUT}+", BLOWOUT, 99)):
+        print(f"  {name:16} {100 * sum(lo <= h <= hi for _, h in rows) / n:3.0f}%")
+    print("  когда герой побеждает: жизней в среднем, разгромов")
+    per = {}
+    for hero, h in rows:
+        per.setdefault(hero, []).append(h)
+    for hero, hs in sorted(per.items(), key=lambda x: -sum(x[1]) / len(x[1])):
+        print(f"    {RU[hero]:8} {sum(hs) / len(hs):4.1f}   {100 * sum(h >= BLOWOUT for h in hs) / len(hs):3.0f}%   (побед {len(hs)})")
 
 
 RU = {"fire": "огонь", "frost": "лёд", "nature": "природа", "dark": "тьма", "light": "свет", "earth": "земля"}

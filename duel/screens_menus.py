@@ -247,10 +247,11 @@ class MenuScreensMixin:
             who = r["players"].get(pid)
             parts.append((name + (f" ({who})" if who else ""), HERO_COLOR.get(h, color) if h else color))
         w = r["winner"]
-        win = (tr("win.draw") if w == "draw" else tr("replays.won", side=tr("name." + w)) if w in ("blue", "red")
-               else tr("replays.unfinished"))
+        wh = heroes.get(w) if w in ("blue", "red") else None
+        win = (tr("win.draw") if w == "draw" else tr("replays.won", side=tr("hero." + wh)) if wh
+               else tr("replays.won", side=tr("name." + w)) if w in ("blue", "red") else tr("replays.unfinished"))
         sec = int(r["time"] or 0)
-        parts += [(win, color), (f"{sec // 60}:{sec % 60:02d}", color)]
+        parts += [(win, HERO_COLOR.get(wh, color) if wh else color), (f"{sec // 60}:{sec % 60:02d}", color)]
         if r["tuning"]:
             parts.append(("⚙ " + ", ".join(r["tuning"]), (230, 200, 120)))
         for k, (text, c) in enumerate(parts):

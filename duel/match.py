@@ -469,7 +469,8 @@ class Match:
         zone = zone_at(p.x, p.y)
         if zone == self.foe_zone_of(p):
             return 1.0 if (firm or "icewalk" in p.effects or self.on_trail(p, p)) else FOE_LAND_SLOW
-        return ARENA_SLOW if zone == "arena" and not firm else 1.0
+        ice = "icewalk" in p.effects or self.on_trail(p, p)         # тропа — земля Холода: и в арене как дома
+        return ARENA_SLOW if zone == "arena" and not (firm or ice) else 1.0
 
     def danger(self, p):
         """Опасная земля под магом: (жизней в секунду, чья стихия жжёт — герой или "arena") или (0, None).

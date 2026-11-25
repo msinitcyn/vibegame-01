@@ -117,3 +117,49 @@ def test_strategy_overrides_hero_style():
     m = Match(seed=1, heroes={"blue": "frost", "red": "fire"})
     assert SmartBot(m, "blue", strategy="rush").style(m.blue)["aggro"] == 1.0
     assert SmartBot(m, "blue").style(m.blue)["range"] == 340
+
+
+def test_icewalk_not_wasted_on_own_land():
+    m = Match(seed=5, heroes={"blue": "frost", "red": "fire"})
+    m.mobs.clear()
+    m.blue.add_item("icewalk")
+    m.red.x, m.red.y = m.blue.x + 150, m.blue.y        # соперник рядом, но на нейтральной/своей стороне синего
+    from duel.entities import zone_at
+    assert zone_at(m.red.x, m.red.y) in ("blue", "neutral")
+    bot = SmartBot(m, "blue", "hard", 1)
+    run(m, {"blue": bot, "red": Idle()}, 1.0)
+    assert "icewalk" in m.blue.items                    # у себя тропа не нужна
+
+
+def test_bot_freezes_close_foe_and_punishes_it():
+    m = Match(seed=5, heroes={"blue": "frost", "red": "fire"})
+    m.mobs.clear()
+    m.blue.add_item("foe_freeze")
+    m.red.x, m.red.y = m.blue.x + 220, m.blue.y
+    bot = SmartBot(m, "blue", "hard", 1)
+    bot.walk = True
+    hp = m.red.hp
+    run(m, {"blue": bot, "red": Idle()}, 2.0)
+    assert "foe_freeze" not in m.blue.items and m.red.hp < hp
+
+
+def test_empty_bot_goes_home():
+    m = Match(seed=5, heroes={"blue": "frost", "red": "fire"})
+    m.mobs.clear()
+    m.ammo_packs.clear()
+    m.blue.ammo = 0
+    m.blue.x = 470                                       # у границы, на нейтральной полосе
+    m.red.x = 900
+    bot = SmartBot(m, "blue", "hard", 1)
+    run(m, {"blue": bot, "red": Idle()}, 1.5)
+    assert m.blue.x < 400                                # к себе — ближе к пачкам
+
+
+def test_icewalk_arena_neither_burns_nor_slows():
+    from duel.config import ARENA, ARENA_SLOW
+    m = Match(seed=5, heroes={"blue": "frost", "red": "fire"})
+    p = m.blue
+    p.x, p.y = ARENA
+    assert m.ground_slow(p) == ARENA_SLOW and m.in_danger(p)
+    m.give(p, "icewalk")
+    assert m.ground_slow(p) == 1.0 and not m.in_danger(p)
