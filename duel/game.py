@@ -646,6 +646,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
                 self.popup(t("popup.noammo"), ev[1], BAD_TEXT)
             elif kind == "pickup":
                 self.popup(item_name(ev[2]), ev[1], ring_color(ev[2]))
+            elif kind == "lasso_miss":            # лассо никого не зацепило
+                self.popup(t("popup.lasso_miss"), ev[1], BAD_TEXT)
             elif kind == "immune":                # артефакт соперника отскочил от коры
                 self.popup(t("popup.immune"), ev[1], ITEMS["immune"][1])
             elif kind == "pickup_at":             # двойник подобрал — надпись над ним

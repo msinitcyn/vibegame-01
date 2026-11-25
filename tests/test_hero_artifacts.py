@@ -470,8 +470,8 @@ def drops(hero, mob_hp, n=1500):
 def test_levels_cover_all_items():
     from duel.items import ITEMS, item_level
     assert {item_level(k) for k in ITEMS} == {1, 2, 3, 4}
-    assert item_level("bear") == item_level("firering") == 4
-    assert {item_level(k) for k in ("lasso", "zombies", "icewalk", "sentries")} == {3}
+    assert item_level("bear") == item_level("firering") == item_level("lasso") == 4
+    assert {item_level(k) for k in ("zombies", "icewalk", "sentries")} == {3}
 
 
 def test_level_by_mob_hp():
@@ -479,14 +479,14 @@ def test_level_by_mob_hp():
     thin = drops("fire", 3, 600)
     assert max(item_level(k) for k in thin) == 2                  # худой моб: только 1–2
     mid = drops("fire", 5, 600)
-    assert max(item_level(k) for k in mid) == 3 and "firering" not in mid
+    assert max(item_level(k) for k in mid) <= 3 and "firering" not in mid and "lasso" not in mid
     fat = drops("fire", 6)
     assert "firering" in fat and "lasso" in fat
 
 
 def test_heavy_items_are_rarer():
     fat = drops("fire", 6, 3000)
-    assert fat["firering"] < fat["lasso"] < fat["triple"]          # личные: чем тяжелее, тем реже
+    assert max(fat["firering"], fat["lasso"]) < fat["triple"]      # личные: чем тяжелее, тем реже
     assert fat["fastshots"] == 0                                    # «быстрые пули» убраны
     assert fat["heal"] == 0                                         # на земле героя — только артефакты его стихии
 
@@ -651,3 +651,28 @@ def test_deflect_and_nofire_pictures_draw():
     for since in (0.0, 0.1, 1.0, 3.9):
         fx_mage.draw_nofire(surf, (100, 150), 14, since, 4 - since, since)
     assert surf.get_bounding_rect().w > 0
+
+
+def test_lasso_targets_hero_under_cursor_or_wastes_on_clone_or_miss():
+    """Лассо — в того, на кого навели: соперник — тянет его; двойник — тянет двойника; никого — мимо."""
+    from duel.entities import Clone
+    m = new_match()
+    b, r = m.blue, m.red
+    r.hero = "dark"
+    r.x, r.y = b.x + 300, b.y
+    clone = Clone(r)
+    clone.x, clone.y = b.x + 300, b.y + 150
+    m.clones.append(clone)
+
+    def throw(x, y):
+        b.aim = math.atan2(y - b.y, x - b.x)
+        b.reach = math.hypot(x - b.x, y - b.y)
+        b.add_item("lasso")
+        events = m.apply_item(b, "lasso") or []
+        return events
+    throw(clone.x, clone.y)
+    assert "lassoed" in clone.effects and "lassoed" not in r.effects      # угадал не того
+    throw(b.x, b.y + 300)                                                  # никого под курсором
+    assert "lassoed" not in r.effects and any(e[0] == "lasso_miss" for e in m.events)
+    throw(r.x + 5, r.y)
+    assert "lassoed" in r.effects

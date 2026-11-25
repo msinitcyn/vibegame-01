@@ -916,6 +916,7 @@ class Beam:
         self.vx, self.vy = cos * BEAM_SPEED, sin * BEAM_SPEED
         self.path = [(self.hx, self.hy)]      # от хвоста к голове
         self.touching = {}            # кого луч уже ударил (по разу на цель)
+        self.bounces = 0              # рикошетов от стенок поля (как у пули — не больше BULLET_WALL_BOUNCES)
         self.alive = True
         self.age = 0.0                # для анимации каста
 
@@ -923,10 +924,19 @@ class Beam:
         self.age += dt
         self.hx += self.vx * dt
         self.hy += self.vy * dt
-        if self.hy < TOP:                     # отскок, как у пули
-            self.hy, self.vy = 2 * TOP - self.hy, abs(self.vy)
-        elif self.hy > BOTTOM:
-            self.hy, self.vy = 2 * BOTTOM - self.hy, -abs(self.vy)
+        if self.bounces < BULLET_WALL_BOUNCES:    # рикошет от всех четырёх стенок, как у пули; потом — улетает
+            if self.hy < TOP:
+                self.hy, self.vy = 2 * TOP - self.hy, abs(self.vy)
+                self.bounces += 1
+            elif self.hy > BOTTOM:
+                self.hy, self.vy = 2 * BOTTOM - self.hy, -abs(self.vy)
+                self.bounces += 1
+            if self.hx < 0:
+                self.hx, self.vx = -self.hx, abs(self.vx)
+                self.bounces += 1
+            elif self.hx > WIDTH:
+                self.hx, self.vx = 2 * WIDTH - self.hx, -abs(self.vx)
+                self.bounces += 1
         self.path.append((self.hx, self.hy))
         # хвост — не длиннее BEAM_LENGTH: старые точки отрезаем, последний отрезок укорачиваем
         total, keep = 0.0, [self.path[-1]]
@@ -939,7 +949,9 @@ class Beam:
             total += seg
             keep.append((x0, y0))
         self.path = keep[::-1]
-        if all(x < -BEAM_WIDTH for x, _ in self.path) or all(x > WIDTH + BEAM_WIDTH for x, _ in self.path):
+        out = all(x < -BEAM_WIDTH or x > WIDTH + BEAM_WIDTH or y < TOP - BEAM_WIDTH or y > BOTTOM + BEAM_WIDTH
+                  for x, y in self.path)
+        if out:                                   # целиком вылетел за поле (после последнего рикошета)
             self.alive = False
 
     def touches(self, x, y, r):

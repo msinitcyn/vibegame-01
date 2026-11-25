@@ -621,7 +621,7 @@ class SmartBot:
         if foe is None:
             return None
         fd = math.hypot(foe[0] - me.x, foe[1] - me.y)
-        if kind == "firering":
+        if kind in ("firering", "lasso"):         # круг — под соперника, лассо — в него (курсор на сопернике)
             return fd
         if kind == "wall":
             return min(WALL_RANGE, max(90, fd * 0.4))

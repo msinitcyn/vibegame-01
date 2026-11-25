@@ -26,6 +26,8 @@ import random
 from .commands import REACH_FAR, Command
 from .config import (
     MOB_LATE_EXTRA,
+    LASSO_CONE,
+    LASSO_PICK,
     PEACE_FX,
     DEFLECT_FX,
     DEATH_TIME,
@@ -387,8 +389,15 @@ class Match:
             self.give(p, "icewalk")
         elif kind == "trees":                 # стена деревьев по прицелу
             self.trees.append(TreeWall(p))
-        elif kind == "lasso":                 # огненное лассо: соперника тянет к магу
-            self.give(foe, "lassoed")
+        elif kind == "lasso":                 # огненное лассо — в того, на кого нацелено: соперника или его двойника
+            target = self.lasso_target(p)
+            if target is None:
+                self.emit("lasso_miss", p.id)     # никого под курсором (по прицелу) — мимо, артефакт потрачен
+            elif target is foe:
+                self.give(foe, "lassoed")
+            else:
+                target.apply("lassoed")           # угадал не того — тянет двойника
+                target.lasso_by = p
         elif kind == "beam":                  # летящий луч по прицелу
             self.beams.append(Beam(p))
         elif kind == "cleanse":
@@ -634,6 +643,15 @@ class Match:
         for c in self.clones:
             x0, y0 = c.x, c.y
             self.bullets.extend(c.update(dt, self.other(c.owner)))
+            if "lassoed" in c.effects:                # двойника поймали лассо — тянет к тому, кто бросил
+                puller = getattr(c, "lasso_by", None) or self.other(c.owner)
+                dx, dy = puller.x - c.x, puller.y - c.y
+                d = math.hypot(dx, dy)
+                room = d - c.radius - puller.radius
+                if room > 0:
+                    step = min(LASSO_SPEED * dt, room)
+                    c.x += dx / d * step
+                    c.y += dy / d * step
             if self.blocked(c.x, c.y, c.radius) or any(r.stops(x0, y0, c.x, c.y) or r.stops(c.x, c.y, x0, y0)
                                                       for r in self.rings):
                 c.x, c.y = x0, y0                     # деревья и огненная стена — назад и в другую сторону
@@ -744,6 +762,22 @@ class Match:
         allies = [m for m in self.mobs if m.alive and m.zombie_of is p] + self.clones_of(p)
         near = [u for u in allies if math.hypot(u.x - at[0], u.y - at[1]) <= u.radius + ALLY_PICK]
         return min(near, key=lambda u: math.hypot(u.x - at[0], u.y - at[1])) if near else None
+
+    def lasso_target(self, p):
+        """Кого цепляет лассо мага p: соперника или двойника соперника — под курсором (не дальше края + LASSO_PICK),
+        без курсора (стик, клавиши, бот) — ближайшего к прицелу в пределах LASSO_CONE. None — промах."""
+        foe = self.other(p)
+        units = [u for u in [foe] + self.clones_of(foe) if getattr(u, "dead_at", None) is None]
+        at = self.cursor_point(p)
+        if at is not None:
+            near = [u for u in units if math.hypot(u.x - at[0], u.y - at[1]) <= u.radius + LASSO_PICK]
+            return min(near, key=lambda u: math.hypot(u.x - at[0], u.y - at[1])) if near else None
+
+        def off(u):
+            a = math.atan2(u.y - p.y, u.x - p.x) - p.aim
+            return abs((a + math.pi) % (2 * math.pi) - math.pi)
+        near = [u for u in units if off(u) <= LASSO_CONE]
+        return min(near, key=off) if near else None
 
     def wall_spot(self, p):
         """Куда встанет зеркало мага p: по прицелу, под курсор, от WALL_MIN до WALL_RANGE от мага

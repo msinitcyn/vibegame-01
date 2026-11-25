@@ -1,6 +1,8 @@
 """«Луч света» — летящий длинный луч героя Свет: насквозь, отскакивает, улетает."""
 import math
 
+from duel.config import BULLET_WALL_BOUNCES
+
 import pytest
 
 from duel.commands import Command
@@ -57,9 +59,22 @@ def test_beam_bounces_and_leaves(light):
             bounced = True
         if not m.beams:
             break
-        assert all(TOP - 1 <= y <= BOTTOM + 1 for _, y in beam.path)
-    assert bounced and m.beams == []                    # отскочил и целиком улетел за край
-    assert beam.hx > WIDTH
+        if beam.bounces < BULLET_WALL_BOUNCES:
+            assert all(TOP - 1 <= y <= BOTTOM + 1 for _, y in beam.path)
+    assert bounced and m.beams == []                    # отскочил и, отрикошетив своё, улетел за край
+    assert beam.bounces == BULLET_WALL_BOUNCES
+
+
+def test_beam_ricochets_off_side_wall(light):
+    """Луч рикошетит и от боковой стенки, как пуля."""
+    m = light
+    b = m.blue
+    b.aim = math.pi                                     # прямо в левую стенку
+    m.apply_item(b, "beam")
+    beam = m.beams[0]
+    for _ in range(int(1.0 / DT)):
+        m.step(DT)
+    assert beam.vx > 0 and beam.bounces >= 1
 
 
 def test_mage_moves_while_beam_flies(light):

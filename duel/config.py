@@ -65,6 +65,8 @@ BEAR_HP = 15                     # жизни медведя (после — п�
 BEAR_SIZE = 1.6                  # во сколько раз больше мага
 BEAR_SPEED = 1.3                 # во сколько раз быстрее мага
 FREEZE_BREAK_HITS = 3            # заморозка спадает после стольких попаданий в замороженного
+LASSO_PICK = 24                  # лассо: курсор не дальше стольких пикселей от края героя (или двойника) — цепляет его
+LASSO_CONE = 0.3                 # лассо без курсора (стик, клавиши, бот): цель — в пределах такого угла от прицела, рад
 BULLET_WALL_BOUNCES = 3          # пуля отскакивает от стенок поля не больше стольких раз (стражи и зеркало — не в счёт)
 BEAR_REACH = 45                  # на сколько дальше ближний удар, пикс
 BEAR_MELEE_DAMAGE = 3            # сила ближнего удара медведя
@@ -84,7 +86,7 @@ SENTRY_R = unit(20)              # размер дерева, пикс
 # Уровни артефактов 1..4: чем выше, тем реже и только из толстых мобов
 ITEM_LEVEL = {
     "bear": 4, "firering": 4,
-    "lasso": 3, "zombies": 3, "icewalk": 3, "sentries": 3, "trees": 3, "immune": 3, "clones": 3,
+    "lasso": 4, "zombies": 3, "icewalk": 3, "sentries": 3, "trees": 3, "immune": 3, "clones": 3,
     "cleanse": 2, "foe_nofire": 2, "foe_noitems": 2, "foe_freeze": 2, "shield": 2, "slowfoe": 2,
     "rapid": 2, "mobswap": 2, "wall": 2, "beam": 2, "invisible": 2,
     "landswap": 4, "quake": 3, "speedsteal": 2, "firmground": 2,

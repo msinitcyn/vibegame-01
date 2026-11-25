@@ -7,6 +7,7 @@ import math
 import pygame
 
 from .config import (
+    LASSO_PICK,
     BEAM_LENGTH,
     FIRE_RING_R,
     FIRE_RING_RANGE,
@@ -457,6 +458,17 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         near = [u for u in allies if math.hypot(u["x"] - mx, u["y"] - my) <= u["r"] + ALLY_PICK]
         return min(near, key=lambda u: math.hypot(u["x"] - mx, u["y"] - my)) if near else None
 
+    def lasso_under_cursor(self, pid):
+        """Кого зацепит лассо (как решит сервер): соперник или его двойник под курсором; невидимого — не показываем."""
+        if self.reach_for(pid) >= REACH_FAR or self.mouse_pos is None:
+            return None
+        mx, my = self.mouse_pos
+        foe_id = "red" if pid == "blue" else "blue"
+        units = [q for q in self.snap.get("players", []) if q["id"] == foe_id and "invisible" not in q.get("effects", {})]
+        units += [c for c in self.snap.get("clones", []) if c.get("owner") == foe_id]
+        near = [u for u in units if math.hypot(u["x"] - mx, u["y"] - my) <= u["r"] + LASSO_PICK]
+        return min(near, key=lambda u: math.hypot(u["x"] - mx, u["y"] - my)) if near else None
+
     def draw_armed_previews(self, s):
         """Выбранный (ещё не применённый) артефакт — видно только себе, куда он пойдёт: огненный круг — контур
         кольца (центр под курсором, не дальше дальности), луч и стена деревьев — пунктир по прицелу."""
@@ -494,6 +506,17 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
                     pygame.draw.line(s, (16, 12, 20), a, b, 5)
                     pygame.draw.line(s, (220, 230, 255), a, b, 3)
                 pygame.draw.line(s, color, (cx, cy), (cx + math.cos(aim) * 14, cy + math.sin(aim) * 14), 2)
+            elif kind == "lasso":                 # кого зацепит лассо: соперника или его двойника под курсором
+                u = self.lasso_under_cursor(pid)
+                if u is not None:
+                    rr = u["r"] + 9
+                    for i in range(0, 20, 2):
+                        a0 = (i - t * 4) * 2 * math.pi / 20
+                        a1 = a0 + 2 * math.pi / 20
+                        pa = (u["x"] + math.cos(a0) * rr, u["y"] + math.sin(a0) * rr)
+                        pb = (u["x"] + math.cos(a1) * rr, u["y"] + math.sin(a1) * rr)
+                        pygame.draw.line(s, (16, 12, 20), pa, pb, 4)
+                        pygame.draw.line(s, (255, 150, 60), pa, pb, 2)
             elif kind == "heal":                  # кого вылечит: союзника под курсором (зомби, двойник) или себя
                 u = self.ally_under_cursor(pid) or p
                 rr = u["r"] + 10

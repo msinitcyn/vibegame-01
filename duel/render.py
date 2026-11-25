@@ -612,6 +612,11 @@ def draw_field(surf, snap, font, viewer=None):
         if "lassoed" in p.get("effects", {}):
             puller = by_id["red" if p["id"] == "blue" else "blue"]
             fx_spells.draw_lasso(surf, p, puller, side_color(heroes, puller["id"]), snap.get("time", 0))
+    for c in snap["clones"]:                  # лассо поймало двойника (не угадал) — тянет его
+        if "lassoed" in c.get("effects", {}):
+            puller = by_id.get("red" if c["owner"] == "blue" else "blue")
+            if puller:
+                fx_spells.draw_lasso(surf, c, puller, side_color(heroes, puller["id"]), snap.get("time", 0))
     for b in snap.get("beams", []):
         draw_beam(surf, b, heroes, snap.get("time", 0))
     for p in snap["players"]:
