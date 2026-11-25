@@ -17,6 +17,15 @@ latest=$(git tag -l 'v*' --sort=-v:refname | head -1)
 current=$(git describe --tags --exact-match 2>/dev/null || echo "нет")
 [[ -z "$latest" || "$latest" == "$current" ]] && { rm -f "$STATE"; exit 0; }
 
+# метка уже есть, а выпуск ещё собирается (или сборка упала) — не обновляться: иначе сайт останется без
+# браузерной версии (её берём из выпуска). Обновимся при следующей проверке, когда выпуск будет готов.
+REPO=${SG_REPO:-msinitcyn/vibegame-01}
+if [[ -z "${SG_SKIP_SITE:-}" ]] && ! curl -fsIL --max-time 20 -o /dev/null \
+     "https://github.com/$REPO/releases/download/$latest/spellgunners-web.zip"; then
+  log "есть метка $latest, но выпуска с браузерной версией ещё нет — ждём"
+  exit 0
+fi
+
 busy=$(curl -s --max-time 5 "$STATUS" | python3 -c \
   "import json,sys; d=json.load(sys.stdin); print(d.get('players', 0) + d.get('lobby', 0))" 2>/dev/null || echo 0)
 if [[ "$busy" != "0" ]]; then

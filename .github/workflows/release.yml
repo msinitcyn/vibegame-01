@@ -118,6 +118,7 @@ jobs:
       - name: Зависимости
         run: |
           python -m pip install pygbag==0.9.3
+          sudo apt-get update -q                     # список пакетов у раннера бывает устаревшим (404 на .deb)
           sudo apt-get install -y -q ffmpeg          # звуки и музыка — в .ogg
 
       - name: Сборка страницы
