@@ -228,16 +228,19 @@ def test_bear_is_big_fast_melee_and_returns_old_hp_and_spot():
     assert (b.x, b.y) == spot                            # маг — там, где превратился
 
 
-def test_bear_defeated_kills_the_mage():
-    from duel.config import BEAR_HP
+def test_bear_defeated_mage_returns_alive():
+    """Медведя убили — маг не погибает: появляется там, где превратился, с прежними жизнями."""
+    from duel.config import BEAR_HP, DEATH_TIME
     m = new_match()
     b = m.blue
     b.hp = 3
+    spot = (b.x, b.y)
     m.apply_item(b, "bear")
-    m.hurt_player(b, BEAR_HP)
-    from duel.config import DEATH_TIME
-    step(m, DEATH_TIME + 0.1)                            # дух улетает — потом итог
-    assert b.hp <= 0 and "bear" not in b.effects and m.winner is m.red
+    b.y += 80
+    m.hurt_player(b, BEAR_HP + 5)
+    assert b.hp == 3 and "bear" not in b.effects and b.bear_saved is None and (b.x, b.y) == spot
+    step(m, DEATH_TIME + 0.1)
+    assert b.dead_at is None and not m.winner
 
 
 def test_bear_melee_reaches_further_and_hits_harder():

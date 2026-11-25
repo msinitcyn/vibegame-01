@@ -434,17 +434,14 @@ class Match:
         p.hit_flash = 0.12
         self.stats[p.id]["damage_taken"] += n
         if p.bear_saved is not None and p.hp <= 0:
-            self.end_bear(p, killed=True)     # медведя победили — маг погиб
+            self.end_bear(p)                  # медведя победили — превращение кончилось, маг жив
 
-    def end_bear(self, p, killed=False):
-        """Конец превращения. По времени: маг — там, где превратился, с жизнями, что были до него.
-        Медведя убили — погибает и маг."""
-        if killed:
-            p.hp = 0
-        else:
-            p.hp = p.bear_saved
-            if p.bear_at:
-                p.x, p.y = p.bear_at
+    def end_bear(self, p):
+        """Конец превращения — по времени или медведя убили: маг там, где превратился, с жизнями, что были
+        до него (лишний урон по медведю магу не переходит)."""
+        p.hp = p.bear_saved
+        if p.bear_at:
+            p.x, p.y = p.bear_at
         p.bear_saved = p.bear_at = None
         p.effects.pop("bear", None)
         self.emit("bear_end", p.id)
