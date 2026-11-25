@@ -25,7 +25,7 @@ def run(stage, seconds):
 def test_parse_srt_and_language_fallback():
     subs = parse_srt("1\n00:00:01,500 --> 00:00:03,000\nПривет\nмир\n\n2\r\n00:00:04,000 --> 00:00:05,250\r\nЕщё\r\n")
     assert subs == [(1.5, 3.0, "Привет\nмир"), (4.0, 5.25, "Ещё")]
-    assert load_subs("intro", "ru")[0][2] == "Спеллганнерс!"
+    assert load_subs("intro", "ru")[0][2] == "Выбирай героя!"
     assert load_subs("intro", "de") == load_subs("intro", "en")        # нет своего языка — английский
 
 
@@ -336,3 +336,24 @@ def test_title_zoom_flies_straight_into_left_stem_of_u(game):
         st.t = t
         points.add(st.place(1000)[1])
     assert points == {(ax, ay)}                                 # летит прямо, никуда не сворачивает
+
+
+def test_pick_scene_scrolls_heroes_and_locks(game):
+    from duel.movie_pick import PickStage
+    st = PickStage({"length": 3.6, "pick": {"blue": "fire", "red": "frost", "every": 0.3, "lock": [2.3, 2.7]}})
+    seen = {"blue": set(), "red": set()}
+    for _ in range(int(3.6 * 60)):
+        st.update(1 / 60)
+        for pid, v in st.state().items():
+            seen[pid].add(v["hero"])
+    assert len(seen["blue"]) >= 5 and len(seen["red"]) >= 5               # листались
+    assert st.state() == {"blue": {"hero": "fire", "ok": True}, "red": {"hero": "frost", "ok": True}}
+    img = st.render_frame(game, movie.FRAME.size)
+    assert img.get_size() == movie.FRAME.size
+    assert not hasattr(game, "pick") or game.state != "pick"              # экран игры не тронут
+
+
+def test_intro_second_scene_is_hero_pick_with_subtitle():
+    data = movie.load("intro")
+    assert data["scenes"][1].get("pick")
+    assert load_subs("intro", "ru")[0][2] == "Выбирай героя!"

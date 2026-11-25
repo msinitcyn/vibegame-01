@@ -28,7 +28,8 @@
     }
 
 Сцена — duel/scene.py (тот же движок, что у сценок «Обучения»): поля сцены и API — там. Сцена с "title"
-(zoom | slide) — надпись, сквозь буквы которой идёт бой ботов: duel/movie_title.py. Сцену можно
+(zoom | slide) — надпись, сквозь буквы которой идёт бой ботов: duel/movie_title.py; с "pick" — экран выбора
+героя, по которому листаются герои: duel/movie_pick.py. Сцену можно
 написать и на Python: Scene(данные сцены) и вызовы его методов — сценарий JSON делает то же самое.
 """
 import json
@@ -56,6 +57,9 @@ def make_stage(data):
     if data.get("title"):
         from .movie_title import TitleStage
         return TitleStage(data, ASPECT)
+    if data.get("pick"):
+        from .movie_pick import PickStage
+        return PickStage(data, ASPECT)
     return Scene(data, ASPECT)
 
 
@@ -182,8 +186,13 @@ class Movie:
         surf.fill((0, 0, 0))
         if self.stage is None:
             return
-        snap = self.last_snap = self.stage.snapshot()
-        img = game.scene_frame(snap, self.stage.lands_pair(), self.stage.cam, FRAME.size)
+        own = getattr(self.stage, "render_frame", None)
+        if own:                                        # сцена со своим кадром (экран выбора героя)
+            self.last_snap = None
+            img = own(game, FRAME.size)
+        else:
+            snap = self.last_snap = self.stage.snapshot()
+            img = game.scene_frame(snap, self.stage.lands_pair(), self.stage.cam, FRAME.size)
         overlay = getattr(self.stage, "overlay", None)
         if overlay:                                    # сцена-надпись: бой сквозь буквы
             overlay(img, game)

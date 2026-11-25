@@ -237,7 +237,7 @@ class MenuScreensMixin:
                 img = self.tiny_text.render(line, True, WHITE)
                 s.blit(img, img.get_rect(center=(card.centerx, y)))
                 y += 16
-        else:
+        elif not getattr(self, "pick_in_movie", False):     # в ролике подсказки нет
             img = self.small.render(tr("pick.spells_hint"), True, GREY)
             s.blit(img, img.get_rect(center=(card.centerx, icons_y + icon_r + 26)))
         pygame.draw.rect(s, color if me["ok"] else (70, 74, 92), card, 4 if me["ok"] else 1, border_radius=10)

@@ -7,28 +7,12 @@
       "length": 5.6,
       "title": "zoom",
       "zoom_time": 4.4,
-      "battle": {"seed": 40, "heroes": ["frost", "light"], "skip": 19, "level": "hard", "view": [0, 84, 1000, 640]}
+      "battle": {"seed": 40, "heroes": ["frost", "light"], "skip": 17, "level": "hard", "view": [0, 84, 1000, 640]}
     },
     {
       "length": 3.6,
       "transition": "flash",
-      "heroes": {"blue": "fire", "red": "frost"},
-      "lands": ["fire", "frost"],
-      "camera": [0, 84, 1000, 640],
-      "setup": {"blue": {"x": 430, "y": 150, "hidden": true}, "red": {"x": 570, "y": 150, "hidden": true}},
-      "script": [
-        {"t": 0.0, "do": "camera", "view": [330, 90, 340, 120], "time": 2.0},
-        {"t": 0.0, "do": "aim", "who": "blue", "at": "red"},
-        {"t": 0.0, "do": "aim", "who": "red", "at": "blue"},
-        {"t": 0.4, "do": "appear", "who": "blue"},
-        {"t": 0.7, "do": "appear", "who": "red"},
-        {"t": 1.4, "do": "hero", "who": "blue", "hero": "nature"},
-        {"t": 1.6, "do": "hero", "who": "red", "hero": "dark"},
-        {"t": 2.3, "do": "hero", "who": "blue", "hero": "light"},
-        {"t": 2.5, "do": "hero", "who": "red", "hero": "earth"},
-        {"t": 3.0, "do": "vanish", "who": "blue"},
-        {"t": 3.0, "do": "vanish", "who": "red"}
-      ]
+      "pick": {"blue": "fire", "red": "frost", "every": 0.3, "lock": [2.3, 2.7]}
     },
     {
       "length": 3.4,
