@@ -808,7 +808,10 @@ def test_reconnect_sends_net_report_and_server_logs_reason(game):
         frames(game, lambda: (other.send({"type": "cmd", "move": [0, 0]}) or True)
                and any("отчёт о разрыве" in x for x in lines), timeout=8)
         assert any("обрыв — " in x for x in lines)                         # сервер: причина и связь
-        reports = sorted((logs.log_dir() / "net-reports").glob("*.json"))
+        folder = logs.log_dir() / "net-reports"                           # файл пишется сразу после строки лога
+        frames(game, lambda: (other.send({"type": "cmd", "move": [0, 0]}) or True) and any(folder.glob("*.json")),
+               timeout=5)
+        reports = sorted(folder.glob("*.json"))
         assert reports
         rep = json.loads(reports[-1].read_text(encoding="utf-8"))
         events = [row[1] for row in rep["journal"]]
