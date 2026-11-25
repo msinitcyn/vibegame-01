@@ -77,6 +77,12 @@ class InputMixin:
         if self.state == "replays":
             self.replays_key(sc)
             return
+        if self.state == "addons":
+            self.addons_key(sc)
+            return
+        if self.state == "addon":
+            self.addon_key(sc)
+            return
         if self.state == "settings":
             self.settings_key(sc)
             return
@@ -230,6 +236,8 @@ class InputMixin:
         if self.state == "settings" and self.settings_rows[self.settings_index] == "name":
             chars = "".join(ch for ch in text if ch.isprintable())
             self.set_name((self.settings["name"] + chars)[:settings.NAME_MAX])
+        elif self.state == "addon":
+            self.addon_text(text)
         elif self.state == "settings" and self.settings_rows[self.settings_index] == "replay_dir":
             self.set_replay_dir(self.settings.get("replay_dir", "") + "".join(ch for ch in text if ch.isprintable()))
 
@@ -257,6 +265,8 @@ class InputMixin:
             return {**up, **ok, **back}
         if self.state == "account":                # имя и пароль — с клавиатуры; □/○ — назад
             return back
+        if self.state in ("addons", "addon"):
+            return {**up, **sides, **ok, **back}
         if self.state in ("join", "replays"):
             return {**up, **ok, **back}
         if self.state == "lobby":                  # △ — ищу соперника, Share — разминка

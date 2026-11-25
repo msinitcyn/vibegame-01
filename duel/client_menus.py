@@ -179,10 +179,25 @@ class MenusMixin:
         """Экран «Повторы»: записанные партии (новые сверху) — сами пишутся после каждой партии; ←/→ — другая
         папка (прогоны лаборатории баланса, tools/lab.py --replays)."""
         self.state = "replays"
+        self.replays_back = "settings"
         self.replays_opened = pygame.time.get_ticks()    # первые мгновения нажатия не считаются (двойной щелчок)
         self.replay_folders = replay_folders(self.settings)
         self.replay_folder_i = i % len(self.replay_folders)
         self.load_replay_list()
+
+    def open_replays_at(self, folder=None):
+        """«Повторы» из аддона: сразу нужная папка; Esc — обратно в аддон."""
+        back = self.state if self.state == "addon" else "settings"
+        self.open_replays()
+        self.replays_back = back
+        if folder:
+            from pathlib import Path
+            want = Path(folder).resolve()
+            for i, f in enumerate(self.replay_folders):
+                if Path(f).resolve() == want:
+                    self.replay_folder_i = i
+                    self.load_replay_list()
+                    break
 
     def load_replay_list(self):
         """Список папки: из оглавления (лаборатория — тысячи партий); файлы без оглавления не читаются сразу —
@@ -217,7 +232,7 @@ class MenusMixin:
         K = pygame
         n = len(self.replay_list)
         if sc in (K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE):
-            self.state = "settings"               # «Повторы» открываются из «Настройки → Дополнительно»
+            self.state = getattr(self, "replays_back", "settings")   # откуда открыли: «Дополнительно» или аддон
         elif n and sc in (K.KSCAN_UP, K.KSCAN_W):
             self.replay_index = (self.replay_index - 1) % n
         elif n and sc in (K.KSCAN_DOWN, K.KSCAN_S):
@@ -495,6 +510,9 @@ class MenusMixin:
         elif row == "replays":
             if sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE, K.KSCAN_D, K.KSCAN_RIGHT):
                 self.open_replays()
+        elif row == "addons":
+            if sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE, K.KSCAN_D, K.KSCAN_RIGHT) and self.addons:
+                self.open_addons()
         elif row == "save_replays":
             if sc in (K.KSCAN_A, K.KSCAN_LEFT, K.KSCAN_D, K.KSCAN_RIGHT, K.KSCAN_RETURN, K.KSCAN_KP_ENTER,
                       K.KSCAN_SPACE):

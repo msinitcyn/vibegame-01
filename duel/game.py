@@ -22,6 +22,7 @@ from .replay import Player as ReplayPlayer, Recorder
 from . import logs
 from .logs import log
 from .commands import Command
+from .client_addons import AddonsMixin
 from .client_chat import ChatMixin
 from .demos import has_demo
 from .config import (
@@ -55,7 +56,7 @@ from .client_menus import MenusMixin
 from .client_net import NetClientMixin
 
 
-class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, ChatMixin):
+class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, ChatMixin, AddonsMixin):
     """Приложение поверх матча: хотсит — оба игрока за одним компьютером."""
 
     def __init__(self, windowed=False, net=None, pad=0, replay=None, movie=None, intro=False):
@@ -91,7 +92,14 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.menu = ["play", "net", "test", "help", "settings"]
         self.replay_list, self.replay_index = [], 0       # экран «Повторы»: файлы и выбранный
         self.replay_back = None       # повтор открыт из «Повторов» — Esc возвращает туда, а не закрывает игру
-        self.advanced_rows = ["save_replays", "replay_dir", "replays", "back"]   # «Настройки → Дополнительно»
+        self.advanced_rows = ["save_replays", "replay_dir", "replays", "addons", "back"]   # «Настройки → Дополнительно»
+        self.addons = None            # аддоны (duel/addons.py) — только настольная игра
+        if not WEB:
+            try:
+                from .addons import Addons
+                self.addons = Addons(self.settings, self)
+            except Exception:         # noqa: BLE001 — аддоны не должны мешать игре запуститься
+                log.exception("аддоны не загрузились")
         self.settings_page = "main"
         self.paused = False           # пауза в партии (Esc): за одним компьютером матч стоит
         self.pause_index = 0
@@ -488,6 +496,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             self.on_mouse_up(e.button)
         elif e.type == pygame.TEXTINPUT:
             self.on_text(e.text)
+        elif e.type == pygame.MOUSEWHEEL and self.state == "addon":
+            self.addon_wheel(e.y)
         elif e.type == pygame.MOUSEWHEEL and self.state == "replays" and self.replay_list:
             self.replay_index = max(0, min(len(self.replay_list) - 1, self.replay_index - 3 * e.y))   # колесо — листать
         elif e.type == MUSIC_END:
@@ -511,6 +521,10 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             self.draw_help()
         elif self.state == "replays":
             self.draw_replays()
+        elif self.state == "addons":
+            self.draw_addons()
+        elif self.state == "addon":
+            self.draw_addon()
         elif self.state in ("keys", "settings"):
             if self.settings_back == "play":
                 self.background_play(dt)      # настройки с паузы: сеть и лобби живут дальше

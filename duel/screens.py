@@ -541,6 +541,8 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         viewer = (getattr(self, "me", None) or "") if (self.net or getattr(self, "warmup", False)) and not self.watching \
             else ("" if self.watching else None)
         draw_field(s, self.death_clock(self.snap), self.tiny, viewer)   # погибший — тело и вылетающий дух
+        if getattr(self, "addons", None):                # слои аддонов — поверх поля, под интерфейсом
+            self.addons.draw_field(s, self.snap, viewer or None, self.tiny)
         self.draw_armed_previews(s)
         target = getattr(self, "walk_to", None)
         if target:                                     # «идти к курсору»: куда идёт маг — ромбик на земле

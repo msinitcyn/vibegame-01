@@ -11,6 +11,8 @@ import os
 
 
 if __name__ == "__main__":
+    import multiprocessing
+    multiprocessing.freeze_support()     # собранная игра: процессы лаборатории (аддон) запускают этот же exe
     ap = argparse.ArgumentParser(description="Spellgunners")
     ap.add_argument("--connect", metavar="АДРЕС", help="подключиться к серверу (host или host:port)")
     ap.add_argument("--windowed", action="store_true", help="в окне, а не на весь экран")

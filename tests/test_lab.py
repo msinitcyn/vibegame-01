@@ -1,14 +1,8 @@
-"""Лаборатория баланса: подмена параметров (duel/tuning.py) и прогон партий (tools/lab.py)."""
-import sys
-from pathlib import Path
-
+"""Лаборатория баланса: подмена параметров (duel/tuning.py) и прогон партий (duel/lab.py)."""
 import pytest
 
-from duel import config, tuning
+from duel import config, lab, tuning
 from duel.match import Match
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
-import lab  # noqa: E402
 
 
 def test_override_reaches_every_module_and_undoes():
@@ -105,4 +99,13 @@ def test_lab_run_saves_every_game_replay_with_index(tmp_path, capsys):
     m = p.run()
     p.close()
     assert round(m.match_time, 1) == r["length"]
-    lab.SAVE_DIR = None
+
+
+def test_lab_main_says_progress_and_stops():
+    lines, prog = [], []
+    rs = lab.main(["report", "--games", "6", "--workers", "1", "--limit", "30"], say=lines.append,
+                  progress=lambda i, n, t: prog.append((i, n)))
+    assert len(rs) == 6 and any("герои" in str(x) for x in lines) and prog[-1] == (6, 6)
+    with pytest.raises(lab.Stopped):
+        lab.main(["report", "--games", "40", "--workers", "1", "--limit", "30"], say=lines.append,
+                 progress=lambda *a: None, stop=lambda: True)

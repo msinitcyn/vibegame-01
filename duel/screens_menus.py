@@ -297,6 +297,7 @@ class MenuScreensMixin:
                   "save_replays": f"◀  {tr('settings.save_replays', v=tr('yes' if self.settings.get('save_replays', True) else 'no'))}  ▶",
                   "replay_dir": tr("settings.replay_dir", path=rdir if rdir.strip() else tr("settings.replay_dir_default")),
                   "replays": tr("settings.replays"),
+                  "addons": tr("settings.addons"),
                   "back": tr("settings.back")}
         step = min(46, (HEIGHT - 230) // len(self.settings_rows))     # строк много — плотнее
         for i, line in enumerate(self.settings_rows):
@@ -360,7 +361,7 @@ class MenuScreensMixin:
         «Назад» — в меню; «Имя» — выбрать строку (дальше набирать с клавиатуры)."""
         self.settings_index = i
         row = self.settings_rows[i]
-        if row in ("back", "keys", "check_now", "advanced", "replays"):
+        if row in ("back", "keys", "check_now", "advanced", "replays", "addons"):
             self.on_key(pygame.KSCAN_RETURN)
         elif row not in ("name", "replay_dir"):
             left = self.ui_mouse is not None and self.ui_mouse[0] < rect.centerx
