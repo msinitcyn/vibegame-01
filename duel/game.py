@@ -17,7 +17,8 @@ from .platform import WEB
 from . import config
 from . import settings
 from .audio import Audio, MUSIC_END
-from .brain import LEVEL_NAMES, SmartBot
+from .ai_env import bot_levels, make_game_bot
+from .brain import LEVEL_NAMES
 from .replay import Player as ReplayPlayer, Recorder
 from . import logs
 from .logs import log
@@ -198,9 +199,9 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
                 self.first_start_intro()
 
     def bot_level(self):
-        """Сложность бота из настроек: easy / normal / hard."""
+        """Бот из настроек: easy / normal / hard или «ai:имя» (обученная сеть, если она есть)."""
         level = self.settings.get("bot_level", "normal")
-        return level if level in LEVEL_NAMES else "normal"
+        return level if level in LEVEL_NAMES or (level.startswith("ai:") and level in bot_levels()) else "normal"
 
     def first_start_intro(self):
         """Запуск игры: ролик (если в «Об игре» стоит галка «Показывать при старте»), потом — туда, куда шли
@@ -269,7 +270,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
     def start(self, hp=MAX_HP, heroes=None, bot=False):
         """Новая партия двух игроков (тестовый режим — другое число жизней и бот за красного) — после отсчёта."""
         self.start_hp = hp
-        self.test_bot = SmartBot(None, "red", self.bot_level(), 7) if bot else None    # бот на правилах
+        self.test_bot = make_game_bot(None, "red", self.bot_level(), 7) if bot else None   # на правилах или ИИ
         if bot:
             self.chat_system(t("cmd.test_hello", **self.hint_keys()))
         self.heroes = dict(heroes or DEFAULT_HERO)
@@ -303,7 +304,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         # без зерна — каждый раз новая партия; герои — выбранные перед партией
         self.match = Match(self.start_hp, seed, getattr(self, "heroes", None))
         if getattr(self, "test_bot", None):   # новая партия — бот снова играет (/bot stop — на одну партию)
-            self.test_bot = SmartBot(self.match, "red", self.bot_level(), 7)
+            self.test_bot = make_game_bot(self.match, "red", self.bot_level(), 7)
         self.popups = []              # [текст, x, y, время, цвет]
         self.pending = {pid: Command() for pid in PLAYER_IDS}   # нажатия до следующего такта
         self.time_acc = 0.0           # накопленное время кадров для фиксированного такта

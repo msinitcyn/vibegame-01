@@ -11,7 +11,7 @@ from . import settings
 from .config import DEFAULT_HERO, HELP_BASICS, HELP_LANDS, INTRO_MOVIE, HELP_PAGES, HELP_TABS, HERO_ONLY_ITEMS, HEROES, MAX_HP
 from .items import HELP_SECTIONS
 from .i18n import get_lang, guess_lang, LANGS, set_lang, t
-from .brain import LEVEL_NAMES
+from .ai_env import bot_levels
 from .replay import (folder as replay_dir, folders as replay_folders, load as replay_load, read_index,
                      summary as replay_summary)
 
@@ -483,7 +483,7 @@ class MenusMixin:
             step = {K.KSCAN_A: -1, K.KSCAN_LEFT: -1, K.KSCAN_D: 1, K.KSCAN_RIGHT: 1,
                     K.KSCAN_RETURN: 1, K.KSCAN_KP_ENTER: 1, K.KSCAN_SPACE: 1}.get(sc)
             if step:
-                levels = list(LEVEL_NAMES)
+                levels = bot_levels()          # лёгкий, обычный, сложный и обученные сети ИИ
                 self.settings["bot_level"] = levels[(levels.index(self.bot_level()) + step) % len(levels)]
                 settings.save(self.settings)
         elif row in ("aim_stick", "aim_mouse"):

@@ -245,3 +245,33 @@ class Env:
             obs, gm, im = self.bot.observation()
         return obs, gm, im, reward, done, result
 
+
+
+_game_policies = {}
+
+
+def bot_levels():
+    """Уровни бота для настроек: лёгкий, обычный, сложный и обученные сети (если лежат в assets/ai/)."""
+    from .ai_policy import available
+    from .brain import LEVEL_NAMES
+    return list(LEVEL_NAMES) + [f"ai:{name}" for name in available()]
+
+
+def make_game_bot(match, pid, level, seed=7):
+    """Бот для игры по настройке: «ai:имя» — ИИ-бот (реакция обычная), иначе бот на правилах.
+    Сеть не загрузилась (нет файла, другая раскладка наблюдения) — бот на правилах, обычный."""
+    if level.startswith("ai:"):
+        from .ai_policy import load
+        name = level[3:]
+        try:
+            if name not in _game_policies:
+                _game_policies[name] = load(name)
+            policy = _game_policies[name]
+            if policy.obs_size != obs_size():
+                raise ValueError("другая раскладка наблюдения")
+            return AiBot(match, pid, "normal", seed, policy=policy)
+        except (OSError, ValueError, KeyError) as e:
+            import logging
+            logging.getLogger("duel").warning("ИИ-бот %s не загрузился (%s) — играет бот на правилах", name, e)
+            level = "normal"
+    return SmartBot(match, pid, level, seed)

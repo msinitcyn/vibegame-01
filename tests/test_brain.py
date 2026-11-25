@@ -94,8 +94,10 @@ def test_hard_bot_beats_easy_bot():
     assert wins >= 6
 
 
-def test_bot_level_setting_cycles_and_saves(game):
+def test_bot_level_setting_cycles_and_saves(game, tmp_path, monkeypatch):
     import pygame
+    from duel import ai_policy
+    monkeypatch.setattr(ai_policy, "AI_DIR", tmp_path)          # обученных сетей нет — только три уровня
     game.state = "settings"
     game.settings_index = game.settings_rows.index("bot_level")
     game.on_key(pygame.KSCAN_D)

@@ -4,6 +4,11 @@
 import pygame
 
 from .platform import WEB
+def bot_level_name(level):
+    """Как назвать бота в настройках: «обычный» или «ИИ fire-v2»."""
+    return tr("bot_level.ai", name=level[3:]) if level.startswith("ai:") else tr("bot_level." + level)
+
+
 REPLAY_MODES = ("hotseat", "test", "warmup", "net", "net-bot", "lab")
 from .config import (
     SHOT_COOLDOWN,
@@ -350,7 +355,7 @@ class MenuScreensMixin:
                   "aim_mode": f"◀  {tr('settings.aim_mode', mode=tr('aim_mode.' + self.settings.get('aim_mode', 'move')))}  ▶",
                   "aim_stick": f"◀  {tr('settings.aim_stick', n=self.settings.get('aim_stick', 6))}  ▶",
                   "aim_mouse": f"◀  {tr('settings.aim_mouse', n=self.settings.get('aim_mouse', 5))}  ▶",
-                  "bot_level": f"◀  {tr('settings.bot_level', v=tr('bot_level.' + self.bot_level()))}  ▶",
+                  "bot_level": f"◀  {tr('settings.bot_level', v=bot_level_name(self.bot_level()))}  ▶",
                   "music": f"◀  {tr('settings.music', n=self.settings.get('music_volume', 5))}  ▶",
                   "sfx": f"◀  {tr('settings.sfx', n=self.settings.get('sfx_volume', 5))}  ▶",
                   "keys": tr("settings.keys"),

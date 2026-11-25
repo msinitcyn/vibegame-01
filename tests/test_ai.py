@@ -79,3 +79,36 @@ def test_training_runs_briefly(tmp_path, monkeypatch):
     ai_train.main(["--name", "t", "--minutes", "0.05", "--workers", "1", "--envs", "2", "--rollout", "16",
                    "--hidden", "16,16", "--snapshot", "1", "--imitate", "300"])
     assert (tmp_path / "ai" / "t.json").exists() and (tmp_path / "runs" / "t" / "log.csv").exists()
+
+
+def test_ai_bot_in_settings_and_test_game(game, tmp_path, monkeypatch):
+    import pygame
+    from duel import ai_env, ai_policy
+    monkeypatch.setattr(ai_policy, "AI_DIR", tmp_path)
+    ai_env._game_policies.clear()
+    (tmp_path / "probe.json").write_text(json.dumps({**random_weights(obs_size(), len(GOALS), hidden=(8, 8)),
+                                                      "name": "probe"}))
+    assert "ai:probe" in ai_env.bot_levels()
+    game.state = "settings"
+    game.settings_index = game.settings_rows.index("bot_level")
+    game.settings["bot_level"] = "hard"
+    game.on_key(pygame.KSCAN_D)                               # после «сложный» — сеть
+    assert game.bot_level() == "ai:probe"
+    game.draw_settings()
+    game.start(15, {"blue": "frost", "red": "fire"}, bot=True)
+    game.restart()
+    assert isinstance(game.test_bot, ai_env.AiBot)
+    game.state = "play"
+    for _ in range(30):
+        game.play_frame(1 / 60) if hasattr(game, "play_frame") else None
+    game.settings["bot_level"] = "normal"
+
+
+def test_broken_ai_file_falls_back_to_rules(tmp_path, monkeypatch):
+    from duel import ai_env, ai_policy
+    from duel.brain import SmartBot
+    monkeypatch.setattr(ai_policy, "AI_DIR", tmp_path)
+    ai_env._game_policies.clear()
+    (tmp_path / "old.json").write_text(json.dumps(random_weights(10, len(GOALS), hidden=(4,))))   # чужая раскладка
+    bot = ai_env.make_game_bot(None, "red", "ai:old")
+    assert type(bot) is SmartBot
