@@ -7,3 +7,5 @@ dist/
 duel/_version.py
 sprite_png/
 raw/
+ai_runs/
+assets/ai/

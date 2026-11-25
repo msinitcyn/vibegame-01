@@ -64,8 +64,7 @@ def play(job, record=False):
     try:
         heroes = job["heroes"]
         m = Match(seed=job["seed"], heroes={"blue": heroes[0], "red": heroes[1]})
-        bots = {pid: SmartBot(m, pid, job[pid][0], job["seed"] * 2 + i, job[pid][1])
-                for i, pid in enumerate(("blue", "red"))}
+        bots = {pid: make_bot(m, pid, job[pid], job["seed"] * 2 + i) for i, pid in enumerate(("blue", "red"))}
         lows = {"blue": 0, "red": 0}           # самое большое отставание по жизням у каждой стороны
         first = {}
         every = int(SAMPLE / STEP)
@@ -346,10 +345,42 @@ def other(pid):
 
 # ------------------------------------------------------------------ режимы
 
+def side_spec(text, a):
+    """Сторона: «hard», «normal:kite», «ai:имя» (ИИ-бот, реакция обычная) или «ai:имя@hard»; None — --level/--strategy."""
+    if not text:
+        return (a.level, a.strategy)
+    if text.startswith("ai:"):
+        return (text, "hero")
+    level, _, strategy = text.partition(":")
+    return (level, strategy or "hero")
+
+
+_policies = {}
+
+
+def make_bot(m, pid, spec, seed):
+    """Бот стороны по описанию (уровень, стратегия); «ai:имя[@уровень]» — ИИ-бот с обученной сетью."""
+    level, strategy = spec
+    if level.startswith("ai:"):
+        from .ai_env import AiBot
+        from .ai_policy import load
+        name, _, react = level[3:].partition("@")
+        if name not in _policies:
+            _policies[name] = load(name)
+        return AiBot(m, pid, react or "normal", seed, policy=_policies[name])
+    return SmartBot(m, pid, level, seed, strategy)
+
+
+def spec_name(spec):
+    return spec[0] if spec[0].startswith("ai:") else f"{spec[0]}" + (f":{spec[1]}" if spec[1] != "hero" else "")
+
+
 def cmd_report(a):
-    spec = (a.level, a.strategy)
-    rs = run(jobs_for(a.games, spec, spec, a.set, a.limit, a.seed), a.workers)
-    report(rs, f"уровень {a.level}, стратегия {a.strategy}" + (f", {', '.join(a.set)}" if a.set else ""))
+    blue, red = side_spec(a.blue, a), side_spec(a.red, a)
+    rs = run(jobs_for(a.games, blue, red, a.set, a.limit, a.seed), a.workers)
+    sides = f"синий {spec_name(blue)} против красного {spec_name(red)}" if blue != red else \
+        f"уровень {a.level}, стратегия {a.strategy}"
+    report(rs, sides + (f", {', '.join(a.set)}" if a.set else ""))
     return rs
 
 
@@ -503,6 +534,8 @@ def _main(argv):
     common.add_argument("--games", type=int, default=300)
     common.add_argument("--level", default="normal")
     common.add_argument("--strategy", default="hero", choices=list(STRATEGIES))
+    common.add_argument("--blue", help="синий (левый): hard | normal:kite | ai:имя[@уровень] — иначе --level/--strategy")
+    common.add_argument("--red", help="красный (правый): так же")
     common.add_argument("--set", action="append", default=[], metavar="ИМЯ=знач")
     common.add_argument("--limit", type=float, default=300.0, help="самая долгая партия, с")
     common.add_argument("--seed", type=int, default=1)

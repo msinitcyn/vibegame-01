@@ -95,6 +95,7 @@ class SmartBot:
         self.think_left = 0.0
         self.move = (0, 0)
         self.goal = "idle"
+        self.goal_since = 0.0
         self.target = None            # во что целится: ("foe",) / ("mob", моб) / None
         self.aim = None
         self.strafe = self.rng.choice((-1, 1))
@@ -195,21 +196,37 @@ class SmartBot:
         return self.rng.choices(scored, weights)[0]
 
     def decide(self, me, foe, threats):
-        """Раз в think секунд: что делать (уклониться, отступить, подобрать, фарм, бой) и куда идти."""
-        m = self.match
-        st = self.style(me)
+        """Раз в think секунд: рефлексы (уклониться, уйти с жгучей земли), иначе — какое дело выбрать из
+        возможных (goal_options → pick_goal: у бота на правилах — по оценке, у ИИ-бота — сеть) и исполнить."""
+        if self.reflex(me, foe, threats):
+            return
+        _, goal, data = self.pick_goal(self.goal_options(me, foe), me, foe)
+        self.execute(me, foe, goal, data)
+
+    def pick_goal(self, options, me, foe):
+        return self.choose(options)
+
+    def reflex(self, me, foe, threats):
+        """Летит пуля — уйти с линии; жжёт земля (а не воруем пачку) — уйти домой. True — сделано."""
         danger = self.threat_score(me.x, me.y, threats)
         if danger > 0.5:                              # летит — уйти с линии
             self.goal, self.move = "dodge", self.best_dodge(me, threats)
             self.pick_target(me, foe)
-            return
-        steal = self.steal_target(me, foe)
-        stealing = self.goal == "steal" and steal is not None
-        if m.danger(me)[0] > 0 and not self.burning_ok(me) and not stealing:
+            return True
+        stealing = self.goal == "steal" and self.steal_target(me, foe) is not None
+        if self.match.danger(me)[0] > 0 and not self.burning_ok(me) and not stealing:
             self.goal = "retreat"
             self.move = self.step_toward(me, self.home_point(me), anywhere=True)   # уйти — хоть через опасное
             self.pick_target(me, foe)
-            return
+            return True
+        return False
+
+    def goal_options(self, me, foe):
+        """Возможные сейчас дела: [(оценка бота на правилах, дело, данные)]. Не бывает пустым."""
+        m = self.match
+        st = self.style(me)
+        steal = self.steal_target(me, foe)
+        stealing = self.goal == "steal" and steal is not None
         low = me.hp <= max(4, me.max_hp * 0.3)
         options = []
         foe_p = self.foe()
@@ -248,7 +265,13 @@ class SmartBot:
             options.append((0.5 + st["aggro"] * 0.7 - (0.5 if low else 0.0) - (0.8 if unarmed else 0.0), "duel", foe))
         if not options:
             options.append((0.1, "home", self.home_point(me)))
-        _, goal, data = self.choose(options)
+        return options
+
+    def execute(self, me, foe, goal, data):
+        """Исполнить дело: куда идти и во что целиться."""
+        st = self.style(me)
+        if goal != self.goal:
+            self.goal_since = self.match.match_time       # с какого времени этим делом занят (ИИ видит)
         self.goal = goal
         if goal in ("pickup", "ammo", "home"):
             self.move = self.step_toward(me, data)
@@ -513,8 +536,15 @@ class SmartBot:
 
     def choose_item(self, me, foe):
         """Ячейка, которую применить сейчас (или None), и «до курсора» для заклинаний на область."""
-        if self.item_cd > 0 or "noitems" in me.effects or me.stunned:
+        ready = self.ready_items(me, foe)
+        if not ready or self.rng.random() > self.L["items"]:
             return None, None
+        return self.use_slot(me, foe, *ready[0])
+
+    def ready_items(self, me, foe):
+        """Ячейки, которые правила считают уместным применить сейчас: [(ячейка, «до курсора»)] (без действия)."""
+        if self.item_cd > 0 or "noitems" in me.effects or me.stunned:
+            return []
         ready = []
         fd = math.hypot(foe[0] - me.x, foe[1] - me.y) if foe else 1e9
         fight = fd < 520 or any(x.target is me for x in self.match.mobs if x.alive)
@@ -567,13 +597,35 @@ class SmartBot:
                 ok = fight
             if ok:
                 ready.append((i, reach))
-        if not ready or self.rng.random() > self.L["items"]:
-            return None, None
-        self.item_cd = 1.0                            # не всё разом — как человек
-        slot, reach = ready[0]
-        if reach is not None:
-            self.aim = math.atan2(foe[1] - me.y, foe[0] - me.x)   # заклинание на область — в соперника
+        return ready
+
+    def usable_slots(self, me):
+        """Ячейки, которые сейчас можно применить вообще (не пусто, не снаряжение, нет запрета и паузы)."""
+        if self.item_cd > 0 or "noitems" in me.effects or me.stunned:
+            return []
+        return [i for i, kind in enumerate(me.items)
+                if kind is not None and ITEMS.get(kind, ("self",))[0] != "gear"]
+
+    def use_slot(self, me, foe, slot, reach=None):
+        """Применить ячейку: пауза перед следующим (как человек); заклинание на область — «до курсора» в соперника."""
+        self.item_cd = 1.0
+        kind = me.items[slot]
+        if reach is None:
+            reach = self.item_reach(kind, me, foe)
+        if reach is not None and foe is not None:
+            self.aim = math.atan2(foe[1] - me.y, foe[0] - me.x)
         return slot, reach
+
+    def item_reach(self, kind, me, foe):
+        """Куда ставить заклинание на область (огненный круг — под соперника, зеркало — между)."""
+        if foe is None:
+            return None
+        fd = math.hypot(foe[0] - me.x, foe[1] - me.y)
+        if kind == "firering":
+            return fd
+        if kind == "wall":
+            return min(WALL_RANGE, max(90, fd * 0.4))
+        return None
 
 
 def bot_for(match, pid, level="normal", seed=7):
