@@ -147,9 +147,12 @@ def read_index(path):
 
 
 def write_index(path, entries):
+    """Атомарно: игра может читать оглавление, пока лаборатория его дописывает."""
+    tmp = Path(path) / (INDEX + ".tmp")
     try:
-        with open(Path(path) / INDEX, "w", encoding="utf-8") as f:
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(entries, f, ensure_ascii=False)
+        tmp.replace(Path(path) / INDEX)
     except OSError:
         pass
 

@@ -120,3 +120,21 @@ def test_lab_run_folders_switch_with_arrows(game):
     assert game.replay_folder_i == 0
     game.replay_index = 0
     game.on_event(pygame.event.Event(pygame.MOUSEWHEEL, x=0, y=-1, flipped=False))
+
+
+def test_folder_without_index_is_read_lazily(game, tmp_path, monkeypatch):
+    """Папка без оглавления (прогон ещё идёт): список открывается сразу, файлы читаются по видимым строкам."""
+    from duel import replay as rp
+    for _ in range(12):
+        write_replay(tmp_path)
+    game.settings["replay_dir"] = str(tmp_path)
+    reads = []
+    real = rp.load
+    monkeypatch.setattr("duel.client_menus.replay_load", lambda p: reads.append(p) or real(p))
+    game.open_replays()
+    assert len(game.replay_list) == 12 and not reads          # открыть — ничего не читая
+    for _ in range(12):
+        game.draw_replays()
+    assert len(reads) == 9                                     # только видимые строки, по одной за кадр
+    assert game.replay_list[0]["mode"] == "lab"
+    game.settings["replay_dir"] = ""

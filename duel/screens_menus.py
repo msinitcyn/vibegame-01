@@ -202,6 +202,9 @@ class MenuScreensMixin:
                 s.blit(img, img.get_rect(center=(WIDTH // 2, 220 + k * 34)))
         visible = 9
         top = max(0, min(self.replay_index - visible // 2, len(rows) - visible))
+        unread = next((r for r in rows[top:top + visible] if r.get("unread")), None)
+        if unread:                                         # по одному файлу за кадр — меню не замирает
+            self.read_replay_row(unread)
         for k, r in enumerate(rows[top:top + visible]):
             i = top + k
             sel = i == self.replay_index
@@ -232,6 +235,10 @@ class MenuScreensMixin:
         x = rect.x + 16
         color = WHITE if sel else GREY
         mode = r["mode"]
+        if r.get("unread") or r.get("broken"):
+            img = self.small.render(f"{when}   {'…' if r.get('unread') else '?'}", True, color)
+            s.blit(img, img.get_rect(midleft=(x, rect.centery)))
+            return
         parts = [(when, color), (tr("replays.mode." + mode) if mode in REPLAY_MODES else mode, color)]
         heroes = r["heroes"]
         for pid in ("blue", "red"):

@@ -119,17 +119,33 @@ def run(jobs, workers):
     if SAVE_DIR:
         for j in jobs:
             j["save_dir"] = str(SAVE_DIR)
-    with Pool(workers) as pool:
+    with Pool(workers, initializer=lower_priority) as pool:
         for i, r in enumerate(pool.imap_unordered(play, jobs, chunksize=4), 1):
             out.append(r)
+            if SAVE_DIR and i % 100 == 0:                # оглавление — по ходу: папку можно смотреть, пока идёт
+                save_index(out)
             if i % 50 == 0 or i == len(jobs):
                 print(f"\r  партий {i}/{len(jobs)} за {time.time() - t0:.0f} с", end="", file=sys.stderr, flush=True)
     print(file=sys.stderr)
     if SAVE_DIR:                                     # оглавление: в игре список тысяч партий — сразу
-        index = read_index(SAVE_DIR)
-        index.update({r["replay"]: r.pop("entry") for r in out if "replay" in r})
-        write_index(SAVE_DIR, index)
+        save_index(out)
+        for r in out:
+            r.pop("entry", None)
     return out
+
+
+def save_index(results):
+    index = read_index(SAVE_DIR)
+    index.update({r["replay"]: r["entry"] for r in results if "entry" in r})
+    write_index(SAVE_DIR, index)
+
+
+def lower_priority():
+    """Рабочие процессы — с низким приоритетом: игра (и остальное) рядом не тормозит."""
+    try:
+        os.nice(10)
+    except (AttributeError, OSError):
+        pass                                         # Windows — без этого
 
 
 def hero_pairs(n, rng):

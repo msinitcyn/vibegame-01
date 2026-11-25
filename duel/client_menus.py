@@ -185,7 +185,8 @@ class MenusMixin:
         self.load_replay_list()
 
     def load_replay_list(self):
-        """Список папки: из оглавления (лаборатория — тысячи партий), остальное — читая файлы."""
+        """Список папки: из оглавления (лаборатория — тысячи партий); файлы без оглавления не читаются сразу —
+        строка заполняется, когда видна (read_replay_row), иначе тысячи файлов вешали бы меню."""
         folder = self.replay_folders[self.replay_folder_i]
         self.replay_index = 0
         self.replay_list = []
@@ -196,13 +197,17 @@ class MenusMixin:
             paths = []
         lab = folder != self.replay_folders[0]
         for path in (sorted(paths) if lab else paths):  # прогон лаборатории — по порядку партий
-            entry = index.get(path.name)
-            if entry is None:
-                try:
-                    entry = replay_summary(replay_load(path))
-                except (OSError, ValueError, EOFError):
-                    continue
+            entry = index.get(path.name) or {"mode": "", "heroes": {}, "players": {}, "winner": None, "time": 0,
+                                              "tuning": [], "unread": True}
             self.replay_list.append({**entry, "path": path, "stamp": path.name[:13]})
+
+    def read_replay_row(self, r):
+        """Строка без оглавления — прочитать файл (только видимые строки, по одной за кадр)."""
+        r.pop("unread", None)
+        try:
+            r.update(replay_summary(replay_load(r["path"])))
+        except (OSError, ValueError, EOFError):
+            r["broken"] = True
 
     def shown_replay_folder(self):
         folders = getattr(self, "replay_folders", None)
