@@ -13,9 +13,9 @@ import math
 import random
 from collections import deque
 
-from .config import (BOTTOM, BULLET_R, BULLET_SPEED, FIRE_RING_RANGE, MELEE_RANGE, MOB_SHOT_R, MOB_SHOT_SPEED, TOP,
+from .config import (ARENA, NEUTRAL_HALF, BOTTOM, BULLET_R, BULLET_SPEED, FIRE_RING_RANGE, MELEE_RANGE, MOB_SHOT_R, MOB_SHOT_SPEED, TOP,
                      WALL_RANGE, WIDTH, ZOMBIE_RADIUS)
-from .entities import zone_at
+from .entities import in_arena, zone_at
 from .items import BAD_EFFECTS, ITEMS
 
 STEP = 1 / 60
@@ -63,11 +63,15 @@ FARM_AMMO = 12                    # меньше — мобов не трога�
 AMMO_PLENTY = 40                  # столько патронов — «хватает», за дальней пачкой не идёт
 
 SELF_COMBAT = {"triple", "rapid", "shield", "shrink", "clones", "sentries", "trees", "beam", "zombies", "bear",
-               "firmground", "invisible", "slowfoe", "clearfoe", "speedsteal"}
+               "invisible", "slowfoe", "clearfoe", "speedsteal"}
 FOE_TARGETED = {"foe_grow", "foe_nofire", "foe_invert", "foe_noitems", "lasso", "quake"}
 FOE_SHOT_GAP = 0.8               # издалека по сопернику — не чаще (от дальней пули уворачиваются: 3 из 4 мимо)
 FOE_SHOT_NEAR = 300               # ближе — стреляет как может
-PUNISH_DIST = 130                 # к замороженному сопернику — так близко (не промахнуться, добить мечом)
+PUNISH_DIST = 130
+STEAL_DEPTH = 70                  # пачку на чужой земле так близко к границе — можно украсть (обожжётся чуть)
+STEAL_HP = 6                      # меньше жизней — не ворует
+AMBUSH_FOE_AMMO = 6               # у соперника патронов меньше — пачка рядом с ним станет его целью: стреляем туда
+ARENA_LOOT_RANGE = 520            # «Твёрдая почва» — когда в арене есть лут не дальше этого                 # к замороженному сопернику — так близко (не промахнуться, добить мечом)
 
 
 class SmartBot:
@@ -170,7 +174,7 @@ class SmartBot:
             reach < self.fire_dist(me)                # далеко — патроны не тратит
         melee = self.melee_ready(me)
         move = self.move if self.walk else (0, 0)
-        if fire and self.target[0] == "foe" and reach >= FOE_SHOT_NEAR:
+        if fire and self.target[0] in ("foe", "spot") and reach >= FOE_SHOT_NEAR:
             self.foe_gap = FOE_SHOT_GAP * self.rng.uniform(0.7, 1.3)
         return move, fire, melee, slot, aim, reach
 
@@ -199,7 +203,9 @@ class SmartBot:
             self.goal, self.move = "dodge", self.best_dodge(me, threats)
             self.pick_target(me, foe)
             return
-        if m.danger(me)[0] > 0 and not self.burning_ok(me):
+        steal = self.steal_target(me, foe)
+        stealing = self.goal == "steal" and steal is not None
+        if m.danger(me)[0] > 0 and not self.burning_ok(me) and not stealing:
             self.goal = "retreat"
             self.move = self.step_toward(me, self.home_point(me), anywhere=True)   # уйти — хоть через опасное
             self.pick_target(me, foe)
@@ -215,11 +221,20 @@ class SmartBot:
         art = self.nearest_safe(me, [(a.x, a.y) for a in m.artifacts], 560)
         if art:                                       # лут — главное: за артефактом идёт и издалека
             options.append((1.55 - math.hypot(art[0] - me.x, art[1] - me.y) / 900, "pickup", art))
-        pack = self.nearest_safe(me, [(a.x, a.y) for a in m.ammo_packs if a.life > 0], 600)
-        if pack:                                      # патроны: рядом — берёт всегда, далеко — когда мало
-            d = math.hypot(pack[0] - me.x, pack[1] - me.y)
-            need = 1.0 - min(me.ammo, AMMO_PLENTY) / AMMO_PLENTY
-            options.append((max(0.8 + 1.3 * need - d / 900, 1.5 if d < 160 else 0.0), "ammo", pack))
+        need = 1.0 - min(me.ammo, AMMO_PLENTY) / AMMO_PLENTY
+        packs = [a for a in m.ammo_packs if a.life > 0 and self.safe_spot(me, a.x, a.y)
+                 and math.hypot(a.x - me.x, a.y - me.y) < 650]
+        if packs:                                     # патроны: рядом — берёт всегда, далеко — когда мало
+            a = min(packs, key=lambda a: math.hypot(a.x - me.x, a.y - me.y))
+            d = math.hypot(a.x - me.x, a.y - me.y)
+            score = max(0.9 + 1.3 * need - d / 1000, 1.5 if d < 160 else 0.0)
+            if a.life < 4 and d / max(1.0, me.speed) < a.life:   # скоро пропадёт, а успеваем — не пропускать
+                score += 0.3
+            options.append((score, "ammo", (a.x, a.y)))
+        if steal is not None:                         # пачка у самой границы на чужой земле — украсть
+            options.append((1.05 + 1.0 * need + (STICK if stealing else 0.0), "steal", steal))
+        if firm_loot := self.arena_loot(me):          # «Твёрдая почва» действует — бегом за лутом в арену
+            options.append((1.9, "pickup", firm_loot))
         angry = [x for x in m.mobs if x.alive and x.zombie_of is None and x.target is me]
         # мобы — источник лута: бить и тех, что в арене (стреляет с безопасного места рядом)
         calm = [x for x in m.mobs if x.alive and x.zombie_of is None and x.target is None
@@ -238,6 +253,9 @@ class SmartBot:
         if goal in ("pickup", "ammo", "home"):
             self.move = self.step_toward(me, data)
             self.pick_target(me, foe)
+        elif goal == "steal":                         # за чужой пачкой — напрямик (обжечься немного можно)
+            self.move = self.step_toward(me, data, anywhere=True)
+            self.pick_target(me, foe)
         elif goal == "punish":
             self.target = ("foe",)
             d = math.hypot(foe[0] - me.x, foe[1] - me.y)
@@ -252,6 +270,9 @@ class SmartBot:
                 self.move = self.step_toward(me, (data.x, data.y)) if d > want + 60 else self.strafe_move(me, data.x, data.y)
         else:
             self.target = ("foe",)
+            spot = self.ambush_spot(me, foe)
+            if spot is not None and self.rng.random() < 0.5:   # соперник без патронов идёт к пачке — бьём туда
+                self.target = ("spot", spot)
             d = math.hypot(foe[0] - me.x, foe[1] - me.y)
             if d > st["range"] + 60:
                 self.move = self.step_toward(me, foe)
@@ -303,6 +324,48 @@ class SmartBot:
             return True
         return any(self.hot_for(me, a.x, a.y) and math.hypot(a.x - me.x, a.y - me.y) < 400
                    for a in self.match.artifacts)
+
+    def arena_artifacts(self, me):
+        """Артефакты в арене мобов не дальше ARENA_LOOT_RANGE."""
+        return [a for a in self.match.artifacts if zone_at(a.x, a.y) == "arena"
+                and math.hypot(a.x - me.x, a.y - me.y) < ARENA_LOOT_RANGE]
+
+    def arena_loot(self, me):
+        """Под «Твёрдой почвой» — ближайший артефакт в арене (или None)."""
+        if "firmground" not in me.effects:
+            return None
+        arts = self.arena_artifacts(me)
+        a = min(arts, key=lambda a: math.hypot(a.x - me.x, a.y - me.y)) if arts else None
+        return (a.x, a.y) if a else None
+
+    def steal_target(self, me, foe):
+        """Пачка на чужой земле у самой границы (не глубже STEAL_DEPTH), путь — не через арену, соперник не рядом,
+        жизней хватает: её можно украсть. (x, y) или None."""
+        if me.hp <= STEAL_HP:
+            return None
+        foe_zone = self.match.foe_zone_of(me)
+        best = None
+        for a in self.match.ammo_packs:
+            if a.life <= 0.5 or zone_at(a.x, a.y) != foe_zone:
+                continue
+            depth = abs(a.x - ARENA[0]) - NEUTRAL_HALF
+            if depth > STEAL_DEPTH or in_arena((a.x + me.x) / 2, (a.y + me.y) / 2, 0):
+                continue
+            if foe is not None and math.hypot(foe[0] - a.x, foe[1] - a.y) < 130:
+                continue
+            d = math.hypot(a.x - me.x, a.y - me.y)
+            if d < 420 and (best is None or d < best[0]):
+                best = (d, (a.x, a.y))
+        return best[1] if best else None
+
+    def ambush_spot(self, me, foe):
+        """У соперника кончаются патроны, а рядом с ним пачка — он пойдёт за ней: точка, куда стрелять."""
+        if foe is None or self.foe().ammo >= AMBUSH_FOE_AMMO or me.ammo < LOW_AMMO:
+            return None
+        near = [a for a in self.match.ammo_packs if a.life > 0.5
+                and math.hypot(a.x - foe[0], a.y - foe[1]) < 260 and math.hypot(a.x - me.x, a.y - me.y) < FIRE_DIST]
+        a = min(near, key=lambda a: math.hypot(a.x - foe[0], a.y - foe[1])) if near else None
+        return (a.x, a.y) if a else None
 
     def ammo_home(self, me):
         """Куда идти без патронов: середина своей земли (пачки падают на неё) — оттуда до любой близко."""
@@ -394,6 +457,11 @@ class SmartBot:
             d = math.hypot(foe[0] - me.x, foe[1] - me.y)
             t = d / BULLET_SPEED
             tx, ty = foe[0] + foe_vel[0] * t, foe[1] + foe_vel[1] * t
+        elif self.target and self.target[0] == "spot":
+            tx, ty = self.target[1]
+            if not any(a.life > 0 and abs(a.x - tx) < 1 and abs(a.y - ty) < 1 for a in self.match.ammo_packs):
+                self.target = ("foe",)                # пачку забрали — снова по сопернику
+                tx = ty = None
         elif self.target and self.target[0] == "mob":
             mob = self.target[1]
             if mob.alive:
@@ -417,7 +485,7 @@ class SmartBot:
 
     def foe_shot_ok(self, reach):
         """Дальний выстрел по сопернику — с паузой FOE_SHOT_GAP (кроме замороженного); вблизи и по мобам — сразу."""
-        if not (self.target and self.target[0] == "foe") or reach is None or reach < FOE_SHOT_NEAR \
+        if not (self.target and self.target[0] in ("foe", "spot")) or reach is None or reach < FOE_SHOT_NEAR \
                 or "freeze" in self.foe().effects:
             return True
         return self.foe_gap <= 0
@@ -477,6 +545,8 @@ class SmartBot:
             elif kind == "wall":
                 ok = foe is not None and fd < 600 and self.threat_score(me.x, me.y, self.perceived()[2], 1.0) > 0
                 reach = min(WALL_RANGE, max(90, fd * 0.4))
+            elif kind == "firmground":            # «Твёрдая почва» — за лутом в арену мобов (там его обычно много)
+                ok = bool(self.arena_artifacts(me)) and "firmground" not in me.effects
             elif kind == "icewalk":               # тропа — чтобы зайти туда, где жжёт: к сопернику или артефакту
                 ok = self.wants_hot_ground(me, foe)
             elif kind == "foe_freeze":            # заморозка: добить самому, отдать мобам или остановить натиск

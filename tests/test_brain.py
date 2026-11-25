@@ -163,3 +163,53 @@ def test_icewalk_arena_neither_burns_nor_slows():
     assert m.ground_slow(p) == ARENA_SLOW and m.in_danger(p)
     m.give(p, "icewalk")
     assert m.ground_slow(p) == 1.0 and not m.in_danger(p)
+
+
+def test_earth_uses_firmground_to_loot_arena():
+    """Земля с «Твёрдой почвой» и лутом в арене — надевает почву и идёт в арену за ним."""
+    from duel.config import ARENA
+    from duel.entities import Artifact, zone_at
+    m = Match(seed=5, heroes={"blue": "earth", "red": "fire"})
+    m.mobs.clear()
+    m.blue.x, m.blue.y = ARENA[0] - 230, ARENA[1]
+    m.red.x, m.red.y = 950, 650
+    m.blue.add_item("firmground")
+    m.artifacts.append(Artifact(ARENA[0] - 60, "triple", ARENA[1]))
+    assert zone_at(ARENA[0] - 60, ARENA[1]) == "arena"
+    bot = SmartBot(m, "blue", "hard", 1)
+    run(m, {"blue": bot, "red": Idle()}, 4.0)
+    assert m.stats["blue"]["used"].get("firmground") and m.stats["blue"]["picked"].get("triple")
+
+
+def test_bot_steals_ammo_pack_near_border():
+    """Пачка на чужой земле у самой границы — бот забегает и забирает её."""
+    from duel.config import ARENA, NEUTRAL_HALF
+    from duel.entities import AmmoPack
+    m = Match(seed=5, heroes={"blue": "frost", "red": "fire"})
+    m.mobs.clear()
+    m.ammo_packs.clear()
+    m.blue.ammo = 3
+    m.blue.x, m.blue.y = ARENA[0] - 40, 120                  # на нейтральной полосе над ареной
+    m.red.x, m.red.y = 950, 650
+    m.ammo_packs.append(AmmoPack(ARENA[0] + NEUTRAL_HALF + 40, 130))
+    bot = SmartBot(m, "blue", "hard", 1)
+    run(m, {"blue": bot, "red": Idle()}, 3.0)
+    assert m.blue.ammo >= 20 and not m.ammo_packs
+
+
+def test_bot_shoots_where_out_of_ammo_foe_will_pick_up():
+    """У соперника нет патронов, рядом с ним пачка — бот иногда бьёт в эту точку."""
+    from duel.entities import AmmoPack
+    m = Match(seed=5, heroes={"blue": "frost", "red": "fire"})
+    m.mobs.clear()
+    m.ammo_packs.clear()
+    m.red.ammo = 0
+    m.blue.x, m.blue.y, m.red.x, m.red.y = 300, 400, 700, 400
+    m.ammo_packs.append(AmmoPack(760, 460))
+    bot = SmartBot(m, "blue", "hard", 1)
+    targets = set()
+    for _ in range(240):
+        bot.act()
+        if bot.target:
+            targets.add(bot.target[0])
+    assert "spot" in targets
