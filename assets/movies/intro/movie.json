@@ -4,7 +4,14 @@
   "transition": "fade",
   "scenes": [
     {
+      "length": 5.6,
+      "title": "zoom",
+      "zoom_time": 4.4,
+      "battle": {"seed": 11, "heroes": ["fire", "dark"], "skip": 24, "level": "hard", "view": [0, 84, 1000, 640]}
+    },
+    {
       "length": 3.6,
+      "transition": "flash",
       "heroes": {"blue": "fire", "red": "frost"},
       "lands": ["fire", "frost"],
       "camera": [0, 84, 1000, 640],
@@ -115,6 +122,14 @@
         {"t": [0.3, 1.4], "every": 0.45, "do": "fire", "who": "red", "at": "blue"},
         {"t": 0.7, "do": "camera", "view": [470, 100, 260, 146], "time": 1.0}
       ]
+    },
+    {
+      "length": 4.1,
+      "title": "slide",
+      "transition": "cut",
+      "slide": [1.1, 1.7, 1.0],
+      "shake": 7,
+      "battle": {"seed": 23, "heroes": ["light", "nature"], "skip": 30, "level": "hard", "view": [0, 84, 1000, 640]}
     }
   ]
 }

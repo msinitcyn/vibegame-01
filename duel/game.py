@@ -228,12 +228,14 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
 
     def end_movie(self):
         self.movie = None
+        self.audio.set_music_fade(1.0)
         self.audio.stop_sounds()
         self.state = self.movie_back
 
     def movie_frame(self, dt):
         """Кадр ролика: сцены идут, звучат, рисуются; кончился — назад."""
         self.movie.update(dt)
+        self.audio.set_music_fade(self.movie.music_gain())   # надпись летит — музыка нарастает
         self.event_sounds(self.movie.take_events())
         if self.movie.done:
             self.end_movie()

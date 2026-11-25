@@ -133,7 +133,7 @@ def test_movie_plays_scenes_with_transitions_and_subtitles(game):
 
 def test_subtitles_white_on_black_at_bottom(game):
     mv = Movie("intro", lang="ru")
-    while mv.t < 1.5:
+    while mv.t < 7.0:                                  # первые секунды — надпись (вступление), потом субтитр
         mv.update(1 / 60)
     mv.render(game, game.screen)
     s = game.screen
@@ -283,3 +283,38 @@ def test_death_event_and_sound_only_when_mage_really_dies(game, monkeypatch):
                  "script": [{"t": [0.1, 2.0], "every": 0.3, "do": "fire", "who": "blue", "at": "red"}]})
     run(st2, 1.5)
     assert all(e[0] != "dead" for e in st2.take_events())
+
+
+def test_intro_starts_with_title_zoom_and_ends_with_slide():
+    data = movie.load("intro")
+    assert data["scenes"][0]["title"] == "zoom" and data["scenes"][-1]["title"] == "slide"
+
+
+def test_title_zoom_holes_music_swell_and_fly_through(game):
+    from duel.movie_title import TitleStage
+    st = TitleStage({"title": "zoom", "length": 5, "zoom_time": 4, "battle": {"seed": 3, "skip": 2}})
+    gains, blacks = [], []
+    for _ in range(int(4.6 * 60)):
+        st.update(1 / 60)
+        if int(st.t * 60) % 30 == 0:
+            img = game.scene_frame(st.snapshot(), st.lands_pair(), st.cam, movie.FRAME.size)
+            st.overlay(img, game)
+            gains.append(st.music_gain())
+            dark = sum(1 for x in range(0, img.get_width(), 10) for y in range(0, img.get_height(), 10)
+                       if img.get_at((x, y))[:3] == (0, 0, 0))
+            blacks.append(dark / ((img.get_width() // 10 + 1) * (img.get_height() // 10 + 1)))
+    assert gains == sorted(gains) and gains[0] < 0.3 and gains[-1] == 1.0     # музыка нарастает
+    assert blacks[0] > 0.95 and blacks[-1] < 0.05                              # чёрное с дырками → поле целиком
+    assert st.take_events() is not None and st.pending == 0
+
+
+def test_title_slide_comes_from_left_shakes_and_leaves(game):
+    from duel.movie_title import TitleStage
+    st = TitleStage({"title": "slide", "length": 4, "slide": [1, 1.5, 1], "battle": {"skip": 0}})
+    st.build_mask(game)
+    xs = {}
+    for t in (0.0, 0.5, 1.2, 1.6, 2.1, 3.3):
+        st.t = t
+        xs[t] = st.place(1000)[2][0]
+    assert xs[0.0] < -500 and xs[0.5] < 0 and abs(xs[1.2]) < 10 and abs(xs[2.1]) < 10 and xs[3.3] < -500
+    assert xs[1.2] != xs[1.6]                                                  # в центре трясётся

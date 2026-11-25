@@ -85,6 +85,7 @@ class Audio:
         self.items = {}               # артефакт -> звук применения
         self.base = {}                # звук -> громкость при уровне 5
         self.music_level = self.sfx_level = 5
+        self.music_fade = 1.0                 # множитель громкости музыки (ролик: нарастает, пока летит надпись)
         self.enabled = False
         self.kind = None              # какая музыка сейчас: menu / game
         self.loop_sounds = {}         # звук-цикл (шаги, чужая земля, ледяная тропа) -> Sound
@@ -156,7 +157,15 @@ class Audio:
     def apply_music_volume(self):
         """Громкость музыки: уровень из настроек × MUSIC_VOLUME × громкость этого трека (MUSIC_GAIN)."""
         gain = MUSIC_GAIN.get(Path(self.track).stem, 1.0) if self.track else 1.0
-        pygame.mixer.music.set_volume(min(1.0, MUSIC_VOLUME * gain * self.music_level / 5))
+        pygame.mixer.music.set_volume(min(1.0, MUSIC_VOLUME * gain * self.music_fade * self.music_level / 5))
+
+    def set_music_fade(self, k):
+        """Множитель громкости музыки 0..1 (ролик); меняется заметно — сразу на музыку."""
+        k = max(0.0, min(1.0, float(k)))
+        if abs(k - self.music_fade) >= 0.01 or (k in (0.0, 1.0) and k != self.music_fade):
+            self.music_fade = k
+            if self.enabled:
+                self.apply_music_volume()
 
     def movie_music(self, mask):
         """Музыка ролика: файлы по маске в assets/music (нет маски или файлов — тишина)."""

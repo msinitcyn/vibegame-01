@@ -27,7 +27,8 @@
       ]
     }
 
-Сцена — duel/scene.py (тот же движок, что у сценок «Обучения»): поля сцены и API — там. Сцену можно
+Сцена — duel/scene.py (тот же движок, что у сценок «Обучения»): поля сцены и API — там. Сцена с "title"
+(zoom | slide) — надпись, сквозь буквы которой идёт бой ботов: duel/movie_title.py. Сцену можно
 написать и на Python: Scene(данные сцены) и вызовы его методов — сценарий JSON делает то же самое.
 """
 import json
@@ -48,6 +49,14 @@ TRANSITIONS = ("fade", "dissolve", "flash", "wipe", "cut")
 SKIP_HINT = 4.0                       # сколько секунд в начале видна подсказка «Esc — пропустить»
 
 _cache = {}
+
+
+def make_stage(data):
+    """Сцена ролика: обычная (duel/scene.py) или «надпись» ("title": zoom | slide — duel/movie_title.py)."""
+    if data.get("title"):
+        from .movie_title import TitleStage
+        return TitleStage(data, ASPECT)
+    return Scene(data, ASPECT)
 
 
 def load(name):
@@ -112,7 +121,7 @@ class Movie:
         self.t = 0.0
         self.index = 0
         self.scene_t0 = 0.0
-        self.stage = Scene(self.scenes[0], ASPECT) if self.scenes else None
+        self.stage = make_stage(self.scenes[0]) if self.scenes else None
         self.prev_frame = None
         self.last_frame = None
         self.done = not self.scenes
@@ -136,11 +145,16 @@ class Movie:
             self.scene_t0 += self.stage.length
             self.index += 1
             self.prev_frame = self.last_frame
-            self.stage = Scene(self.scenes[self.index], ASPECT)
+            self.stage = make_stage(self.scenes[self.index])
 
     def take_events(self):
         out, self.events = self.events, []
         return out
+
+    def music_gain(self):
+        """Громкость музыки (доля): сцена-надпись нарастает, остальные — полная."""
+        gain = getattr(self.stage, "music_gain", None)
+        return gain() if gain else 1.0
 
     def subtitle(self):
         """Строки субтитров на это время."""
@@ -170,6 +184,9 @@ class Movie:
             return
         snap = self.last_snap = self.stage.snapshot()
         img = game.scene_frame(snap, self.stage.lands_pair(), self.stage.cam, FRAME.size)
+        overlay = getattr(self.stage, "overlay", None)
+        if overlay:                                    # сцена-надпись: бой сквозь буквы
+            overlay(img, game)
         self.last_frame = img.copy()
         local = self.t - self.scene_t0
         kind = self.transition(self.index) if self.index else None
