@@ -236,7 +236,7 @@ class NetScreensMixin:
             for i, h in enumerate(HEROES):
                 card = pygame.Rect(x0 + i * (w + gap), top + 32, w, 170)
                 cur = hero == h
-                taken = other.get("who") and other.get("hero") == h
+                taken = other.get("who") not in (None, "", "bot") and other.get("hero") == h      # героя бота взять можно
                 if mine:
                     self.hit(card, lambda h=h: self.choose_hero(h))
                 on = cur or (mine and not taken and self.hovered(card))

@@ -9,6 +9,7 @@ import pygame
 import pytest
 
 from duel import i18n
+from duel.config import HEROES
 from duel.net import PROTO, Conn, connect, parse_address
 from duel.room import HOLD, SEND_EVERY, SILENCE
 from duel.server import JOIN_WAIT, Server, start_in_thread
@@ -553,17 +554,21 @@ def test_heroes_in_lobby(server):
     assert next(p for p in a.last()["snap"]["players"] if p["id"] == "red")["hero"] == "dark"
 
 
-def test_bot_gets_free_hero():
+def test_bot_hero_random_and_player_may_take_it():
     srv = make_server(bot=True)
     try:
         a = Client(srv)
         wait(srv, lambda: a.states() and a.last()["seats"]["red"]["who"] == "bot", clients=(a,))
         bot = a.last()["seats"]["red"]["hero"]
         assert bot and bot != a.last()["seats"]["blue"]["hero"]
-        a.conn.send({"type": "hero", "hero": bot})          # героя бота взять нельзя
-        a.conn.send({"type": "hero", "hero": "nature"})
-        wait(srv, lambda: a.last()["seats"]["blue"]["hero"] == "nature", clients=(a,))
-        assert a.last()["seats"]["red"]["hero"] == bot
+        a.conn.send({"type": "hero", "hero": bot})          # героя бота взять можно — бот берёт другого
+        wait(srv, lambda: a.last()["seats"]["blue"]["hero"] == bot, clients=(a,))
+        new = a.last()["seats"]["red"]["hero"]
+        assert new and new != bot
+        other = next(h for h in HEROES if h not in (bot, new))
+        a.conn.send({"type": "hero", "hero": other})        # взял другого — бот своего не меняет
+        wait(srv, lambda: a.last()["seats"]["blue"]["hero"] == other, clients=(a,))
+        assert a.last()["seats"]["red"]["hero"] == new
     finally:
         srv.close()
 
@@ -575,15 +580,17 @@ def test_client_changes_hero_in_lobby(game):
         game.enter_net(*connect(address, timeout=3), address)
         frames(game, lambda: game.net_seats.get("red", {}).get("hero"))
         bot_hero = game.net_seats["red"]["hero"]
-        for _ in range(3):
+        i = HEROES.index(game.side_hero("blue"))
+        steps = (HEROES.index(bot_hero) - i) % len(HEROES)      # листаем до героя бота — его можно взять
+        for _ in range(steps):
             game.on_key(pygame.KSCAN_RIGHT)
             frames(game, lambda: True)
-            assert game.side_hero("blue") != bot_hero         # занятого бота пропускаем
+        assert game.side_hero("blue") == bot_hero
+        frames(game, lambda: game.net_seats["red"]["hero"] != bot_hero)   # бот уступил — взял другого
         game.draw_lobby()
         game.on_key(pygame.KSCAN_RETURN)
-        mine = game.side_hero("blue")
         frames(game, lambda: not game.net_waiting)
-        assert game.side_hero("blue") == mine and game.side_hero("red") == bot_hero
+        assert game.side_hero("blue") == bot_hero and game.side_hero("red") not in (bot_hero, None)
         game.draw()
     finally:
         game.leave_net()

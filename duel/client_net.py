@@ -191,7 +191,7 @@ class NetClientMixin:
         if self.watching:
             return
         mine = self.side_hero(self.me)
-        taken = {s.get("hero") for pid, s in self.net_seats.items() if pid != self.me and s.get("who")}
+        taken = self.heroes_taken_by_people()
         i = HEROES.index(mine)
         for k in range(1, len(HEROES)):
             hero = HEROES[(i + step * k) % len(HEROES)]
@@ -210,11 +210,16 @@ class NetClientMixin:
         if mine.get("hero") == hero:
             self.send_ready(not self.my_ready())
             return
-        taken = {s.get("hero") for pid, s in self.net_seats.items() if pid != self.me and s.get("who")}
+        taken = self.heroes_taken_by_people()
         if hero in taken or self.reconnect_until is not None:
             return
         self.net.send({"type": "hero", "hero": hero})
         self.net_seats.setdefault(self.me, {})["hero"] = hero      # сразу видно у себя
+
+    def heroes_taken_by_people(self):
+        """Герои соперников-людей: их взять нельзя. Героя бота — можно (бот возьмёт другого)."""
+        return {s.get("hero") for pid, s in self.net_seats.items()
+                if pid != self.me and s.get("who") and s.get("who") != "bot"}
 
     def my_ready(self):
         return bool(self.net_seats.get(self.me, {}).get("ready"))

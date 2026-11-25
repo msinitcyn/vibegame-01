@@ -10,6 +10,7 @@
 и забирает ушедших из комнаты (read() их возвращает).
 """
 import math
+import random
 from collections import deque
 import secrets
 
@@ -94,6 +95,8 @@ class Room:
         self.spectators = []          # соединения зрителей: получают снимки, ничего не меняют
         self.bot = bot
         self.bots = {pid: SmartBot(None, pid, "normal", i + 1) for i, pid in enumerate(PIDS)}   # бот на правилах
+        self.bot_heroes = {}          # герой бота на месте: случайный; человек взял его же — бот берёт другого
+        self.rng = random.Random()
         self.tick_no = 0              # номер такта комнаты (для плавной анимации у клиентов)
         self.phase = "lobby"
         self.events = []              # события с прошлого снимка
@@ -147,20 +150,25 @@ class Room:
         return self.full() and all(s.ready for s in humans)
 
     def taken_heroes(self, pid):
-        """Герои, занятые другими местами (люди, отошедшие и бот)."""
-        heroes = self.seat_heroes()
-        return {h for p, h in heroes.items() if p != pid and h}
+        """Герои, занятые другими людьми (и отошедшими). Героя бота взять можно — бот возьмёт другого."""
+        return {s.hero for p, s in self.seats.items() if p != pid and not s.free and s.hero}
 
     def seat_heroes(self):
-        """Герой каждого места: у людей — свой, у бота — первый свободный, у пустого — None."""
+        """Герой каждого места: у людей — свой, у бота — случайный (выбран заранее, игрок видит его и может
+        выбрать в ответ; взял того же — бот берёт другого случайного), у пустого — None."""
         out = {pid: s.hero for pid, s in self.seats.items() if not s.free}
         for pid in self.bot_seats():
-            out[pid] = next(h for h in [DEFAULT_HERO[pid], *HEROES] if h not in out.values())
+            h = self.bot_heroes.get(pid)
+            if h is None or h in out.values():
+                h = self.bot_heroes[pid] = self.rng.choice([x for x in HEROES if x not in out.values()])
+            out[pid] = h
         return out
 
     def free_hero(self, pid):
         taken = self.taken_heroes(pid)
-        return next(h for h in [DEFAULT_HERO[pid], *HEROES] if h not in taken)
+        bots = {h for p, h in self.bot_heroes.items() if p != pid}
+        return next((h for h in [DEFAULT_HERO[pid], *HEROES] if h not in taken and h not in bots),
+                    next(h for h in [DEFAULT_HERO[pid], *HEROES] if h not in taken))
 
     def new_match(self):
         self.games += 1
@@ -427,6 +435,7 @@ class Room:
             self.log("все готовы — отсчёт")
         elif self.phase == "over" and self.all_ready():
             self.new_match()                  # реванш — снова выбор героя, потом отсчёт
+            self.bot_heroes = {}              # бот выбирает заново
             self.phase = "lobby"
             self.log("реванш — выбор героя")
         paused = any(s.away_until is not None for s in self.seats.values())

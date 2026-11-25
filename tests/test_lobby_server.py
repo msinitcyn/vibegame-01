@@ -185,3 +185,13 @@ def test_lobby_chat_to_everyone_and_history_for_newcomer(server):
     vova = Member(server, "Вова")                                   # пришёл позже — видит историю
     log = vova.got("lobby_chat_log")
     assert [x["text"] for x in log["lines"]] == ["кто играет?"]
+
+
+def test_bot_hero_is_random_not_always_fire():
+    from duel.room import Room
+    seen = set()
+    for _ in range(30):
+        room = Room(1, bot=True, clock=lambda: 0.0, log=lambda t: None)
+        room.seats["blue"].conn, room.seats["blue"].hero = object(), "frost"   # человек есть — бот на свободном
+        seen.add(room.seat_heroes()["red"])
+    assert len(seen) >= 3 and "frost" not in seen
