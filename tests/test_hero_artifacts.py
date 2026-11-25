@@ -653,8 +653,8 @@ def test_deflect_and_nofire_pictures_draw():
     assert surf.get_bounding_rect().w > 0
 
 
-def test_lasso_targets_hero_under_cursor_or_wastes_on_clone_or_miss():
-    """Лассо — в того, на кого навели: соперник — тянет его; двойник — тянет двойника; никого — мимо."""
+def test_lasso_catches_nearest_to_cursor_never_misses():
+    """Лассо цепляет того, кто ближе к курсору: соперника или его двойника; промахнуться нельзя."""
     from duel.entities import Clone
     m = new_match()
     b, r = m.blue, m.red
@@ -670,9 +670,7 @@ def test_lasso_targets_hero_under_cursor_or_wastes_on_clone_or_miss():
         b.add_item("lasso")
         events = m.apply_item(b, "lasso") or []
         return events
-    throw(clone.x, clone.y)
-    assert "lassoed" in clone.effects and "lassoed" not in r.effects      # угадал не того
-    throw(b.x, b.y + 300)                                                  # никого под курсором
-    assert "lassoed" not in r.effects and any(e[0] == "lasso_miss" for e in m.events)
-    throw(r.x + 5, r.y)
+    throw(clone.x - 40, clone.y + 60)                                     # ближе двойник
+    assert "lassoed" in clone.effects and "lassoed" not in r.effects
+    throw(b.x - 300, b.y - 200)                                           # далеко от обоих — всё равно ближайший
     assert "lassoed" in r.effects

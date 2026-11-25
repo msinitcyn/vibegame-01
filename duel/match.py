@@ -26,8 +26,6 @@ import random
 from .commands import REACH_FAR, Command
 from .config import (
     MOB_LATE_EXTRA,
-    LASSO_CONE,
-    LASSO_PICK,
     PEACE_FX,
     DEFLECT_FX,
     DEATH_TIME,
@@ -391,9 +389,7 @@ class Match:
             self.trees.append(TreeWall(p))
         elif kind == "lasso":                 # огненное лассо — в того, на кого нацелено: соперника или его двойника
             target = self.lasso_target(p)
-            if target is None:
-                self.emit("lasso_miss", p.id)     # никого под курсором (по прицелу) — мимо, артефакт потрачен
-            elif target is foe:
+            if target is foe:
                 self.give(foe, "lassoed")
             else:
                 target.apply("lassoed")           # угадал не того — тянет двойника
@@ -764,20 +760,18 @@ class Match:
         return min(near, key=lambda u: math.hypot(u.x - at[0], u.y - at[1])) if near else None
 
     def lasso_target(self, p):
-        """Кого цепляет лассо мага p: соперника или двойника соперника — под курсором (не дальше края + LASSO_PICK),
-        без курсора (стик, клавиши, бот) — ближайшего к прицелу в пределах LASSO_CONE. None — промах."""
+        """Кого цепляет лассо мага p: промахнуться нельзя — соперника или его двойника, кто ближе к курсору
+        (без курсора — стик, клавиши, бот — кто ближе к линии прицела)."""
         foe = self.other(p)
-        units = [u for u in [foe] + self.clones_of(foe) if getattr(u, "dead_at", None) is None]
+        units = [foe] + self.clones_of(foe)
         at = self.cursor_point(p)
         if at is not None:
-            near = [u for u in units if math.hypot(u.x - at[0], u.y - at[1]) <= u.radius + LASSO_PICK]
-            return min(near, key=lambda u: math.hypot(u.x - at[0], u.y - at[1])) if near else None
+            return min(units, key=lambda u: math.hypot(u.x - at[0], u.y - at[1]))
 
         def off(u):
             a = math.atan2(u.y - p.y, u.x - p.x) - p.aim
             return abs((a + math.pi) % (2 * math.pi) - math.pi)
-        near = [u for u in units if off(u) <= LASSO_CONE]
-        return min(near, key=off) if near else None
+        return min(units, key=off)
 
     def wall_spot(self, p):
         """Куда встанет зеркало мага p: по прицелу, под курсор, от WALL_MIN до WALL_RANGE от мага

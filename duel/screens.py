@@ -7,7 +7,6 @@ import math
 import pygame
 
 from .config import (
-    LASSO_PICK,
     BEAM_LENGTH,
     FIRE_RING_R,
     FIRE_RING_RANGE,
@@ -459,15 +458,18 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         return min(near, key=lambda u: math.hypot(u["x"] - mx, u["y"] - my)) if near else None
 
     def lasso_under_cursor(self, pid):
-        """Кого зацепит лассо (как решит сервер): соперник или его двойник под курсором; невидимого — не показываем."""
+        """Кого зацепит лассо (как решит сервер): соперник или его двойник, кто ближе к курсору. Невидимого соперника
+        подсказка не выдаёт: если ближе всех он — не показываем ничего."""
         if self.reach_for(pid) >= REACH_FAR or self.mouse_pos is None:
             return None
         mx, my = self.mouse_pos
         foe_id = "red" if pid == "blue" else "blue"
-        units = [q for q in self.snap.get("players", []) if q["id"] == foe_id and "invisible" not in q.get("effects", {})]
+        units = [q for q in self.snap.get("players", []) if q["id"] == foe_id]
         units += [c for c in self.snap.get("clones", []) if c.get("owner") == foe_id]
-        near = [u for u in units if math.hypot(u["x"] - mx, u["y"] - my) <= u["r"] + LASSO_PICK]
-        return min(near, key=lambda u: math.hypot(u["x"] - mx, u["y"] - my)) if near else None
+        if not units:
+            return None
+        u = min(units, key=lambda u: math.hypot(u["x"] - mx, u["y"] - my))
+        return None if "invisible" in u.get("effects", {}) and "owner" not in u else u   # невидимого не выдаём
 
     def draw_armed_previews(self, s):
         """Выбранный (ещё не применённый) артефакт — видно только себе, куда он пойдёт: огненный круг — контур
