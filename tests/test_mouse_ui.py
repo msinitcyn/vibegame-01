@@ -80,7 +80,8 @@ def test_pick_heroes_with_mouse(game):
     game.settings["aim_mode"] = "move"
     game.open_pick(10)
     redraw(game, game.draw_pick)
-    cards = [h[0] for h in game.hits[:-1]]            # 6 героев × 2 строки (последнее — «←»)
+    size = game.PICK_ICON                             # иконки магов: 6 у левого, 6 у правого (ещё — заклинания, «←»)
+    cards = [h[0] for h in game.hits if h[0].size == (size, size)]
     game.on_mouse_move(cards[2].center)               # наведение — третий герой у синего
     assert game.pick["blue"]["hero"] == "nature"
     game.on_mouse_button(1)                           # щелчок по выбранному — подтвердить

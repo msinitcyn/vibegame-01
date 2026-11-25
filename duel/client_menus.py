@@ -669,12 +669,26 @@ class MenusMixin:
         self.pick_hp = hp
         self.pick_bot = bot
         self.pick = {pid: {"hero": last[pid], "ok": False} for pid in PLAYER_IDS}
+        self.pick_spell = {pid: None for pid in PLAYER_IDS}     # чьё заклинание смотрит игрок (вверх/вниз)
         self.state = "pick"
+
+    def pick_spells(self, pid):
+        """Заклинания (артефакты) героя, которого сейчас смотрит игрок."""
+        return self.land_items(self.pick[pid]["hero"])
+
+    def pick_spell_step(self, pid, step):
+        """Вверх/вниз (клавиши игрока, крестовина): листать заклинания героя; за краем — снова маг."""
+        spells = self.pick_spells(pid)
+        order = [None] + spells
+        cur = self.pick_spell.get(pid)
+        i = order.index(cur) if cur in order else 0
+        self.pick_spell[pid] = order[(i + step) % len(order)]
 
     def pick_move(self, pid, step):
         p = self.pick[pid]
         if not p["ok"]:
             p["hero"] = HEROES[(HEROES.index(p["hero"]) + step) % len(HEROES)]
+            self.pick_spell[pid] = None           # другой герой — снова его портрет
 
     def pick_confirm(self, pid, ok):
         """Подтвердить (или снять) выбор; героя, подтверждённого соперником, взять нельзя.
@@ -707,6 +721,10 @@ class MenusMixin:
             if sc in left or sc in right:
                 self.pick_move(pid, -1 if sc in left else 1)
                 return
+            c = self.controls[pid]
+            if sc in c.up or sc in c.down:        # вверх/вниз — заклинания героя (сценка)
+                self.pick_spell_step(pid, -1 if sc in c.up else 1)
+                return
             if sc in ok:
                 self.pick_confirm(pid, not self.pick[pid]["ok"])
                 return
@@ -716,6 +734,7 @@ class MenusMixin:
         p = self.pick[pid]
         if not p["ok"] and p["hero"] != hero:
             p["hero"] = hero
+            self.pick_spell[pid] = None
             if not click:
                 return
         if click:

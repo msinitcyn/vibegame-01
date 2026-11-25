@@ -128,55 +128,119 @@ class MenuScreensMixin:
         pygame.display.flip()
 
     def draw_pick(self):
-        """Выбор героев за одним компьютером: строка левого игрока сверху, правого — снизу."""
+        """Выбор героев за одним компьютером: экран пополам — левый игрок слева, правый справа. Сверху у
+        каждого — маленькие иконки магов, внизу — большая карточка выбранного: маг на своей земле и его
+        заклинания; навести на заклинание (или вверх/вниз) — его сценка."""
         s = self.screen
         s.fill(BG)
-        img = self.big.render(tr("pick.title"), True, WHITE)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 60)))
-        n, gap = len(HEROES), 16
-        w = min(210, (WIDTH - 40 - gap * (n - 1)) // n)        # карточки по числу героев
-        x0 = (WIDTH - n * w - (n - 1) * gap) // 2
-        for row, pid in enumerate(("blue", "red")):
-            me, other = self.pick[pid], self.pick["red" if pid == "blue" else "blue"]
-            top = 120 + row * 260
-            left, right, ok = self.pick_keys(pid)
-            bot = pid == "red" and getattr(self, "pick_bot", False)
-            first = (lambda ks: ks[0] if ks else None)      # клавиши можно снять — тогда «—»
-            label = tr("pick.bot" if bot else "pick.left" if pid == "blue" else "pick.right",
-                       left=keys.label(first(left)), right=keys.label(first(right)),
-                       ok=" / ".join(keys.label(k) for k in ok[:1] + ok[-1:]) if ok else keys.label(None))
-            pad = self.pad_of(pid)
-            pad_name = self.pads.pads[pad][1].name[:24] if pad is not None else ""
-            if not bot:
-                label += "   " + (tr("pick.pad", n=pad + 1, name=pad_name) if pad is not None else
-                                  tr("pick.mouse") if pid == "blue" else tr("pick.no_pad"))
-            img = self.small.render(label, True, GREY)
-            s.blit(img, (x0, top))
-            for i, hero in enumerate(HEROES):
-                card = pygame.Rect(x0 + i * (w + gap), top + 26, w, 190)
-                self.hit(card, lambda pid=pid, hero=hero: self.pick_mouse(pid, hero, True),
-                         lambda pid=pid, hero=hero: self.pick_mouse(pid, hero))
-                cur = me["hero"] == hero
-                taken = other["ok"] and other["hero"] == hero
-                pygame.draw.rect(s, (40, 46, 66) if cur else (26, 29, 40), card, border_radius=12)
-                pygame.draw.rect(s, HERO_COLOR[hero] if cur else (60, 64, 80), card,
-                                 4 if cur and me["ok"] else (2 if cur else 1), border_radius=12)
-                draw_unit(s, HERO_SPRITE[hero], (card.centerx, card.top + 72), 40, 1 if pid == "blue" else -1,
-                          alpha=90 if taken else 255)
-                img = self.font.render(tr("hero." + hero), True, HERO_COLOR[hero] if not taken else GREY)
-                s.blit(img, img.get_rect(center=(card.centerx, card.top + 140)))
-                note = tr("pick.chosen") if cur and me["ok"] else (tr("pick.taken") if taken else "")
-                if note:
-                    img = self.small.render(note, True, AMMO_COLOR if cur else GREY)
-                    s.blit(img, img.get_rect(center=(card.centerx, card.top + 170)))
+        half = WIDTH // 2
+        pygame.draw.line(s, (50, 54, 70), (half, 16), (half, HEIGHT - 60), 2)
+        for side, pid in enumerate(("blue", "red")):
+            self.draw_pick_half(pid, pygame.Rect(side * half, 0, half, HEIGHT - 58))
         if not self.pads.pads and not self.aim_by_move() and not getattr(self, "pick_bot", False):
             # прицел нужен правым стиком хотя бы одному (с ботом — не нужен)
-            img = self.font.render(tr("pick.need_pad"), True, BAD_TEXT)
-            s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 72)))
+            img = self.small.render(tr("pick.need_pad"), True, BAD_TEXT)
+            s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 46)))
         img = self.small.render(tr("pick.hint"), True, GREY)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 40)))
+        s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 22)))
         self.back_button()
         pygame.display.flip()
+
+    PICK_ICON = 66                     # иконка мага в ряду выбора, пикс
+
+    def draw_pick_half(self, pid, area):
+        """Половина экрана одного игрока: подпись клавиш, ряд иконок магов, карточка выбранного."""
+        s = self.screen
+        me, other = self.pick[pid], self.pick["red" if pid == "blue" else "blue"]
+        bot = pid == "red" and getattr(self, "pick_bot", False)
+        left, right, ok = self.pick_keys(pid)
+        first = (lambda ks: ks[0] if ks else None)          # клавиши можно снять — тогда «—»
+        label = tr("pick.bot" if bot else "pick.left" if pid == "blue" else "pick.right",
+                   left=keys.label(first(left)), right=keys.label(first(right)),
+                   ok=" / ".join(keys.label(k) for k in ok[:1] + ok[-1:]) if ok else keys.label(None))
+        img = self.small.render(label, True, WHITE)
+        s.blit(img, img.get_rect(center=(area.centerx + (28 if pid == "blue" else 0), 22)))
+        if not bot:
+            pad = self.pad_of(pid)
+            note = (tr("pick.pad", n=pad + 1, name=self.pads.pads[pad][1].name[:24]) if pad is not None else
+                    tr("pick.mouse") if pid == "blue" else tr("pick.no_pad"))
+            img = self.tiny_text.render(note.lstrip("· "), True, GREY)
+            s.blit(img, img.get_rect(center=(area.centerx + (28 if pid == "blue" else 0), 40)))
+        # ряд иконок магов
+        n, size, gap = len(HEROES), self.PICK_ICON, 10
+        x0 = area.centerx - (n * size + (n - 1) * gap) // 2
+        for i, hero in enumerate(HEROES):
+            r = pygame.Rect(x0 + i * (size + gap), 56, size, size)
+            cur = me["hero"] == hero
+            taken = other["ok"] and other["hero"] == hero
+            self.hit(r, lambda pid=pid, hero=hero: self.pick_mouse(pid, hero, True),
+                     lambda pid=pid, hero=hero: self.pick_mouse(pid, hero))
+            s.blit(self.land_picture(hero, r.size), r)
+            shade = pygame.Surface(r.size, pygame.SRCALPHA)
+            shade.fill((10, 10, 16, 150 if not cur else 60))
+            s.blit(shade, r)
+            draw_unit(s, HERO_SPRITE[hero], r.center, size * 0.36, 1 if pid == "blue" else -1,
+                      alpha=80 if taken else 255)
+            pygame.draw.rect(s, HERO_COLOR[hero] if cur else (60, 64, 80), r,
+                             4 if cur and me["ok"] else (3 if cur else 1), border_radius=8)
+            if taken:
+                img = self.tiny_text.render(tr("pick.taken"), True, WHITE)
+                s.blit(img, img.get_rect(midbottom=(r.centerx, r.bottom - 2)))
+        self.draw_pick_card(pid, pygame.Rect(area.x + 18, 136, area.w - 36, area.bottom - 136 - 8), bot)
+
+    def draw_pick_card(self, pid, card, bot):
+        """Большая карточка героя: земля фоном, маг крупно (или сценка заклинания), имя, заклинания."""
+        s = self.screen
+        me = self.pick[pid]
+        hero = me["hero"]
+        color = HERO_COLOR[hero]
+        s.blit(self.land_picture(hero, card.size), card)
+        shade = pygame.Surface(card.size, pygame.SRCALPHA)
+        shade.fill((8, 8, 14, 120))
+        s.blit(shade, card)
+        spells = self.land_items(hero)
+        # заклинание под мышью — его сценка; иначе выбранное клавишами (вверх/вниз)
+        icon_r, icon_gap = 26, 18
+        icons_y = card.bottom - 150
+        ix0 = card.centerx - (len(spells) * 2 * icon_r + (len(spells) - 1) * icon_gap) // 2 + icon_r
+        rects = []
+        for j, kind in enumerate(spells):
+            c = (ix0 + j * (2 * icon_r + icon_gap), icons_y)
+            rects.append((kind, pygame.Rect(c[0] - icon_r - 4, c[1] - icon_r - 4, 2 * icon_r + 8, 2 * icon_r + 8)))
+        focus = next((k for k, r in rects if self.hovered(r)), None) or self.pick_spell.get(pid)
+        if focus not in spells:
+            focus = None
+        view = pygame.Rect(card.x + 12, card.y + 12, card.w - 24, (card.w - 24) // 2)   # окно 2:1, как в «Обучении»
+        if focus and has_demo(focus):
+            self.draw_demo(focus, view)
+        elif focus:
+            draw_icon(s, focus, view.center, 60)
+        else:
+            draw_unit(s, HERO_SPRITE[hero], (view.centerx, view.centery + 10), view.h * 0.42,
+                      1 if pid == "blue" else -1)
+        img = self.big.render(tr("hero." + hero), True, color)
+        s.blit(img, img.get_rect(center=(card.centerx, view.bottom + 34)))
+        if me["ok"] or bot:
+            img = self.font.render(tr("pick.chosen") if me["ok"] else tr("pick.bot_side"), True, AMMO_COLOR)
+            s.blit(img, img.get_rect(center=(card.centerx, view.bottom + 72)))
+        for kind, r in rects:
+            sel = kind == focus
+            pygame.draw.circle(s, (20, 22, 30), r.center, icon_r + 4)
+            draw_icon(s, kind, r.center, icon_r)
+            pygame.draw.circle(s, ITEMS[kind][1] if sel else (70, 74, 92), r.center, icon_r + 4, 3 if sel else 1)
+            self.hit(r, lambda pid=pid, kind=kind: self.pick_spell.__setitem__(pid, kind))
+        if focus:                                          # что делает заклинание
+            name = self.font.render(item_name(focus), True, ITEMS[focus][1])
+            s.blit(name, name.get_rect(center=(card.centerx, icons_y + icon_r + 22)))
+            y = icons_y + icon_r + 42
+            for line in self.wrap(item_help(focus), card.w - 30, self.tiny_text)[:4]:
+                img = self.tiny_text.render(line, True, WHITE)
+                s.blit(img, img.get_rect(center=(card.centerx, y)))
+                y += 16
+        else:
+            img = self.small.render(tr("pick.spells_hint"), True, GREY)
+            s.blit(img, img.get_rect(center=(card.centerx, icons_y + icon_r + 26)))
+        pygame.draw.rect(s, color if me["ok"] else (70, 74, 92), card, 4 if me["ok"] else 1, border_radius=10)
 
     def draw_replays(self):
         """«Повторы»: записанные партии, новые сверху; Enter или щелчок — смотреть."""

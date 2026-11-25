@@ -2,7 +2,7 @@
 import pygame
 
 from duel import i18n
-from duel.config import HERO_COLOR, HEROES, MAX_HP, TEST_HP
+from duel.config import HERO_COLOR, HEROES, MAX_HP, TEST_HP, WIDTH
 from duel.match import Match
 from duel.snapshot import snapshot
 from tests.conftest import FakePad
@@ -157,3 +157,39 @@ def test_hud_name_in_hero_color_with_pads(game):
         game.font = font
     names = {t.split()[0]: c for t, c in shown if t.startswith((i18n.t("hero.light"), i18n.t("hero.dark")))}
     assert names[i18n.t("hero.light")] == HERO_COLOR["light"] and names[i18n.t("hero.dark")] == HERO_COLOR["dark"]
+
+
+def test_pick_split_screen_spells_preview(game):
+    """Экран выбора пополам: вверх/вниз (свои клавиши игрока) листают заклинания героя — видна их сценка."""
+    open_pick(game, MAX_HP)
+    game.pick["blue"]["hero"] = "light"
+    assert game.pick_spell["blue"] is None
+    game.on_key(pygame.KSCAN_S)                              # левый: вниз — первое заклинание Света
+    assert game.pick_spell["blue"] == game.land_items("light")[0]
+    game.on_key(pygame.KSCAN_DOWN)                           # правый: своё, левого не трогает
+    assert game.pick_spell["red"] == game.land_items(game.pick["red"]["hero"])[0]
+    game.hits = []
+    game.draw_pick()
+    game.on_key(pygame.KSCAN_D)                              # другой герой — снова портрет
+    assert game.pick_spell["blue"] is None
+    from tests.conftest import FakePad
+    game.pads.pads = [(100, FakePad())]
+    game.on_pad(100, pygame.CONTROLLER_BUTTON_DPAD_DOWN)    # геймпад правого — его заклинания
+    assert game.pick_spell["red"] is not None
+
+
+def test_pick_hover_spell_shows_demo(game, monkeypatch):
+    open_pick(game, MAX_HP)
+    game.pick["blue"]["hero"] = "fire"
+    shown = []
+    monkeypatch.setattr(game, "draw_demo", lambda kind, box: shown.append(kind))
+    monkeypatch.setattr(game, "hovered", lambda r: r.collidepoint(game._probe))
+    game._probe = (-1, -1)
+    game.hits = []
+    game.draw_pick()
+    assert not shown                                         # без наведения — портрет мага
+    spell_hits = [h for h in game.hits if h[0].w == 60 and h[0].x < WIDTH // 2]
+    game._probe = spell_hits[1][0].center                    # навели на второе заклинание Огня
+    game.hits = []
+    game.draw_pick()
+    assert shown == [game.land_items("fire")[1]]

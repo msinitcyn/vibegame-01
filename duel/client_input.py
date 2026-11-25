@@ -296,6 +296,8 @@ class InputMixin:
                 self.pick_move(pid, -1)
             elif btn in (B.CONTROLLER_BUTTON_DPAD_RIGHT, PAD_RIGHT):
                 self.pick_move(pid, 1)
+            elif btn in (B.CONTROLLER_BUTTON_DPAD_UP, PAD_UP, B.CONTROLLER_BUTTON_DPAD_DOWN, PAD_DOWN):
+                self.pick_spell_step(pid, -1 if btn in (B.CONTROLLER_BUTTON_DPAD_UP, PAD_UP) else 1)
             elif btn == B.CONTROLLER_BUTTON_A:
                 self.pick_confirm(pid, True)
             elif btn in back:             # снять выбор; если ничего не выбрано — назад в меню
