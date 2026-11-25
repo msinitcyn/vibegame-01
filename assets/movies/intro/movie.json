@@ -7,7 +7,7 @@
       "length": 5.6,
       "title": "zoom",
       "zoom_time": 4.4,
-      "battle": {"seed": 40, "heroes": ["frost", "light"], "skip": 17, "level": "hard", "view": [0, 84, 1000, 640]}
+      "battle": {"seed": 4, "heroes": ["frost", "light"], "skip": 21, "level": "hard", "view": [0, 84, 1000, 640]}
     },
     {
       "length": 3.6,
