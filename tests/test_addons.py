@@ -179,3 +179,18 @@ def test_lab_addon_runs_report_and_opens_replays(game, addon_dir):
     game.on_key(pygame.KSCAN_ESCAPE)
     assert game.state == "addon"
     m.set_enabled(lab, False)
+
+
+def test_lab_addon_crosses_bots_per_side(game, addon_dir):
+    m = fresh(game)
+    lab = m.items["lab"]
+    m.set_enabled(lab, True)
+    mod = lab.module
+    mod.api.storage.update(mode="report", blue="hard:kite", red="easy")
+    args = mod.argv()
+    assert args[args.index("--blue") + 1] == "hard:kite" and args[args.index("--red") + 1] == "easy"
+    options, names = mod.side_options()
+    assert "" in options and "normal:rush" in options and names["hard:kite"] == "сложный · kite"
+    game.open_addon_screen(lab, *lab.screens[0])
+    game.draw_addon()
+    m.set_enabled(lab, False)

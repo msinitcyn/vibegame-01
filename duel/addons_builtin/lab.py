@@ -58,6 +58,11 @@ def build():
             ]
     if st["mode"] != "strats":
         rows.append(api.Choice("Стратегия", list(STRATEGIES), st["strategy"], setter("strategy")))
+    if st["mode"] == "report":                    # скрестить разных ботов: свой бот на каждую сторону
+        options, names = side_options()
+        for key, label in (("blue", "Синий (левый)"), ("red", "Красный (правый)")):
+            cur = st.get(key, "") if st.get(key, "") in options else ""
+            rows.append(api.Choice(label, options, cur, setter(key), names))
     rows.append(api.Choice("Герои", PAIRS, st["pair"] if st["pair"] in PAIRS else "все", setter("pair")))
     if st["mode"] == "sweep":
         rows.append(api.TextInput("Перебрать", st["param"], setter("param")))
@@ -75,6 +80,22 @@ def build():
     return rows
 
 
+def side_options():
+    """Кто может играть за сторону: «как выше» (уровень и стратегия), любой бот на правилах, любая обученная сеть."""
+    from duel.ai_policy import available
+    options, names = [""], {"": "как выше"}
+    level_ru = {"easy": "лёгкий", "normal": "обычный", "hard": "сложный"}
+    for level in LEVELS:
+        for strategy in STRATEGIES:
+            key = level if strategy == "hero" else f"{level}:{strategy}"
+            options.append(key)
+            names[key] = level_ru.get(level, level) + ("" if strategy == "hero" else f" · {strategy}")
+    for net in available():
+        options.append(f"ai:{net}")
+        names[f"ai:{net}"] = f"ИИ {net}"
+    return options, names
+
+
 def argv():
     st = api.storage
     level = st["level"] if st["level"] in LEVELS or st["mode"] == "strats" else "normal"
@@ -84,6 +105,10 @@ def argv():
         out += ["--strategy", st["strategy"]]
     if st["pair"] != "все":
         out += ["--heroes", st["pair"]]
+    if st["mode"] == "report":
+        for key in ("blue", "red"):
+            if st.get(key):
+                out += [f"--{key}", st[key]]
     for item in st["set"].split():
         out += ["--set", item]
     if st["replays"]:
