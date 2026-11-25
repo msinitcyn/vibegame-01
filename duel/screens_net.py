@@ -357,10 +357,16 @@ class NetScreensMixin:
                 y += 40
         self.draw_lobby_chat(pygame.Rect(30, 432, WIDTH - 60, 152))
         by = HEIGHT - 110
-        self.button((WIDTH // 2 - 230, by), tr("lobby.unseek") if self.seeking else tr("lobby.seek"),
-                    self.toggle_seek, w=220, color=AMMO_COLOR if self.seeking else None)
-        self.button((WIDTH // 2, by), tr("lobby.bot"), lambda: self.lobby_conn.send({"type": "bot_game"}), w=220)
-        self.button((WIDTH // 2 + 230, by), tr("lobby.warm"), self.start_warmup, w=220)
+        buttons = [(tr("lobby.unseek") if self.seeking else tr("lobby.seek"), self.toggle_seek,
+                    AMMO_COLOR if self.seeking else None),
+                   (tr("lobby.bot"), lambda: self.lobby_conn.send({"type": "bot_game"}), None),
+                   (tr("lobby.warm"), self.start_warmup, None)]
+        if self.server_can("recent"):                   # «Последние игры» сервера — у новых серверов
+            buttons.append((tr("lobby.recent"), self.open_recent, None))
+        bw, gap = (200, 20) if len(buttons) == 4 else (220, 10)
+        x0 = WIDTH // 2 - (len(buttons) - 1) * (bw + gap) // 2
+        for k, (label, action, color) in enumerate(buttons):
+            self.button((x0 + k * (bw + gap), by), label, action, w=bw, color=color)
         if self.lobby_notice:
             img = self.font.render(self.lobby_notice, True, AMMO_COLOR)
             box = img.get_rect(center=(WIDTH // 2, by - 45))

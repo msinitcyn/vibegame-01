@@ -1,0 +1,15 @@
+{
+  "heroes": {"blue": "nature", "red": "fire"},
+  "view": [320, 86, 380, 180],
+  "length": 4.4,
+  "speed": 0.7,
+  "setup": {"blue": {"x": 400, "y": 150}, "red": {"x": 620, "y": 150}},
+  "script": [
+    {"t": 0.0, "do": "aim", "who": "blue", "at": "red"},
+    {"t": 0.0, "do": "aim", "who": "red", "at": "blue"},
+    {"t": 0.3, "do": "cast", "who": "red", "item": "foe_grow"},
+    {"t": 1.2, "do": "cast", "who": "blue", "item": "immune"},
+    {"t": 2.3, "do": "cast", "who": "red", "item": "foe_freeze"},
+    {"t": [2.6, 4.2], "every": 0.5, "do": "fire", "who": "red", "at": "blue"}
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "heroes": {"blue": "light", "red": "fire"},
+  "view": [290, 70, 440, 200],
+  "length": 4.4,
+  "speed": 0.6,
+  "setup": {
+    "blue": {"x": 340, "y": 170},
+    "red": {"x": 900, "y": 600},
+    "mobs": [
+      {"x": 480, "y": 115, "hp": 9, "angry": true, "target": "blue"},
+      {"x": 490, "y": 225, "hp": 9, "angry": true, "target": "blue"}
+    ]
+  },
+  "script": [
+    {"t": 0.0, "do": "aim", "who": "blue", "at": [480, 115]},
+    {"t": 0.5, "do": "cast", "who": "blue", "item": "mobpeace"},
+    {"t": [1.6, 3.6], "every": 0.45, "do": "fire", "who": "blue", "at": [480, 115]}
+  ]
+}

@@ -272,9 +272,10 @@ class MenusMixin:
         """Из повтора — в список повторов (подменённые лабораторией числа — вернуть)."""
         if self.replay:
             self.replay.close()
+        back = self.replay_back or "replays"     # откуда открыли: «Повторы» или «Последние игры» сервера
         self.replay, self.replay_back = None, None
         self.popups, self.win_time = [], 0
-        self.state = "replays"
+        self.state = back
 
     def close_settings(self):
         """Из настроек — туда, откуда пришли: в меню или обратно в партию (на паузу); из «Дополнительно» —

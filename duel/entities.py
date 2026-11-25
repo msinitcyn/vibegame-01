@@ -688,6 +688,7 @@ class Mob:
         self.zombie_life = 0.0
         self.swap = 0.0               # «Мобы на соперника»: сколько ещё видна анимация перенаправления
         self.swap_by = None           # кто перенаправил (цвет)
+        self.peace = 0.0              # «Мир с мобами» успокоил: сколько ещё виден белый флажок
         self.swap_dir = None          # куда теперь идёт (радианы) или None — успокоился
         self.immortal = False         # сцены «Обучения» и роликов: жизни кончились — снова полные (не гибнет)
         self.heal_fx = 0.0            # для анимации: зомби вылечили
@@ -725,6 +726,7 @@ class Mob:
         self.hit_cd = max(0.0, self.hit_cd - dt)
         self.swing = max(0.0, self.swing - dt)
         self.swap = max(0.0, self.swap - dt)
+        self.peace = max(0.0, self.peace - dt)
         p = self.target
         if p is None:
             self.windup = 0.0

@@ -57,7 +57,7 @@ def snapshot(match):
             "max_hp": x.max_hp, "ranged": x.ranged, "facing": x.facing, "flash": _t(x.flash),
             "windup": _t(x.windup), "swing": _t(x.swing), "swing_dir": _t(x.swing_dir), "swing_hit": x.swing_hit,
             "zombie": _pid(x.zombie_of), "zombie_life": _t(x.zombie_life), "heal_fx": _t(x.heal_fx),
-            "swap": _t(x.swap), "swap_by": _pid(x.swap_by),
+            "swap": _t(x.swap), "swap_by": _pid(x.swap_by), "peace": _t(x.peace),
             "swap_dir": None if x.swap_dir is None else round(x.swap_dir, 2),
             "target": _pid(getattr(x.target, "owner", x.target)),     # на двойника — цвет хозяина
         } for x in m.mobs],

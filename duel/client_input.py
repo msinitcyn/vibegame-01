@@ -80,6 +80,9 @@ class InputMixin:
         if self.state == "addons":
             self.addons_key(sc)
             return
+        if self.state == "recent":
+            self.recent_key(sc)
+            return
         if self.state == "addon":
             self.addon_key(sc)
             return
@@ -265,7 +268,7 @@ class InputMixin:
             return {**up, **ok, **back}
         if self.state == "account":                # имя и пароль — с клавиатуры; □/○ — назад
             return back
-        if self.state in ("addons", "addon"):
+        if self.state in ("addons", "addon", "recent"):
             return {**up, **sides, **ok, **back}
         if self.state in ("join", "replays"):
             return {**up, **ok, **back}

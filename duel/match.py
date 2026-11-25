@@ -26,6 +26,7 @@ import random
 from .commands import REACH_FAR, Command
 from .config import (
     MOB_LATE_EXTRA,
+    PEACE_FX,
     DEATH_TIME,
     WALL_MIN,
     WALL_RANGE,
@@ -346,6 +347,7 @@ class Match:
             for m in self.mobs:
                 if m.target in mine:
                     m.target = None
+                    m.peace = PEACE_FX            # белый флажок над мобом
         elif kind == "landswap":              # «Смена земель»: земли меняются хозяевами на время
             self.give(p, "landswap")
         elif kind == "firmground":            # «Твёрдая почва»: арена мобов не жжёт

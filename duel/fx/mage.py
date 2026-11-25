@@ -578,3 +578,49 @@ def draw_oak_bark(surf, pos, r, since, left, time):
             w = 3 + (j % 3)
             pygame.draw.ellipse(layer, (*leaf, int(240 * (1 - q))), (x - w, y - w / 2, 2 * w, w))
     surf.blit(layer, layer.get_rect(center=(int(pos[0]), int(pos[1]))))
+
+
+def draw_mob_peace(surf, pos, r, since, left, time):
+    """«Мир с мобами» на маге: при применении — светлая волна; пока действует — сияние и оливковые листочки."""
+    P = params("peace")
+    light = rgb(P.get("light"), (255, 242, 200))
+    leaf = rgb(P.get("leaf"), (156, 207, 110))
+    fade = min(1.0, since / 0.3, max(0.0, left) / 0.6)                 # появляется и гаснет
+    halo(surf, pos, r, light, float(P.get("glow_alpha", 70)) / 255 * fade * (0.8 + 0.2 * math.sin(time * 3)))
+    wave_r = float(P.get("wave", 190))
+    wt = float(P.get("wave_time", 0.8))
+    size = int(max(wave_r, r * 3) * 2 + 20)
+    c = size // 2
+    layer = pygame.Surface((size, size), pygame.SRCALPHA)
+    q = since / wt
+    if 0 <= q < 1:                                                       # волна расходится
+        for lag, w in ((0.0, 3), (0.18, 2)):
+            k = q - lag
+            if 0 < k < 1:
+                pygame.draw.circle(layer, (*light, int(220 * (1 - k))), (c, c), int(r + (wave_r - r) * ease_out(k)), w)
+    n = int(P.get("leaves", 4))
+    for i in range(n):                                                   # листочки кружат вокруг
+        a = time * 1.3 + i * 2 * math.pi / n
+        d = r + 10 + 3 * math.sin(time * 2 + i)
+        x, y = c + math.cos(a) * d, c + math.sin(a) * d * 0.8
+        leaf_img = pygame.Surface((10, 6), pygame.SRCALPHA)
+        pygame.draw.ellipse(leaf_img, (*leaf, int(230 * fade)), (0, 0, 10, 6))
+        pygame.draw.line(leaf_img, (*INK, int(120 * fade)), (1, 3), (9, 3), 1)
+        leaf_img = pygame.transform.rotate(leaf_img, -math.degrees(a) + 90)
+        layer.blit(leaf_img, leaf_img.get_rect(center=(int(x), int(y))))
+    surf.blit(layer, layer.get_rect(center=(int(pos[0]), int(pos[1]))))
+
+
+def draw_peace_flag(surf, x, y, k, time):
+    """Белый флажок над успокоенным мобом: поднимается, развевается, тает. k — 0..1."""
+    alpha = int(255 * min(1.0, (1 - k) * 2.5))
+    rise = ease_out(min(1.0, k * 4)) * 6
+    layer = pygame.Surface((30, 34), pygame.SRCALPHA)
+    pygame.draw.line(layer, (*INK, alpha), (8, 32), (8, 6), 3)
+    pygame.draw.line(layer, (200, 170, 120, alpha), (8, 32), (8, 6), 1)
+    wave = math.sin(time * 9) * 2
+    pts = [(9, 6), (24, 8 + wave), (24, 17 + wave), (9, 15)]
+    pygame.draw.polygon(layer, (*INK, alpha), [(px, py) for px, py in pts], 0)
+    inner = [(10, 7), (23, 9 + wave), (23, 16 + wave), (10, 14)]
+    pygame.draw.polygon(layer, (250, 250, 245, alpha), inner)
+    surf.blit(layer, (int(x - 8), int(y - 34 - rise)))

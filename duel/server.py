@@ -13,7 +13,9 @@
 пустые комнаты убирает. Свой сервер внутри игры («Создать свой сервер») — тот же класс в потоке.
 """
 import argparse
+import base64
 import json
+import re
 import select
 import socket
 import threading
@@ -29,6 +31,11 @@ from .status import Health, serve as serve_status
 from .ws import WS_PORT, WSConn
 from .match import STEP
 from .config import CHAT_GAP, CHAT_MAX, LOBBY_CHAT_KEEP
+from .replay import load as replay_load
+
+RECENT_KEEP = 50                  # «Последние игры»: столько последних сетевых партий (повторы хранятся столько же)
+RECENT_CHUNK = 48 * 1024          # повтор — кусками не длиннее (сообщение — не длиннее MAX_LINE = 64 КБ)
+RECENT_NAME = re.compile(r"^\d{8}-\d{6}-net(-bot)?-\d+(-\d+)?\.json\.gz$")   # только сетевые; путь не подсунуть
 
 JOIN_WAIT = 5.0                   # новичок без запроса столько секунд — закрываем
 MAX_PENDING = 16                  # подключений, ещё ничего не попросивших
@@ -265,6 +272,56 @@ class Server:
         room.seat(conn, {"role": "player", "name": self.member_name(conn)}, now)
         self.push_lobby()
 
+    # ------------------------------------------------------------------ «Последние игры»
+
+    def recent_folder(self):
+        return Path(self.dump_dir) / "replays" if self.dump_dir else None
+
+    def recent_games(self):
+        """Последние сетевые партии сервера (повторы в logs/replays, хранятся последние 50) — новые сверху.
+        Оглавление кешируется по имени и времени файла: список открывается без чтения всех повторов."""
+        folder = self.recent_folder()
+        if folder is None:
+            return []
+        cache = self.__dict__.setdefault("recent_cache", {})
+        out = []
+        try:
+            files = sorted((p for p in folder.glob("*.json.gz") if RECENT_NAME.match(p.name)), reverse=True)
+        except OSError:
+            return []
+        for p in files[:RECENT_KEEP]:
+            try:
+                mtime = p.stat().st_mtime
+                hit = cache.get(p.name)
+                if hit is None or hit[0] != mtime:
+                    data = replay_load(p)
+                    res = data.get("result") or {}
+                    hit = cache[p.name] = (mtime, {
+                        "id": p.name, "when": p.name[:15], "mode": data.get("mode"),
+                        "players": data.get("players") or {}, "heroes": data.get("heroes") or {},
+                        "winner": res.get("winner"), "time": res.get("time", data.get("length", 0) / 60),
+                        "version": data.get("version")})
+                out.append(hit[1])
+            except (OSError, ValueError, EOFError):
+                continue
+        return out
+
+    def send_recent_game(self, conn, name):
+        """Повтор партии — кусками (сообщение не длиннее MAX_LINE): recent_part i из n, байты — gzip в base64."""
+        folder = self.recent_folder()
+        if folder is None or not isinstance(name, str) or not RECENT_NAME.match(name):
+            conn.send({"type": "recent_part", "id": name, "error": "noreplay"})
+            return
+        try:
+            raw = (folder / name).read_bytes()
+        except OSError:
+            conn.send({"type": "recent_part", "id": name, "error": "noreplay"})
+            return
+        b64 = base64.b64encode(raw).decode()
+        parts = [b64[i:i + RECENT_CHUNK] for i in range(0, len(b64), RECENT_CHUNK)] or [""]
+        for i, part in enumerate(parts):
+            conn.send({"type": "recent_part", "id": name, "i": i, "n": len(parts), "data": part})
+
     def leave_lobby(self, conn):
         """Соединение уходит из лобби в комнату: снять поиск и вызовы."""
         if conn in self.seeking:
@@ -398,6 +455,12 @@ class Server:
                     self.lobby.append(conn)
                 self.push_lobby([conn])
                 conn.send({"type": "lobby_chat_log", "lines": self.lobby_chat_log})
+            elif kind == "recent" and getattr(conn, "member", None) is not None:
+                where = where or "lobby"      # «Последние игры»: список сетевых партий сервера
+                conn.send({"type": "recent", "list": self.recent_games()})
+            elif kind == "recent_get" and getattr(conn, "member", None) is not None:
+                where = where or "lobby"
+                self.send_recent_game(conn, msg.get("id"))
             elif kind == "lobby_chat" and getattr(conn, "member", None) is not None:
                 where = where or "lobby"
                 if conn in self.lobby:

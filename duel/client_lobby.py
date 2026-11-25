@@ -354,6 +354,8 @@ class LobbyMixin:
                 if self.warmup:
                     self.stop_warmup()
                     self.state = "lobby"
+                if self.state == "recent":        # вызов виден в лобби
+                    self.state = "lobby"
                 self.incoming = {"from": msg.get("from"), "name": msg.get("name") or "?",
                                  "until": time.monotonic() + float(msg.get("left") or 20)}
             elif kind == "challenge_over":
@@ -379,6 +381,8 @@ class LobbyMixin:
                 self.lobby_chat = (self.lobby_chat + [msg])[-LOBBY_CHAT_KEEP:]
             elif kind == "auth":
                 self.on_auth(msg)
+            elif kind in ("recent", "recent_part"):
+                self.recent_message(msg)
             elif kind == "bye":
                 self.leave_net(t("net.host_left"), voluntary=False)
                 return
@@ -438,6 +442,8 @@ class LobbyMixin:
             self.lobby_conn.send({"type": "bot_game"})
         elif sc == K.KSCAN_T:
             self.start_warmup()
+        elif sc == K.KSCAN_G:
+            self.open_recent()
 
     def open_lobby_chat(self, swallow=False):
         """Написать в чат лобби (C или щелчок по полю). swallow — первая буква — сама C, её не печатаем."""

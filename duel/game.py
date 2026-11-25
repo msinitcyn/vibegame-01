@@ -23,6 +23,7 @@ from . import logs
 from .logs import log
 from .commands import Command
 from .client_addons import AddonsMixin
+from .client_recent import RecentMixin
 from .client_chat import ChatMixin
 from .demos import has_demo
 from .config import (
@@ -56,7 +57,7 @@ from .client_menus import MenusMixin
 from .client_net import NetClientMixin
 
 
-class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, ChatMixin, AddonsMixin):
+class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, ChatMixin, AddonsMixin, RecentMixin):
     """Приложение поверх матча: хотсит — оба игрока за одним компьютером."""
 
     def __init__(self, windowed=False, net=None, pad=0, replay=None, movie=None, intro=False):
@@ -498,6 +499,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             self.on_mouse_up(e.button)
         elif e.type == pygame.TEXTINPUT:
             self.on_text(e.text)
+        elif e.type == pygame.MOUSEWHEEL and self.state == "recent":
+            self.recent_wheel(e.y)
         elif e.type == pygame.MOUSEWHEEL and self.state == "addon":
             self.addon_wheel(e.y)
         elif e.type == pygame.MOUSEWHEEL and self.state == "replays" and self.replay_list:
@@ -546,6 +549,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             self.lobby_frame()
             if self.state == "lobby":
                 self.draw_lobby_screen()
+            elif self.state == "recent":
+                self.draw_recent()
             elif self.state == "entry":
                 self.draw_entry()
             elif self.state == "entering":
@@ -565,6 +570,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
     def play_frame(self, dt):
         """Кадр партии: разминка из лобби, сетевая партия или за одним компьютером (пауза, отсчёт, такты)."""
         if self.replay:                       # повтор партии: матч шагает по записи
+            if self.replay_back == "recent" and self.lobby_conn:
+                self.lobby_frame()            # повтор из «Последних игр»: лобби сервера слушаем дальше
             self.replay_frame(dt)
             self.draw()
             return

@@ -15,6 +15,7 @@ from .config import (
     WEAPON_TIME,
     ZOMBIE_RISE,
     MOBSWAP_FX,
+    PEACE_FX,
     ZOMBIE_TIME,
     SHOT_FLASH,
     WALK_FPS,
@@ -95,6 +96,8 @@ def draw_effects(surf, u, time=0.0):
         fx_spells.draw_freeze(surf, pos, u["r"], since_start("freeze", effects["freeze"]), effects["freeze"], time)
     if "speed" in effects:
         pygame.draw.circle(surf, ITEMS["speed"][1], pos, r + 8, 1)
+    if "mobpeace" in effects:                     # мир с мобами — волна, сияние, листочки (assets/effects/peace.json)
+        fx_mage.draw_mob_peace(surf, pos, u["r"], since_start("mobpeace", effects["mobpeace"]), effects["mobpeace"], time)
     if "immune" in effects:                       # дубовая кора — пластины коры вокруг мага (assets/effects/oak.json)
         fx_mage.draw_oak_bark(surf, pos, u["r"], since_start("immune", effects["immune"]), effects["immune"], time)
     if "shield" in effects:                       # пузырь щита: соты, блик, заряды, рябь от удара
@@ -452,6 +455,8 @@ def draw_mob(surf, m, font=None, heroes=DEFAULT_HERO):
             pygame.draw.circle(aura, (*side_color(heroes, zombie), 220), (c, c), r + 8, 3)
             surf.blit(aura, aura.get_rect(center=pos))
         draw_unit(surf, name + ("_zombie" if zombie else ""), pos, m["r"], m["facing"], white=m["flash"] > 0)
+    if m.get("peace", 0) > 0:                       # «Мир с мобами» успокоил — белый флажок
+        fx_mage.draw_peace_flag(surf, pos[0], pos[1] - m["r"], 1 - m["peace"] / PEACE_FX, m["peace"])
     if m.get("swap", 0) > 0 and m.get("swap_by"):  # Тьма перенаправила на соперника
         fx_spells.mobswap(surf, pos, m["r"], 1 - m["swap"] / MOBSWAP_FX, m.get("swap_dir"),
                           side_color(heroes, m["swap_by"]), m["swap"])

@@ -16,6 +16,7 @@
 | ice-shield.mp3 | daviddumaisaudio-magical-spell-cast-190272.mp3 | 190272 |
 | lasso.mp3 | dragon-studio-fire-spell-impact-393921.mp3 | 393921 |
 | mirror.mp3 | vadim_makes_sound-dark-magic-curse-light-impact-1-546566.mp3 | 546566 |
+| mob-truce.mp3 | universfield-magic-spell-03-242245.mp3 | 242245 |
 | oak-bark.mp3 | dragon-studio-wood-creaking-636725.mp3 | 636725 |
 | steps.mp3 | freesound_community-footsteps_grass_1-6810.mp3 | 6810 |
 | tree-wall.mp3 | mollyroselee-falling-tree-ai-generated-431321.mp3 | 431321 |
