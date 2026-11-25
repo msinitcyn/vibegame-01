@@ -57,23 +57,13 @@ def test_settings_menu_changes_and_saves_language(game, lang_restore):
     game.state = "menu"
     game.on_key(pygame.KSCAN_5)                 # «Настройки»
     assert game.state == "settings"
-    game.on_key(pygame.KSCAN_D)                 # язык → следующий
+    game.on_key(pygame.KSCAN_D)                 # язык → следующий (пока он один — английский)
     assert i18n.get_lang() == "en"
     assert i18n.t("name.blue") == "Blue" and game.menu_label(0) == "Two players"
     assert json.loads(settings.path().read_text())["lang"] == "en"
-    game.on_key(pygame.KSCAN_RIGHT)
-    assert i18n.get_lang() == "fi" and i18n.t("name.blue") == "Sininen"
-    game.on_key(pygame.KSCAN_A)
-    game.on_key(pygame.KSCAN_LEFT)
-    assert i18n.get_lang() == "ru"
-    game.on_key(pygame.KSCAN_S)                 # «Имя»
-    game.on_key(pygame.KSCAN_S)                 # на строке имени S — буква, не листает
-    assert game.settings_rows[game.settings_index] == "name"
-    for _ in range(12):                         # прицел ×3, бот, музыка, звуки, клавиши, обновления ×2, отчёты, «Дополнительно», «Назад»
-        game.on_key(pygame.KSCAN_DOWN)
-    assert game.settings_rows[game.settings_index] == "back"
-    game.on_key(pygame.KSCAN_RETURN)
-    assert game.state == "menu"
+    i18n.set_lang("ru")                         # отложенные языки не включаются
+    assert i18n.get_lang() == "en"
+    game.on_key(pygame.KSCAN_ESCAPE)
 
 
 def test_settings_by_gamepad(game, lang_restore):

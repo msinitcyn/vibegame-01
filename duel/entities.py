@@ -265,8 +265,10 @@ class Unit:
 
 
 class Player(Unit):
-    def __init__(self, pid, x, color, direction, land):
-        self.id = pid                 # постоянный номер: "blue" / "red"
+    def __init__(self, pid, x, color, direction, land, team=None, start_y=None):
+        self.id = pid                 # постоянный номер: "blue" / "red" (2×2 — "blue", "blue2", "red", "red2")
+        self.team = team or pid       # команда: "blue" (слева) / "red" (справа); земля — по команде
+        self.start_y = start_y        # где появляется по высоте (None — посередине)
         self.rng = None               # генератор случайных чисел матча (ставит Match)
         self.start_x = x
         self.color = color
@@ -279,7 +281,7 @@ class Player(Unit):
     def reset(self, hp=None):
         hp = MAX_HP if hp is None else hp       # по умолчанию — из конфига в момент вызова (лаборатория крутит)
         self.x = self.start_x
-        self.y = (TOP + BOTTOM) / 2
+        self.y = (TOP + BOTTOM) / 2 if self.start_y is None else self.start_y
         self.hp = self.max_hp = hp
         self.ammo = START_AMMO
         self.cooldown = 0.0

@@ -97,14 +97,14 @@ def test_aim_by_move_only_for_two_on_one_computer(game, monkeypatch):
 def test_web_menu_labels(game, monkeypatch):
     from duel import client_menus, screens_menus
     from duel.i18n import set_lang
-    set_lang("ru")                                  # подписи проверяются по-русски — не зависеть от прошлых тестов
+    set_lang("en")                                  # подписи проверяются по-английски — не зависеть от прошлых тестов
     game.state = "menu"
     game.hits = []
     game.draw_menu()
     desktop = len(game.hits)
     monkeypatch.setattr(client_menus, "WEB", True)
     monkeypatch.setattr(screens_menus, "WEB", True)
-    assert game.menu_label(game.menu.index("net")) == "Подключиться к серверу"
+    assert game.menu_label(game.menu.index("net")) == "Connect to a server"
     game.hits = []
     game.draw_menu()
     assert len(game.hits) == desktop - 2                  # без «Выход» и без «проверить обновления»

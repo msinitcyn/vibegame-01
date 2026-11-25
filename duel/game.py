@@ -18,7 +18,7 @@ from . import config
 from . import settings
 from .audio import Audio, MUSIC_END
 from .ai_env import bot_levels, make_game_bot
-from .brain import LEVEL_NAMES
+from .brain import LEVEL_NAMES, SmartBot
 from .replay import Player as ReplayPlayer, Recorder
 from . import logs
 from .logs import log
@@ -61,7 +61,7 @@ from .client_net import NetClientMixin
 class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, ChatMixin, AddonsMixin, RecentMixin):
     """Приложение поверх матча: хотсит — оба игрока за одним компьютером."""
 
-    def __init__(self, windowed=False, net=None, pad=0, replay=None, movie=None, intro=False):
+    def __init__(self, windowed=False, net=None, pad=0, replay=None, movie=None, intro=False, test_2v2=False):
         """net — (соединение, место от сервера, адрес) для сетевого клиента; pad — номер своего геймпада;
         replay — данные повтора партии (duel/replay.py): игра только показывает его; movie — показать ролик;
         intro — обычный запуск main.py: показать ролик, если стоит галка «Показывать при старте»."""
@@ -188,6 +188,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.movie_back = "menu"
         if replay:
             self.start_replay(replay)
+        elif test_2v2:                        # проба 2×2: ты — синий ведущий, остальные трое — боты
+            self.start(heroes={"blue": "fire", "red": "frost"}, bot=True, mode="2v2")
         elif movie:
             self.start_movie(movie)
         else:
@@ -267,9 +269,11 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
     def players(self):
         return self.match.players
 
-    def start(self, hp=MAX_HP, heroes=None, bot=False):
-        """Новая партия двух игроков (тестовый режим — другое число жизней и бот за красного) — после отсчёта."""
+    def start(self, hp=MAX_HP, heroes=None, bot=False, mode="1v1"):
+        """Новая партия двух игроков (тестовый режим — другое число жизней и бот за красного) — после отсчёта.
+        mode="2v2" — команды по двое: ведущими (blue, red) играют люди как в 1×1, напарниками — боты."""
         self.start_hp = hp
+        self.mode = mode
         self.test_bot = make_game_bot(None, "red", self.bot_level(), 7) if bot else None   # на правилах или ИИ
         if bot:
             self.chat_system(t("cmd.test_hello", **self.hint_keys()))
@@ -302,9 +306,12 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
 
     def restart(self, seed=None):
         # без зерна — каждый раз новая партия; герои — выбранные перед партией
-        self.match = Match(self.start_hp, seed, getattr(self, "heroes", None))
+        self.match = Match(self.start_hp, seed, getattr(self, "heroes", None), getattr(self, "mode", "1v1"))
         if getattr(self, "test_bot", None):   # новая партия — бот снова играет (/bot stop — на одну партию)
             self.test_bot = make_game_bot(self.match, "red", self.bot_level(), 7)
+        # 2×2: напарники ведущих — боты на правилах
+        self.mates = {p.id: SmartBot(self.match, p.id, self.bot_level() if self.bot_level() in LEVEL_NAMES else "normal", 11 + i)
+                      for i, p in enumerate(self.match.players) if p.id not in PLAYER_IDS}
         self.popups = []              # [текст, x, y, время, цвет]
         self.pending = {pid: Command() for pid in PLAYER_IDS}   # нажатия до следующего такта
         self.time_acc = 0.0           # накопленное время кадров для фиксированного такта
@@ -410,6 +417,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             commands[pid] = cmd
         if self.test_bot:                     # тестовый режим: красным играет бот
             commands["red"] = Command(*self.test_bot.act())
+        for pid, b in getattr(self, "mates", {}).items():     # 2×2: напарники-боты
+            commands[pid] = Command(*b.act())
         self.pending = {pid: Command() for pid in PLAYER_IDS}
         self.rec().tick(commands)
         events = self.match.step(dt, commands)

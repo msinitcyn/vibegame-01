@@ -60,7 +60,7 @@ from .icons import draw_icon
 from .items import ITEMS
 from .sprites import SPRITE_TO_HITBOX, draw_unit, sprite, sprite_px
 
-DIR = {"blue": 1, "red": -1}              # +1 стреляет вправо, -1 влево (стороны поля)
+DIR = {"blue": 1, "red": -1, "blue2": 1, "red2": -1}   # +1 стреляет вправо, -1 влево (стороны поля; 2×2 — и напарники)
 
 
 
@@ -78,6 +78,15 @@ def heroes_of(snap):
             out[p["id"]] = p["hero"]
     out.update(snap.get("heroes") or {})          # ролики: маг спрятан, а цвета его стороны нужны
     return out
+
+
+def foe_of(snap, p):
+    """Соперник мага p в снимке: 1×1 — второй маг; 2×2 — ближайший маг другой команды."""
+    me_team = p.get("team") or p["id"]
+    foes = [q for q in snap.get("players", []) if (q.get("team") or q["id"]) != me_team]
+    if not foes:
+        return p
+    return min(foes, key=lambda q: math.hypot(q["x"] - p["x"], q["y"] - p["y"]))
 
 
 def side_color(heroes, pid):
@@ -605,16 +614,16 @@ def draw_field(surf, snap, font, viewer=None):
             surf.blit(ring, (int(p["x"]) - c, int(p["y"]) - c))
         steal = p.get("effects", {}).get("quickstep")
         if steal is not None and since_start("quickstep", steal) < 0.8:   # скорость утекает к Земле
-            src = by_id["red" if p["id"] == "blue" else "blue"]
+            src = foe_of(snap, p)
             if not hidden_now(src) and not hidden_now(p):
                 fx_earth.draw_steal_stream(surf, _pos(src), _pos(p), since_start("quickstep", steal) / 0.8,
                                            fx.rgb(fx.params("earth").get("steal"), (130, 220, 120)))
         if "lassoed" in p.get("effects", {}):
-            puller = by_id["red" if p["id"] == "blue" else "blue"]
+            puller = by_id.get(p.get("lasso_by")) or foe_of(snap, p)
             fx_spells.draw_lasso(surf, p, puller, side_color(heroes, puller["id"]), snap.get("time", 0))
     for c in snap["clones"]:                  # лассо поймало двойника (не угадал) — тянет его
         if "lassoed" in c.get("effects", {}):
-            puller = by_id.get("red" if c["owner"] == "blue" else "blue")
+            puller = foe_of(snap, by_id.get(c["owner"]) or {"id": c["owner"], "x": c["x"], "y": c["y"]})
             if puller:
                 fx_spells.draw_lasso(surf, c, puller, side_color(heroes, puller["id"]), snap.get("time", 0))
     for b in snap.get("beams", []):

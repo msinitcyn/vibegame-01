@@ -99,4 +99,4 @@ def test_client_shows_server_countdown_and_go(game):
 def test_go_text(lang):
     i18n.set_lang(lang)
     assert i18n.t("countdown.go")
-    i18n.set_lang("ru")
+    i18n.set_lang("en")

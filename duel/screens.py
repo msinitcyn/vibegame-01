@@ -6,6 +6,7 @@ import math
 
 import pygame
 
+from . import field
 from .config import (
     BEAM_LENGTH,
     FIRE_RING_R,
@@ -169,7 +170,8 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         pygame.draw.rect(s, (30, 33, 45), (0, 0, WIDTH, HUD_H))
         pygame.draw.line(s, GREY, (0, HUD_H), (WIDTH, HUD_H), 2)
         self.draw_wave_timer()
-        for i_player, p in enumerate(self.snap["players"]):
+        # 2×2: на панели — ведущие команд (blue, red), у имени — возрождения команды; напарники — на поле
+        for i_player, p in enumerate(q for q in self.snap["players"] if q["id"] in ("blue", "red")):
             pid = p["id"]
             color = self.side_color(pid)
             left = pid == "blue"
@@ -233,7 +235,7 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
 
     def field_background_draw(self, heroes):
         cached = getattr(self, "_field_bg", None)
-        if cached is None or cached[0] != heroes:
+        if cached is None or cached[0] != heroes or cached[1].get_size() != (WIDTH, BOTTOM - TOP):
             h = BOTTOM - TOP
             bg = pygame.Surface((WIDTH, h))
             half = WIDTH // 2
@@ -274,7 +276,11 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
 
     def name_line(self, p, color):
         """Первая строка статуса: имя и снаряжение (4 значка: надетое — ярко в золотой рамке, нет — бледно)."""
-        name = self.font.render(self.player_label(p["id"]), True, color)
+        label = self.player_label(p["id"])
+        lives = self.snap.get("team_lives")
+        if lives:                                     # 2×2: сколько возрождений осталось у команды
+            label += f"  ♥{lives[p.get('team') or p['id']]}"
+        name = self.font.render(label, True, color)
         r, gap = 10, 4
         have = p.get("gear", [])
         width = name.get_width() + 12 + len(GEAR_ITEMS) * (2 * r + gap)
@@ -560,6 +566,27 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         return all((now - t0) / 1000 >= SPIRIT_TIME for t0 in seen.values())
 
     def draw(self):
+        geo = field.geometry(self.snap.get("mode"))
+        if geo:                                        # 2×2: поле больше окна — рисуем целиком и уменьшаем
+            real = self.screen
+            fw, fh = (round(v) for v in field.size(geo))
+            big = getattr(self, "_big_field", None)
+            if big is None or big.get_size() != (fw, TOP + fh):
+                big = self._big_field = pygame.Surface((fw, TOP + fh))
+            self.screen = big
+            try:
+                with field.use(geo):
+                    self.draw_play_field()
+            finally:
+                self.screen = real
+            area = big.subsurface((0, TOP, fw, fh))
+            real.blit(pygame.transform.smoothscale(area, (WIDTH, HEIGHT - TOP)), (0, TOP))
+        else:
+            self.draw_play_field()
+        self.draw_play_ui()
+
+    def draw_play_field(self):
+        """Поле партии со всем, что на нём (в координатах поля): земли, маги, слои аддонов, прицел, надписи."""
         s = self.screen
         self.blit_field(s, self.snap)
         # кто смотрит: None — за одним компьютером (видно всё), "" — зритель по сети
@@ -592,9 +619,13 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         dx, dy = self.shake_offset()
         if dx or dy:                                   # большое заклинание: поле дрожит (панель сверху — нет)
             area = pygame.Rect(0, TOP, WIDTH, BOTTOM - TOP)
-            field = s.subsurface(area).copy()
+            shaken = s.subsurface(area).copy()
             s.fill((0, 0, 0), area)
-            s.blit(field, (dx, TOP + dy))
+            s.blit(shaken, (dx, TOP + dy))
+
+    def draw_play_ui(self):
+        """Поверх поля — в координатах окна: панель, отсчёт, итог, пауза, чат."""
+        s = self.screen
         self.draw_hud()
         self.draw_countdown()
 

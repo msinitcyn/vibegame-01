@@ -35,7 +35,7 @@ def test_client_warns_about_old_and_new_server(game, monkeypatch):
     monkeypatch.setattr(logs, "version", lambda: "0.7.5")
     game.server_info = {"version": "0.7.4", "features": set(BASELINE_FEATURES)}
     text = game.server_compat()
-    assert "0.7.4" in text and "0.7.5" in text and "тестовые" in text
+    assert "0.7.4" in text and "0.7.5" in text and "test commands" in text
     assert not game.server_can("test") and game.server_can("chat")
     game.server_info = {"version": "0.8.0", "features": set(FEATURES)}
     assert "0.8.0" in game.server_compat()
@@ -57,7 +57,7 @@ def test_test_command_on_old_server(game):
     game.chat_reset()
     try:
         game.chat_command("give lasso")
-        assert not sent and "обновите сервер" in game.chat_lines[-1][2]
+        assert not sent and "update the server" in game.chat_lines[-1][2]
         game.server_info = {"version": "0.7.5", "features": set(FEATURES)}
         game.chat_command("give lasso")
         assert sent and sent[-1]["type"] == "test"

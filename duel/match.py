@@ -23,9 +23,13 @@
 import math
 import random
 
+from . import field
 from .commands import REACH_FAR, Command
 from .config import (
     MOB_LATE_EXTRA,
+    START_AMMO,
+    RESPAWN_TIME,
+    TEAM_LIVES,
     PEACE_FX,
     DEFLECT_FX,
     DEATH_TIME,
@@ -126,14 +130,33 @@ ALLY_PICK = 14                    # курсор не дальше стольк�
 
 
 class Match:
-    def __init__(self, hp=None, seed=None, heroes=None):
+    def __init__(self, hp=None, seed=None, heroes=None, mode="1v1"):
+        """mode: "1v1" — синий против красного; "2v2" — команды blue1, blue2 против red1, red2 на поле в 1,5 раза
+        больше (duel/field.py), у команды TEAM_LIVES возрождений."""
+        self.mode = mode
+        self.geo = field.geometry(mode)
+        with field.use(self.geo):
+            self._init(hp, seed, heroes)
+
+    def _init(self, hp, seed, heroes):
         hp = MAX_HP if hp is None else hp
         self.seed = random.randrange(2 ** 32) if seed is None else seed
         self.rng = random.Random(self.seed)
         self.last_id = 0
-        self.blue = Player("blue", 60, BLUE, 1, BLUE_LAND)
-        self.red = Player("red", WIDTH - 60, RED, -1, RED_LAND)
-        self.players = (self.blue, self.red)
+        if self.mode == "2v2":
+            mid, dy = (TOP + BOTTOM) / 2, (BOTTOM - TOP) * 0.2
+            self.players = (Player("blue", 60, BLUE, 1, BLUE_LAND, "blue", mid - dy),
+                            Player("blue2", 60, BLUE, 1, BLUE_LAND, "blue", mid + dy),
+                            Player("red", WIDTH - 60, RED, -1, RED_LAND, "red", mid - dy),
+                            Player("red2", WIDTH - 60, RED, -1, RED_LAND, "red", mid + dy))
+            self.blue, self.red = self.players[0], self.players[2]     # «первый» мага команды (старые места)
+            self.team_lives = {"blue": TEAM_LIVES, "red": TEAM_LIVES}
+        else:
+            self.blue = Player("blue", 60, BLUE, 1, BLUE_LAND)
+            self.red = Player("red", WIDTH - 60, RED, -1, RED_LAND)
+            self.players = (self.blue, self.red)
+            self.team_lives = None
+        self.by_id = {p.id: p for p in self.players}
         self.set_heroes(heroes)
         for p in self.players:
             p.rng = self.rng
@@ -172,14 +195,31 @@ class Match:
     def set_heroes(self, heroes=None):
         """Герои сторон (только вид); по умолчанию — Холод слева, Огонь справа."""
         heroes = heroes or {}
-        for p in self.players:
-            p.hero = heroes.get(p.id) or DEFAULT_HERO[p.id]
+        for p in self.players:                # 2×2: герой команды (одна стихия на команду) или свой
+            p.hero = heroes.get(p.id) or heroes.get(p.team) or DEFAULT_HERO[p.team]
 
     def player(self, pid):
-        return self.blue if pid == "blue" else self.red
+        """Маг по номеру; в 2×2 "blue"/"red" — первый маг команды (как в 1×1)."""
+        return self.by_id.get(pid) or (self.blue if pid == "blue" else self.red)
+
+    def team(self, t):
+        return [p for p in self.players if p.team == t]
+
+    def allies(self, p):
+        """Союзники мага (без него самого)."""
+        return [q for q in self.players if q.team == p.team and q is not p]
+
+    def enemies(self, p):
+        """Враги мага (маги другой команды)."""
+        return [q for q in self.players if q.team != p.team]
 
     def other(self, p):
-        return self.red if p is self.blue else self.blue
+        """Соперник: в 1×1 — второй маг; в 2×2 — ближайший враг в игре (все выбыли — ближайший любой)."""
+        if len(self.players) == 2:
+            return self.red if p is self.blue else self.blue
+        foes = self.enemies(p)
+        live = [q for q in foes if q.dead_at is None and not getattr(q, "out", False)] or foes
+        return min(live, key=lambda q: math.hypot(q.x - p.x, q.y - p.y))
 
     def emit(self, *event):
         self.events.append(event)
@@ -200,7 +240,12 @@ class Match:
                 o.id = self.next_id()
 
     def step(self, dt, commands=None):
-        """Один такт: нажатия из команд, затем движение и все правила. Возвращает события."""
+        """Один такт: нажатия из команд, затем движение и все правила. Возвращает события.
+        Геометрия поля — своя (2×2 — поле больше), на время шага."""
+        with field.use(self.geo):
+            return self._step(dt, commands)
+
+    def _step(self, dt, commands=None):
         commands = commands or {}
         if not self.winner:
             # нажатия — раньше движения, как и раньше при обработке клавиш перед кадром
@@ -256,16 +301,16 @@ class Match:
                 continue                      # своих зомби не бьём
             if m.alive and math.hypot(m.x - p.x, m.y - p.y) <= p.radius + m.radius + reach:
                 m.hurt(p, damage)             # злится на ударившего; смерть — общим порядком
-        foe = self.other(p)
-        if math.hypot(foe.x - p.x, foe.y - p.y) <= p.radius + foe.radius + reach:
-            if not foe.shield_absorb():      # щит гасит удар целиком
-                self.hurt_player(foe, damage)
-        for c in self.clones_of(foe):
-            if math.hypot(c.x - p.x, c.y - p.y) <= p.radius + c.radius + reach:
-                c.hurt(damage)
-        for st in self.sentries:
-            if st.owner is foe and math.hypot(st.x - p.x, st.y - p.y) <= p.radius + st.radius + reach:
-                st.hurt(damage)
+        for foe in self.enemies(p):           # враги (в 1×1 — один), их двойники и стражи; своих не бьём
+            if foe.dead_at is None and math.hypot(foe.x - p.x, foe.y - p.y) <= p.radius + foe.radius + reach:
+                if not foe.shield_absorb():      # щит гасит удар целиком
+                    self.hurt_player(foe, damage)
+            for c in self.clones_of(foe):
+                if math.hypot(c.x - p.x, c.y - p.y) <= p.radius + c.radius + reach:
+                    c.hurt(damage)
+            for st in self.sentries:
+                if st.owner is foe and math.hypot(st.x - p.x, st.y - p.y) <= p.radius + st.radius + reach:
+                    st.hurt(damage)
         for g in self.guardians:
             if g.alive and self.can_hurt_guardian(g, p) and \
                     math.hypot(g.x - p.x, g.y - p.y) <= p.radius + g.radius + reach:
@@ -314,7 +359,7 @@ class Match:
         if kind in GEAR_ITEMS:                # снаряжение не применяется — надевается
             self.take_gear(p, kind)
             return
-        foe = self.other(p)
+        foe = self.target_enemy(p)            # 1×1 — соперник; 2×2 — враг ближе к курсору (прицелу)
         if ITEMS[kind][0] == "foe" and "immune" in foe.effects:
             self.emit("immune", foe.id, kind)     # «Дубовая кора»: на Природу не действует
             self.deflects.append([kind, p.x, p.y, foe, 0.0])   # заклинание летит и отскакивает от коры
@@ -389,8 +434,9 @@ class Match:
             self.trees.append(TreeWall(p))
         elif kind == "lasso":                 # огненное лассо — в того, на кого нацелено: соперника или его двойника
             target = self.lasso_target(p)
-            if target is foe:
-                self.give(foe, "lassoed")
+            if isinstance(target, Player):
+                self.give(target, "lassoed")
+                target.lasso_by = p                  # кто тянет (в 2×2 врагов двое)
             else:
                 target.apply("lassoed")           # угадал не того — тянет двойника
                 target.lasso_by = p
@@ -458,7 +504,7 @@ class Match:
 
     def on_trail(self, p, owner):
         """Маг p стоит на ледяном следе хозяина owner."""
-        return any(t.owner is owner and t.under(p.x, p.y) for t in self.ice)
+        return any(t.owner.team == owner.team and t.under(p.x, p.y) for t in self.ice)   # след — земля команды
 
     def lands_swapped(self):
         """«Смена земель» действует (у кого-то из магов): земли сторон поменялись хозяевами."""
@@ -512,7 +558,7 @@ class Match:
         p.x = max(r, min(WIDTH - r, p.x))
         p.y = max(TOP + r, min(BOTTOM - r, p.y))
         for t in self.trees:
-            if t.owner is not p and t.hits(p.x, p.y, r):      # сквозь свои ёлки хозяин проходит
+            if t.owner.team != p.team and t.hits(p.x, p.y, r):  # сквозь свои ёлки хозяин (и союзник) проходит
                 p.x, p.y = t.push_out(p.x, p.y, r)
         for ring in self.rings:               # огненную стену не пересечь
             ring.keep(p)
@@ -541,6 +587,9 @@ class Match:
         self.update_clones(dt)
         self.update_bullets(dt)
         self.bury_mobs()
+        if self.team_lives is not None:
+            self.update_teams()
+            return
         for p in self.players:                # погиб — звук и вылетающий дух; партия идёт, пока дух улетает
             if p.hp <= 0 and p.dead_at is None:
                 p.dead_at = self.match_time
@@ -552,6 +601,43 @@ class Match:
             if self.match_time >= self.end_at - 1e-9:      # анимация кончилась — итог
                 alive = [p for p in self.players if p.dead_at is None]
                 self.winner = alive[0] if len(alive) == 1 else "draw"   # погибли оба — ничья
+
+    def update_teams(self):
+        """2×2: погиб — команда теряет возрождение, маг через RESPAWN_TIME появляется на своей земле с полными
+        жизнями (артефакты и снаряжение при нём); возрождений нет — выбывает (out). Команда, у которой все
+        выбыли, проиграла (обе — ничья), итог — после анимации гибели (DEATH_TIME)."""
+        for p in self.players:
+            if p.hp <= 0 and p.dead_at is None:
+                p.dead_at = self.match_time
+                self.emit("dead", p.id)
+                if self.team_lives[p.team] > 0:
+                    self.team_lives[p.team] -= 1
+                    p.respawn_at = self.match_time + RESPAWN_TIME
+                else:
+                    p.out = True                  # выбыл: дух улетает, маг больше не играет
+                    p.respawn_at = None
+            elif p.dead_at is not None and getattr(p, "respawn_at", None) is not None \
+                    and self.match_time >= p.respawn_at:
+                self.respawn(p)
+        if self.winner:
+            return
+        gone = [t for t in ("blue", "red") if all(getattr(p, "out", False) for p in self.team(t))]
+        if gone:
+            if self.end_at is None:
+                self.end_at = self.match_time + DEATH_TIME
+            if self.match_time >= self.end_at - 1e-9:
+                self.winner = "draw" if len(gone) == 2 else ("red" if gone[0] == "blue" else "blue")
+
+    def respawn(self, p):
+        """Возрождение (2×2): на своей земле, где появлялся, с полными жизнями, без эффектов и лассо."""
+        p.x, p.y = p.start_x, p.start_y if p.start_y is not None else (TOP + BOTTOM) / 2
+        p.hp = p.max_hp
+        p.dead_at = p.respawn_at = None
+        p.bear_saved = p.bear_at = None
+        p.reset_effects()
+        p.lasso_by = None
+        p.ammo = max(p.ammo, START_AMMO)
+        self.emit("respawn", p.id)
 
     def age_terrain(self, dt):
         """Стена деревьев растёт и стареет, лёд тает, огненные круги догорают."""
@@ -577,7 +663,7 @@ class Match:
         if p.bear_saved is not None and "bear" not in p.effects:
             self.end_bear(p)                  # время медведя вышло
         if "lassoed" in p.effects:            # «Огненное лассо»: тянет к сопернику быстрее бега
-            foe = self.other(p)
+            foe = getattr(p, "lasso_by", None) or self.other(p)
             dx, dy = foe.x - p.x, foe.y - p.y
             d = math.hypot(dx, dy)
             room = d - p.radius - foe.radius
@@ -598,7 +684,7 @@ class Match:
         else:
             p.foe_land_t = 0.0
         # у огненной стены соперника хозяина — FIRE_RING_DPS в секунду
-        if any(r.owner is not p and r.near_wall(p) for r in self.rings):
+        if any(r.owner.team != p.team and r.near_wall(p) for r in self.rings):   # свой круг не жжёт (и союзника)
             p.ring_t += dt
             while p.ring_t >= 1 / FIRE_RING_DPS:
                 p.ring_t -= 1 / FIRE_RING_DPS
@@ -707,31 +793,37 @@ class Match:
                     g.reflect(b)
 
     def bullet_hits_side(self, b):
-        """Пуля и сторона соперника её хозяина (хозяин мог смениться после зеркала): щит, маг, двойники."""
-        target = self.other(b.owner)
+        """Пуля и враги её хозяина (хозяин мог смениться после зеркала): щит, маг, двойники. Своих не ранит."""
+        for target in self.enemies(b.owner):
+            if self.bullet_hits_mage(b, target):
+                return
+
+    def bullet_hits_mage(self, b, target):
+        """Пуля и один враг (и его двойники). True — пуля погасла."""
         if target.offstage or target.dead_at is not None:
-            return                            # маг «за кадром» (сцены) или погибший: пули его не задевают
+            return False                      # маг «за кадром» (сцены) или погибший: пули его не задевают
         if target.shield_blocks(b):
             b.alive = False                   # щит поглощает пулю
             self.hit_at(b, "shield")
-            return
+            return True
         if math.hypot(b.x - target.x, b.y - target.y) < target.radius + BULLET_R:
             b.alive = False
             self.hurt_player(target, 1)
             self.hit_at(b, "mage", target)
-            return
+            return True
         for c in self.clones:
             if not c.alive or c.owner is not target:
                 continue
             if c.shield_blocks(b):
                 b.alive = False
                 self.hit_at(b, "shield")
-                return
+                return True
             if math.hypot(b.x - c.x, b.y - c.y) < c.radius + BULLET_R:
                 b.alive = False
                 c.hurt(1)
                 self.hit_at(b, "mage", c)
-                return
+                return True
+        return False
 
     def bury_mobs(self):
         """Погибшие мобы: обычный роняет артефакт, зомби — нет; мёртвые и пули — с поля."""
@@ -762,8 +854,7 @@ class Match:
     def lasso_target(self, p):
         """Кого цепляет лассо мага p: промахнуться нельзя — соперника или его двойника, кто ближе к курсору
         (без курсора — стик, клавиши, бот — кто ближе к линии прицела)."""
-        foe = self.other(p)
-        units = [foe] + self.clones_of(foe)
+        units = [u for foe in self.enemies(p) if not getattr(foe, "out", False) for u in [foe] + self.clones_of(foe)]
         at = self.cursor_point(p)
         if at is not None:
             return min(units, key=lambda u: math.hypot(u.x - at[0], u.y - at[1]))
@@ -772,6 +863,21 @@ class Match:
             a = math.atan2(u.y - p.y, u.x - p.x) - p.aim
             return abs((a + math.pi) % (2 * math.pi) - math.pi)
         return min(units, key=off)
+
+    def target_enemy(self, p):
+        """На кого действует артефакт «на соперника»: 1×1 — соперник; 2×2 — враг в игре, кто ближе к курсору
+        (без курсора — к линии прицела)."""
+        if len(self.players) == 2:
+            return self.other(p)
+        foes = [q for q in self.enemies(p) if q.dead_at is None and not getattr(q, "out", False)] or self.enemies(p)
+        at = self.cursor_point(p)
+        if at is not None:
+            return min(foes, key=lambda u: math.hypot(u.x - at[0], u.y - at[1]))
+
+        def off(u):
+            a = math.atan2(u.y - p.y, u.x - p.x) - p.aim
+            return abs((a + math.pi) % (2 * math.pi) - math.pi)
+        return min(foes, key=off)
 
     def wall_spot(self, p):
         """Куда встанет зеркало мага p: по прицелу, под курсор, от WALL_MIN до WALL_RANGE от мага
@@ -853,7 +959,7 @@ class Match:
 
     def bullet_speed(self, owner):
         """Множитель скорости пуль owner: «быстрые пули» у него; «пули соперника замирают» у цели — стоят."""
-        if "slowfoe" in self.other(owner).effects:
+        if any("slowfoe" in q.effects for q in self.enemies(owner)):
             return STOP_BULLET_FACTOR
         return FAST_BULLET_FACTOR if "fastshots" in owner.effects else 1.0
 
@@ -933,6 +1039,15 @@ class Match:
         """Маг невидим: мобы, зомби и стражи его не замечают."""
         return "invisible" in getattr(p, "effects", {})
 
+    def guardian_target(self, g):
+        """От кого страж охраняет арену: маг его стороны (в 2×2 — из команды тот, кто в арене и ближе)."""
+        team = [p for p in self.players if p.team == g.side]
+        if len(team) == 1:
+            return team[0]
+        live = [p for p in team if p.dead_at is None] or team
+        inside = [p for p in live if in_arena(p.x, p.y)] or live
+        return min(inside, key=lambda p: math.hypot(p.x - g.x, p.y - g.y))
+
     def can_hurt_guardian(self, g, attacker):
         """Стража ранят, только когда он проснулся и бьющий (маг) сам в арене."""
         return g.awake and isinstance(attacker, Player) and in_arena(attacker.x, attacker.y)
@@ -956,7 +1071,7 @@ class Match:
             g.hit_cd = max(0.0, g.hit_cd - dt)
             g.swing = max(0.0, g.swing - dt)
             g.petrify = max(0.0, g.petrify - dt)
-            target = self.player(g.side)
+            target = self.guardian_target(g)
             # «Твёрдая почва»: для стражей Земля — свой: не просыпаются, проснувшиеся снова каменеют
             awake = (in_arena(target.x, target.y) and not self.hidden(target) and "firmground" not in target.effects
                      and target.dead_at is None)
@@ -1088,25 +1203,25 @@ class Match:
         for beam in self.beams:
             beam.update(dt)
             owner = beam.owner
-            foe = self.other(owner)
             for b in self.bullets:
-                if b.alive and b.owner is not owner and beam.touches(b.x, b.y, BULLET_R):
+                if b.alive and b.owner.team != owner.team and beam.touches(b.x, b.y, BULLET_R):
                     b.alive = False
                     self.hit_at(b, "knock", None, owner)
             for s in self.mob_shots:
                 if s.alive and s.owner is not owner and beam.touches(s.x, s.y, MOB_SHOT_R):
                     s.alive = False
                     self.hit_at(s, "knock", None, owner)
-            if not foe.offstage and beam.tick(foe, beam.touches(foe.x, foe.y, foe.radius), dt):
-                if foe.shield_absorb():
-                    self.hit_at(beam.head(), "shield", foe, owner)
-                else:
-                    self.hurt_player(foe, BEAM_DAMAGE)
-                    self.hit_at(beam.head(), "mage", foe, owner)
-            for c in self.clones_of(foe):
-                if beam.tick(c, beam.touches(c.x, c.y, c.radius), dt):
-                    c.hurt(BEAM_DAMAGE)
-                    self.hit_at(beam.head(), "mage", c, owner)
+            for foe in self.enemies(owner):  # враги (в 1×1 — один) и их двойники; своих луч не задевает
+                if not foe.offstage and beam.tick(foe, beam.touches(foe.x, foe.y, foe.radius), dt):
+                    if foe.shield_absorb():
+                        self.hit_at(beam.head(), "shield", foe, owner)
+                    else:
+                        self.hurt_player(foe, BEAM_DAMAGE)
+                        self.hit_at(beam.head(), "mage", foe, owner)
+                for c in self.clones_of(foe):
+                    if beam.tick(c, beam.touches(c.x, c.y, c.radius), dt):
+                        c.hurt(BEAM_DAMAGE)
+                        self.hit_at(beam.head(), "mage", c, owner)
             for m in self.mobs:
                 if m.zombie_of is owner:
                     continue                  # свои зомби
@@ -1135,7 +1250,8 @@ class Match:
             if not s.alive:
                 continue
             for p in list(self.players) + self.clones:     # и двойников: моб мог злиться на двойника
-                if self.hero_of(p) is s.owner or not getattr(p, "alive", True) or getattr(p, "offstage", False):
+                if (s.owner is not None and self.hero_of(p).team == s.owner.team) or not getattr(p, "alive", True) \
+                        or getattr(p, "offstage", False):     # свои снаряды (стражи Природы) не ранят ни хозяина, ни союзника
                     continue                  # семя стража не ранит Природу и её двойников; «за кадром» — тоже
                 guard = SHIELD_GAP if "shield" in p.effects else 0
                 if math.hypot(s.x - p.x, s.y - p.y) < p.radius + guard + MOB_SHOT_R:
@@ -1153,14 +1269,15 @@ class Match:
         self.mob_wave += 1
         # уже живые мобы не меняются: сильнее становятся только новые волны
         late = max(0, k - (MOB_MAX_HP - MOB_HP))      # волны после максимума жизней — мобов прибавляется больше
-        want, hp = MOB_COUNT + k + late * MOB_LATE_EXTRA, min(MOB_HP + k, MOB_MAX_HP)
-        count = max(0, min(want, MOB_MAX - len(self.mobs)))
+        crowd = len(self.players) // 2             # 2×2 — мобов вдвое больше (поле больше, магов больше)
+        want, hp = (MOB_COUNT + k + late * MOB_LATE_EXTRA) * crowd, min(MOB_HP + k, MOB_MAX_HP)
+        count = max(0, min(want, MOB_MAX * crowd - len(self.mobs)))
         for i in range(count):
             x, y = self.free_mob_spot()
             # каждый MOB_RANGED_EVERY-й моб волны — дальнобойный
             self.mobs.append(Mob(x, y, hp, ranged=(i + 1) % MOB_RANGED_EVERY == 0))
         self.emit("wave", k + 1, count, hp)
-        return want >= MOB_MAX and MOB_HP + k >= MOB_MAX_HP
+        return want >= MOB_MAX * crowd and MOB_HP + k >= MOB_MAX_HP
 
     def free_mob_spot(self):
         """Случайное место в круглой арене, по возможности не на другом мобе."""

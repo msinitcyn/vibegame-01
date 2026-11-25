@@ -1,12 +1,14 @@
-"""Переводы: русский, английский, финский.
+"""Переводы. Пока в игре только английский (LANGS): новые строки пишем только по-английски, а русский и
+финский (SHELVED) лежат здесь до перевода «скопом» — их вернут, когда игра устоится.
 
-t("ключ", **числа) — строка на текущем языке. Нет перевода — берётся русская.
+t("ключ", **числа) — строка на текущем языке. Нет перевода — английская, нет и её — русская.
 Числа подставляются через {имя}, например t("popup.ammo", n=20).
 """
 import sys
 
-LANGS = {"ru": "Русский", "en": "English", "fi": "Suomi"}
-DEFAULT_LANG = "ru"
+LANGS = {"en": "English"}                         # языки в игре (меню выбора языка — из них)
+SHELVED = {"ru": "Русский", "fi": "Suomi"}         # отложены до перевода скопом (тексты не удаляем)
+DEFAULT_LANG = "en"
 _lang = DEFAULT_LANG
 
 
@@ -48,7 +50,7 @@ def get_lang():
 
 
 def t(key, **kw):
-    text = TEXTS[_lang].get(key) or TEXTS[DEFAULT_LANG][key]
+    text = TEXTS[_lang].get(key) or TEXTS["en"].get(key) or TEXTS["ru"][key]
     return text.format(**kw) if kw else text
 
 

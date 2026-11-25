@@ -428,6 +428,11 @@ class InputMixin:
             return None
         return slot
 
+    def field_scale(self):
+        """Во сколько раз поле партии больше окна: 1×1 — 1, 2×2 — FIELD_2V2 (снимок знает размер поля)."""
+        size = (getattr(self, "snap", None) or {}).get("field")
+        return size[0] / WIDTH if size else 1.0
+
     def my_pids(self):
         """Чьи выборы артефактов видны на этом экране: по сети — только свой маг, за одним компьютером — оба."""
         if getattr(self, "watching", False):
@@ -493,13 +498,16 @@ class InputMixin:
                 hit = self.ui_hit(pos)
                 if hit and hit[2]:
                     hit[2]()
+        # перекрестие — в координатах поля (2×2: поле больше окна, рисуется с уменьшением — field_scale)
+        fk = self.field_scale()
+        fw, fh = WIDTH * fk, (HEIGHT - TOP) * fk
         if self.mouse_captured and rel is not None and self.mouse_pos is not None:
-            k = self.mouse_factor()
-            x = max(0.0, min(WIDTH - 1.0, self.mouse_pos[0] + rel[0] * k))
-            y = max(float(TOP), min(HEIGHT - 1.0, self.mouse_pos[1] + rel[1] * k))
+            k = self.mouse_factor() * fk
+            x = max(0.0, min(fw - 1.0, self.mouse_pos[0] + rel[0] * k))
+            y = max(float(TOP), min(TOP + fh - 1.0, self.mouse_pos[1] + rel[1] * k))
             self.mouse_pos = (x, y)
         else:
-            self.mouse_pos = pos
+            self.mouse_pos = (pos[0] * fk, TOP + (pos[1] - TOP) * fk) if fk != 1 else pos
         side = self.mouse_side()
         if side:
             self.aim_source[side] = "mouse"

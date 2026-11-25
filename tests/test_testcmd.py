@@ -11,9 +11,9 @@ from tests.test_network import Client, make_server, playing, wait
 
 
 def test_find_item_by_code_and_name():
-    set_lang("ru")
+    set_lang("en")
     assert testcmd.find_item("lasso") == "lasso"
-    assert testcmd.find_item("ЛАССО") == "lasso"           # часть названия, без учёта регистра
+    assert testcmd.find_item("LASSO") == "lasso"           # часть названия, без учёта регистра
     assert testcmd.find_item("абракадабра") is None
     assert testcmd.find_item("") is None
 
@@ -86,12 +86,12 @@ def command(game, text):
 
 
 def test_local_test_mode_bot_and_commands(game):
-    set_lang("ru")
+    set_lang("en")
     game.start(config.TEST_HP, {"blue": "fire", "red": "frost"}, bot=True)
     game.countdown = 0
     try:
-        assert game.test_bot and game.player_label("red") == "Бот"
-        command(game, "/give лассо")
+        assert game.test_bot and game.player_label("red") == "Bot"
+        command(game, "/give lasso")
         assert "lasso" in game.match.blue.items
         command(game, "/give beam bot")
         assert "beam" in game.match.red.items
@@ -117,12 +117,12 @@ def test_local_test_mode_bot_and_commands(game):
 
 
 def test_commands_need_a_bot(game):
-    set_lang("ru")
+    set_lang("en")
     game.chat_reset()
     game.on_key(pygame.KSCAN_T)                                      # два человека за одним компьютером: чата нет
     assert not game.chat_typing
     game.chat_command("give lasso")
-    assert "lasso" not in game.match.blue.items and "бот" in game.chat_lines[-1][2]
+    assert "lasso" not in game.match.blue.items and "bot" in game.chat_lines[-1][2]
 
 
 def test_pick_in_test_mode_bot_row_by_click_and_keys(game):
@@ -174,7 +174,7 @@ def test_drops_off():
 
 
 def test_console_stays_open(game):
-    set_lang("ru")
+    set_lang("en")
     game.start(config.TEST_HP, {"blue": "fire", "red": "frost"}, bot=True)
     game.countdown = 0
     try:
@@ -211,7 +211,7 @@ def test_ammo_to_me_and_bot():
 
 
 def test_ammo_command(game):
-    set_lang("ru")
+    set_lang("en")
     game.start(config.TEST_HP, {"blue": "fire", "red": "frost"}, bot=True)
     try:
         a, b = game.match.blue.ammo, game.match.red.ammo

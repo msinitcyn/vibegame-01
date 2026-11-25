@@ -5,7 +5,7 @@ import pygame
 
 from duel import settings
 from duel.config import HEAL_FX, ITEM_SOUNDS
-from duel.i18n import get_lang, set_lang
+from duel.i18n import get_lang
 from tests.conftest import DT, new_match
 
 
@@ -27,33 +27,26 @@ def test_language_pick_then_intro_then_menu(game, monkeypatch):
     assert game.state == "lang_pick"
     game.hits = []
     game.draw_lang_pick()
-    codes = game.lang_order()
-    assert codes == ["en", "ru", "fi"]                                   # English, Русский, Suomi
-    game.lang_index = 0
-    game.on_key(pygame.KSCAN_DOWN)                                       # ниже English — Русский
+    assert game.lang_order() == ["en"]                                   # пока только английский
     game.on_key(pygame.KSCAN_RETURN)
-    try:
-        assert get_lang() == "ru" and saved[-1]["lang"] == "ru" and saved[-1]["lang_chosen"]
-        assert game.state == "movie" and game.movie_back == "menu"       # язык выбран — ролик, потом меню
-        game.on_key(pygame.KSCAN_ESCAPE)
-        assert game.state == "menu"
-        game.settings["intro_on_start"] = False
-        game.open_lang_pick(then_intro=True)
-        game.hits = []
-        game.draw_lang_pick()
-        fi = [h for h in game.hits if h[0].w == 360][codes.index("fi")]
-        game.on_mouse_move(fi[0].center)
-        game.on_mouse_button(1)                                           # щелчок по «Suomi»
-        assert get_lang() == "fi" and game.state == "menu"                # галка снята — без ролика
-    finally:
-        set_lang("ru")
-        game.settings["lang"] = "ru"
+    assert get_lang() == "en" and saved[-1]["lang"] == "en" and saved[-1]["lang_chosen"]
+    assert game.state == "movie" and game.movie_back == "menu"           # язык выбран — ролик, потом меню
+    game.on_key(pygame.KSCAN_ESCAPE)
+    assert game.state == "menu"
+    game.settings["intro_on_start"] = False
+    game.open_lang_pick(then_intro=True)
+    game.hits = []
+    game.draw_lang_pick()
+    en = [h for h in game.hits if h[0].w == 360][0]
+    game.on_mouse_move(en[0].center)
+    game.on_mouse_button(1)                                               # щелчок по «English»
+    assert get_lang() == "en" and game.state == "menu"                    # галка снята — без ролика
 
 
 def test_settings_language_row_marks_chosen(game, monkeypatch):
     monkeypatch.setattr(settings, "save", lambda data: None)
     game.settings["lang_chosen"] = False
-    game.set_language("ru")
+    game.set_language("en")
     assert game.settings["lang_chosen"] is True
 
 

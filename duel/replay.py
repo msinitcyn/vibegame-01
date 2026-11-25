@@ -50,6 +50,8 @@ class Recorder:
     def __init__(self, match, mode, **extra):
         self.head = {"format": FORMAT, "mode": mode, "seed": match.seed,
                      "hp": match.players[0].max_hp, "heroes": {p.id: p.hero for p in match.players}, **extra}
+        if match.mode != "1v1":
+            self.head["team"] = match.mode          # 2×2 (нет поля — 1×1, как в старых записях)
         self.ticks, self.actions = [], []
         self.n = 0                    # тактов записано (номер следующего)
         self.last = {}
@@ -175,7 +177,7 @@ class Player:
         d = self.data
         if self.undo is None:                 # числа партии (лаборатория) — до создания матча
             self.undo = tuning.apply(tuning.parse(d.get("tuning") or []))
-        self.match = Match(int(d.get("hp", 10)), int(d["seed"]), d.get("heroes"))
+        self.match = Match(int(d.get("hp", 10)), int(d["seed"]), d.get("heroes"), d.get("team", "1v1"))
         self.n = 0
         self.ti = self.ai = 0
         self.held = {}                # текущая «держащаяся» команда игрока (движение и прицел)
@@ -198,7 +200,7 @@ class Player:
             now = ticks[self.ti][1]
             self.ti += 1
         commands = {}
-        for pid in ("blue", "red"):
+        for pid in (p.id for p in self.match.players):     # 2×2 — все четверо
             if pid in now:
                 commands[pid] = unpack(now[pid])
                 move, aim = now[pid][0], now[pid][4]

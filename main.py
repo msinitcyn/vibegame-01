@@ -19,6 +19,7 @@ if __name__ == "__main__":
     ap.add_argument("--pad", type=int, default=0, help="номер своего геймпада (с 0) в сетевой игре")
     ap.add_argument("--selftest", action="store_true", help="самопроверка без окна и звука")
     ap.add_argument("--replay", metavar="ФАЙЛ", help="показать повтор партии (logs/replays/*.json.gz)")
+    ap.add_argument("--test-2v2", action="store_true", help="проба режима 2×2: ты и бот против двух ботов")
     ap.add_argument("--movie", metavar="РОЛИК", help="показать ролик assets/movies/<РОЛИК> (Esc — в меню)")
     args = ap.parse_args()
     if args.selftest:
@@ -52,7 +53,8 @@ if __name__ == "__main__":
             from duel.replay import load
             replay = load(args.replay)
         Game(windowed=args.windowed or bool(args.replay), net=net, pad=args.pad, replay=replay,
-             movie=args.movie, intro=not (net or args.replay or args.movie)).run()
+             movie=args.movie, test_2v2=args.test_2v2,
+             intro=not (net or args.replay or args.movie or args.test_2v2)).run()
     except Exception as e:
         logs.report_crash(e)
         raise

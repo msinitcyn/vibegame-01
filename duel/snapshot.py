@@ -9,6 +9,7 @@
 """
 import math
 
+from . import field
 from .config import BEAR_HP
 
 
@@ -35,6 +36,8 @@ def snapshot(match):
         "wave": m.mob_wave,
         "next_wave": _t(m.next_wave),
         "winner": _pid(m.winner),
+        "mode": m.mode, "team_lives": dict(m.team_lives) if m.team_lives else None,
+        "field": list(field.size(m.geo)),
         "players": [{
             "id": p.id, "hero": p.hero, "x": _xy(p.x), "y": _xy(p.y), "r": _xy(p.radius), "aim": _t(p.aim),
             "hp": p.hp, "max_hp": BEAR_HP if "bear" in p.effects else p.max_hp,
@@ -47,6 +50,9 @@ def snapshot(match):
             "cleanse_fx": _t(p.cleanse_fx),
             "moving": bool(p.moving or p.moving_x), "shot": _t(p.shot_flash),
             "burn": m.danger(p)[1],      # чья стихия жжёт (герой или "arena") или None
+            "team": p.team, "lasso_by": _pid(getattr(p, "lasso_by", None)) if "lassoed" in p.effects else None,
+            "out": bool(getattr(p, "out", False)),
+            "respawn": _t(max(0.0, p.respawn_at - m.match_time)) if getattr(p, "respawn_at", None) else None,
         } for p in m.players],
         "bullets": [{"id": b.id, "x": _xy(b.x), "y": _xy(b.y), "owner": b.owner.id,
                      "a": round(math.atan2(b.vy, b.vx), 2)} for b in m.bullets],

@@ -192,7 +192,7 @@ def test_update_texts(lang, game):
         assert i18n.t("update." + state) is not None
     for err in ("download", "broken", "nosums", "write"):
         assert i18n.t("update.err." + err)
-    i18n.set_lang("ru")
+    i18n.set_lang("en")
 
 
 def test_check_now_finds_release_published_later(game, tmp_path):

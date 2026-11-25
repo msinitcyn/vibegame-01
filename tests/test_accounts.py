@@ -265,4 +265,4 @@ def test_account_texts_every_language():
         i18n.set_lang(lang)
         for why in ("bad", "taken", "short", "name", "banned", "wait", "expired"):
             assert i18n.t("acc.err." + why)
-    i18n.set_lang("ru")
+    i18n.set_lang("en")

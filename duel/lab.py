@@ -63,8 +63,9 @@ def play(job, record=False):
     undo = tuning.apply(tuning.parse(job.get("set")))
     try:
         heroes = job["heroes"]
-        m = Match(seed=job["seed"], heroes={"blue": heroes[0], "red": heroes[1]})
-        bots = {pid: make_bot(m, pid, job[pid], job["seed"] * 2 + i) for i, pid in enumerate(("blue", "red"))}
+        m = Match(seed=job["seed"], heroes={"blue": heroes[0], "red": heroes[1]}, mode=job.get("mode", "1v1"))
+        # бот за каждого мага; в 2×2 напарник — тем же ботом, что ведущий команды
+        bots = {p.id: make_bot(m, p.id, job[p.team], job["seed"] * 2 + i) for i, p in enumerate(m.players)}
         lows = {"blue": 0, "red": 0}           # самое большое отставание по жизням у каждой стороны
         first = {}
         every = int(SAMPLE / STEP)
@@ -86,7 +87,7 @@ def play(job, record=False):
                 if "blood" not in first and m.stats[o.id]["damage_taken"] > 0:
                     first["blood"] = p.id
             if tick % every == 0:
-                for p in m.players:
+                for p in m.players[::len(m.players) // 2]:     # отставание — по ведущим команд
                     lows[p.id] = max(lows[p.id], m.other(p).hp - p.hp)
             if m.winner:
                 break
@@ -192,7 +193,7 @@ def jobs_for(n, blue, red, sets, limit, seed, tag=None):
     pair = _ctl.get("heroes")                         # --heroes a,b: только эта пара, поровну за обе стороны
     pairs = [tuple(pair) if i % 2 == 0 else tuple(reversed(pair)) for i in range(n)] if pair else hero_pairs(n, rng)
     return [{"seed": seed * 100000 + i, "heroes": h, "blue": blue, "red": red, "set": list(sets or []),
-             "limit": limit, "tag": tag} for i, h in enumerate(pairs)]
+             "limit": limit, "tag": tag, "mode": _ctl.get("team") or "1v1"} for i, h in enumerate(pairs)]
 
 
 # ------------------------------------------------------------------ числа
@@ -536,6 +537,7 @@ def _main(argv):
     common.add_argument("--strategy", default="hero", choices=list(STRATEGIES))
     common.add_argument("--blue", help="синий (левый): hard | normal:kite | ai:имя[@уровень] — иначе --level/--strategy")
     common.add_argument("--red", help="красный (правый): так же")
+    common.add_argument("--team", choices=["1v1", "2v2"], default="1v1", help="режим: 1×1 или 2×2 (напарник — тот же бот)")
     common.add_argument("--set", action="append", default=[], metavar="ИМЯ=знач")
     common.add_argument("--limit", type=float, default=300.0, help="самая долгая партия, с")
     common.add_argument("--seed", type=int, default=1)
@@ -576,6 +578,7 @@ def _main(argv):
         save_dir.mkdir(parents=True, exist_ok=True)
     _ctl["save_dir"] = save_dir
     _ctl["heroes"] = None
+    _ctl["team"] = a.team
     if a.heroes:
         pair = [HERO_BY_NAME.get(x.strip().lower()) for x in a.heroes.split(",")]
         if len(pair) != 2 or None in pair or pair[0] == pair[1]:

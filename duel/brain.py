@@ -15,6 +15,7 @@ from collections import deque
 
 from .config import (ARENA, NEUTRAL_HALF, BOTTOM, BULLET_R, BULLET_SPEED, FIRE_RING_RANGE, MELEE_RANGE, MOB_SHOT_R, MOB_SHOT_SPEED, TOP,
                      WALL_RANGE, WIDTH, ZOMBIE_RADIUS)
+from . import field
 from .entities import in_arena, zone_at
 from .items import BAD_EFFECTS, ITEMS
 
@@ -117,9 +118,9 @@ class SmartBot:
         m, me = self.match, self.me()
         foe = self.foe()
         visible = "invisible" not in foe.effects and foe.dead_at is None and not foe.offstage
-        bullets = [(b.x, b.y, b.vx, b.vy) for b in m.bullets if b.alive and b.owner is not me]
+        bullets = [(b.x, b.y, b.vx, b.vy) for b in m.bullets if b.alive and b.owner.team != me.team]
         shots = [(s.x, s.y, s.dx * MOB_SHOT_SPEED, s.dy * MOB_SHOT_SPEED) for s in m.mob_shots
-                 if s.alive and s.owner is not me]
+                 if s.alive and (s.owner is None or s.owner.team != me.team)]
         self.seen.append((self.tick, (foe.x, foe.y) if visible else None, bullets, shots))
         lag = int(self.L["reaction"] / STEP)
         while len(self.seen) > lag + 2:
@@ -142,6 +143,12 @@ class SmartBot:
     # ------------------------------------------------------------------ ход
 
     def act(self):
+        """Решение на такт — с геометрией поля своей партии (2×2 — поле больше, duel/field.py)."""
+        geo = getattr(self.match, "geo", None)
+        with field.use(geo):
+            return self._act()
+
+    def _act(self):
         """Решение на такт: (движение, выстрел, удар, ячейка, прицел, до курсора)."""
         slot, self.use_next = self.use_next, None
         if self.mode != "play" or self.match is None:
@@ -324,7 +331,7 @@ class SmartBot:
     def safe_spot(self, me, x, y):
         """Можно ли туда идти: своя земля и нейтральная полоса — да; арена и чужая земля — только под защитой."""
         z = zone_at(x, y)
-        if z in (me.id, "neutral"):
+        if z in (me.team, "neutral"):
             return True
         if z == "arena":
             return "firmground" in me.effects or "icewalk" in me.effects    # тропа: арена — как своя земля
@@ -339,7 +346,7 @@ class SmartBot:
     def hot_for(me, x, y):
         """Жжёт ли там мага без «Ледяной тропы»: чужая земля, арена (если нет твёрдой почвы)."""
         z = zone_at(x, y)
-        return (z == "arena" and "firmground" not in me.effects) or z not in (me.id, "neutral", "arena")
+        return (z == "arena" and "firmground" not in me.effects) or z not in (me.team, "neutral", "arena")
 
     def wants_hot_ground(self, me, foe):
         """Есть ли зачем на жгучую землю: соперник там рядом или там лежит артефакт."""
@@ -586,7 +593,7 @@ class SmartBot:
                 ok = foe is not None and ((fd < 280 and me.ammo >= 4) or fd < 140 or
                                           (fd < 420 and mobs_on_foe) or ("bear" in foe_p.effects and fd < 300))
             elif kind == "landswap":
-                ok = foe is not None and zone_at(*foe) == self.foe().id   # соперник у себя — земля станет чужой
+                ok = foe is not None and zone_at(*foe) == self.foe().team   # соперник у себя — земля станет чужой
             elif kind in FOE_TARGETED:
                 ok = foe is not None and fd < 420
             elif kind in SELF_COMBAT:

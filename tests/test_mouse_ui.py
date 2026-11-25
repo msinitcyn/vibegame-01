@@ -61,15 +61,14 @@ def test_help_tabs_list_and_back_button(game):
 
 
 def test_settings_arrows_by_half(game):
-    i18n.set_lang("ru")
     game.state, game.settings_index = "settings", 0
     redraw(game, game.draw_settings)
     lang = game.hits[game.settings_rows.index("lang")][0]
-    click(game, (lang.right - 20, lang.centery))      # правая половина — «▶»
+    click(game, (lang.right - 20, lang.centery))      # правая половина — «▶» (язык пока один)
     assert i18n.get_lang() == "en"
     redraw(game, game.draw_settings)
     click(game, (lang.left + 20, lang.centery))       # левая — «◀»
-    assert i18n.get_lang() == "ru"
+    assert i18n.get_lang() == "en"
     redraw(game, game.draw_settings)
     back = game.hits[game.settings_rows.index("back")][0]
     click(game, back.center)
