@@ -8,7 +8,7 @@
      "battle": {"seed": 7, "heroes": ["fire", "dark"], "skip": 25, "level": "hard",
                 "view": [0, 84, 1000, 640]}}    // бой: зерно, герои, сколько секунд прокрутить заранее, участок поля
 
-    {"length": 4.4, "title": "slide",           // slide — надпись въезжает слева, встаёт и трясётся, уезжает влево
+    {"length": 4.4, "title": "slide",           // slide — надпись въезжает слева, встаёт и трясётся, уезжает вправо
      "slide": [1.1, 1.6, 1.0], "shake": 7, ...} //   въезд, стоит (трясётся), выезд — секунды; сила тряски, пикс
 
 Бой — живые боты по текущим правилам (детерминированно по зерну), а не повтор из файла: правка баланса
@@ -29,6 +29,8 @@ FAR = 0.05                    # надпись вдали: такая доля �
 NEAR = 0.82                   # «вплотную», ещё целиком: доля ширины кадра (дальше — пролёт сквозь букву)
 THROUGH = 1.35                # в конце пролёта ножка буквы шире кадра во столько раз
 SKIP_PER_FRAME = 30           # тактов прокрутки боя за кадр (см. pending)
+TARGET_LETTER = "U"           # камера летит в левую ножку этой буквы
+SLIDE_SIZE = 0.95             # надпись концовки: доля ширины кадра
 FONT_SIZE = 160               # надпись рисуется этим кеглем и масштабируется
 MUSIC_FROM = 0.12             # громкость музыки в начале полёта (доля)
 RIM = 4                       # ободок вокруг букв, пикс (при кегле FONT_SIZE)
@@ -134,8 +136,27 @@ class TitleStage:
         self.rim = rim
         alpha = pygame.mask.from_surface(img, 128)
         self.mask = img
-        self.anchor = self.deepest_stem(alpha)
+        self.anchor = self.target_point(alpha, font, text, pad)
         self.center = (img.get_width() / 2, img.get_height() / 2)
+
+    def target_point(self, alpha, font, text, pad):
+        """Куда летит камера: левая ножка буквы TARGET_LETTER посередине высоты (нет такой буквы — самая
+        широкая ножка поближе к центру). (x, y, ширина ножки)."""
+        letter = self.data.get("target", TARGET_LETTER)
+        i = text.find(letter)
+        if i >= 0:
+            x = pad + font.size(text[:i])[0]
+            y = int(pad + font.get_ascent() - font.size("H")[1] * 0.3)    # середина высоты заглавной
+            y = max(0, min(alpha.get_size()[1] - 1, y))
+            end = pad + font.size(text[:i + 1])[0]
+            while x < end and not alpha.get_at((x, y)):
+                x += 1
+            x0 = x
+            while x < end and alpha.get_at((x, y)):
+                x += 1
+            if x > x0:
+                return (x0 + x) / 2, y, x - x0
+        return self.deepest_stem(alpha)
 
     @staticmethod
     def deepest_stem(alpha):
@@ -174,12 +195,9 @@ class TitleStage:
             near = NEAR * fit
             j = 0.0 if scale <= near else min(1.0, math.log(scale / near) / math.log(s1 / near))
             self.rim_alpha = max(0.0, 1 - j * 3)               # влетаем в букву — ободок гаснет
-            j = j * j * (3 - 2 * j)                            # плавно смещаем цель с центра слова на ножку буквы
-            cx, cy = self.center
-            point = (cx + (ax - cx) * j, cy + (ay - cy) * j)
-            return scale, point, (0, 0)
+            return scale, (ax, ay), (0, 0)                     # летим прямо в ножку буквы, никуда не сворачивая
         self.rim_alpha = 1.0
-        scale = 0.86 * fit
+        scale = SLIDE_SIZE * fit
         a, hold, out = self.slide
         width = mw * scale
         off = frame_w / 2 + width / 2 + 20                     # совсем за левым краем
@@ -189,7 +207,7 @@ class TitleStage:
             x = 0.0
         else:
             k = min(1.0, (self.t - a - hold) / max(0.01, out))
-            x = -off * k * k                                  # уезжает влево с разгоном
+            x = off * k * k                                   # уезжает вправо с разгоном
         dx = dy = 0
         if a <= self.t < a + hold:                             # стоит в центре — трясётся
             fade = 1 - (self.t - a) / hold * 0.5

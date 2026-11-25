@@ -4,7 +4,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from duel.brain import LEVELS, SmartBot
+from duel.brain import LEVELS, STYLES, SmartBot
 from duel.commands import Command
 from duel.entities import Bullet, zone_at
 from duel.match import STEP, Match
@@ -116,7 +116,7 @@ def test_weak_bot_sometimes_picks_not_best_option():
 def test_strategy_overrides_hero_style():
     m = Match(seed=1, heroes={"blue": "frost", "red": "fire"})
     assert SmartBot(m, "blue", strategy="rush").style(m.blue)["aggro"] == 1.0
-    assert SmartBot(m, "blue").style(m.blue)["range"] == 340
+    assert SmartBot(m, "blue").style(m.blue)["range"] == STYLES["frost"]["range"]
 
 
 def test_icewalk_not_wasted_on_own_land():

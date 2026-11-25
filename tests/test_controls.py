@@ -110,7 +110,7 @@ def test_menu_keys(game):
     assert game.state == "pick"
     game.on_key(pygame.KSCAN_SPACE)
     game.on_key(pygame.KSCAN_RETURN)
-    assert game.state == "play" and game.match.blue.hp == 1000
+    assert game.state == "play" and game.match.blue.hp == MAX_HP
 
 
 def with_pads(game):
@@ -170,7 +170,7 @@ def test_pad_menu_navigation(game):
     assert game.state == "pick"                                     # третий пункт — тестовый режим
     game.on_pad(100, pygame.CONTROLLER_BUTTON_A)
     game.on_pad(101, pygame.CONTROLLER_BUTTON_A)
-    assert game.state == "play" and game.match.blue.hp == 1000
+    assert game.state == "play" and game.match.blue.hp == MAX_HP
     game.on_pad(100, pygame.CONTROLLER_BUTTON_START)
     assert game.state == "play" and game.paused             # Start — пауза
     game.on_pad(100, pygame.CONTROLLER_BUTTON_DPAD_UP)

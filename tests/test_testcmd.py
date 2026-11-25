@@ -264,3 +264,32 @@ def test_pause_and_chat_keys_are_reassignable(game):
         game.settings["keys"] = {}
         game.apply_keys()
         game.start()
+
+
+def test_hp_command_sets_lives_for_me_or_bot():
+    from duel import testcmd
+    from duel.match import Match
+    m = Match(seed=1)
+    assert testcmd.run(m, None, "blue", {"do": "hp", "n": 1000, "to": "me"})
+    assert m.blue.hp == m.blue.max_hp == 1000
+    assert testcmd.run(m, None, "blue", {"do": "hp", "n": 50, "to": "foe"})
+    assert m.red.hp == m.red.max_hp == 50
+    assert not testcmd.run(m, None, "blue", {"do": "hp", "n": 0})
+    assert not testcmd.run(m, None, "blue", {"do": "hp", "n": testcmd.HP_MAX_GIVE + 1})
+
+
+def test_hp_chat_command_in_test_game(game):
+    game.start(15, {"blue": "fire", "red": "frost"}, bot=True)
+    game.restart()
+    game.state = "play"
+    game.chat_command("hp 1000")
+    game.chat_command("hp 300 bot")
+    assert game.match.blue.hp == 1000 and game.match.red.hp == 300
+
+
+def test_test_with_bot_is_a_normal_game(game):
+    from duel.config import MAX_HP
+    game.state = "menu"
+    game.menu_index = game.menu.index("test")
+    game.menu_select()
+    assert game.state == "pick" and game.pick_hp == MAX_HP

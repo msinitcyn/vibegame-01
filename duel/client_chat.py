@@ -32,6 +32,7 @@ COMMANDS = {
     "items": ("items", "артефакты", "список"),
     "bot": ("bot", "бот"),
     "ammo": ("ammo", "патроны", "пт"),
+    "hp": ("hp", "жизни", "хп"),
     "drops": ("drops", "drop", "дроп", "выпадение"),
 }
 
@@ -169,6 +170,8 @@ class ChatMixin:
             self.test_bot_cmd(args)
         elif cmd == "ammo":
             self.test_ammo(args)
+        elif cmd == "hp":
+            self.test_hp(args)
         elif cmd == "drops":
             on = True if args and args[0] in testcmd.ON_WORDS else False if args and args[0] in testcmd.OFF_WORDS else None
             if on is None:
@@ -208,6 +211,19 @@ class ChatMixin:
             return
         if self.test_send({"do": "ammo", "n": int(n), "to": to}):
             self.chat_system(tr("cmd.ammo_" + to, n=n))
+
+    def test_hp(self, args):
+        """/hp N [bot]: жизни себе или боту — столько и есть, и максимум."""
+        to = "me"
+        if args and args[-1] in testcmd.FOE_WORDS:
+            to, args = "foe", args[:-1]
+        elif args and args[-1] in testcmd.ME_WORDS:
+            args = args[:-1]
+        if len(args) != 1 or not args[0].isdigit() or not 1 <= int(args[0]) <= testcmd.HP_MAX_GIVE:
+            self.chat_system(tr("cmd.hp_usage", max=testcmd.HP_MAX_GIVE))
+            return
+        if self.test_send({"do": "hp", "n": int(args[0]), "to": to}):
+            self.chat_system(tr("cmd.hp_" + to, n=args[0]))
 
     def test_bot_cmd(self, args):
         """/bot stop | fire | play | use N."""

@@ -8,7 +8,7 @@ import pygame
 from .platform import WEB
 from . import keys
 from . import settings
-from .config import DEFAULT_HERO, HELP_BASICS, HELP_LANDS, INTRO_MOVIE, HELP_PAGES, HELP_TABS, HERO_ONLY_ITEMS, HEROES, MAX_HP, TEST_HP
+from .config import DEFAULT_HERO, HELP_BASICS, HELP_LANDS, INTRO_MOVIE, HELP_PAGES, HELP_TABS, HERO_ONLY_ITEMS, HEROES, MAX_HP
 from .items import HELP_SECTIONS
 from .i18n import get_lang, guess_lang, LANGS, set_lang, t
 from .brain import LEVEL_NAMES
@@ -133,7 +133,7 @@ class MenusMixin:
 
     def menu_label(self, i):
         return {"play": t("menu.two"), "net": t("menu.connect" if WEB else "menu.net"),
-                "test": t("menu.test", hp=TEST_HP), "help": t("menu.help"),
+                "test": t("menu.test"), "help": t("menu.help"),
                 "settings": t("menu.settings"),
                 "update": t("menu.update", v=self.updater.latest or "")}[self.menu[i]]
 
@@ -149,7 +149,7 @@ class MenusMixin:
             self.settings_back = "menu"
             self.settings_index = 0
         elif action == "test":
-            self.open_pick(TEST_HP, bot=True)
+            self.open_pick(MAX_HP, bot=True)     # обычная партия; больше жизней — /hp в консоли
         elif action == "net":
             self.open_join()                  # в браузере — только адрес сервера (WebSocket)
         elif action == "update":

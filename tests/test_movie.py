@@ -308,7 +308,7 @@ def test_title_zoom_holes_music_swell_and_fly_through(game):
     assert st.take_events() is not None and st.pending == 0
 
 
-def test_title_slide_comes_from_left_shakes_and_leaves(game):
+def test_title_slide_comes_from_left_shakes_and_leaves_right(game):
     from duel.movie_title import TitleStage
     st = TitleStage({"title": "slide", "length": 4, "slide": [1, 1.5, 1], "battle": {"skip": 0}})
     st.build_mask(game)
@@ -316,5 +316,23 @@ def test_title_slide_comes_from_left_shakes_and_leaves(game):
     for t in (0.0, 0.5, 1.2, 1.6, 2.1, 3.3):
         st.t = t
         xs[t] = st.place(1000)[2][0]
-    assert xs[0.0] < -500 and xs[0.5] < 0 and abs(xs[1.2]) < 10 and abs(xs[2.1]) < 10 and xs[3.3] < -500
+    assert xs[0.0] < -500 and xs[0.5] < 0 and abs(xs[1.2]) < 10 and abs(xs[2.1]) < 10 and xs[3.3] > 500
     assert xs[1.2] != xs[1.6]                                                  # в центре трясётся
+
+
+def test_title_zoom_flies_straight_into_left_stem_of_u(game):
+    from duel.movie_title import TitleStage
+    st = TitleStage({"title": "zoom", "length": 5, "zoom_time": 4, "battle": {"skip": 0}})
+    st.build_mask(game)
+    from duel.client_common import load_font
+    from duel.movie_title import FONT_SIZE
+    font = load_font(FONT_SIZE, bold=True)
+    u0 = font.size("SPELLG")[0]
+    u1 = font.size("SPELLGU")[0]
+    ax, ay, stem = st.anchor
+    assert u0 < ax < (u0 + u1) / 2 and 10 < stem < 60          # левая ножка «U»
+    points = set()
+    for t in (0.5, 2.0, 3.5, 3.9):
+        st.t = t
+        points.add(st.place(1000)[1])
+    assert points == {(ax, ay)}                                 # летит прямо, никуда не сворачивает

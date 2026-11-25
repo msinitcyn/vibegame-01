@@ -7,7 +7,7 @@
       "length": 5.6,
       "title": "zoom",
       "zoom_time": 4.4,
-      "battle": {"seed": 11, "heroes": ["fire", "dark"], "skip": 24, "level": "hard", "view": [0, 84, 1000, 640]}
+      "battle": {"seed": 40, "heroes": ["frost", "light"], "skip": 19, "level": "hard", "view": [0, 84, 1000, 640]}
     },
     {
       "length": 3.6,
@@ -129,7 +129,7 @@
       "transition": "cut",
       "slide": [1.1, 1.7, 1.0],
       "shake": 7,
-      "battle": {"seed": 23, "heroes": ["light", "nature"], "skip": 30, "level": "hard", "view": [0, 84, 1000, 640]}
+      "battle": {"seed": 12, "heroes": ["nature", "light"], "skip": 21, "level": "hard", "view": [0, 84, 1000, 640]}
     }
   ]
 }

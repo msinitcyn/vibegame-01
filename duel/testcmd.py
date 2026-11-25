@@ -9,10 +9,12 @@
     {"do": "bot", "use": 0..3}
     {"do": "ammo", "n": 1..999, "to": "me" | "foe"}   патроны
     {"do": "drops", "on": bool}                        мобы роняют артефакты или нет
+    {"do": "hp", "n": 1..HP_MAX_GIVE, "to": "me" | "foe"}   жизни: столько и есть, и максимум (полоска — по ним)
 """
 from .config import GEAR_ITEMS
 from .items import INSTANT_ITEMS, ITEMS, item_name
 
+HP_MAX_GIVE = 99999                  # /hp: не больше стольких жизней
 AMMO_MAX_GIVE = 999                  # /ammo: не больше стольких патронов за раз
 BOT_MODES = ("play", "stop", "fire", "stand", "walk", "noshoot", "shoot")
 
@@ -87,6 +89,20 @@ def run(match, bot, pid, msg):
             return False
         me = match.player(pid)
         (match.other(me) if msg.get("to") == "foe" else me).ammo += n
+        return True
+    if do == "hp":
+        n = msg.get("n")
+        if not isinstance(n, int) or isinstance(n, bool) or not 1 <= n <= HP_MAX_GIVE:
+            return False
+        me = match.player(pid)
+        p = match.other(me) if msg.get("to") == "foe" else me
+        if p.dead_at is not None:
+            return False
+        if p.bear_saved is not None:              # медведь: жизни мага (вернутся после превращения)
+            p.bear_saved = n
+        else:
+            p.hp = n
+        p.max_hp = n
         return True
     if do == "drops" and isinstance(msg.get("on"), bool):
         match.drops = msg["on"]

@@ -37,14 +37,15 @@ LEVEL_NAMES = tuple(LEVELS)
 
 # стиль героя: агрессия (0..1 — как охотно идёт в бой), фарм (как охотно бьёт мобов), дистанция боя (пикс)
 STYLES = {
-    "fire":   {"aggro": 0.8, "farm": 0.5, "range": 260},
-    "frost":  {"aggro": 0.5, "farm": 0.6, "range": 340},
-    "nature": {"aggro": 0.6, "farm": 0.7, "range": 300},
-    "dark":   {"aggro": 0.5, "farm": 0.8, "range": 320},
-    "light":  {"aggro": 0.6, "farm": 0.6, "range": 360},
-    "earth":  {"aggro": 0.7, "farm": 0.6, "range": 300},
+    # люди играют так: агрессия и лут — все стили напористые, разница — в оттенках
+    "fire":   {"aggro": 1.0, "farm": 0.8, "range": 210},
+    "frost":  {"aggro": 0.85, "farm": 0.9, "range": 260},
+    "nature": {"aggro": 0.9, "farm": 0.9, "range": 230},
+    "dark":   {"aggro": 0.85, "farm": 1.0, "range": 250},
+    "light":  {"aggro": 0.9, "farm": 0.9, "range": 270},
+    "earth":  {"aggro": 0.95, "farm": 0.9, "range": 230},
 }
-DEFAULT_STYLE = {"aggro": 0.6, "farm": 0.6, "range": 320}
+DEFAULT_STYLE = {"aggro": 0.9, "farm": 0.9, "range": 240}
 
 # стратегии (для лаборатории баланса: есть ли выигрышная): поверх стиля героя; "hero" — стиль героя как есть
 STRATEGIES = {
@@ -55,16 +56,17 @@ STRATEGIES = {
     "turtle": {"aggro": 0.1, "farm": 0.2, "range": 480},       # сидит у себя, бьёт подходящих
 }
 FIRE_DIST = 560                   # дальше — не стреляет (пуля долго летит, легко уклониться)
-FIRE_DIST_LOW = 300               # последний патрон — только ближе этого
-FIRE_PER_AMMO = 4                 # каждый патрон — на столько пикселей дальше (20 патронов — 380, 65 — предел 560)
+FIRE_DIST_LOW = 320               # последний патрон — только ближе этого
+FIRE_PER_AMMO = 7                 # каждый патрон — на столько пикселей дальше (20 патронов — 460, 35 — предел 560)
 LOW_AMMO = 6
+FARM_AMMO = 12                    # меньше — мобов не трогает
 AMMO_PLENTY = 40                  # столько патронов — «хватает», за дальней пачкой не идёт
 
 SELF_COMBAT = {"triple", "rapid", "shield", "shrink", "clones", "sentries", "trees", "beam", "zombies", "bear",
                "firmground", "invisible", "slowfoe", "clearfoe", "speedsteal"}
 FOE_TARGETED = {"foe_grow", "foe_nofire", "foe_invert", "foe_noitems", "lasso", "quake"}
-FOE_SHOT_GAP = 1.5                # издалека по сопернику — не чаще (от дальней пули уворачиваются: 3 из 4 мимо)
-FOE_SHOT_NEAR = 240               # ближе — стреляет как может
+FOE_SHOT_GAP = 0.8               # издалека по сопернику — не чаще (от дальней пули уворачиваются: 3 из 4 мимо)
+FOE_SHOT_NEAR = 300               # ближе — стреляет как может
 PUNISH_DIST = 130                 # к замороженному сопернику — так близко (не промахнуться, добить мечом)
 
 
@@ -210,20 +212,21 @@ class SmartBot:
         home = self.ammo_home(me)
         if me.ammo < LOW_AMMO:                    # патронов нет — к себе: оттуда до любой пачки близко
             options.append((1.25 if me.ammo == 0 else 0.8, "home", home))
-        art = self.nearest_safe(me, [(a.x, a.y) for a in m.artifacts], 320)
-        if art:
-            options.append((1.2 - math.hypot(art[0] - me.x, art[1] - me.y) / 600, "pickup", art))
+        art = self.nearest_safe(me, [(a.x, a.y) for a in m.artifacts], 560)
+        if art:                                       # лут — главное: за артефактом идёт и издалека
+            options.append((1.55 - math.hypot(art[0] - me.x, art[1] - me.y) / 900, "pickup", art))
         pack = self.nearest_safe(me, [(a.x, a.y) for a in m.ammo_packs if a.life > 0], 600)
         if pack:                                      # патроны: рядом — берёт всегда, далеко — когда мало
             d = math.hypot(pack[0] - me.x, pack[1] - me.y)
             need = 1.0 - min(me.ammo, AMMO_PLENTY) / AMMO_PLENTY
-            options.append((max(0.5 + 1.2 * need - d / 700, 1.4 if d < 140 else 0.0), "ammo", pack))
+            options.append((max(0.8 + 1.3 * need - d / 900, 1.5 if d < 160 else 0.0), "ammo", pack))
         angry = [x for x in m.mobs if x.alive and x.zombie_of is None and x.target is me]
+        # мобы — источник лута: бить и тех, что в арене (стреляет с безопасного места рядом)
         calm = [x for x in m.mobs if x.alive and x.zombie_of is None and x.target is None
-                and self.safe_spot(me, x.x, x.y) and math.hypot(x.x - me.x, x.y - me.y) < 520]
+                and math.hypot(x.x - me.x, x.y - me.y) < 560]
         if angry:
             options.append((1.3, "defend", min(angry, key=lambda x: math.hypot(x.x - me.x, x.y - me.y))))
-        if calm and me.ammo > LOW_AMMO + 4:            # патронов мало — мобов не злит
+        if calm and me.ammo > FARM_AMMO:               # патронов мало — мобов не злит (на соперника нужнее)
             options.append((0.6 + st["farm"] * 0.6, "farm", min(calm, key=lambda x: math.hypot(x.x - me.x, x.y - me.y))))
         if foe is not None:
             unarmed = me.ammo == 0 and math.hypot(foe[0] - me.x, foe[1] - me.y) > 160   # с пустыми руками — не лезет
