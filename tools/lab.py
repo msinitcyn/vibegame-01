@@ -42,7 +42,7 @@ from duel.brain import LEVELS, STRATEGIES, SmartBot  # noqa: E402
 from duel.commands import Command  # noqa: E402
 from duel.config import HEROES  # noqa: E402
 from duel.match import STEP, Match  # noqa: E402
-from duel.replay import Recorder  # noqa: E402
+from duel.replay import Recorder, lab_root, read_index, summary as replay_summary, write_index  # noqa: E402
 
 SAMPLE = 0.5                       # раз в столько секунд — снимок жизней (для камбэков)
 COMEBACK_HP = 5                    # отставал на столько жизней и победил — камбэк
@@ -62,11 +62,11 @@ def play(job, record=False):
         first = {}
         every = int(SAMPLE / STEP)
         rec = None
-        if record:
+        if record or job.get("save_dir"):
             names = {pid: f"{job[pid][0]} · {job[pid][1]}" for pid in ("blue", "red")}
             rec = Recorder(m, "lab", players=names, tuning=list(job.get("set") or []))
         for tick in range(int(job["limit"] / STEP)):
-            commands = {pid: Command(*b.act()) for pid, b in bots.items()}
+            commands = {pid: compact(Command(*b.act())) for pid, b in bots.items()}
             if rec:
                 rec.tick(commands)
             m.step(STEP, commands)
@@ -84,25 +84,51 @@ def play(job, record=False):
             if m.winner:
                 break
         w = getattr(m.winner, "id", m.winner)
-        return {"seed": job["seed"], "winner": w or "timeout", "length": round(m.match_time, 1),
+        saved = {}
+        if job.get("save_dir"):                      # --replays: повтор каждой партии, без удаления старых
+            path = rec.save(job["save_dir"], m, sub="", keep=0)
+            if path:
+                saved = {"replay": path.name, "entry": replay_summary(rec.data(m))}
+        return {**saved, "seed": job["seed"], "winner": w or "timeout", "length": round(m.match_time, 1),
                 "heroes": heroes, "blue": job["blue"], "red": job["red"], "behind": lows, "first": first,
                 "used": {pid: m.stats[pid]["used"] for pid in ("blue", "red")},
                 "gear": {p.id: len(p.gear) for p in m.players}, "tag": job.get("tag"),
                 "set": list(job.get("set") or []), "limit": job["limit"],
-                **({"recorder": rec, "match": m} if rec else {})}
+                **({"recorder": rec, "match": m} if record else {})}
     finally:
         undo()
+
+
+def compact(c):
+    """Прицел — до тысячной радиана, «до курсора» — до пикселя: разницы не видно, а повтор втрое меньше
+    (бот чуть поворачивает прицел почти каждый такт, и каждый такт пишется). Так играет и сама партия —
+    повтор совпадает точно."""
+    if c.aim is not None:
+        c.aim = round(c.aim, 3)
+    if c.reach is not None:
+        c.reach = round(c.reach)
+    return c
+
+
+SAVE_DIR = None                    # --replays: папка прогона, куда пишутся повторы всех партий
 
 
 def run(jobs, workers):
     t0 = time.time()
     out = []
+    if SAVE_DIR:
+        for j in jobs:
+            j["save_dir"] = str(SAVE_DIR)
     with Pool(workers) as pool:
         for i, r in enumerate(pool.imap_unordered(play, jobs, chunksize=4), 1):
             out.append(r)
             if i % 50 == 0 or i == len(jobs):
                 print(f"\r  партий {i}/{len(jobs)} за {time.time() - t0:.0f} с", end="", file=sys.stderr, flush=True)
     print(file=sys.stderr)
+    if SAVE_DIR:                                     # оглавление: в игре список тысяч партий — сразу
+        index = read_index(SAVE_DIR)
+        index.update({r["replay"]: r.pop("entry") for r in out if "replay" in r})
+        write_index(SAVE_DIR, index)
     return out
 
 
@@ -400,6 +426,9 @@ def main(argv=None):
     common.add_argument("--seed", type=int, default=1)
     common.add_argument("--workers", type=int, default=os.cpu_count() or 2)
     common.add_argument("--json", help="сохранить итоги партий (по строке на партию)")
+    common.add_argument("--replays", nargs="?", const="auto", metavar="ПАПКА",
+                        help="повтор каждой партии — в папку (без ПАПКИ — новая в logs/lab-replays; "
+                             "смотреть в игре: «Настройки → Дополнительно → Смотреть повторы», ←/→ — папка)")
     sub.add_parser("report", parents=[common])
     sub.add_parser("strats", parents=[common])
     sw = sub.add_parser("sweep", parents=[common])
@@ -424,11 +453,19 @@ def main(argv=None):
     if a.level not in LEVELS and not (a.mode == "strats" and a.level == "all"):
         ap.error(f"уровень: {', '.join(LEVELS)}" + (" или all" if a.mode == "strats" else ""))
     tuning.apply(tuning.parse(a.set))()          # проверка имён сразу, до тысяч партий
+    global SAVE_DIR
+    if a.replays:
+        name = time.strftime("%Y%m%d-%H%M%S") + f"-{a.mode}-{a.level}" + "".join(f"-{x}" for x in a.set)
+        SAVE_DIR = lab_root() / name if a.replays == "auto" else Path(a.replays).expanduser()
+        SAVE_DIR.mkdir(parents=True, exist_ok=True)
     rs = {"report": cmd_report, "strats": cmd_strats, "sweep": cmd_sweep}[a.mode](a)
     if a.json:
         with open(a.json, "w", encoding="utf-8") as f:
             for r in rs:
                 f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    if SAVE_DIR:
+        print(f"\nповторы всех партий: {SAVE_DIR}\n"
+              "смотреть: в игре «Настройки → Дополнительно → Смотреть повторы», ←/→ — эта папка")
     return rs
 
 

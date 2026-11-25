@@ -101,3 +101,22 @@ def test_menu_screens_show_frame(game, monkeypatch):
         flips.clear()
         game.screen_frame(1 / 60)
         assert flips, state
+
+
+def test_lab_run_folders_switch_with_arrows(game):
+    from duel.replay import lab_root, summary, write_index
+    run = lab_root() / "20991231-235959-report-normal"
+    run.mkdir(parents=True, exist_ok=True)
+    p1 = write_replay(run)
+    write_index(run, {p1.name: {**summary({"mode": "lab", "heroes": {"blue": "fire", "red": "earth"}}),
+                                "winner": "red", "time": 42}})
+    game.open_replays()
+    assert len(game.replay_folders) >= 2 and game.replay_folder_i == 0
+    game.on_key(pygame.KSCAN_RIGHT)                     # → самый новый прогон лаборатории
+    assert game.shown_replay_folder() == run
+    assert game.replay_list[0]["path"] == p1 and game.replay_list[0]["winner"] == "red"   # из оглавления
+    game.draw_replays()
+    game.on_key(pygame.KSCAN_LEFT)
+    assert game.replay_folder_i == 0
+    game.replay_index = 0
+    game.on_event(pygame.event.Event(pygame.MOUSEWHEEL, x=0, y=-1, flipped=False))

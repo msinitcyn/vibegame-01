@@ -76,8 +76,10 @@ class Recorder:
             out["result"] = match.summary()
         return out
 
-    def save(self, folder, match=None, sub="replays"):
-        """Записать в folder/sub (sub="" — прямо в folder; старые сверх KEEP — удалить). Возвращает путь или None."""
+    def save(self, folder, match=None, sub="replays", keep=None):
+        """Записать в folder/sub (sub="" — прямо в folder; старые сверх keep (по умолчанию KEEP) — удалить,
+        keep=0 — хранить все).
+        Возвращает путь или None."""
         try:
             from .logs import version
             folder = Path(folder) / sub if sub else Path(folder)
@@ -91,8 +93,10 @@ class Recorder:
             data = {**self.data(match), "version": version()}
             with gzip.open(path, "wt", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
-            for old in sorted(folder.glob("*.json.gz"))[:-KEEP]:
-                old.unlink(missing_ok=True)
+            keep = KEEP if keep is None else keep
+            if keep:
+                for old in sorted(folder.glob("*.json.gz"))[:-keep]:
+                    old.unlink(missing_ok=True)
             return path
         except OSError:
             return None
@@ -104,6 +108,50 @@ def folder(cfg=None):
     cfg = settings.load() if cfg is None else cfg
     custom = (cfg.get("replay_dir") or "").strip()
     return Path(custom).expanduser() if custom else logs.log_dir() / "replays"
+
+
+INDEX = "index.json"               # оглавление папки (лаборатория пишет): {имя файла: summary()} — список сразу
+
+
+def lab_root():
+    """Где лаборатория хранит повторы прогонов: по папке на прогон."""
+    from . import logs
+    return logs.log_dir() / "lab-replays"
+
+
+def folders(cfg=None):
+    """Папки для экрана «Повторы»: повторы игры, потом прогоны лаборатории (новые первыми)."""
+    out = [folder(cfg)]
+    try:
+        out += sorted((p for p in lab_root().iterdir() if p.is_dir()), reverse=True)
+    except OSError:
+        pass
+    return out
+
+
+def summary(data):
+    """Строка списка повторов по записи: режим, герои, игроки, победитель, длительность, числа."""
+    res = data.get("result") or {}
+    return {"mode": data.get("mode", ""), "heroes": data.get("heroes") or {}, "players": data.get("players") or {},
+            "winner": res.get("winner"), "time": res.get("time", data.get("length", 0) / 60),
+            "tuning": data.get("tuning") or []}
+
+
+def read_index(path):
+    try:
+        with open(Path(path) / INDEX, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def write_index(path, entries):
+    try:
+        with open(Path(path) / INDEX, "w", encoding="utf-8") as f:
+            json.dump(entries, f, ensure_ascii=False)
+    except OSError:
+        pass
 
 
 def load(path):

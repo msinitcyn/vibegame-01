@@ -488,6 +488,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             self.on_mouse_up(e.button)
         elif e.type == pygame.TEXTINPUT:
             self.on_text(e.text)
+        elif e.type == pygame.MOUSEWHEEL and self.state == "replays" and self.replay_list:
+            self.replay_index = max(0, min(len(self.replay_list) - 1, self.replay_index - 3 * e.y))   # колесо — листать
         elif e.type == MUSIC_END:
             self.audio.on_music_end()
         elif e.type == pygame.CONTROLLERDEVICEADDED:

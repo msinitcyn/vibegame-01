@@ -89,3 +89,20 @@ def test_lab_replay_command_picks_games(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "разошлась" not in out and ".json.gz" in out
     assert len(list(tmp_path.glob("*-lab-*.json.gz"))) == 1
+
+
+def test_lab_run_saves_every_game_replay_with_index(tmp_path, capsys):
+    from duel.replay import Player, load, read_index
+    out = tmp_path / "run"
+    rs = lab.main(["report", "--games", "4", "--workers", "2", "--limit", "60", "--replays", str(out)])
+    files = sorted(out.glob("*.json.gz"))
+    assert len(files) == 4
+    index = read_index(out)
+    assert set(index) == {f.name for f in files}
+    assert all(r["replay"] in index for r in rs)
+    r = rs[0]
+    p = Player(load(out / r["replay"]))           # повтор — та же партия
+    m = p.run()
+    p.close()
+    assert round(m.match_time, 1) == r["length"]
+    lab.SAVE_DIR = None

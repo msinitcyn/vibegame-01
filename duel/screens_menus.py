@@ -183,7 +183,18 @@ class MenuScreensMixin:
         s = self.screen
         s.fill(BG)
         img = self.big.render(tr("replays.title"), True, WHITE)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 70)))
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 50)))
+        folders = getattr(self, "replay_folders", None) or [self.replay_folder()]
+        i = getattr(self, "replay_folder_i", 0)
+        name = tr("replays.game_folder") if i == 0 else tr("replays.lab_folder", name=folders[i].name)
+        label = f"◀  {name}  ({len(self.replay_list)})  ▶" if len(folders) > 1 else f"{name}  ({len(self.replay_list)})"
+        rect = pygame.Rect(0, 0, 620, 30)
+        rect.center = (WIDTH // 2, 97)
+        img = self.small.render(label, True, (230, 200, 120) if i else GREY)
+        s.blit(img, img.get_rect(center=rect.center))
+        if len(folders) > 1:
+            self.hit(rect, lambda: self.on_key(pygame.KSCAN_LEFT if self.ui_mouse and self.ui_mouse[0] < WIDTH // 2
+                                               else pygame.KSCAN_RIGHT))
         rows = self.replay_list
         if not rows:
             for k, line in enumerate(tr("replays.empty").split("\n")):
@@ -195,17 +206,20 @@ class MenuScreensMixin:
             i = top + k
             sel = i == self.replay_index
             rect = pygame.Rect(0, 0, 880, 40)
-            rect.center = (WIDTH // 2, 135 + k * 46)
+            rect.center = (WIDTH // 2, 145 + k * 46)
             pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=8)
             pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=8)
             self.draw_replay_row(r, rect, sel)
             self.hit(rect, lambda i=i: self.replay_click(i))     # щелчок — выбрать, ещё щелчок — смотреть
         if len(rows) > visible:
             img = self.tiny_text.render(f"{self.replay_index + 1} / {len(rows)}", True, GREY)
-            s.blit(img, img.get_rect(center=(WIDTH // 2, 135 + visible * 46 - 14)))
+            s.blit(img, img.get_rect(center=(WIDTH // 2, 145 + visible * 46 - 14)))
         img = self.small.render(tr("replays.hint"), True, GREY)
         s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 62)))
-        img = self.tiny_text.render(tr("settings.replay_dir_now", path=str(self.replay_folder())), True, GREY)
+        path = str(self.shown_replay_folder())
+        while len(path) > 8 and self.tiny_text.size(tr("settings.replay_dir_now", path=path))[0] > WIDTH - 280:
+            path = "…" + path[2:]                  # длинный путь — без начала, чтобы не налезал на «←»
+        img = self.tiny_text.render(tr("settings.replay_dir_now", path=path), True, GREY)
         s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 36)))
         self.button((70, HEIGHT - 30), "←", lambda: self.on_key(pygame.KSCAN_ESCAPE), w=80)
         pygame.display.flip()

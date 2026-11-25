@@ -12,7 +12,8 @@ from .config import DEFAULT_HERO, HELP_BASICS, HELP_LANDS, INTRO_MOVIE, HELP_PAG
 from .items import HELP_SECTIONS
 from .i18n import get_lang, guess_lang, LANGS, set_lang, t
 from .brain import LEVEL_NAMES
-from .replay import folder as replay_dir, load as replay_load
+from .replay import (folder as replay_dir, folders as replay_folders, load as replay_load, read_index,
+                     summary as replay_summary)
 
 PATH_MAX = 400
 REPLAYS_GUARD_MS = 400            # столько после открытия «Повторов» список не запускает повтор
@@ -174,22 +175,38 @@ class MenusMixin:
         self.settings_page, self.settings_rows = "main", self.main_rows
         self.settings_index = self.settings_rows.index("advanced")
 
-    def open_replays(self):
-        """Экран «Повторы»: записанные партии (новые сверху) — сами пишутся после каждой партии."""
+    def open_replays(self, i=0):
+        """Экран «Повторы»: записанные партии (новые сверху) — сами пишутся после каждой партии; ←/→ — другая
+        папка (прогоны лаборатории баланса, tools/lab.py --replays)."""
         self.state = "replays"
+        self.replays_opened = pygame.time.get_ticks()    # первые мгновения нажатия не считаются (двойной щелчок)
+        self.replay_folders = replay_folders(self.settings)
+        self.replay_folder_i = i % len(self.replay_folders)
+        self.load_replay_list()
+
+    def load_replay_list(self):
+        """Список папки: из оглавления (лаборатория — тысячи партий), остальное — читая файлы."""
+        folder = self.replay_folders[self.replay_folder_i]
         self.replay_index = 0
         self.replay_list = []
-        self.replays_opened = pygame.time.get_ticks()    # первые мгновения нажатия не считаются (двойной щелчок)
-        for path in sorted(self.replay_folder().glob("*.json.gz"), reverse=True):
-            try:
-                data = replay_load(path)
-            except (OSError, ValueError, EOFError):
-                continue
-            res = data.get("result") or {}
-            self.replay_list.append({"path": path, "mode": data.get("mode", ""), "heroes": data.get("heroes") or {},
-                                     "winner": res.get("winner"), "time": res.get("time", data.get("length", 0) / 60),
-                                     "players": data.get("players") or {}, "tuning": data.get("tuning") or [],
-                                     "stamp": path.name[:13]})
+        index = read_index(folder)
+        try:
+            paths = sorted(folder.glob("*.json.gz"), reverse=True)
+        except OSError:
+            paths = []
+        lab = folder != self.replay_folders[0]
+        for path in (sorted(paths) if lab else paths):  # прогон лаборатории — по порядку партий
+            entry = index.get(path.name)
+            if entry is None:
+                try:
+                    entry = replay_summary(replay_load(path))
+                except (OSError, ValueError, EOFError):
+                    continue
+            self.replay_list.append({**entry, "path": path, "stamp": path.name[:13]})
+
+    def shown_replay_folder(self):
+        folders = getattr(self, "replay_folders", None)
+        return folders[self.replay_folder_i] if folders else self.replay_folder()
 
     def replays_key(self, sc):
         K = pygame
@@ -200,6 +217,10 @@ class MenusMixin:
             self.replay_index = (self.replay_index - 1) % n
         elif n and sc in (K.KSCAN_DOWN, K.KSCAN_S):
             self.replay_index = (self.replay_index + 1) % n
+        elif sc in (K.KSCAN_LEFT, K.KSCAN_RIGHT, K.KSCAN_A, K.KSCAN_D) and len(self.replay_folders) > 1:
+            step = -1 if sc in (K.KSCAN_LEFT, K.KSCAN_A) else 1
+            self.replay_folder_i = (self.replay_folder_i + step) % len(self.replay_folders)
+            self.load_replay_list()
         elif n and sc in (K.KSCAN_PAGEUP, K.KSCAN_PAGEDOWN):
             self.replay_index = max(0, min(n - 1, self.replay_index + (10 if sc == K.KSCAN_PAGEDOWN else -10)))
         elif n and sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE) and self.replays_ready():
