@@ -190,7 +190,8 @@ ITEM_SOUNDS = {"beam": ("sun-ray.mp3", 0.9), "firering": ("fire-ring.mp3", 0.45)
                "trees": ("tree-wall.mp3", 0.6),
                "triple": ("3shoot-effect.mp3", 0.6),    # тройной выстрел: выезжают ещё два ствола
                "heal": ("healing.mp3", 0.6),            # лечение: при подборе
-               "cleanse": ("cleanse.mp3", 0.6)}
+               "cleanse": ("cleanse.mp3", 0.6),
+               "immune": ("oak-bark.mp3", 0.6)}        # дубовая кора: скрип дерева
 # звуки-циклы: играют, пока это происходит (шаги — маг идёт; чужая земля — горит; ледяная тропа — действует)
 LOOP_SOUNDS = {"steps": ("steps.mp3", 0.5), "enemy-land": ("enemy-land.mp3", 0.35), "ice-road": ("ice-road.mp3", 0.5)}
 LOOP_FADE_MS = 150

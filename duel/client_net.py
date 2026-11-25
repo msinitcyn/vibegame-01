@@ -6,14 +6,19 @@ import time
 
 import pygame
 
-from .platform import WEB
+
 from .logs import log
 from .commands import Command
 from .config import HEROES, PING_EVERY
 from .i18n import t
 from .interp import Playback
 from .match import STEP
-from .net import connect, error_key
+from .net import Reconnect, error_key
+from .platform import WEB, page_hidden
+
+JOURNAL_KEEP = 60                     # событий связи в журнале (≈ последние пять минут)
+JOURNAL_EVERY = 5.0                   # раз в столько секунд — пинг, снимки, FPS в журнал
+FRAME_STALL = 1.0                     # кадра не было дольше — в журнал (вкладка в фоне, тормоза)
 from .client_common import MAX_STEPS_PER_FRAME, GO_FLASH, SILENCE, RECONNECT_FOR, RECONNECT_EVERY, PLAYER_IDS
 
 
@@ -35,7 +40,15 @@ class NetClientMixin:
             if going_on is not None:
                 return going_on
         self.show_playback(dt)
+        self.net_journal_tick(now)
         if self.net.closed or now - self.net_heard > SILENCE:
+            why = ("закрыто " + str(getattr(self.net, "close_info", "") or "сервером или сетью")) if self.net.closed \
+                else f"тишина {now - self.net_heard:.1f} с"
+            self.net_journal("связь потеряна", why)
+            self.net_lost_why = why
+            self.lost_at = now
+            self.reconnect_tries = 0
+            self.reconnecting = None
             self.net.close()
             self.reconnect_until = now + RECONNECT_FOR
             self.next_try = now
@@ -147,6 +160,39 @@ class NetClientMixin:
                 "jitter": round(jitter, 1), "buf": len(self.playback.buf) if getattr(self, "playback", None) else 0,
                 "fps": round(self.clock.get_fps())}
 
+    # ------------------------------------------------------------------ журнал связи (разрывы: что видел клиент)
+
+    def net_journal(self, event, detail=""):
+        """Событие связи — в журнал (последние JOURNAL_KEEP); после возврата журнал уходит серверу."""
+        j = self.__dict__.setdefault("net_log", [])
+        j.append([round(time.monotonic() - self.net_log_t0, 1), event, str(detail)[:200]])
+        del j[:-JOURNAL_KEEP]
+
+    def net_journal_tick(self, now):
+        """Раз в JOURNAL_EVERY с — пинг, снимков/с, джиттер, FPS; вкладка браузера ушла в фон — тоже событие
+        (браузер усыпляет фоновые вкладки — частая причина разрыва)."""
+        if now >= getattr(self, "net_log_next", 0.0):
+            self.net_log_next = now + JOURNAL_EVERY
+            st = self.my_net_stats(now)
+            self.net_journal("связь", f"пинг {st['ping']}, снимков {st['rate']}/с, джиттер {st['jitter']}, fps {st['fps']}")
+        hidden = page_hidden()
+        if hidden != getattr(self, "net_page_hidden", False):
+            self.net_page_hidden = hidden
+            self.net_journal("вкладка скрыта" if hidden else "вкладка снова видна")
+        gap = now - getattr(self, "net_frame_at", now)
+        self.net_frame_at = now
+        if gap > FRAME_STALL:                     # игра стояла (вкладка в фоне, компьютер тормозил)
+            self.net_journal("кадра не было", f"{gap:.1f} с")
+
+    def send_net_report(self):
+        """После возврата — журнал серверу (сервер кладёт в logs/net-reports/ и пишет строку в лог)."""
+        if self.net is None:
+            return
+        from .logs import version
+        self.net.send({"type": "net_report", "why": getattr(self, "net_lost_why", ""), "client": "web" if WEB else "desktop",
+                       "version": version(), "away": round(time.monotonic() - getattr(self, "lost_at", time.monotonic()), 1),
+                       "tries": getattr(self, "reconnect_tries", 0), "journal": list(self.__dict__.get("net_log", []))})
+
     def show_playback(self, dt):
         snap, events, waiting = self.playback.advance(dt)
         if snap is not None:
@@ -158,27 +204,46 @@ class NetClientMixin:
         self.tick_popups(dt)
 
     def try_reconnect(self, now, dt):
-        """Связь потеряна: раз в секунду пробуем вернуться на своё место по ключу."""
+        """Связь потеряна: пробуем вернуться на своё место по ключу — по шагу за кадр (Reconnect: и в браузере,
+        и без подвисаний). Сервер держит место RECONNECT_FOR секунд, партия на это время стоит на паузе."""
         self.show_playback(dt)        # картинка стоит на последнем снимке
-        if now > self.reconnect_until or WEB:     # в браузере ждать, блокируясь, нельзя — без переподключения
+        if now > self.reconnect_until:
             self.net_end = "net.lost"
             return False
-        if now >= self.next_try:
-            self.next_try = now + RECONNECT_EVERY
-            try:
-                conn, seat = connect(self.net_addr, timeout=RECONNECT_EVERY, name=self.player_name(),
-                                     token=self.net_token, role="spectator" if self.watching else "player",
-                                     room=self.net_room,
-                                     session=self.saved_account().get("token") if self.account_user else None)
-            except (ConnectionError, OSError) as e:
-                if error_key(e) in ("full", "proto", "noroom"):    # место или комнату уже отдали
-                    self.net_end = "net.lost"
-                    return False
+        attempt = getattr(self, "reconnecting", None)
+        if attempt is None:
+            if now < self.next_try:
                 return True
-            self.net, self.me, self.net_token = conn, seat["you"], seat["token"]
-            self.playback = Playback()
-            self.net_heard = time.monotonic()
-            self.reconnect_until = None
+            self.next_try = now + RECONNECT_EVERY
+            self.reconnect_tries = getattr(self, "reconnect_tries", 0) + 1
+            try:
+                attempt = self.reconnecting = Reconnect(
+                    self.net_addr, name=self.player_name(), token=self.net_token,
+                    role="spectator" if self.watching else "player", room=self.net_room,
+                    session=self.saved_account().get("token") if self.account_user else None)
+            except (ConnectionError, OSError) as e:
+                self.net_journal("попытка не вышла", error_key(e) or str(e))
+                return True
+        try:
+            done = attempt.step()
+        except (ConnectionError, OSError) as e:
+            self.reconnecting = None
+            key = error_key(e)
+            self.net_journal("попытка не вышла", key or str(e))
+            if key in ("full", "proto", "noroom"):    # место или комнату уже отдали
+                self.net_end = "net.lost"
+                return False
+            return True
+        if done is None:
+            return True
+        conn, seat = done
+        self.reconnecting = None
+        self.net, self.me, self.net_token = conn, seat["you"], seat["token"]
+        self.playback = Playback()
+        self.net_heard = time.monotonic()
+        self.net_journal("вернулся", f"попыток {self.reconnect_tries}, через {now - self.lost_at:.1f} с")
+        self.send_net_report()
+        self.reconnect_until = None
         return True
 
     @property
@@ -245,6 +310,8 @@ class NetClientMixin:
         self.net_spectators = 0
         self.reconnect_until = None
         self.net_heard = time.monotonic()
+        self.net_log, self.net_log_t0, self.net_log_next = [], time.monotonic(), 0.0
+        self.net_journal("вошёл", f"комната {seat.get('room')}, {'браузер' if WEB else 'настольная'}")
         self.playback = Playback()
         self.net_waiting = True
         self.state = "play"

@@ -95,9 +95,8 @@ def draw_effects(surf, u, time=0.0):
         fx_spells.draw_freeze(surf, pos, u["r"], since_start("freeze", effects["freeze"]), effects["freeze"], time)
     if "speed" in effects:
         pygame.draw.circle(surf, ITEMS["speed"][1], pos, r + 8, 1)
-    if "immune" in effects:                       # дубовая кора — золотисто-бурое кольцо
-        pygame.draw.circle(surf, (16, 12, 20), pos, r + 12, 6)
-        pygame.draw.circle(surf, ITEMS["immune"][1], pos, r + 12, 4)
+    if "immune" in effects:                       # дубовая кора — пластины коры вокруг мага (assets/effects/oak.json)
+        fx_mage.draw_oak_bark(surf, pos, u["r"], since_start("immune", effects["immune"]), effects["immune"], time)
     if "shield" in effects:                       # пузырь щита: соты, блик, заряды, рябь от удара
         fx_mage.draw_shield(surf, pos, u["r"], SHIELD_GAP, effects["shield"], since_start("shield", effects["shield"]),
                               u.get("shield_hits", 0), u.get("shield_flash", 0) / SHIELD_FLASH, time)

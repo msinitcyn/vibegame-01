@@ -783,3 +783,37 @@ def test_connection_flood_is_limited(server):
         server.step()
     b = Client(server)                         # после наплыва нормальный игрок входит
     assert b.you == "red"
+
+
+def test_reconnect_sends_net_report_and_server_logs_reason(game):
+    """Обрыв: сервер пишет причину, клиент возвращается (по шагу за кадр) и шлёт журнал связи —
+    он ложится в logs/net-reports/."""
+    import json
+    from duel import logs
+    lines = []
+    srv = start_in_thread(port=0, log=lines.append, discovery_port=None)
+    try:
+        address = f"127.0.0.1:{srv.port}"
+        game.enter_net(*connect(address, timeout=3), address)
+        other = connect(address, timeout=3)[0]
+        for room in srv.rooms.values():                  # куда класть отчёты (у сервера в игре — logs/)
+            room.replays = logs.log_dir()
+        game.on_key(pygame.KSCAN_RETURN)
+        other.send({"type": "ready", "ready": True})
+        frames(game, lambda: (other.send({"type": "cmd", "move": [0, 0]}) or True) and not game.net_waiting)
+        game.net.sock.close()
+        frames(game, lambda: (other.send({"type": "cmd", "move": [0, 0]}) or True)
+               and game.reconnect_until is None and game.net_seats.get("blue", {}).get("who") == "human",
+               timeout=5)
+        frames(game, lambda: (other.send({"type": "cmd", "move": [0, 0]}) or True)
+               and any("отчёт о разрыве" in x for x in lines), timeout=3)
+        assert any("обрыв — " in x for x in lines)                         # сервер: причина и связь
+        reports = sorted((logs.log_dir() / "net-reports").glob("*.json"))
+        assert reports
+        rep = json.loads(reports[-1].read_text(encoding="utf-8"))
+        events = [row[1] for row in rep["journal"]]
+        assert "связь потеряна" in events and "вернулся" in events and rep["client"] == "desktop"
+        other.close()
+    finally:
+        game.leave_net()
+        srv.stop()

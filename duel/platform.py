@@ -26,3 +26,14 @@ def media(path):
 def media_mask(mask):
     """Маска файлов музыки: в браузере *.ogg вместо *.mp3."""
     return mask.replace(MP3, OGG) if WEB else mask
+
+
+def page_hidden():
+    """Вкладка браузера скрыта (ушла в фон)? Вне браузера — всегда False."""
+    if sys.platform != "emscripten":
+        return False
+    try:
+        import platform as browser           # в pygbag — модуль браузера с window (не наш duel.platform)
+        return bool(browser.window.document.hidden)
+    except Exception:
+        return False

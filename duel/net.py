@@ -353,3 +353,63 @@ def local_addresses():
         if not a.startswith("127.") and a != "0.0.0.0" and a not in out:
             out.append(a)
     return out
+
+
+class Reconnect:
+    """Вернуться на своё место без ожидания на месте — шаг за кадром (в браузере ждать, блокируясь, нельзя:
+    пока Python ждёт, сокет не откроется). step() -> None (ещё идёт), (conn, seat) — вернулись, или бросает
+    NetError: «full»/«noroom»/«proto» — место или комнату уже отдали (дальше пробовать незачем), остальное —
+    эта попытка не вышла (игра начнёт новую через RECONNECT_EVERY)."""
+
+    def __init__(self, address, name="", token=None, role="player", room=None, session=None, timeout=4.0):
+        import time
+        self.args = dict(name=name, token=token, role=role, room=room)
+        self.session = session
+        self.deadline = time.monotonic() + timeout
+        self.conn = transport(address, timeout)
+        self.stage = "open"
+
+    def fail(self, key, text):
+        self.conn.close()
+        raise NetError(key, text)
+
+    def step(self):
+        import time
+        if time.monotonic() > self.deadline:
+            self.fail("timeout", "сервер не ответил")
+        if getattr(self.conn, "failed", False) and not getattr(self.conn, "opened", True):
+            self.fail("refused", "не подключиться")
+        if self.stage == "open":
+            if not getattr(self.conn, "opened", True):
+                return None
+            self.stage = "hello"
+        for msg in self.conn.recv():
+            kind = msg.get("type")
+            if kind == "bye":
+                self.fail("bye", "сервер закрывается")
+            if self.stage == "hello" and kind == "hello":
+                if msg.get("proto") != PROTO:
+                    self.fail("proto", f"другая версия протокола: {msg.get('proto')} (у нас {PROTO})")
+                self.conn.accept_z = True
+                self.conn.send({"type": "compress"})
+                if self.session:
+                    self.conn.send({"type": "resume", "token": self.session})
+                    self.stage = "auth"
+                else:
+                    self.join()
+            elif self.stage == "auth" and kind == "auth":
+                self.join()
+            elif self.stage == "seat" and kind in ("seat", "watch", "full", "noroom"):
+                if kind == "seat":
+                    return self.conn, msg
+                if kind == "watch":
+                    return self.conn, {"room": msg.get("room"), "you": None, "token": None, "watch": True}
+                self.fail(kind, "места или комнаты уже нет")
+        if self.conn.closed:
+            self.fail("closed", "соединение закрылось")
+        return None
+
+    def join(self):
+        a = self.args
+        self.conn.send({"type": "join", "room": a["room"], "role": a["role"], "name": a["name"], "token": a["token"]})
+        self.stage = "seat"

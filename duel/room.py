@@ -29,6 +29,7 @@ STATS_LOG_EVERY = 3600            # связь игроков в лог — ра
 
 PIDS = ("blue", "red")
 SEND_EVERY = 2                    # снимок раз в 2 такта — 30 в секунду
+NET_REPORTS_KEEP = 200            # отчётов о разрывах (logs/net-reports/) — последние столько
 HOLD = 30.0                       # секунд держим место потерявшему связь
 SILENCE = 3.0                     # столько секунд без сообщений — связь потеряна
 MAX_SPECTATORS = 8                # зрителей в комнате больше не пускаем
@@ -197,6 +198,11 @@ class Room:
         conn = s.conn
         if conn and close:
             conn.close()
+        if self.phase in ("play", "countdown") and self.replays and self.recorder and not self.match.winner:
+            path = self.recorder.save(self.replays, self.match)      # оборванная партия — тоже повтор (разбирать)
+            if path:
+                self.log(f"повтор оборванной партии: {path.name}")
+            self.recorder = None
         self.seats[pid] = Seat()
         self.log(f"{pid} {why}")
         if self.duel and (self.conns or self.spectators or any(x.away_until for x in self.seats.values())):
@@ -205,9 +211,15 @@ class Room:
             self.to_lobby("соперник вышел")
         return None if close else conn
 
-    def drop(self, pid):
-        """Связь с игроком потеряна: в партии место держится HOLD секунд, в лобби — свободно."""
+    def drop(self, pid, why=""):
+        """Связь с игроком потеряна: в партии место держится HOLD секунд (партия стоит), в лобби — свободно.
+        В лог — причина и последняя связь игрока (что он сам мерил): по ним и по его отчёту (net_report) —
+        разбирать разрывы."""
         s = self.seats[pid]
+        st = s.stats or {}
+        self.log(f"{pid} ({s.name or 'гость'}): обрыв — {why or 'причина неизвестна'}; фаза {self.phase}, "
+                 f"последняя связь: пинг {st.get('ping', '—')} мс, снимков {st.get('rate', '—')}/с, "
+                 f"джиттер {st.get('jitter', '—')}, fps {st.get('fps', '—')}")
         if s.conn:
             s.conn.close()
             s.conn = None
@@ -235,7 +247,10 @@ class Room:
         pid = next((p for p, s in self.seats.items() if token and s.token == token), None)
         back = pid is not None
         if back and self.seats[pid].conn:     # сервер ещё не заметил обрыв — ключ важнее старого соединения
-            self.seats[pid].conn.close()
+            old = self.seats[pid]
+            self.log(f"{pid} ({old.name or 'гость'}): обрыв — вернулся раньше, чем сервер заметил "
+                     f"(тишина {now - old.last_seen:.1f} с)")
+            old.conn.close()
         if pid is None:
             pid = next((p for p, s in self.seats.items() if s.free), None)
         if pid is None:
@@ -281,7 +296,8 @@ class Room:
                 self.log(f"{pid}: нарушение протокола — {s.conn.violation}")
                 s.conn.violation = None
             if s.conn.closed or now - s.last_seen > SILENCE:
-                self.drop(pid)
+                why = "соединение закрыто" if s.conn.closed else f"тишина {now - s.last_seen:.1f} с"
+                self.drop(pid, why)
         return left
 
     def read_spectators(self):
@@ -333,6 +349,8 @@ class Room:
                     self.bot = True
                     s.ready = True
                     self.log(f"{pid} позвал бота")
+            elif kind == "net_report":        # клиент вернулся после разрыва — его журнал связи
+                self.save_net_report(pid, s, msg)
             elif kind == "ping":              # пинг: сразу ответ; статистика связи игрока — в снимки обоим
                 if isinstance(msg.get("t"), (int, float)):
                     s.conn.send({"type": "pong", "t": msg["t"]})
@@ -509,6 +527,32 @@ class Room:
             self.record({**m.summary(), "room": self.id,
                          "players": {pid: "bot" if pid in bots else (self.seats[pid].name or "guest") for pid in PIDS}},
                         "net-bot" if bots else "net")
+
+    def save_net_report(self, pid, s, msg):
+        """Отчёт клиента о разрыве: в лог — строка, в logs/net-reports/ — весь журнал (последние NET_REPORTS_KEEP)."""
+        journal = msg.get("journal")
+        if not isinstance(journal, list):
+            return
+        journal = [[str(x)[:200] for x in row][:3] for row in journal[:80] if isinstance(row, list)]
+        info = {k: str(msg.get(k, ""))[:80] for k in ("why", "client", "version", "away", "tries")}
+        self.log(f"{pid} ({s.name or 'гость'}) вернулся, отчёт о разрыве: {info['why']}; {info['client']} "
+                 f"v{info['version']}, без связи {info['away']} с, попыток {info['tries']}")
+        if not self.replays:
+            return
+        import json
+        import time
+        from pathlib import Path
+        try:
+            folder = Path(self.replays) / "net-reports"
+            folder.mkdir(parents=True, exist_ok=True)
+            name = f"{time.strftime('%Y%m%d-%H%M%S')}-room{self.id}-{pid}.json"
+            (folder / name).write_text(json.dumps({**info, "room": self.id, "player": pid, "name": s.name,
+                                                   "phase": self.phase, "journal": journal},
+                                                  ensure_ascii=False, indent=1), encoding="utf-8")
+            for old in sorted(folder.glob("*.json"))[:-NET_REPORTS_KEEP]:
+                old.unlink(missing_ok=True)
+        except OSError as e:
+            self.log(f"отчёт о разрыве не записан: {e}")
 
     def log_stats(self):
         """Раз в минуту боя — связь игроков (что они сами меряют и шлют, см. /net)."""

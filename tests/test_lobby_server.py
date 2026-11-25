@@ -195,3 +195,13 @@ def test_bot_hero_is_random_not_always_fire():
         room.seats["blue"].conn, room.seats["blue"].hero = object(), "frost"   # человек есть — бот на свободном
         seen.add(room.seat_heroes()["red"])
     assert len(seen) >= 3 and "frost" not in seen
+
+
+def test_aborted_match_saved_as_replay(tmp_path):
+    """Игрок не вернулся — оборванная партия всё равно сохраняется повтором (разбирать разрывы)."""
+    from duel.room import Room
+    room = Room(1, clock=lambda: 0.0, log=lambda t: None, replays=tmp_path)
+    room.phase = "play"
+    room.rec()                                               # запись партии началась
+    room.free_seat("blue", "не вернулся")
+    assert list((tmp_path / "replays").glob("*.json.gz"))

@@ -15,7 +15,7 @@ window.duelWS = function (url) {
   try { s.ws = new WebSocket(url); } catch (e) { s.failed = true; return s; }
   s.ws.binaryType = "arraybuffer";
   s.ws.onopen = () => { s.open = true; };
-  s.ws.onclose = () => { s.closed = true; };
+  s.ws.onclose = (e) => { s.closed = true; s.code = e.code; s.reason = e.reason || ""; };
   s.ws.onerror = () => { s.failed = true; };
   s.ws.onmessage = (ev) => {
     const b = new Uint8Array(ev.data); let str = "";
@@ -60,6 +60,14 @@ class BrowserConn(Conn):
     @property
     def failed(self):
         return bool(self.js.failed) or bool(self.js.closed)
+
+    @property
+    def close_info(self):
+        """Как закрылся WebSocket: код (1006 — оборвался без закрытия) и причина — для журнала связи."""
+        try:
+            return f"код {self.js.code} {self.js.reason}".strip() if self.js.closed else ""
+        except Exception:
+            return ""
 
     def fileno(self):
         return -1

@@ -518,3 +518,63 @@ def draw_death(surf, pos, r, img, since, time):
             dot = pygame.Surface((4, 4), pygame.SRCALPHA)
             pygame.draw.circle(dot, (*spark, a), (2, 2), 2)
             surf.blit(dot, (int(sx) - 2, int(sy) - 2))
+
+
+def draw_oak_bark(surf, pos, r, since, left, time):
+    """«Дубовая кора»: пластины коры вокруг мага. since — с начала эффекта, left — сколько осталось (с).
+    Нарастают снизу вверх по обе стороны, при появлении разлетаются листья; потом «дышат»; в конце опадают."""
+    P = params("oak")
+    bark = rgb(P.get("bark"), (122, 82, 48))
+    dark = rgb(P.get("dark"), (59, 36, 20))
+    light = rgb(P.get("light"), (176, 132, 79))
+    leaf = rgb(P.get("leaf"), (127, 207, 90))
+    n = int(P.get("plates", 11))
+    grow, fall = float(P.get("grow", 0.55)), float(P.get("fall", 0.6))
+    ring = r + float(P.get("gap", 12))
+    size = int(ring * 2 + r * 4 + 40)
+    c = size // 2
+    layer = pygame.Surface((size, size), pygame.SRCALPHA)
+    end = max(0.0, 1 - left / fall) if left < fall else 0.0            # 0 — держится, 1 — опала
+    for i in range(n):
+        a = math.pi / 2 + (i - (n - 1) / 2) * 2 * math.pi / n           # от низа (π/2) по кругу
+        order = abs(i - (n - 1) / 2) / ((n - 1) / 2)                     # 0 — снизу, 1 — сверху
+        g = min(1.0, max(0.0, (since / grow) * 1.6 - (1 - order) * 0.0 - order * 0.6))   # снизу раньше
+        if g <= 0:
+            continue
+        breathe = 1.0 + 0.04 * math.sin(time * 2.2 + i)
+        drop = end * r * (1.4 + 0.3 * (i % 3))
+        rad = ring * breathe * (0.6 + 0.4 * ease_out(g))
+        x, y = c + math.cos(a) * rad, c + math.sin(a) * rad + drop
+        alpha = int(255 * min(1.0, g * 1.5) * (1 - end))
+        if alpha <= 0:
+            continue
+        # пластина — вытянутый вдоль окружности многоугольник, повёрнутый по касательной
+        tx, ty = -math.sin(a), math.cos(a)                               # касательная
+        nx, ny = math.cos(a), math.sin(a)                                # наружу
+        hw = ring * math.pi / n * 0.92 * ease_out(g)                     # полуширина вдоль круга
+        hh = r * 0.32 * ease_out(g) + 1                                  # полутолщина
+        tilt = end * (0.6 if i % 2 else -0.6)
+        tx, ty = tx * math.cos(tilt) - nx * math.sin(tilt), ty * math.cos(tilt) - ny * math.sin(tilt)
+        pts = [(x + tx * hw * k1 + nx * hh * k2, y + ty * hw * k1 + ny * hh * k2)
+               for k1, k2 in ((-1, -0.7), (-0.8, 1), (0.8, 1), (1, -0.7), (0.6, -1), (-0.6, -1))]
+        pygame.draw.polygon(layer, (*dark, alpha), pts)
+        inner = [(x + (px - x) * 0.78, y + (py - y) * 0.78) for px, py in pts]
+        pygame.draw.polygon(layer, (*bark, alpha), inner)
+        for k in (-0.4, 0.15):                                           # прожилки вдоль пластины
+            pygame.draw.line(layer, (*light, int(alpha * 0.8)),
+                             (x + tx * hw * -0.6 + nx * hh * k, y + ty * hw * -0.6 + ny * hh * k),
+                             (x + tx * hw * 0.5 + nx * hh * (k + 0.15), y + ty * hw * 0.5 + ny * hh * (k + 0.15)), 1)
+        if g >= 1 and end == 0 and (i * 7 + int(time * 1.5)) % 5 == 0:   # пробился листочек
+            lx, ly = x + nx * hh, y + ny * hh
+            pygame.draw.ellipse(layer, (*leaf, 230), (lx - 3, ly - 2, 7, 4))
+    nl = int(P.get("leaves", 8))
+    q = since / 0.9
+    if 0 < q < 1:                                                        # при появлении — листья разлетаются
+        for j in range(nl):
+            a = j * 2 * math.pi / nl + 0.5
+            d = ring * (0.8 + 1.4 * ease_out(q))
+            x = c + math.cos(a) * d
+            y = c + math.sin(a) * d + q * q * r * 1.2                    # и падают
+            w = 3 + (j % 3)
+            pygame.draw.ellipse(layer, (*leaf, int(240 * (1 - q))), (x - w, y - w / 2, 2 * w, w))
+    surf.blit(layer, layer.get_rect(center=(int(pos[0]), int(pos[1]))))

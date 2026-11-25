@@ -609,3 +609,14 @@ def test_heal_goes_to_own_zombie_under_cursor_else_self():
     m.step(1 / 60, {"blue": Command(aim=0.0, reach=5)})       # курсор на себе — лечит себя
     m.apply_item(b, "heal")
     assert b.hp == 5 + HEAL_AMOUNT
+
+
+def test_oak_bark_animation_draws_through_its_life():
+    import pygame
+    from duel.config import DURATION
+    from duel.fx import mage as fx_mage
+    surf = pygame.Surface((300, 300), pygame.SRCALPHA)
+    total = DURATION["immune"]
+    for since in (0.0, 0.2, 0.5, 2.0, total - 0.3, total - 0.01):
+        fx_mage.draw_oak_bark(surf, (150, 150), 14, since, total - since, since)
+    assert surf.get_bounding_rect().w > 0
