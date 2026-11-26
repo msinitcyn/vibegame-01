@@ -16,6 +16,37 @@ os.environ["DUEL_NO_UPDATE_CHECK"] = "1"         # тесты не ходят в
 os.environ["DUEL_SETTINGS"] = os.path.join(tempfile.mkdtemp(), "settings.json")
 
 import pytest  # noqa: E402
+import pygame._sdl2.video as _sdl_video  # noqa: E402
+
+
+class _FakeWindow:
+    """Окно SDL в тестах — заглушка: настоящий Window.from_display_module() при видеодрайвере dummy портит
+    память (падало потом что угодно — сборка мусора, event.get, разбор JSON: Segmentation fault в CI)."""
+    display_index = 0
+
+    def __init__(self):
+        self.fullscreen = False
+
+    @classmethod
+    def from_display_module(cls):
+        return cls()
+
+    def set_fullscreen(self, desktop=False):
+        self.fullscreen = True
+
+    def set_windowed(self):
+        self.fullscreen = False
+
+
+class _FakeRenderer:
+    logical_size = (0, 0)
+
+    @classmethod
+    def from_window(cls, window):
+        return cls()
+
+
+_sdl_video.Window, _sdl_video.Renderer = _FakeWindow, _FakeRenderer
 
 from duel.commands import Command  # noqa: E402
 from duel.game import Game  # noqa: E402

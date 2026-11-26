@@ -311,9 +311,11 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
     def sdl_window(self):
         """Окно SDL игры — один объект на всё время (pygame 2.6.1: каждый новый Window.from_display_module(),
         выброшенный после F11, портил окно — следующее переключение роняло игру)."""
+        from pygame._sdl2.video import Window
+        if pygame.version.vernum < (2, 6):    # pygame 2.5: как раньше — временный объект (держать его опасно:
+            return Window.from_display_module()   # окно пересоздаётся при F11, а он остался бы на старом)
         window = self.__dict__.get("_sdl_window")
         if window is None:
-            from pygame._sdl2.video import Window
             window = self._sdl_window = Window.from_display_module()
         return window
 

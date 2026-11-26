@@ -310,9 +310,13 @@ def test_garbage_collected_only_from_main_thread(game):
     assert gc.get_count()[0] < gc.get_threshold()[0]
 
 
-def test_sdl_window_object_is_kept(game):
-    """Объект окна SDL — один на всё время: новый на каждый F11 (и выброшенный) портил окно в pygame 2.6.1."""
-    assert game.sdl_window() is game.sdl_window()
+def test_sdl_window_object_is_kept(game, monkeypatch):
+    """pygame 2.6: объект окна SDL — один на всё время (новый на каждый F11 и выброшенный портил окно)."""
+    monkeypatch.setattr(pygame.version, "vernum", (2, 6, 1))
+    try:
+        assert game.sdl_window() is game.sdl_window()
+    finally:
+        game.__dict__.pop("_sdl_window", None)         # не оставлять другим тестам (pygame 2.5 — окно пересоздаётся)
 
 
 def test_fullscreen_on_pygame_25_recreates_window_first(game, monkeypatch):
