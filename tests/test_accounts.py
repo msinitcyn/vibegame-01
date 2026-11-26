@@ -195,7 +195,9 @@ def test_register_in_game_and_auto_login_next_time(game):
     frames(game, lambda: game.state == "lobby" and game.account_user == "Папа")
     assert game.settings["accounts"][srv.id]["user"] == "Папа"
     game.draw_lobby_screen()
-    game.on_key(pygame.KSCAN_ESCAPE)              # к серверам — и снова на свой сервер
+    game.on_key(pygame.KSCAN_ESCAPE)              # в меню, не отключаясь
+    assert game.state == "menu" and game.lobby_conn and game.menu[0] == "back"
+    game.disconnect()                             # отключиться — к серверам, и снова на свой сервер
     game.join_touched, game.join_pick = True, "own"
     game.on_key(pygame.KSCAN_RETURN)
     assert game.state == "entering"               # входим по ключу — без пароля и без «Как войти?»

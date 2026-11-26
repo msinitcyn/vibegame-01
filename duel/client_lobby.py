@@ -48,7 +48,13 @@ class LobbyMixin:
         self.host_server = None
 
     def open_join(self, message=None):
-        """Экран серверов («Играть по сети»): найденные в сети, свой, адрес вручную, «Создать свой»."""
+        """Экран серверов («Играть по сети»): найденные в сети, свой, адрес вручную, «Создать свой».
+        В браузере экрана серверов нет: игра только на своём сервере — назад в меню (с причиной)."""
+        if WEB:
+            self.state = "menu"
+            self.menu_message = message
+            self.join_error = None
+            return
         self.state = "join"
         self.join_error = message
         self.join_pick = None
@@ -66,6 +72,13 @@ class LobbyMixin:
                 self.finder = Finder(port=self.discovery_port, known=known)
             except OSError:
                 self.finder = None    # без сети поиска — остаётся ручной ввод
+
+    def connect_web(self):
+        """Браузер: подключиться к своему серверу (с которого открыта страница) — без экрана серверов."""
+        if self.connected() or getattr(self, "connecting", None):
+            return
+        self.menu_message = None
+        self.open_lobby(config.WEB_SERVER)
 
     def close_finder(self):
         if self.finder:
@@ -379,6 +392,8 @@ class LobbyMixin:
                 self.lobby_chat = [x for x in msg.get("lines") or [] if isinstance(x, dict)][-LOBBY_CHAT_KEEP:]
             elif kind == "lobby_chat":
                 self.lobby_chat = (self.lobby_chat + [msg])[-LOBBY_CHAT_KEEP:]
+                if msg.get("from") != self.lobby_you:
+                    self.chat_toast(str(msg.get("name") or "?"), str(msg.get("text") or ""))
             elif kind == "auth":
                 self.on_auth(msg)
             elif kind in ("recent", "recent_part"):
@@ -429,7 +444,9 @@ class LobbyMixin:
             self.open_lobby_chat(swallow=True)
             return
         if sc in (K.KSCAN_ESCAPE, K.KSCAN_BACKSPACE):
-            self.leave_net()
+            self.state = "menu"               # в меню, не отключаясь: лобби живёт дальше (client_away.py)
+            self.sync_menu()
+            self.menu_index = 0
         elif sc in (K.KSCAN_UP, K.KSCAN_W):
             self.lobby_index = max(0, self.lobby_index - 1)
         elif sc in (K.KSCAN_DOWN, K.KSCAN_S):

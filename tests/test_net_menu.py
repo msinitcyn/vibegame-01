@@ -218,7 +218,11 @@ def test_rematch_and_to_lobby_buttons(game):
     game.on_key(pygame.KSCAN_R)                   # реванш (Маша тоже — она «готова» на выборе героя)
     masha.conn.send({"type": "ready", "ready": True})
     frames(game, lambda: game.net_waiting and not game.snap["winner"], keep=(masha,))   # снова выбор героя
-    game.on_key(pygame.KSCAN_ESCAPE)              # в лобби — партия закрыта для обоих
+    game.on_key(pygame.KSCAN_ESCAPE)              # в меню — место держится
+    assert game.state == "menu" and game.net and game.menu[0] == "back"
+    game.menu_select()                            # «Вернуться в партию»
+    assert game.state == "play"
+    game.quit_match()                             # «Покинуть» — в лобби, партия закрыта для обоих
     assert game.state == "lobby"
     frames(game, lambda: masha.got("room_closed"), keep=(masha,))
     masha.close()
@@ -273,7 +277,10 @@ def test_mouse_buttons_in_warmup(game):
 
 def test_esc_steps_back_and_own_server_keeps_running(game):
     srv = own_server_lobby(game)
-    game.on_key(pygame.KSCAN_ESCAPE)              # из лобби — к серверам
+    game.on_key(pygame.KSCAN_ESCAPE)              # из лобби — в меню, соединение живо
+    assert game.state == "menu" and game.lobby_conn
+    game.menu_index = game.menu.index("disconnect")
+    game.menu_select()                            # «Отключиться» — к серверам
     assert game.state == "join" and game.lobby_conn is None
     game.join_autopick()
     assert game.join_pick == "own"
@@ -509,7 +516,7 @@ def test_red_uses_1234_and_sees_1234(game):
 def test_guest_choice_remembered_per_server(game):
     srv = own_server_lobby(game)
     assert game.settings["accounts"][srv.id] == {"guest": True} and game.player_name() == "Тест"
-    game.on_key(pygame.KSCAN_ESCAPE)              # к серверам — и снова на свой
+    game.disconnect()                             # к серверам — и снова на свой
     game.join_touched, game.join_pick = True, "own"
     game.on_key(pygame.KSCAN_RETURN)
     assert game.state == "lobby"                  # без «Как войти?»
@@ -615,3 +622,43 @@ def test_join_team_game_from_lobby_list(game):
         game.net_frame(1 / 60)
     game.draw()
     papa.close()
+
+
+def menu_frames(game, until, keep=(), timeout=3.0):
+    """Кадры меню (как в run): экран меню рисуется, сеть живёт в фоне."""
+    deadline = time.monotonic() + timeout
+    while not until():
+        assert time.monotonic() < deadline, "не дождались"
+        for c in keep:
+            c.tick()
+        game.screen_frame(1 / 60)
+        time.sleep(1 / 120)
+
+
+def test_menu_while_connected_toast_challenge_and_back(game):
+    """Из лобби — в меню, не отключаясь: настройки открываются, вызов приходит уведомлением, принять — из него."""
+    srv = own_server_lobby(game)
+    masha = Bob(srv.port, "Маша")
+    frames(game, lambda: len(game.lobby_players) == 2, keep=(masha,))
+    game.on_key(pygame.KSCAN_ESCAPE)                       # в меню
+    assert game.state == "menu" and game.lobby_conn and game.menu[0] == "back" and game.menu[-1] == "disconnect"
+    game.menu_index = game.menu.index("settings")
+    game.menu_select()
+    assert game.state == "settings" and game.lobby_conn     # настройки — без отключения
+    masha_id = next(p["id"] for p in game.lobby_players if p["name"] == "Маша")
+    me = game.lobby_you
+    masha.conn.send({"type": "challenge", "to": me})
+    menu_frames(game, lambda: game.toast and game.toast.get("challenge"), keep=(masha,))
+    assert game.state == "settings" and game.incoming["from"] == masha_id
+    game.hits = []
+    game.draw_settings()                                    # уведомление поверх настроек — с кнопками
+    accept = [h for h in game.hits if h[0].w == 150][0]
+    accept[1]()                                             # «Принять»
+    frames(game, lambda: game.state == "play" and game.net and game.net_seats, keep=(masha,))
+    game.on_key(pygame.KSCAN_ESCAPE)                        # выбор героя — в меню, место держится
+    assert game.state == "menu" and game.net and game.menu[0] == "back"
+    menu_frames(game, lambda: srv.room and srv.room.seats[game.me].in_menu, keep=(masha,))   # сопернику видно «в меню»
+    game.menu_index = 0
+    game.menu_select()                                      # «Вернуться в партию»
+    assert game.state == "play" and game.net
+    masha.close()

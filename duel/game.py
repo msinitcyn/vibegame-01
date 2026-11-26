@@ -27,6 +27,7 @@ from .commands import Command
 from .client_addons import AddonsMixin
 from .client_recent import RecentMixin
 from .client_seats import SeatsMixin
+from .client_away import AwayMixin
 from .client_chat import ChatMixin
 from .demos import has_demo
 from .config import (
@@ -71,7 +72,7 @@ def collect_garbage():
 
 
 class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, ChatMixin, AddonsMixin, RecentMixin,
-           SeatsMixin):
+           SeatsMixin, AwayMixin):
     """Приложение поверх матча: хотсит — оба игрока за одним компьютером."""
 
     def __init__(self, windowed=False, net=None, pad=0, replay=None, movie=None, intro=False, test_2v2=False):
@@ -105,7 +106,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.held = set()             # зажатые физические клавиши
         self.pads = Gamepads()
         # пункты меню; подписи — menu_label()
-        self.menu = ["play", "team", "net", "test", "help", "settings"]
+        self.menu = self.base_menu()
         self.replay_list, self.replay_index = [], 0       # экран «Повторы»: файлы и выбранный
         self.replay_back = None       # повтор открыт из «Повторов» — Esc возвращает туда, а не закрывает игру
         self.advanced_rows = ["save_replays", "replay_dir", "replays", "addons", "back"]   # «Настройки → Дополнительно»
@@ -149,6 +150,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.acc_register = False
         self.entry_name, self.entry_row = "", 1
         self.menu_index = 0
+        self.toast = None             # уведомление с сервера поверх меню (client_away.py)
+        pygame.display.flip = self.show_frame     # кадр меню — с уведомлением, если подключён к серверу
         self.walk_to = None           # кнопка мыши «идти»: куда идёт маг; walk_hold — кнопка зажата
         self.walk_hold, self.walk_pid, self.walk_code = False, None, None
         self.settings_rows = ["lang", "name", "aim_mode", "aim_stick", "aim_mouse", "bot_level", "music", "sfx", "keys",
@@ -606,6 +609,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
 
     def screen_frame(self, dt):
         """Кадр экрана вне партии (меню, справка, настройки, выбор, серверы, лобби). False — это партия."""
+        self.background_net(dt)               # подключён к серверу, а на экране меню — сеть живёт дальше
         if self.state == "menu":
             self.draw_menu()
         elif self.state == "help":
@@ -617,8 +621,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         elif self.state == "addon":
             self.draw_addon()
         elif self.state in ("keys", "settings"):
-            if self.settings_back == "play":
-                self.background_play(dt)      # настройки с паузы: сеть и лобби живут дальше
+            if self.settings_back == "play" and self.warmup:
+                self.background_play(dt)      # настройки с паузы разминки: лобби слушаем дальше
             if self.state == "keys":
                 self.draw_keys()
             elif self.state == "settings":

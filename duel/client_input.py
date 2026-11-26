@@ -114,8 +114,12 @@ class InputMixin:
             self.pause_key_p()
             return
         if sc == pygame.KSCAN_ESCAPE:
-            if self.snap["winner"] or self.watching or (self.net and self.net_waiting and not self.warmup):
-                self.quit_match()         # партия кончилась, зритель, выбор героя — выходим, как раньше
+            if self.net and self.net_waiting and not self.warmup and not self.watching and not self.snap["winner"]:
+                self.state = "menu"       # выбор героя по сети: в меню, место держится (выйти — «Покинуть»)
+                self.sync_menu()
+                self.menu_index = 0
+            elif self.snap["winner"] or self.watching:
+                self.quit_match()         # партия кончилась, зритель — выходим, как раньше
             else:
                 self.paused = not self.paused     # в партии Esc — пауза, а не выход
                 self.pause_index = 0

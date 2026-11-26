@@ -79,8 +79,28 @@ class MenusMixin:
             return t("update.checked_at", t=when)
         return f"{t(key, v=v or '')} · {when}"
 
+    @staticmethod
+    def base_menu():
+        """Пункты главного меню без подключения. Браузер — только игра на сервере (своей игры и сервера нет)."""
+        if WEB:
+            return ["net", "help", "settings"]
+        return ["play", "team", "net", "test", "help", "settings"]
+
+    def sync_menu(self):
+        """Подключён к серверу — «Вернуться в лобби / в партию», обучение, настройки, «Отключиться»."""
+        base = self.base_menu()
+        if self.connected():
+            base = ["back", "help", "settings", "disconnect"]     # своя игра — после отключения
+
+        extra = [x for x in self.menu if x == "update"]
+        if base + extra != self.menu:
+            cur = self.menu[self.menu_index] if 0 <= self.menu_index < len(self.menu) else None
+            self.menu = base + extra
+            self.menu_index = self.menu.index(cur) if cur in self.menu else 0
+
     def refresh_menu(self):
         """Пункт «Обновить» появляется, когда нашлась новая версия и её можно поставить."""
+        self.sync_menu()
         can = self.updater.available and self.updater.can_install
         if can and "update" not in self.menu:
             self.menu.append("update")
@@ -132,7 +152,9 @@ class MenusMixin:
             self.menu_select()
 
     def menu_label(self, i):
-        return {"play": t("menu.two"), "team": t("menu.team"), "net": t("menu.connect" if WEB else "menu.net"),
+        return {"play": t("menu.two"), "team": t("menu.team"), "net": t("menu.net"),
+                "back": t("menu.back_game") if getattr(self, "net", None) else t("menu.back_lobby"),
+                "disconnect": t("menu.disconnect"),
                 "test": t("menu.test"), "help": t("menu.help"),
                 "settings": t("menu.settings"),
                 "update": t("menu.update", v=self.updater.latest or "")}[self.menu[i]]
@@ -153,7 +175,14 @@ class MenusMixin:
         elif action == "team":
             self.open_pick(MAX_HP, mode="2v2")     # обычная партия; больше жизней — /hp в консоли
         elif action == "net":
-            self.open_join()                  # в браузере — только адрес сервера (WebSocket)
+            if WEB:                           # в браузере — сразу на свой сервер (с которого открыта страница)
+                self.connect_web()
+            else:
+                self.open_join()
+        elif action == "back":
+            self.back_to_server()
+        elif action == "disconnect":
+            self.disconnect()
         elif action == "update":
             self.state = "update"
             self.updater.start()

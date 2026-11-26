@@ -21,22 +21,28 @@ def test_frame_and_web_loop(game, monkeypatch):
     asyncio.run(game.run_web())                           # выход по QUIT, без зависания
 
 
-def test_web_menu_opens_server_address(game, monkeypatch):
+def test_web_menu_only_online_and_connects_to_own_server(game, monkeypatch):
+    """Браузер: в меню нет своей игры и своего сервера; «Играть по сети» — сразу к своему серверу."""
     from duel import client_lobby, client_menus, config
     monkeypatch.setattr(client_menus, "WEB", True)
     monkeypatch.setattr(client_lobby, "WEB", True)
+    opened = []
+    monkeypatch.setattr(game, "open_lobby", lambda address, remember=False: opened.append(address))
     game.state = "menu"
-    game.address = "localhost"
+    game.sync_menu()
+    assert game.menu == ["net", "help", "settings"]
     game.menu_index = game.menu.index("net")
     game.menu_select()
-    assert game.state == "join" and game.address == config.WEB_SERVER and game.finder is None
-    assert game.join_rows() == ["public", None]           # сервер в интернете и адрес вручную, без «Создать»
-    game.draw_join()
+    assert opened == [config.WEB_SERVER] and game.state == "menu"
+    game.open_join("нет связи")                           # экрана серверов нет — меню с причиной
+    assert game.state == "menu" and game.menu_message == "нет связи"
     called = []
     monkeypatch.setattr(game.updater, "check", lambda: called.append(1))
     game.start_update_check()
     assert not called                                     # в браузере не проверяем обновления
-    game.state = "menu"
+    game.menu_message = None
+    monkeypatch.setattr(client_menus, "WEB", False)
+    game.sync_menu()
 
 
 def test_web_connect_does_not_block(game, monkeypatch):
@@ -52,9 +58,9 @@ def test_web_connect_does_not_block(game, monkeypatch):
     monkeypatch.setattr(client_lobby, "transport",
                         lambda address, timeout: Conn(socket.create_connection(("127.0.0.1", srv.port))))
     try:
-        game.open_join()
+        game.state = "menu"
         game.open_lobby("ws://example/")
-        assert game.connecting and game.state == "join"     # сразу вернулись — ждём кадрами
+        assert game.connecting and game.state == "menu"     # сразу вернулись — ждём кадрами
         import time
         end = time.monotonic() + 3
         while game.connecting and time.monotonic() < end:
@@ -104,10 +110,13 @@ def test_web_menu_labels(game, monkeypatch):
     desktop = len(game.hits)
     monkeypatch.setattr(client_menus, "WEB", True)
     monkeypatch.setattr(screens_menus, "WEB", True)
-    assert game.menu_label(game.menu.index("net")) == "Connect to a server"
+    monkeypatch.setattr(game, "connect_web", lambda: None)
     game.hits = []
     game.draw_menu()
-    assert len(game.hits) == desktop - 2                  # без «Выход» и без «проверить обновления»
+    assert game.menu_label(game.menu.index("net")) == "Play online"
+    assert len(game.hits) == desktop - 5                  # без своей игры (3 пункта), «Выход» и «проверить обновления»
+    monkeypatch.setattr(client_menus, "WEB", False)
+    game.sync_menu()
 
 
 def test_ammo_pack_timer_draws(game):

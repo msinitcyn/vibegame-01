@@ -56,6 +56,10 @@ PICK_TOP = 52                          # экран выбора: выше — �
 
 class MenuScreensMixin:
     def draw_menu(self):
+        self.sync_menu()
+        if WEB and not getattr(self, "web_tried", False):     # браузер: сразу к своему серверу
+            self.web_tried = True
+            self.connect_web()
         s = self.screen
         s.fill(BG)
         img = self.big.render(tr("title"), True, WHITE)
@@ -63,7 +67,7 @@ class MenuScreensMixin:
         for i in range(len(self.menu)):
             sel = i == self.menu_index
             rect = pygame.Rect(0, 0, 460, 40)
-            rect.center = (WIDTH // 2, 190 + i * 47)
+            rect.center = (WIDTH // 2, 190 + i * (47 if len(self.menu) <= 6 else 40))
             pygame.draw.rect(s, (40, 46, 66) if sel else (26, 29, 40), rect, border_radius=10)
             pygame.draw.rect(s, BLUE if sel else GREY, rect, 2, border_radius=10)
             txt = self.font.render(f"{i + 1}.  {self.menu_label(i)}", True, WHITE if sel else GREY)
@@ -73,8 +77,9 @@ class MenuScreensMixin:
         if not WEB:                               # в браузере выходить некуда — закрывают вкладку
             self.button((70, HEIGHT - 30), tr("menu.quit"), lambda: pygame.event.post(pygame.event.Event(pygame.QUIT)),
                         w=120)
-        if self.menu_message:
-            img = self.font.render(self.menu_message, True, BAD_TEXT)
+        message = self.menu_message or (getattr(self, "join_error", None) if WEB else None)
+        if message:
+            img = self.font.render(message, True, BAD_TEXT)
             s.blit(img, img.get_rect(center=(WIDTH // 2, 528)))
         u = self.updater
         if u.available and not u.can_install:       # из исходников: только сообщить

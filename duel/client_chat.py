@@ -267,9 +267,11 @@ class ChatMixin:
     def chat_received(self, msg):
         pid = msg.get("from")
         text = str(msg.get("text") or "")[:CHAT_MAX]
-        if pid in ("blue", "red") and text:
+        if pid in ("blue", "red", "blue2", "red2") and text:      # 2×2 — и напарники
             self.chat_lines.append((pid, str(msg.get("name") or ""), text, time.monotonic()))
             self.chat_lines = self.chat_lines[-KEEP_LINES:]
+            if pid != getattr(self, "me", None):
+                self.chat_toast(str(msg.get("name") or self.player_label(pid)), text)
 
     # ------------------------------------------------------------------ рисование
 

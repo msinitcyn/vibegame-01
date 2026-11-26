@@ -64,11 +64,12 @@ class NetClientMixin:
             if self.watching:             # зритель ничего не шлёт
                 self.pending = self.net_pending()
                 continue
-            if not self.warmup and self.paused != self.menu_sent:    # открыл/закрыл меню — серверу (сопернику видно)
-                self.menu_sent = self.paused
-                self.net.send({"type": "menu", "open": self.paused})
-            if self.warmup or self.paused or self.chat_typing:   # разминка, меню, чат: пустые команды (связь жива)
-                if self.paused:
+            in_menu = self.paused or self.state != "play"           # пауза или ушёл в меню (настройки, справка)
+            if not self.warmup and in_menu != self.menu_sent:    # открыл/закрыл меню — серверу (сопернику видно)
+                self.menu_sent = in_menu
+                self.net.send({"type": "menu", "open": in_menu})
+            if self.warmup or in_menu or self.chat_typing:   # разминка, меню, чат: пустые команды (связь жива)
+                if in_menu:
                     self.pending = self.net_pending()
                 self.net.send({"type": "cmd", "move": [0, 0]})
                 continue
@@ -369,6 +370,8 @@ class NetClientMixin:
         self.seeking = False
         self.reconnect_until = None
         self.net_waiting = False
+        self.toast = None
         pygame.display.set_caption(t("title"))
         self.restart()
+        self.sync_menu()                      # в меню снова «Играть по сети» вместо «Вернуться» / «Отключиться»
         self.open_join(message)
