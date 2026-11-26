@@ -9,6 +9,7 @@
     client_net.py     — сетевая партия
     screens*.py       — отрисовка (ScreensMixin)
 """
+import gc
 import os
 
 import pygame
@@ -59,6 +60,16 @@ from .client_menus import MenusMixin
 from .client_net import NetClientMixin
 
 
+def collect_garbage():
+    """Сборка мусора — только из главного потока (автоматическая выключена в Game): иначе она могла сработать
+    в потоке своего сервера и освобождать шрифты и поверхности pygame, пока главный поток ими рисует, —
+    падение процесса (Segmentation fault). Пороги — как у автоматической."""
+    c0, c1, c2 = gc.get_count()
+    t0, t1, t2 = gc.get_threshold()
+    if c0 >= t0:
+        gc.collect(2 if c2 >= t2 else 1 if c1 >= t1 else 0)
+
+
 class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, ChatMixin, AddonsMixin, RecentMixin,
            SeatsMixin):
     """Приложение поверх матча: хотсит — оба игрока за одним компьютером."""
@@ -67,6 +78,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         """net — (соединение, место от сервера, адрес) для сетевого клиента; pad — номер своего геймпада;
         replay — данные повтора партии (duel/replay.py): игра только показывает его; movie — показать ролик;
         intro — обычный запуск main.py: показать ролик, если стоит галка «Показывать при старте»."""
+        gc.disable()                  # мусор собирает только главный поток — collect_garbage() в каждом кадре
         pygame.init()
         self.settings = settings.load()
         set_lang(self.settings["lang"])
@@ -525,6 +537,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         """Один кадр игры: события, музыка и звуки, экран или партия. False — выйти из игры."""
         dt = self.clock.tick(FPS) / 1000
         self.go_flash = max(0.0, self.go_flash - dt)
+        collect_garbage()
         for e in pygame.event.get():
             if e.type == pygame.QUIT:
                 return False

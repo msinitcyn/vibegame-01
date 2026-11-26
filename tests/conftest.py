@@ -5,6 +5,7 @@
 В обоих пачки патронов и волны мобов сами не появляются — тесты создают их явно.
 """
 import os
+import gc
 import random
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
@@ -57,6 +58,7 @@ def _game():
 def game(_game):
     """Приложение в режиме «два игрока», без геймпадов, с фиксированным random."""
     random.seed(0)
+    gc.collect()                            # сборка мусора в игре — только из главного потока (кадр игры)
     _game.leave_net()                       # прошлый тест мог оставить сетевую партию
     _game.stop_own_server()                 # и свой сервер
     _game.server_db = ":memory:"            # аккаунты своего сервера — только на время теста

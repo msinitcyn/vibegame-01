@@ -292,3 +292,18 @@ def test_fullscreen_falls_back_and_never_crashes(game, monkeypatch):
     state = game.fullscreen
     game.toggle_fullscreen()                       # ничего не вышло — остаёмся как есть, без падения
     assert game.fullscreen == state and game.screen is not None
+
+
+def test_garbage_collected_only_from_main_thread(game):
+    """Автоматическая сборка мусора в игре выключена (иначе она шла бы и в потоке своего сервера и освобождала
+    объекты pygame, пока главный поток рисует, — Segmentation fault); кадр собирает мусор сам."""
+    import gc
+
+    from duel.game import collect_garbage
+    assert not gc.isenabled()
+    for _ in range(gc.get_threshold()[0] + 10):
+        [].append([])                                 # «мусор» без циклов не нужен — лишь счётчик
+        x = []
+        x.append(x)
+    collect_garbage()
+    assert gc.get_count()[0] < gc.get_threshold()[0]
