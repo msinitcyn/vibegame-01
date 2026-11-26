@@ -307,3 +307,8 @@ def test_garbage_collected_only_from_main_thread(game):
         x.append(x)
     collect_garbage()
     assert gc.get_count()[0] < gc.get_threshold()[0]
+
+
+def test_sdl_window_object_is_kept(game):
+    """Объект окна SDL — один на всё время: новый на каждый F11 (и выброшенный) портил окно в pygame 2.6.1."""
+    assert game.sdl_window() is game.sdl_window()

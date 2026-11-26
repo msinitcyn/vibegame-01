@@ -271,8 +271,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             pygame.display.toggle_fullscreen()
             return
         try:
-            from pygame._sdl2.video import Window
-            display = Window.from_display_module().display_index
+            display = self.sdl_window().display_index
         except Exception:
             display = 0
         want = not self.fullscreen
@@ -293,6 +292,8 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
                 continue
             if surf is not None:
                 self.screen, self.fullscreen = surf, want
+                if attempt is not attempts[0]:
+                    self.__dict__.pop("_sdl_window", None)   # окно пересоздано — старый объект окна не годится
                 return
         log.warning("полный экран не переключился — остаёмся как есть")
         surf = pygame.display.get_surface()
@@ -303,11 +304,18 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
                 surf = pygame.display.set_mode((WIDTH, HEIGHT))
         self.screen = surf
 
-    @staticmethod
-    def window_fullscreen(on):
+    def sdl_window(self):
+        """Окно SDL игры — один объект на всё время (pygame 2.6.1: каждый новый Window.from_display_module(),
+        выброшенный после F11, портил окно — следующее переключение роняло игру)."""
+        window = self.__dict__.get("_sdl_window")
+        if window is None:
+            from pygame._sdl2.video import Window
+            window = self._sdl_window = Window.from_display_module()
+        return window
+
+    def window_fullscreen(self, on):
         """Полный экран (на весь рабочий стол) или окно — у того же окна SDL, без пересоздания."""
-        from pygame._sdl2.video import Window
-        window = Window.from_display_module()
+        window = self.sdl_window()
         if on:
             window.set_fullscreen(desktop=True)
         else:
