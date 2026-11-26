@@ -5,7 +5,7 @@ import math
 
 import pygame
 
-from .commands import REACH_FAR
+from .commands import Command, REACH_FAR
 from .i18n import t
 from .items import item_name, ring_color
 from .platform import WEB
@@ -407,7 +407,7 @@ class InputMixin:
         """Нажатие действия игрока pid (с клавиатуры, мыши или геймпада) — в команду ближайшего такта."""
         if self.snap["winner"]:
             return
-        cmd = self.pending[pid]
+        cmd = self.pending.setdefault(pid, Command())
         if action == "fire":
             cmd.fire = True
         elif action == "melee":

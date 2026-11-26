@@ -211,6 +211,9 @@ class NetScreensMixin:
     def draw_lobby(self):
         """Выбор героя по сети: ряд синего и ряд красного, как за одним компьютером. Свой ряд —
         выбирать (←/→, щелчок) и подтверждать (Enter, щелчок по выбранному); ряд соперника — смотреть."""
+        if getattr(self, "net_mode", "1v1") == "2v2":
+            self.draw_team_lobby()
+            return
         s = self.screen
         s.fill(BG)
         img = self.big.render(tr("pick.title"), True, WHITE)
@@ -270,9 +273,108 @@ class NetScreensMixin:
         self.draw_net_notice()
         pygame.display.flip()
 
+    def draw_team_lobby(self):
+        """Выбор по сети в 2×2: у каждой команды — её места (человек, бот или «свободно» — поставить бота,
+        пересесть) и герой команды: его выбирает капитан (★)."""
+        s = self.screen
+        s.fill(BG)
+        img = self.big.render(tr("team.title"), True, WHITE)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, 40)))
+        seats = self.net_seats
+        caps = getattr(self, "net_captains", {}) or {}
+        my_team = (self.me or "").rstrip("2") or None
+        n, gap = len(HEROES), 12
+        w = min(150, (WIDTH - 40 - gap * (n - 1)) // n)
+        x0 = (WIDTH - n * w - (n - 1) * gap) // 2
+        for row, team in enumerate(("blue", "red")):
+            top = 80 + row * 255
+            team_seats = [team, team + "2"]
+            hero = (seats.get(team) or {}).get("hero") or (seats.get(team + "2") or {}).get("hero")
+            foe = "red" if team == "blue" else "blue"
+            foe_hero = (seats.get(foe) or {}).get("hero")
+            color = HERO_COLOR.get(hero, GREY)
+            img = self.font.render(tr("team.name." + team) + (f"  —  {tr('hero.' + hero)}" if hero else ""), True, color)
+            s.blit(img, (x0, top))
+            captain = caps.get(team) == self.me and self.me is not None
+            for k, pid in enumerate(team_seats):
+                seat = seats.get(pid) or {}
+                who = seat.get("who")
+                box = pygame.Rect(x0 + k * ((WIDTH - 2 * x0) // 2 + 6), top + 34, (WIDTH - 2 * x0) // 2 - 6, 40)
+                pygame.draw.rect(s, (26, 29, 40), box, border_radius=8)
+                pygame.draw.rect(s, color if who in ("human", "away") else (60, 64, 80), box, 1, border_radius=8)
+                if who in ("human", "away"):
+                    label = ("★ " if caps.get(team) == pid else "") + (seat.get("name") or "?")
+                    label += "  —  " + (tr("net.away") if who == "away" else
+                                        tr("pick.chosen") if seat.get("ready") else tr("pick.choosing"))
+                    if pid == self.me:
+                        label += "   (" + tr("net.you") + ")"
+                elif who == "bot":
+                    label = tr("name.bot")
+                else:
+                    label = tr("net.free_seat")
+                img = self.small.render(label, True, WHITE if who else GREY)
+                s.blit(img, img.get_rect(midleft=(box.x + 10, box.centery)))
+                if who in (None, "bot") and not self.watching:        # свободно — бот или пересесть
+                    bw = 110
+                    b1 = pygame.Rect(box.right - bw - 6, box.y + 6, bw, box.h - 12)
+                    self.small_button(b1, tr("team.remove_bot") if who == "bot" else tr("team.add_bot"),
+                                      lambda pid=pid, on=(who != "bot"): self.net_send({"type": "seat_bot", "seat": pid, "on": on}))
+                    if who is None and my_team != team:
+                        b2 = b1.move(-bw - 6, 0)
+                        self.small_button(b2, tr("team.sit"), lambda pid=pid: self.net_send({"type": "switch", "seat": pid}))
+            for i, h in enumerate(HEROES):
+                card = pygame.Rect(x0 + i * (w + gap), top + 84, w, 150)
+                cur = hero == h
+                taken = foe_hero == h
+                if captain and not taken:
+                    self.hit(card, lambda h=h: self.choose_hero(h))
+                on = cur or (captain and not taken and self.hovered(card))
+                pygame.draw.rect(s, (40, 46, 66) if on else (26, 29, 40), card, border_radius=12)
+                pygame.draw.rect(s, HERO_COLOR[h] if cur else (60, 64, 80), card, 3 if cur else 1, border_radius=12)
+                draw_unit(s, HERO_SPRITE[h], (card.centerx, card.top + 56), 32, 1 if team == "blue" else -1,
+                          alpha=90 if taken else 255)
+                img = self.small.render(tr("hero." + h), True, HERO_COLOR[h] if not taken else GREY)
+                s.blit(img, img.get_rect(center=(card.centerx, card.top + 112)))
+                if taken:
+                    img = self.tiny_text.render(tr("pick.taken"), True, GREY)
+                    s.blit(img, img.get_rect(center=(card.centerx, card.top + 134)))
+        if self.watching:
+            self.button((WIDTH // 2, HEIGHT - 80), tr("net.btn_leave"), lambda: self.on_key(pygame.KSCAN_ESCAPE), w=200)
+        else:
+            self.button((WIDTH // 2 - 110, HEIGHT - 80), tr("net.btn_unready") if self.my_ready() else tr("net.btn_ready"),
+                        lambda: self.send_ready(not self.my_ready()), w=200)
+            self.button((WIDTH // 2 + 110, HEIGHT - 80), tr("net.btn_leave"), lambda: self.on_key(pygame.KSCAN_ESCAPE),
+                        w=200)
+        img = self.small.render(tr("team.hint", **self.hint_keys()), True, GREY)
+        s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 36)))
+        self.draw_watch_banner()
+        self.draw_chat()
+        self.draw_net_notice()
+        pygame.display.flip()
+
+    def small_button(self, rect, label, click):
+        s = self.screen
+        self.hit(rect, click)
+        on = self.hovered(rect)
+        pygame.draw.rect(s, (55, 60, 85) if on else (36, 40, 56), rect, border_radius=6)
+        pygame.draw.rect(s, BLUE if on else (80, 86, 110), rect, 1, border_radius=6)
+        img = self.tiny_text.render(label, True, WHITE)
+        s.blit(img, img.get_rect(center=rect.center))
+
+    def net_send(self, msg):
+        if self.net and self.reconnect_until is None:
+            self.net.send(msg)
+
     def game_line(self, g):
-        """Партия в списке: «Папа (Огонь) — Маша (Тьма)» и «идёт 2:14 · зрителей 1»."""
+        """Партия в списке: «Папа (Огонь) — Маша (Тьма)» и «идёт 2:14 · зрителей 1»; 2×2 — по двое."""
         def side(pid):
+            if g.get("mode") == "2v2":
+                names = []
+                for p in (pid, pid + "2"):
+                    x = g.get(p) or {}
+                    names.append(tr("name.bot") if x.get("who") == "bot" else (x.get("name") or "·"))
+                hero = (g.get(pid) or {}).get("hero")
+                return ", ".join(names) + (f" ({tr('hero.' + hero)})" if hero else "")
             x = g.get(pid) or {}
             name = tr("name.bot") if x.get("who") == "bot" else (x.get("name") or "?")
             return f"{name} ({tr('hero.' + x['hero'])})" if x.get("hero") else name
@@ -351,7 +453,8 @@ class NetScreensMixin:
                                   click=lambda i=i: self.lobby_mouse(i, True), hover=lambda i=i: self.lobby_mouse(i))
                 else:
                     left, status, color = self.game_line(d)
-                    self.side_row((x, y, col_w, 34), self.lobby_index == i, left, status + "  ·  " + tr("lobby.watch"),
+                    act = tr("lobby.join_team") if self.can_join_team(d) else tr("lobby.watch")
+                    self.side_row((x, y, col_w, 34), self.lobby_index == i, left, status + "  ·  " + act,
                                   color, click=lambda i=i: self.lobby_mouse(i, True),
                                   hover=lambda i=i: self.lobby_mouse(i))
                 y += 40
@@ -361,9 +464,11 @@ class NetScreensMixin:
                     AMMO_COLOR if self.seeking else None),
                    (tr("lobby.bot"), lambda: self.lobby_conn.send({"type": "bot_game"}), None),
                    (tr("lobby.warm"), self.start_warmup, None)]
+        if self.server_can("team"):                     # 2×2: открыть партию на четверых
+            buttons.insert(2, (tr("lobby.team"), lambda: self.lobby_conn.send({"type": "team_game"}), None))
         if self.server_can("recent"):                   # «Последние игры» сервера — у новых серверов
             buttons.append((tr("lobby.recent"), self.open_recent, None))
-        bw, gap = (200, 20) if len(buttons) == 4 else (220, 10)
+        bw, gap = {5: (178, 8), 4: (200, 20)}.get(len(buttons), (220, 10))
         x0 = WIDTH // 2 - (len(buttons) - 1) * (bw + gap) // 2
         for k, (label, action, color) in enumerate(buttons):
             self.button((x0 + k * (bw + gap), by), label, action, w=bw, color=color)

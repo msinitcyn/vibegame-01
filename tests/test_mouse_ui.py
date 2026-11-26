@@ -107,9 +107,9 @@ def test_own_server_lobby_buttons_and_pick(game):
     assert game.state == "lobby"
     frames(game, lambda: game.lobby_you)
     redraw(game, game.draw_lobby_screen)
-    buttons = [h for h in game.hits if h[0].h == 40 and h[0].w == 200]   # Ищу, С ботом, Разминка, Последние игры
-    assert len(buttons) == 4
-    click(game, buttons[2][0].center)                 # Разминка
+    buttons = [h for h in game.hits if h[0].h == 40 and h[0].w == 178]   # Ищу, С ботом, 2×2, Разминка, Последние игры
+    assert len(buttons) == 5
+    click(game, buttons[3][0].center)                 # Разминка
     assert game.warmup
     game.on_key(pygame.KSCAN_ESCAPE)                  # пауза
     redraw(game, game.draw)
@@ -117,7 +117,7 @@ def test_own_server_lobby_buttons_and_pick(game):
     click(game, quit_btn[0].center)                   # «Закончить разминку»
     assert game.state == "lobby"
     redraw(game, game.draw_lobby_screen)
-    buttons = [h for h in game.hits if h[0].h == 40 and h[0].w == 200]
+    buttons = [h for h in game.hits if h[0].h == 40 and h[0].w == 178]
     click(game, buttons[1][0].center)                 # Играть с ботом
     frames(game, lambda: game.net and game.net_seats.get("blue", {}).get("hero"))
     redraw(game, game.draw_lobby)

@@ -47,7 +47,7 @@ import socket
 
 # Что умеет сервер сверх протокола (сервер шлёт в hello). Протокол тот же, но старый сервер чего-то
 # из этого не знает — клиент подключается и честно говорит, что не будет работать.
-FEATURES = ("chat", "pause", "stats", "test", "replay", "crash", "lobby_chat", "recent")
+FEATURES = ("chat", "pause", "stats", "test", "replay", "crash", "lobby_chat", "recent", "team")
 BASELINE_FEATURES = ("chat", "pause", "stats")     # у серверов 0.7.4, которые ещё не присылали features
 
 

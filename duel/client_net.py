@@ -62,19 +62,23 @@ class NetClientMixin:
             self.time_acc -= STEP
             steps += 1
             if self.watching:             # зритель ничего не шлёт
-                self.pending = {pid: Command() for pid in PLAYER_IDS}
+                self.pending = self.net_pending()
                 continue
             if not self.warmup and self.paused != self.menu_sent:    # открыл/закрыл меню — серверу (сопернику видно)
                 self.menu_sent = self.paused
                 self.net.send({"type": "menu", "open": self.paused})
             if self.warmup or self.paused or self.chat_typing:   # разминка, меню, чат: пустые команды (связь жива)
                 if self.paused:
-                    self.pending = {pid: Command() for pid in PLAYER_IDS}
+                    self.pending = self.net_pending()
                 self.net.send({"type": "cmd", "move": [0, 0]})
                 continue
             self.net.send(self.command_message())
         if steps == MAX_STEPS_PER_FRAME:
             self.time_acc = 0.0
+
+    def net_pending(self):
+        """Пустые нажатия по сети: обе раскладки (ведут своего мага) и сам свой маг (в 2×2 — может быть напарником)."""
+        return {pid: Command() for pid in dict.fromkeys([*PLAYER_IDS, *([self.me] if self.me else [])])}
 
     def command_message(self):
         """Команда своего мага за такт: обе раскладки клавиатуры и геймпад вместе."""
@@ -82,13 +86,13 @@ class NetClientMixin:
         dx = dy = 0
         fire = melee = False
         slot = None
-        for pid in PLAYER_IDS:
-            p = self.pending[pid]
+        for pid in self.net_pending():            # обе раскладки и свой маг (2×2: геймпад — у blue2/red2)
+            p = self.pending.get(pid) or Command()
             ax, ay = self.axis(pid, held)
             dx, dy = dx + ax, dy + ay
             fire, melee = fire or p.fire, melee or p.melee
             slot = p.use_slot if p.use_slot is not None else slot
-        self.pending = {pid: Command() for pid in PLAYER_IDS}
+        self.pending = self.net_pending()
         move = self.walk_move(self.me, (max(-1, min(1, dx)), max(-1, min(1, dy))))
         return {"type": "cmd", "move": list(move), "fire": fire, "melee": melee, "slot": slot,
                 "aim": self.aim_for(self.me, move), "reach": self.reach_for(self.me)}
@@ -105,6 +109,8 @@ class NetClientMixin:
             self.on_state(msg, now)
         elif kind == "chat":
             self.chat_received(msg)
+        elif kind == "seat" and isinstance(msg.get("you"), str):   # 2×2: пересел на другое место
+            self.me, self.net_token = msg["you"], msg.get("token") or self.net_token
         elif kind == "bye":
             self.net_end = "net.host_left"
             return False
@@ -127,6 +133,9 @@ class NetClientMixin:
         self.net_stats = stats if isinstance(stats, dict) else {}
         self.net_seats = msg.get("seats") or {}
         self.net_spectators = int(msg.get("spectators") or 0)
+        self.net_mode = "2v2" if msg.get("mode") == "2v2" else "1v1"
+        caps = msg.get("captains")
+        self.net_captains = caps if isinstance(caps, dict) else {}
         left = msg.get("countdown") or 0
         left = float(left) if isinstance(left, (int, float)) and not isinstance(left, bool) else 0.0
         if self.net_countdown > 0 and left <= 0:
@@ -135,7 +144,7 @@ class NetClientMixin:
         self.net_phase = msg.get("phase", "play")
         self.net_paused = bool(msg.get("paused"))
         hold = msg.get("hold")
-        self.net_hold = hold if hold in PLAYER_IDS else None
+        self.net_hold = hold if isinstance(hold, str) and hold in self.net_seats else None
         self.net_menus = msg.get("menus") if isinstance(msg.get("menus"), dict) else {}
         self.net_pauses = msg.get("pauses") if isinstance(msg.get("pauses"), dict) else {}
         self.net_can_hold = msg.get("can_hold") if isinstance(msg.get("can_hold"), dict) else {}
@@ -251,9 +260,16 @@ class NetClientMixin:
         """Сетевая игра без своего места — зритель."""
         return self.net is not None and self.me is None
 
+    def can_pick_hero(self):
+        """В 2×2 героя команды выбирает только капитан."""
+        if getattr(self, "net_mode", "1v1") != "2v2":
+            return True
+        team = "blue" if (self.me or "").startswith("blue") else "red"
+        return (getattr(self, "net_captains", {}) or {}).get(team) == self.me
+
     def next_hero(self, step):
         """Лобби: следующий свободный герой (занятых соперником пропускаем)."""
-        if self.watching:
+        if self.watching or not self.can_pick_hero():
             return
         mine = self.side_hero(self.me)
         taken = self.heroes_taken_by_people()
@@ -269,7 +285,7 @@ class NetClientMixin:
     def choose_hero(self, hero):
         """Выбор героя по сети мышью: щелчок по другому — выбрать (занятого соперником — нельзя),
         по своему — подтвердить или снять подтверждение."""
-        if self.watching or not self.net_waiting:
+        if self.watching or not self.net_waiting or not self.can_pick_hero():
             return
         mine = self.net_seats.get(self.me) or {}
         if mine.get("hero") == hero:
@@ -282,7 +298,11 @@ class NetClientMixin:
         self.net_seats.setdefault(self.me, {})["hero"] = hero      # сразу видно у себя
 
     def heroes_taken_by_people(self):
-        """Герои соперников-людей: их взять нельзя. Героя бота — можно (бот возьмёт другого)."""
+        """Герои соперников-людей: их взять нельзя. Героя бота — можно (бот возьмёт другого). 2×2 — герой
+        другой команды."""
+        if getattr(self, "net_mode", "1v1") == "2v2":
+            foe = "red" if (self.me or "").startswith("blue") else "blue"
+            return {(self.net_seats.get(foe) or {}).get("hero")}
         return {s.get("hero") for pid, s in self.net_seats.items()
                 if pid != self.me and s.get("who") and s.get("who") != "bot"}
 

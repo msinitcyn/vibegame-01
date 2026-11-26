@@ -468,9 +468,14 @@ class LobbyMixin:
             self.account_click()
         elif kind == "player":
             self.challenge(data)
-        elif kind == "game":
-            self.lobby_conn.send({"type": "join", "room": data.get("room"), "role": "spectator",
+        elif kind == "game":                  # 2×2 со свободным местом — войти игроком, иначе — смотреть
+            role = "player" if self.can_join_team(data) else "spectator"
+            self.lobby_conn.send({"type": "join", "room": data.get("room"), "role": role,
                                   "name": self.player_name()})
+
+    @staticmethod
+    def can_join_team(game):
+        return game.get("mode") == "2v2" and game.get("phase") == "lobby" and (game.get("open") or 0) > 0
 
     def lobby_mouse(self, i, click=False):
         """Лобби: наведение выбирает строку, щелчок — аккаунт / вызвать / смотреть."""

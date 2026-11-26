@@ -28,6 +28,12 @@ STATS_LOG_EVERY = 3600            # связь игроков в лог — ра
 
 
 PIDS = ("blue", "red")
+TEAM_PIDS = ("blue", "blue2", "red", "red2")      # 2×2: ведущий и напарник каждой команды
+MODES = ("1v1", "2v2")
+
+
+def team_of(pid):
+    return "blue" if pid.startswith("blue") else "red"
 SEND_EVERY = 2                    # снимок раз в 2 такта — 30 в секунду
 NET_REPORTS_KEEP = 200            # отчётов о разрывах (logs/net-reports/) — последние столько
 HOLD = 30.0                       # секунд держим место потерявшему связь
@@ -77,6 +83,7 @@ class Seat:
         self.in_menu = False          # игрок открыл меню (игра у него идёт; сопернику видно «в меню»)
         self.last_chat = -1e9         # когда писал в чат (не чаще CHAT_GAP)
         self.stats = {}               # статистика связи, присланная игроком (пинг, снимков/с, …)
+        self.bot = False              # 2×2: на этом месте играет бот (его поставили игроки комнаты)
 
     @property
     def free(self):
@@ -84,18 +91,24 @@ class Seat:
 
 
 class Room:
-    def __init__(self, room_id, name="", bot=False, clock=None, log=print, record=None, replays=None):
+    def __init__(self, room_id, name="", bot=False, clock=None, log=print, record=None, replays=None, mode="1v1"):
+        """mode="2v2" — четыре места (blue, blue2, red, red2); на свободное место игроки ставят бота;
+        героя команды выбирает капитан — случайный из людей команды."""
         self.id = room_id
+        self.mode = mode if mode in MODES else "1v1"
+        self.pids = TEAM_PIDS if self.mode == "2v2" else PIDS
+        self.captain = {"blue": None, "red": None}
+        self.team_hero = {"blue": "frost", "red": "fire"}
         self.name = clean_name(name)  # имя создателя комнаты
         self.clock = clock
         self.log = lambda text: log(f"[комната {room_id}] {text}")
         self.record = record          # record(итог партии) — в matches.jsonl сервера (None — не писать)
         self.replays = replays        # папка логов: повторы партий — в её replays/ (None — не писать)
         self.recorder = None          # запись идущей партии (duel/replay.py)
-        self.seats = {pid: Seat() for pid in PIDS}
+        self.seats = self.fresh_seats()
         self.spectators = []          # соединения зрителей: получают снимки, ничего не меняют
         self.bot = bot
-        self.bots = {pid: SmartBot(None, pid, "normal", i + 1) for i, pid in enumerate(PIDS)}   # бот на правилах
+        self.bots = {pid: SmartBot(None, pid, "normal", i + 1) for i, pid in enumerate(self.pids)}   # бот на правилах
         self.bot_heroes = {}          # герой бота на месте: случайный; человек взял его же — бот берёт другого
         self.rng = random.Random()
         self.tick_no = 0              # номер такта комнаты (для плавной анимации у клиентов)
@@ -106,7 +119,7 @@ class Room:
         self.hold = None              # кто поставил общую паузу (цвет) — партия стоит
         self.resume = 0.0             # паузу сняли: секунд отсчёта до продолжения
         self.pause_cool = 0.0         # после отсчёта: секунд, пока новую паузу ставить нельзя
-        self.pauses = {pid: config.PAUSE_LIMIT for pid in PIDS}
+        self.pauses = {pid: config.PAUSE_LIMIT for pid in self.pids}
         self.duel = False             # партия из лобби (вызов, подбор, бот): ушёл один — закрыть для всех
         self.closing = None           # причина закрыть партию: "left" / "lost" (сервер вернёт всех в лобби)
         self.recent = deque(maxlen=RECENT_TICKS)    # команды последних тактов — для файла ошибки комнаты
@@ -132,19 +145,63 @@ class Room:
         """В комнате никого: ни игроков, ни отошедших, ни зрителей — её можно убрать."""
         return not self.conns and not self.spectators and not any(s.away_until for s in self.seats.values())
 
+    def fresh_seats(self):
+        return {pid: Seat() for pid in self.pids}
+
     def open_seat(self):
-        """Можно войти игроком: есть место без человека (бот его уступит)."""
-        return any(s.free for s in self.seats.values())
+        """Можно войти игроком: есть место без человека (бот его уступит; в 2×2 — место без бота)."""
+        return any(s.free and not s.bot for s in self.seats.values())
 
     def bot_seats(self):
-        """Места, где сейчас играет бот (свободные, если бот разрешён и кто-то подключён)."""
-        if not self.bot or not self.conns:
+        """Места, где сейчас играет бот: 1×1 — свободные, если бот разрешён; 2×2 — где его поставили.
+        Пока в комнате никого — ботов нет."""
+        if not self.conns:
+            return []
+        if self.mode == "2v2":
+            return [pid for pid, s in self.seats.items() if s.free and s.bot]
+        if not self.bot:
             return []
         return [pid for pid, s in self.seats.items() if s.free]
 
     def full(self):
-        """Оба места заняты (людьми, отошедшими или ботом)."""
+        """Все места заняты (людьми, отошедшими или ботами)."""
+        if self.mode == "2v2":
+            return all(not s.free or s.bot for s in self.seats.values())
         return all(not s.free for s in self.seats.values()) or bool(self.bot_seats())
+
+    def update_captains(self):
+        """2×2: капитан команды — случайный из людей команды; ушёл — новый."""
+        if self.mode != "2v2":
+            return
+        for team in ("blue", "red"):
+            humans = [p for p, s in self.seats.items() if team_of(p) == team and not s.free]
+            if self.captain.get(team) not in humans:
+                self.captain[team] = self.rng.choice(humans) if humans else None
+
+    def set_seat_bot(self, pid, on):
+        """2×2: бот на свободное место (или убрать его) — до начала партии; все снова подтверждают."""
+        s = self.seats.get(pid) if isinstance(pid, str) else None
+        if self.mode != "2v2" or self.phase != "lobby" or s is None or not s.free or s.bot == bool(on):
+            return
+        s.bot = bool(on)
+        for x in self.seats.values():
+            x.ready = False
+        self.log(f"{pid}: {'бот' if on else 'место открыто'}")
+
+    def switch_seat(self, pid, to):
+        """2×2: пересесть на свободное место (в другую команду) до начала партии. Новое место — сразу клиенту."""
+        if self.mode != "2v2" or self.phase != "lobby" or not isinstance(to, str) or to not in self.seats \
+                or to == pid or not self.seats[to].free:
+            return pid
+        mine, other = self.seats[pid], self.seats[to]
+        other.bot = False
+        self.seats[pid], self.seats[to] = other, mine
+        mine.ready = False
+        self.pending[to] = Command()
+        self.update_captains()
+        mine.conn.send({"type": "seat", "room": self.id, "you": to, "token": mine.token})
+        self.log(f"{pid} пересел на {to}")
+        return to
 
     def all_ready(self):
         humans = [s for s in self.seats.values() if not s.free]
@@ -157,6 +214,8 @@ class Room:
     def seat_heroes(self):
         """Герой каждого места: у людей — свой, у бота — случайный (выбран заранее, игрок видит его и может
         выбрать в ответ; взял того же — бот берёт другого случайного), у пустого — None."""
+        if self.mode == "2v2":                # герой команды — у всех мест команды
+            return {pid: self.team_hero[team_of(pid)] for pid in self.pids}
         out = {pid: s.hero for pid, s in self.seats.items() if not s.free}
         for pid in self.bot_seats():
             h = self.bot_heroes.get(pid)
@@ -175,10 +234,10 @@ class Room:
         self.games += 1
         self.recent = deque(maxlen=RECENT_TICKS)
         self.recorder = None
-        self.match = Match()
+        self.match = Match(mode=self.mode)
         self.hold, self.resume, self.pause_cool = None, 0.0, 0.0
-        self.pauses = {pid: config.PAUSE_LIMIT for pid in PIDS}
-        self.pending = {pid: Command() for pid in PIDS}
+        self.pauses = {pid: config.PAUSE_LIMIT for pid in self.pids}
+        self.pending = {pid: Command() for pid in self.pids}
         for b in self.bots.values():      # тестовый режим бота (/bot stop) — только на одну партию
             testcmd.set_bot_mode(b, "play")
             b.use_next = None
@@ -204,6 +263,7 @@ class Room:
                 self.log(f"повтор оборванной партии: {path.name}")
             self.recorder = None
         self.seats[pid] = Seat()
+        self.update_captains()
         self.log(f"{pid} {why}")
         if self.duel and (self.conns or self.spectators or any(x.away_until for x in self.seats.values())):
             self.closing = "left" if not close or why == "вышел" else "lost"
@@ -251,8 +311,11 @@ class Room:
             self.log(f"{pid} ({old.name or 'гость'}): обрыв — вернулся раньше, чем сервер заметил "
                      f"(тишина {now - old.last_seen:.1f} с)")
             old.conn.close()
+        want = join.get("seat")
+        if pid is None and isinstance(want, str) and want in self.seats and self.seats[want].free:
+            pid = want                        # 2×2: место выбрали в лобби
         if pid is None:
-            pid = next((p for p, s in self.seats.items() if s.free), None)
+            pid = next((p for p, s in self.seats.items() if s.free and not s.bot), None)
         if pid is None:
             conn.send({"type": "full"})
             return False
@@ -261,11 +324,13 @@ class Room:
         if not back:
             s.token = secrets.token_hex(8)
             s.ready = False
-            s.hero = self.free_hero(pid)
+            s.hero = self.free_hero(pid) if self.mode == "1v1" else None
+            s.bot = False
             self.pending[pid] = Command()
         s.name = clean_name(join.get("name")) or s.name
         if not self.name and pid == "blue":
             self.name = s.name
+        self.update_captains()
         conn.send({"type": "seat", "room": self.id, "you": pid, "token": s.token})
         self.log(f"{conn.addr[0]}:{conn.addr[1]} {'вернулся' if back else 'вошёл'} — {pid}")
         return True
@@ -339,13 +404,27 @@ class Room:
                     s.name = clean_name(msg.get("name"))
             elif kind == "ready":
                 s.ready = bool(msg.get("ready", True))
+            elif kind == "hero" and self.mode == "2v2":       # героя команды выбирает капитан
+                hero, team = msg.get("hero"), team_of(pid)
+                foe = self.team_hero["red" if team == "blue" else "blue"]
+                if isinstance(hero, str) and self.phase == "lobby" and hero in HEROES and hero != foe \
+                        and self.captain.get(team) == pid and hero != self.team_hero[team]:
+                    self.team_hero[team] = hero
+                    for p, x in self.seats.items():
+                        if team_of(p) == team:
+                            x.ready = False
+            elif kind == "seat_bot":          # 2×2: бот на свободное место (или убрать)
+                self.set_seat_bot(msg.get("seat"), msg.get("on", True))
+            elif kind == "switch":            # 2×2: пересесть на свободное место
+                if self.switch_seat(pid, msg.get("seat")) != pid:
+                    return None               # места поменялись — остальное — в следующем такте
             elif kind == "hero":
                 hero = msg.get("hero")
                 if isinstance(hero, str) and self.phase == "lobby" and hero in HEROES \
                         and hero not in self.taken_heroes(pid) and hero != s.hero:
                     s.hero, s.ready = hero, False
             elif kind == "bot":               # бот на свободное место — сразу и «готов» за себя
-                if self.phase == "lobby" and not self.bot:
+                if self.phase == "lobby" and not self.bot and self.mode == "1v1":
                     self.bot = True
                     s.ready = True
                     self.log(f"{pid} позвал бота")
@@ -435,9 +514,10 @@ class Room:
         """Строка списка партий в лобби: кто против кого, какими героями, сколько идёт, зрители."""
         seats, heroes = self.seats_info(), self.seat_heroes()
         side = {pid: {"name": (seats[pid]["name"] or ("bot" if seats[pid]["who"] == "bot" else "")),
-                      "hero": heroes.get(pid), "who": seats[pid]["who"]} for pid in PIDS}
+                      "hero": heroes.get(pid), "who": seats[pid]["who"]} for pid in self.pids}
         return {"room": self.id, "phase": self.phase, "time": round(self.match.match_time),
-                "spectators": len(self.spectators), **side}
+                "spectators": len(self.spectators), "mode": self.mode,
+                "open": sum(1 for s in self.seats.values() if s.free and not s.bot), **side}
 
     def info(self):
         """Строка списка комнат."""
@@ -466,7 +546,7 @@ class Room:
                 self.log("пауза кончилась — играем")
         held = self.hold is not None or self.resume > 0
         if held:                              # стоим: нажатия за паузу не копим
-            self.pending = {pid: Command(move=(0, 0)) for pid in PIDS}
+            self.pending = {pid: Command(move=(0, 0)) for pid in self.pids}
         elif self.phase == "play" and not paused:
             self.pause_cool = max(0.0, self.pause_cool - STEP)
         if self.phase == "countdown" and not paused:
@@ -487,9 +567,10 @@ class Room:
                    "phase": self.phase, "waiting": self.phase == "lobby", "paused": paused,
                    "countdown": round(self.countdown if self.phase == "countdown" else self.resume, 2),
                    "hold": self.hold, "menus": {pid: s.in_menu for pid, s in self.seats.items() if s.conn},
-                   "pauses": dict(self.pauses), "can_hold": {pid: self.can_hold(pid) for pid in PIDS},
+                   "pauses": dict(self.pauses), "can_hold": {pid: self.can_hold(pid) for pid in self.pids},
                    "stats": {pid: s.stats for pid, s in self.seats.items() if s.conn and s.stats},
                    "seats": self.seats_info(), "spectators": len(self.spectators),
+                   "mode": self.mode, "captains": dict(self.captain),
                    "snap": snapshot(self.match), "events": self.events}
             self.events = []
             for conn in list(self.conns.values()) + self.spectators:
@@ -501,7 +582,7 @@ class Room:
             bots = self.bot_seats()
             self.recorder = Recorder(self.match, "net-bot" if bots else "net", room=self.id,
                                      players={pid: "bot" if pid in bots else (self.seats[pid].name or "guest")
-                                              for pid in PIDS})
+                                              for pid in self.pids})
         return self.recorder
 
     def who(self, pid):
@@ -514,8 +595,8 @@ class Room:
         """Итог партии в лог: кто кого, кем, сколько шла, с какими жизнями."""
         m = self.match
         w = getattr(m.winner, "id", m.winner)
-        hp = ", ".join(f"{pid} {m.player(pid).hp}" for pid in PIDS)
-        res = f"победил {self.who(w)}" if w in PIDS else f"итог {w}"
+        hp = ", ".join(f"{pid} {m.player(pid).hp}" for pid in self.pids)
+        res = f"победил {self.who(w)}" if w in self.pids else f"итог {w}"
         self.log(f"партия окончена: {res}; {self.who('blue')} против {self.who('red')}, "
                  f"{m.match_time:.0f} с, волна {m.mob_wave}, жизни: {hp}, зерно {m.seed}")
         if self.replays and self.recorder:
@@ -525,7 +606,7 @@ class Room:
         if self.record:
             bots = self.bot_seats()
             self.record({**m.summary(), "room": self.id,
-                         "players": {pid: "bot" if pid in bots else (self.seats[pid].name or "guest") for pid in PIDS}},
+                         "players": {pid: "bot" if pid in bots else (self.seats[pid].name or "guest") for pid in self.pids}},
                         "net-bot" if bots else "net")
 
     def save_net_report(self, pid, s, msg):
@@ -586,14 +667,14 @@ class Room:
     def play_tick(self):
         commands = {}
         bots = self.bot_seats()
-        for pid in PIDS:
+        for pid in self.pids:
             if self.seats[pid].conn:
                 commands[pid] = self.pending[pid]
             elif pid in bots:
                 self.bots[pid].match = self.match         # партия могла смениться (реванш)
                 commands[pid] = Command(*self.bots[pid].act())
         # нажатия — один раз; направление и прицел держатся до следующей команды клиента
-        self.pending = {pid: Command(move=self.pending[pid].move) for pid in PIDS}
+        self.pending = {pid: Command(move=self.pending[pid].move) for pid in self.pids}
         self.rec().tick(commands)
         self.recent.append([self.tick_no, round(self.match.match_time, 3),
                             {pid: [list(c.move), c.fire, c.melee, c.use_slot,

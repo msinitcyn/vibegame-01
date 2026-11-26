@@ -26,7 +26,7 @@ from pathlib import Path
 from . import discovery
 from .accounts import AuthError, Accounts, default_path
 from .net import FEATURES, PORT, PROTO, Conn, version_tuple
-from .room import PIDS, Room, Seat, clean_name
+from .room import Room, clean_name
 from .status import Health, serve as serve_status
 from .ws import WS_PORT, WSConn
 from .match import STEP
@@ -262,6 +262,18 @@ class Server:
         self.log(f"партия: «{self.member_name(a)}» против «{self.member_name(b)}» (комната {room.id})")
         self.push_lobby()
 
+    def team_game(self, conn, now):
+        """2×2 из лобби: комната на четверых, создатель — синий ведущий. Остальные входят из списка партий,
+        на пустые места игроки комнаты ставят ботов."""
+        room = self.create_room(self.member_name(conn), mode="2v2")
+        if room is None:
+            conn.send({"type": "full", "why": "rooms"})
+            return
+        self.leave_lobby(conn)
+        room.seat(conn, {"role": "player", "name": self.member_name(conn)}, now)
+        self.log(f"«{self.member_name(conn)}» открыл партию 2×2 (комната {room.id})")
+        self.push_lobby()
+
     def bot_game(self, conn, now):
         room = self.create_room(self.member_name(conn))
         if room is None:
@@ -333,11 +345,11 @@ class Server:
             self.lobby.remove(conn)
         conn.in_room = True
 
-    def create_room(self, name=""):
+    def create_room(self, name="", mode="1v1"):
         if len(self.rooms) >= MAX_ROOMS:
             return None
         room = Room(self.next_room, name=name, bot=self.bot, clock=self.clock, log=self.log,
-                    record=self.record_match if self.records else None, replays=self.dump_dir)
+                    record=self.record_match if self.records else None, replays=self.dump_dir, mode=mode)
         self.rooms[room.id] = room
         self.next_room += 1
         self.log(f"комната {room.id} создана")
@@ -484,6 +496,11 @@ class Server:
                     self.seek(conn, now, kind == "seek")
                     if getattr(conn, "in_room", False):
                         return "room"
+            elif kind == "team_game" and getattr(conn, "member", None) is not None:
+                where = where or "lobby"
+                if conn in self.lobby:
+                    self.team_game(conn, now)
+                    return "room"
             elif kind == "bot_game" and getattr(conn, "member", None) is not None:
                 where = where or "lobby"
                 if conn in self.lobby:
@@ -635,7 +652,7 @@ class Server:
                     for conn in room.all_conns():
                         conn.send({"type": "room_closed", "why": room.closing})
                         self.back_to_lobby(conn)
-                    room.seats = {pid: Seat() for pid in PIDS}
+                    room.seats = room.fresh_seats()
                     room.spectators = []
                 if not room.empty:
                     room.tick()
@@ -645,7 +662,7 @@ class Server:
                 self.log(f"ошибка в комнате {room.id}" + (f" (состояние — {where})" if where else "") + ":\n" + text)
                 for conn in room.all_conns():
                     conn.close()
-                room.seats = {pid: Seat() for pid in PIDS}
+                room.seats = room.fresh_seats()
                 room.spectators = []
             if room.empty:
                 del self.rooms[room.id]
