@@ -348,7 +348,9 @@ def test_pick_scene_scrolls_heroes_and_locks(game):
             seen[pid].add(v["hero"])
     assert len(seen["blue"]) >= 5 and len(seen["red"]) >= 5               # листались
     assert st.state() == {"blue": {"hero": "fire", "ok": True}, "red": {"hero": "frost", "ok": True}}
-    img = st.render_frame(game, movie.FRAME.size)
+    for name in ("captain", "seat_who", "seat_mode"):     # как при запуске: экрана выбора ещё не было
+        game.__dict__.pop(name, None)
+    img = st.render_frame(game, movie.FRAME.size)          # раньше: AttributeError «captain» — ролик падал
     assert img.get_size() == movie.FRAME.size
     assert not hasattr(game, "pick") or game.state != "pick"              # экран игры не тронут
 

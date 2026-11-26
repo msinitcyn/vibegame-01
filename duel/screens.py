@@ -277,7 +277,8 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         return cached[1]
 
     def hud_pids(self):
-        """Чьи артефакты на панели: 1×1 — оба; 2×2 — от каждой команды человек (ведущий, если оба) или ведущий."""
+        """Чьи артефакты на панели: 1×1 — оба; 2×2 — от каждой команды человек (ведущий, если оба) или ведущий.
+        По сети — свой маг (даже напарник) и ведущий соперников."""
         players = self.snap["players"]
         if len(players) <= 2:
             return [p["id"] for p in players]
@@ -289,10 +290,14 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         return out
 
     def draw_mate_items(self, s):
-        """2×2: артефакты магов, которых нет на панели, — строкой значков под магом."""
+        """2×2: артефакты магов, которых нет на панели, — строкой значков под магом. По сети — только у партнёра
+        (артефакты соперников не видны, как и в 1×1 у второго)."""
         shown = self.hud_pids()
+        me = getattr(self, "me", None) if self.net and not self.watching else None
         for p in self.snap["players"]:
             if p["id"] in shown or p.get("out") or p.get("dead") is not None:
+                continue
+            if me and (p.get("team") or p["id"]) != me.rstrip("2"):
                 continue
             items = p.get("items") or []
             r, gap = 9, 3

@@ -92,18 +92,22 @@ class SeatsMixin:
             if self.captain.get(team) not in humans:
                 self.captain[team] = random.choice(humans) if humans else None
 
+    def seat_captains(self):
+        """Капитаны сторон; мест ещё нет (сцена выбора в ролике) — как раньше: левая и правая раскладки."""
+        return self.__dict__.get("captain") or {"blue": "kb:blue", "red": "kb:red"}
+
     def side_is_bot(self, side):
-        return self.captain.get(side) is None
+        return self.seat_captains().get(side) is None
 
     def side_device(self, side):
         """Чьё устройство листает героя стороны: капитана (в 1×1 он единственный) или None — у ботов."""
-        return self.captain.get(side)
+        return self.seat_captains().get(side)
 
     def pick_side(self, dev):
         """Какую сторону листает устройство на экране выбора: свою (капитан) — или, если оно не играет,
         сторону ботов."""
-        side = next((s for s in TEAMS if self.captain.get(s) == dev), None)
-        if side is None and dev not in self.seat_who.values():
+        side = next((s for s in TEAMS if self.seat_captains().get(s) == dev), None)
+        if side is None and dev not in (self.__dict__.get("seat_who") or {}).values():
             side = next((s for s in TEAMS if self.side_is_bot(s)), None)
         return side
 

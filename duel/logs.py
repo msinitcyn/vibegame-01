@@ -27,6 +27,7 @@ from . import settings
 
 log = logging.getLogger("duel")
 _ready = False
+_fault_file = None
 
 
 def ready():
@@ -57,7 +58,16 @@ def setup():
         console = logging.StreamHandler()
         console.setLevel(logging.WARNING)
         log.addHandler(console)
-    threading.excepthook = lambda a: crash(a.exc_type, a.exc_value, a.exc_traceback, thread=getattr(a.thread, "name", None))
+    try:                                      # падение внутри SDL и т. п. (без исключения Python) — стек в fault.log
+        import faulthandler
+        global _fault_file
+        _fault_file = open(log_dir() / "fault.log", "a", encoding="utf-8")
+        _fault_file.write(f"--- запуск {version()}\n")
+        _fault_file.flush()
+        faulthandler.enable(file=_fault_file, all_threads=True)
+    except (OSError, ValueError, RuntimeError):
+        pass
+        threading.excepthook = lambda a: crash(a.exc_type, a.exc_value, a.exc_traceback, thread=getattr(a.thread, "name", None))
     log.info("запуск: версия %s, %s, Python %s", version(), platform.platform(), platform.python_version())
 
 

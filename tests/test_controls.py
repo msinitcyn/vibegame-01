@@ -278,8 +278,14 @@ def test_fullscreen_falls_back_and_never_crashes(game, monkeypatch):
         return pygame.Surface(size)
     monkeypatch.setattr(pygame.display, "set_mode", flaky)
     monkeypatch.delenv("SDL_RENDER_DRIVER", raising=False)
+    switched = []
+    monkeypatch.setattr(game, "window_fullscreen", lambda on: switched.append(on) or pygame.display.get_surface())
     was = game.fullscreen
-    game.toggle_fullscreen()
+    game.toggle_fullscreen()                       # окно не пересоздаётся — переключается само окно SDL
+    assert game.fullscreen != was and switched == [not was] and calls[-1] is None
+    monkeypatch.setattr(game, "window_fullscreen", lambda on: (_ for _ in ()).throw(pygame.error("нет")))
+    was = game.fullscreen
+    game.toggle_fullscreen()                       # и это не вышло — программная отрисовка
     assert game.fullscreen != was and calls[-1] == "software"
     monkeypatch.setattr(pygame.display, "set_mode", lambda *a, **k: (_ for _ in ()).throw(pygame.error("нет")))
     monkeypatch.setattr(pygame.display, "toggle_fullscreen", lambda: (_ for _ in ()).throw(pygame.error("нет")))

@@ -262,14 +262,17 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             display = 0
         want = not self.fullscreen
         flags = pygame.SCALED | (pygame.FULLSCREEN if want else 0)
+        # 1) окно заново на своём мониторе (из исходников — работает); 2) собранная игра: своя SDL не создаёт
+        # отрисовщик заново — переключаем само окно, не пересоздавая (масштаб SCALED остаётся); 3–4) запасные.
+        # pygame.display.toggle_fullscreen не берём: поле в углу большого экрана, а в ролике — падение SDL.
         attempts = [lambda: pygame.display.set_mode((WIDTH, HEIGHT), flags, display=display),
+                    lambda: self.window_fullscreen(want),
                     lambda: pygame.display.set_mode((WIDTH, HEIGHT), flags),
-                    self.software_mode(flags),                      # собранная игра: своя SDL не создаёт ускоренный
-                    lambda: (pygame.display.toggle_fullscreen(), pygame.display.get_surface())[1]]
+                    self.software_mode(flags)]
         for attempt in attempts:
             try:
                 surf = attempt()
-            except pygame.error as e:
+            except Exception as e:                                 # pygame.error, нет _sdl2 и т. п.
                 log.warning("полный экран: %s", e)
                 continue
             if surf is not None:
@@ -283,6 +286,17 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             except pygame.error:
                 surf = pygame.display.set_mode((WIDTH, HEIGHT))
         self.screen = surf
+
+    @staticmethod
+    def window_fullscreen(on):
+        """Полный экран (на весь рабочий стол) или окно — у того же окна SDL, без пересоздания."""
+        from pygame._sdl2.video import Window
+        window = Window.from_display_module()
+        if on:
+            window.set_fullscreen(desktop=True)
+        else:
+            window.set_windowed()
+        return pygame.display.get_surface()
 
     @staticmethod
     def software_mode(flags):
