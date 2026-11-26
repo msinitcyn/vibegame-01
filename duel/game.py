@@ -18,7 +18,7 @@ from . import config
 from . import settings
 from .audio import Audio, MUSIC_END
 from .ai_env import bot_levels, make_game_bot
-from .brain import LEVEL_NAMES, SmartBot
+from .brain import LEVEL_NAMES
 from .replay import Player as ReplayPlayer, Recorder
 from . import logs
 from .logs import log
@@ -271,14 +271,15 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
     def players(self):
         return self.match.players
 
-    def start(self, hp=MAX_HP, heroes=None, bot=False, mode="1v1", seats=None):
-        """Новая партия двух игроков (тестовый режим — другое число жизней и бот за красного) — после отсчёта.
-        mode="2v2" — команды по двое; seats — {устройство: маг} с экрана мест (остальные маги — боты);
-        без seats ведущими (blue, red) играют люди как в 1×1, напарниками — боты."""
+    def start(self, hp=MAX_HP, heroes=None, bot=False, mode="1v1", seats=None, seat_bots=None):
+        """Новая партия (тест — бот за красного; /hp и тестовые команды) — после отсчёта.
+        mode="2v2" — команды по двое. seats — {устройство: маг} с экрана выбора, seat_bots — {маг: уровень}
+        (остальные маги — боты); без seats — люди за blue и red как раньше, напарники в 2×2 — боты."""
         self.start_hp = hp
         self.mode = mode
         self.seats = seats
-        self.test_bot = make_game_bot(None, "red", self.bot_level(), 7) if bot else None   # на правилах или ИИ
+        self.seat_bots = dict(seat_bots or {})
+        self.test_bot = make_game_bot(None, "red", self.level_of("red"), 7) if bot else None   # на правилах или ИИ
         if bot:
             self.chat_system(t("cmd.test_hello", **self.hint_keys()))
         self.heroes = dict(heroes or DEFAULT_HERO)
@@ -312,11 +313,11 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         # без зерна — каждый раз новая партия; герои — выбранные перед партией
         self.match = Match(self.start_hp, seed, getattr(self, "heroes", None), getattr(self, "mode", "1v1"))
         if getattr(self, "test_bot", None):   # новая партия — бот снова играет (/bot stop — на одну партию)
-            self.test_bot = make_game_bot(self.match, "red", self.bot_level(), 7)
-        # 2×2: напарники ведущих — боты на правилах
+            self.test_bot = make_game_bot(self.match, "red", self.level_of("red"), 7)
+        # остальные маги без людей — боты (уровень — с экрана выбора или из настроек)
         humans = self.human_pids()
-        level = self.bot_level() if self.bot_level() in LEVEL_NAMES else "normal"
-        self.mates = {p.id: SmartBot(self.match, p.id, level, 11 + i) for i, p in enumerate(self.match.players)
+        self.mates = {p.id: make_game_bot(self.match, p.id, self.level_of(p.id), 11 + i)
+                      for i, p in enumerate(self.match.players)
                       if p.id not in humans and not (p.id == "red" and getattr(self, "test_bot", None))}
         self.popups = []              # [текст, x, y, время, цвет]
         self.pending = self.fresh_pending()   # нажатия до следующего такта
@@ -407,10 +408,16 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
                 log.info("повтор: %s", path)
         log.info("партия окончена (%s): победил %s", mode, self.snap["winner"])
 
+    def level_of(self, pid):
+        """Уровень бота за мага pid: выбранный на экране выбора или из настроек."""
+        return (getattr(self, "seat_bots", None) or {}).get(pid) or self.bot_level()
+
     def human_pids(self):
         """Маги, которыми управляют люди за этим компьютером: с экрана мест «2 vs 2» — севшие, иначе — оба."""
         seats = getattr(self, "seats", None)
-        return [p for p in ("blue", "blue2", "red", "red2") if p in seats.values()] if seats else list(PLAYER_IDS)
+        if seats is None:
+            return list(PLAYER_IDS)
+        return [p for p in ("blue", "blue2", "red", "red2") if p in seats.values()]
 
     def fresh_pending(self):
         """Пустые команды до следующего такта — для каждого мага партии (2×2 — четверо)."""
@@ -565,8 +572,6 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
                 self.draw_settings()
         elif self.state == "pick":
             self.draw_pick()
-        elif self.state == "seats":
-            self.draw_seats()
         elif self.state == "join":
             self.poll_connecting()            # браузер: подключение идёт без ожидания
             if self.finder:

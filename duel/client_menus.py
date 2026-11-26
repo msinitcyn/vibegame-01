@@ -151,7 +151,7 @@ class MenusMixin:
         elif action == "test":
             self.open_pick(MAX_HP, bot=True)
         elif action == "team":
-            self.open_seats()     # обычная партия; больше жизней — /hp в консоли
+            self.open_pick(MAX_HP, mode="2v2")     # обычная партия; больше жизней — /hp в консоли
         elif action == "net":
             self.open_join()                  # в браузере — только адрес сервера (WebSocket)
         elif action == "update":
@@ -665,12 +665,13 @@ class MenusMixin:
             self.keys_wait = (group, keys.ACTIONS[row], slot)
             self.keys_msg = None
 
-    def open_pick(self, hp, bot=False):
-        """Экран выбора героев перед партией за одним компьютером; последний выбор запоминается.
-        bot — тестовый режим: красным играет бот (его героя листают клавиши красного, подтверждать не нужно)."""
+    def open_pick(self, hp, bot=False, mode="1v1"):
+        """Экран выбора героев перед партией за одним компьютером; последний выбор запоминается. Сверху — кто
+        играет (duel/client_seats.py). bot — тест: справа по умолчанию бот. mode="2v2" — команды по двое."""
         last = getattr(self, "heroes", None) or DEFAULT_HERO
         self.pick_hp = hp
         self.pick_bot = bot
+        self.init_seats(mode, bot)
         self.pick = {pid: {"hero": last[pid], "ok": False} for pid in PLAYER_IDS}
         self.pick_spell = {pid: None for pid in PLAYER_IDS}     # чьё заклинание смотрит игрок (вверх/вниз)
         self.state = "pick"
@@ -694,37 +695,45 @@ class MenusMixin:
             self.pick_spell[pid] = None           # другой герой — снова его портрет
 
     def pick_confirm(self, pid, ok):
-        """Подтвердить (или снять) выбор; героя, подтверждённого соперником, взять нельзя.
-        Без геймпада играть нельзя: одному из двоих нужен правый стик для прицела."""
-        bot = getattr(self, "pick_bot", False)
-        if ok and not bot and not self.pads.pads and not self.aim_by_move():
-            return
+        """Подтвердить (или снять) выбор; героя, подтверждённого соперником, взять нельзя. Героя стороны ботов
+        выбирают щелчком или клавишами того, кто не играет."""
         other = self.pick["red" if pid == "blue" else "blue"]
         if ok and other["ok"] and other["hero"] == self.pick[pid]["hero"]:
             return
         self.pick[pid]["ok"] = ok
         if all(p["ok"] for p in self.pick.values()):
-            self.start(self.pick_hp, {pid: p["hero"] for pid, p in self.pick.items()}, bot=bot)
+            seats, bots = self.seat_args()
+            heroes = {side: p["hero"] for side, p in self.pick.items()}
+            self.start(self.pick_hp, heroes, bot="red" in bots and self.seat_mode == "1v1",
+                       mode=self.seat_mode, seats=seats, seat_bots=bots)
 
     def pick_keys(self, pid):
         """Клавиши выбора героя игрока — его же клавиши из настроек: влево/вправо — листать,
         выстрел или ближний удар — выбрать (ещё раз — передумать)."""
-        c = self.controls[pid]
+        dev = self.side_device(pid) or next((d for d in ("kb:red", "kb:blue") if self.pick_side(d) == pid), None)
+        if not dev or not dev.startswith("kb:"):
+            return (), (), ()
+        c = self.controls[dev[3:]]
         return tuple(c.left), tuple(c.right), tuple(c.fire) + tuple(c.melee)
 
     def pick_key(self, sc):
         """Каждый игрок — своими клавишами (по умолчанию левый A/D и Пробел, правый ←/→ и Enter);
-        Esc — меню."""
+        Esc — меню (если открыт список «кто играет» — закрыть его)."""
+        self.mouse_quiet = True               # выбрали клавиатурой — дрожание мыши не перебивает
+        if self.seats_key(sc):                # Tab — к спискам «кто играет»
+            return
         if sc == pygame.KSCAN_ESCAPE:
             self.state = "menu"
             return
-        self.mouse_quiet = True               # выбрали клавиатурой — дрожание мыши не перебивает
-        for pid in PLAYER_IDS:
-            left, right, ok = self.pick_keys(pid)
+        for layout in ("blue", "red"):
+            pid = self.pick_side("kb:" + layout)
+            if pid is None:
+                continue
+            c = self.controls[layout]
+            left, right, ok = tuple(c.left), tuple(c.right), tuple(c.fire) + tuple(c.melee)
             if sc in left or sc in right:
                 self.pick_move(pid, -1 if sc in left else 1)
                 return
-            c = self.controls[pid]
             if sc in c.up or sc in c.down:        # вверх/вниз — заклинания героя (сценка)
                 self.pick_spell_step(pid, -1 if sc in c.up else 1)
                 return

@@ -87,62 +87,62 @@ def test_2v2_replay_reproduces():
     assert [(round(p.x, 3), p.hp) for p in r.match.players] == [(round(p.x, 3), p.hp) for p in m.players]
 
 
-def test_seats_screen_join_switch_hero_and_start(game):
+def test_pick_2v2_dropdowns_captain_and_start(game):
     game.state = "menu"
     game.menu_index = game.menu.index("team")
     game.on_key(pygame.KSCAN_RETURN)
-    assert game.state == "seats"
-    blue_keys, red_keys = game.controls["blue"], game.controls["red"]
-    game.on_key(blue_keys.fire[0])                       # левая раскладка садится — к синим (поровну)
-    game.on_key(red_keys.fire[0])                        # правая — к красным (там людей меньше)
-    assert game.seat_dev == {"kb:blue": "blue", "kb:red": "red"}
-    game.seat_action("pad:0", "join")                    # геймпад — к синим напарником
-    game.seat_action("pad:0", "right")                   # …передумал: к красным
-    assert game.seat_dev["pad:0"] == "red2"
-    hero = game.team_hero["blue"]
-    assert game.captain == {"blue": "kb:blue", "red": game.captain["red"]} and game.captain["red"] in ("kb:red", "pad:0")
-    game.on_key(blue_keys.down[0])                       # герой команды — листает капитан
-    assert game.team_hero["blue"] != hero and game.team_hero["blue"] != game.team_hero["red"]
-    red_hero = game.team_hero["red"]
-    mate = "pad:0" if game.captain["red"] == "kb:red" else "kb:red"
-    game.seat_action(mate, "down")                       # не капитан — героя не меняет
-    assert game.team_hero["red"] == red_hero
-    game.draw_seats()
-    for dev in ("kb:blue", "kb:red"):
-        game.seat_action(dev, "join")
-    assert game.state == "seats"                          # геймпад ещё не готов
-    game.seat_action("pad:0", "join")
-    assert game.state == "play" and game.match.mode == "2v2" and set(game.mates) == {"blue2"}
-    assert game.pad_side(0) == "red2" and game.layout_pid("red") == "red" and game.mouse_side() == "blue"
+    assert game.state == "pick" and game.seat_mode == "2v2"
+    assert game.seat_who["blue"] == "kb:blue" and game.seat_who["red"] == "kb:red"
+    assert game.seat_who["blue2"].startswith("bot:") and game.captain == {"blue": "kb:blue", "red": "kb:red"}
+    game.hits = []
+    game.draw_pick()
+    assert set(game.seat_rects()) == {"blue", "blue2", "red", "red2"}
+    game.on_key(pygame.KSCAN_TAB)                        # к спискам: первый — синий ведущий
+    game.on_key(pygame.KSCAN_RIGHT)                      # → синий напарник
+    game.on_key(pygame.KSCAN_RETURN)                     # открыть
+    assert game.seat_open == "blue2"
+    opts = game.seat_options()
+    game.seat_opt = opts.index("kb:red")
+    game.on_key(pygame.KSCAN_RETURN)                     # правая раскладка — синим напарником
+    assert game.seat_who["blue2"] == "kb:red" and game.seat_who["red"].startswith("bot:")   # красный ведущий — бот
+    assert game.captain["red"] is None and game.side_is_bot("red")
+    game.on_key(pygame.KSCAN_ESCAPE)                     # уйти со списков
+    game.hits = []
+    game.draw_pick()
+    cap = game.captain["blue"]
+    assert cap in ("kb:blue", "kb:red")
+    other = "kb:red" if cap == "kb:blue" else "kb:blue"
+    assert game.pick_side(cap) == "blue" and game.pick_side(other) is None   # героя листает только капитан
+    c = game.controls[cap[3:]]
+    game.on_key(c.fire[0])                               # капитан подтвердил
+    assert game.state == "pick"
+    hero = next(h for h in ("dark", "light") if h != game.pick["blue"]["hero"])
+    game.pick_mouse("red", hero, click=True)             # героя красных ботов — щелчком: поехали
+    assert game.state == "play" and game.match.mode == "2v2"
+    assert set(game.mates) == {"red", "red2"} and game.test_bot is None
+    assert game.layout_pid("red") == "blue2" and game.aim_by_move("blue2") and not game.aim_by_move("blue")
     game.countdown = 0
-    x = game.match.player("red").x
-    game.held = {red_keys.left[0]}                       # правая раскладка ведёт красного ведущего
+    m = game.match
+    y = m.player("blue2").y
+    game.held = {game.controls["red"].down[0]}           # правая раскладка ведёт синего напарника
     for _ in range(10):
         game.update()
-    assert game.match.player("red").x < x
+    assert m.player("blue2").y > y
     game.held = set()
-    game.refresh_snap()
     game.draw()
-    assert game.hud_pids() == ["blue", "red"]
     game.start(heroes={"blue": "fire", "red": "frost"})  # обычная партия — места забыты
     assert game.local_seats() is None and game.layout_pid("red") == "red"
 
 
-def test_seats_back_leaves_and_returns_to_menu(game):
-    game.open_seats()
-    game.seat_action("kb:red", "join")
-    game.seat_action("kb:red", "back")
-    assert game.seat_dev == {} and game.state == "seats"
-    game.seat_action("kb:red", "back")
-    assert game.state == "menu"
-
-
-def test_captain_moves_on_when_he_leaves(game):
-    game.open_seats()
-    game.seat_action("kb:blue", "join")
-    game.seat_action("pad:1", "join")
-    game.seat_action("pad:1", "left")                    # оба за синих
-    cap = game.captain["blue"]
-    assert cap in ("kb:blue", "pad:1") and game.captain["red"] is None
-    game.seat_action(cap, "back")                        # капитан встал — капитан другой
-    assert game.captain["blue"] == ({"kb:blue", "pad:1"} - {cap}).pop()
+def test_pick_1v1_two_dropdowns_bot_side(game):
+    game.pads.pads = []
+    game.open_pick(10, bot=True)
+    assert game.seat_mode == "1v1" and set(game.seat_rects()) == {"blue", "red"}
+    assert game.seat_who["red"].startswith("bot:") and game.pick_side("kb:red") == "red"   # не играет — листает бота
+    game.set_seat("blue", "bot:hard")                    # оба — боты
+    assert game.pick_side("kb:blue") == "blue"
+    game.pick["blue"]["hero"], game.pick["red"]["hero"] = "fire", "earth"
+    game.pick_confirm("blue", True)
+    game.pick_confirm("red", True)
+    assert game.state == "play" and game.test_bot and set(game.mates) == {"blue"} and game.human_pids() == []
+    game.start()

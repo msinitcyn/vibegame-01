@@ -9,8 +9,6 @@ from tests.conftest import FakePad
 
 
 def open_pick(game, hp=MAX_HP):
-    if not game.pads.pads:
-        game.pads.pads = [(100, FakePad())]     # за одним компьютером нужен хотя бы один геймпад
     game.heroes = None
     game.open_pick(hp)
     assert game.state == "pick"
@@ -174,6 +172,7 @@ def test_pick_split_screen_spells_preview(game):
     assert game.pick_spell["blue"] is None
     from tests.conftest import FakePad
     game.pads.pads = [(100, FakePad())]
+    game.set_seat("red", "pad:0")                           # правым играет геймпад
     game.on_pad(100, pygame.CONTROLLER_BUTTON_DPAD_DOWN)    # геймпад правого — его заклинания
     assert game.pick_spell["red"] is not None
 

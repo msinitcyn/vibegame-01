@@ -116,16 +116,17 @@ def test_two_pads_both_players_no_mouse(game):
     assert game.match.blue.aim == 0.0                  # мышь не целится
 
 
-def test_pick_needs_a_gamepad(game):
+def test_two_keyboards_without_gamepad(game):
     game.pads.pads = []
     game.heroes = None
+    game.settings["aim_mode"] = "stick"
     game.open_pick(100)
-    game.on_key(pygame.KSCAN_SPACE)
-    assert not game.pick["blue"]["ok"]
-    game.draw_pick()                                   # надпись «нужен геймпад»
-    game.pads.pads = [(100, FakePad())]
-    game.on_key(pygame.KSCAN_SPACE)
+    assert game.seat_who == {"blue": "kb:blue", "red": "kb:red"}
+    game.on_key(pygame.KSCAN_SPACE)                    # геймпад не нужен: правая раскладка целится по движению
     assert game.pick["blue"]["ok"]
+    game.on_key(pygame.KSCAN_RETURN)
+    assert game.state == "play" and game.aim_by_move("red") and not game.aim_by_move("blue")
+    game.start()
 
 
 def test_aim_goes_over_network():

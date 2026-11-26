@@ -92,9 +92,6 @@ class InputMixin:
         if self.state == "pick":
             self.pick_key(sc)
             return
-        if self.state == "seats":
-            self.seats_key(sc)
-            return
         if self.state == "join":
             self.join_key(sc)
             return
@@ -279,7 +276,7 @@ class InputMixin:
             return {**up, **ok, **back}
         if self.state == "lobby":                  # △ — ищу соперника, Share — разминка
             return {**up, **ok, **back, B.CONTROLLER_BUTTON_Y: B.KSCAN_F, B.CONTROLLER_BUTTON_BACK: B.KSCAN_T}
-        if self.state in ("pick", "seats"):
+        if self.state == "pick":
             return None                            # у каждого геймпада — своя строка выбора (on_pad)
         if self.watching:                          # зритель: только выход
             return back
@@ -297,10 +294,8 @@ class InputMixin:
         pid = self.pad_side(i)        # чей это геймпад (в меню — неважно)
         B = pygame
         back = (B.CONTROLLER_BUTTON_X, B.CONTROLLER_BUTTON_B)
-        if self.state == "seats":
-            self.seats_pad(i, btn)
-            return
-        if self.state == "pick":          # геймпад игрока — его строка выбора
+        if self.state == "pick":          # геймпад игрока — его строка выбора (или сторона ботов)
+            pid = self.pick_side(f"pad:{i}")
             if pid is None:
                 return
             if btn in (B.CONTROLLER_BUTTON_DPAD_LEFT, PAD_LEFT):        # крестовина или левый стик
@@ -349,7 +344,7 @@ class InputMixin:
         он у правого игрока (левый — клавиатура и мышь), при двух — первый у левого, второй у правого."""
         if self.net:
             return self.me if i == self.pad_index else None
-        if self.local_seats():
+        if self.local_seats() is not None:
             return self.seats.get(f"pad:{i}")
         n = len(self.pads.pads)
         if n >= 2:
@@ -385,17 +380,17 @@ class InputMixin:
     def local_seats(self):
         """Места «2 vs 2» за этим компьютером ({устройство: маг}) или None."""
         seats = getattr(self, "seats", None)
-        return seats if seats and not self.net and self.state not in ("seats",) else None
+        return seats if seats is not None and not self.net and self.state != "pick" else None
 
     def layout_pid(self, layout):
         """Каким магом управляет раскладка клавиатуры ("blue" — левая с мышью, "red" — правая)."""
         seats = self.local_seats()
-        return seats.get("kb:" + layout) if seats else layout
+        return seats.get("kb:" + layout) if seats is not None else layout
 
     def pid_layout(self, pid):
         """Чья раскладка у мага pid (None — у него только геймпад или он бот)."""
         seats = self.local_seats()
-        if not seats:
+        if seats is None:
             return pid if pid in self.controls else None
         return next((d[3:] for d, p in seats.items() if p == pid and d.startswith("kb:")), None)
 
@@ -467,18 +462,19 @@ class InputMixin:
             return []
         if self.net or getattr(self, "warmup", False):
             return [self.own_pid()]
-        if self.local_seats():
+        if self.local_seats() is not None:
             return self.human_pids()
         return ["blue", "red"]
 
-    def aim_by_move(self):
+    def aim_by_move(self, pid=None):
         """Прицел «по движению» (стик и мышь не целятся) — только у двоих за одним компьютером и только если
         выбран в настройках. По сети, в разминке, в тесте с ботом, в браузере — всегда стик и мышь."""
-        if self.settings.get("aim_mode", "move") != "move":
-            return False
-        return not (self.net or self.warmup or getattr(self, "lobby_conn", None) or getattr(self, "test_bot", None)
-                    or self.local_seats()
-                    or getattr(self, "replay", None) or WEB)
+        if self.settings.get("aim_mode", "move") == "move" and not (
+                self.net or self.warmup or getattr(self, "lobby_conn", None) or getattr(self, "test_bot", None)
+                or getattr(self, "replay", None) or WEB):
+            return True
+        seats = self.local_seats()                # места: у правой раскладки нет ни мыши, ни стика — по движению
+        return bool(seats and pid is not None and seats.get("kb:red") == pid)
 
     def mouse_side(self):
         """Кто целится мышью: по сети — свой маг; за одним компьютером — левый, если геймпадов меньше двух.
@@ -487,7 +483,7 @@ class InputMixin:
             return None
         if self.net:
             return self.me
-        if self.local_seats():                    # 2×2: мышь — у левой раскладки
+        if self.local_seats() is not None:                    # 2×2: мышь — у левой раскладки
             return self.layout_pid("blue")
         return "blue" if len(self.pads.pads) < 2 else None
 
@@ -500,7 +496,7 @@ class InputMixin:
         за одним компьютером — левый, если геймпадов меньше двух."""
         if self.net:
             return self.me
-        if self.local_seats():
+        if self.local_seats() is not None:
             return self.layout_pid("blue")
         return "blue" if len(self.pads.pads) < 2 else None
 
@@ -660,7 +656,7 @@ class InputMixin:
     def reach_for(self, pid):
         """До курсора, пикс (огненный круг встаёт там): этот маг целится мышью — расстояние до перекрестия;
         иначе (стик, клавиши, прицел «по движению») — REACH_FAR: на всю дальность."""
-        if (not self.aim_by_move() and self.mouse_side() == pid and self.mouse_pos is not None
+        if (not self.aim_by_move(pid) and self.mouse_side() == pid and self.mouse_pos is not None
                 and self.aim_source.get(pid) == "mouse"):
             p = next((p for p in self.snap.get("players", []) if p["id"] == pid), None)
             if p:
@@ -671,7 +667,7 @@ class InputMixin:
         """Прицел игрока на этот такт. Режим «по движению»: куда идёт маг, а стоит — прямо на
         соперника. Режим «стик и мышь»: правый стик, если наклонён; иначе — к перекрестию мыши;
         иначе None (прицел не меняется)."""
-        if self.aim_by_move():
+        if self.aim_by_move(pid):
             dx, dy = move
             return math.atan2(dy, dx) if (dx or dy) else (0.0 if DIR[pid] > 0 else math.pi)
         if pid in self.aim_reset:         # сброс прицела — на этот такт, потом как обычно

@@ -51,6 +51,8 @@ from .items import item_help, item_name, ITEMS
 from .sprites import draw_unit, sprite_image, sprite_size
 
 
+PICK_TOP = 52                          # экран выбора: выше — ряд «кто играет» (duel/client_seats.py)
+
 class MenuScreensMixin:
     def draw_menu(self):
         s = self.screen
@@ -141,14 +143,11 @@ class MenuScreensMixin:
         half = WIDTH // 2
         pygame.draw.line(s, (50, 54, 70), (half, 16), (half, HEIGHT - 60), 2)
         for side, pid in enumerate(("blue", "red")):
-            self.draw_pick_half(pid, pygame.Rect(side * half, 0, half, HEIGHT - 58))
-        if not self.pads.pads and not self.aim_by_move() and not getattr(self, "pick_bot", False):
-            # прицел нужен правым стиком хотя бы одному (с ботом — не нужен)
-            img = self.small.render(tr("pick.need_pad"), True, BAD_TEXT)
-            s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 46)))
+            self.draw_pick_half(pid, pygame.Rect(side * half, PICK_TOP, half, HEIGHT - 58 - PICK_TOP))
         img = self.small.render(tr("pick.hint"), True, GREY)
         s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 22)))
         self.back_button()
+        self.draw_seats_row({pid: HERO_COLOR[self.pick[pid]["hero"]] for pid in ("blue", "red")})   # кто играет
         pygame.display.flip()
 
     PICK_ICON = 66                     # иконка мага в ряду выбора, пикс
@@ -157,25 +156,24 @@ class MenuScreensMixin:
         """Половина экрана одного игрока: подпись клавиш, ряд иконок магов, карточка выбранного."""
         s = self.screen
         me, other = self.pick[pid], self.pick["red" if pid == "blue" else "blue"]
-        bot = pid == "red" and getattr(self, "pick_bot", False)
+        bot = self.side_is_bot(pid)
+        dev = self.side_device(pid)
+        top = area.y
         left, right, ok = self.pick_keys(pid)
         first = (lambda ks: ks[0] if ks else None)          # клавиши можно снять — тогда «—»
-        label = tr("pick.bot" if bot else "pick.left" if pid == "blue" else "pick.right",
-                   left=keys.label(first(left)), right=keys.label(first(right)),
-                   ok=" / ".join(keys.label(k) for k in ok[:1] + ok[-1:]) if ok else keys.label(None))
+        if dev and dev.startswith("pad:"):
+            label = tr("pick.pad_line", n=int(dev[4:]) + 1)
+        else:
+            label = tr("pick.bot" if bot else "pick.keys",
+                       left=keys.label(first(left)), right=keys.label(first(right)),
+                       ok=" / ".join(keys.label(k) for k in ok[:1] + ok[-1:]) if ok else keys.label(None))
         img = self.small.render(label, True, WHITE)
-        s.blit(img, img.get_rect(center=(area.centerx + (28 if pid == "blue" else 0), 22)))
-        if not bot:
-            pad = self.pad_of(pid)
-            note = (tr("pick.pad", n=pad + 1, name=self.pads.pads[pad][1].name[:24]) if pad is not None else
-                    tr("pick.mouse") if pid == "blue" else tr("pick.no_pad"))
-            img = self.tiny_text.render(note.lstrip("· "), True, GREY)
-            s.blit(img, img.get_rect(center=(area.centerx + (28 if pid == "blue" else 0), 40)))
+        s.blit(img, img.get_rect(center=(area.centerx, top + 16)))
         # ряд иконок магов
         n, size, gap = len(HEROES), self.PICK_ICON, 10
         x0 = area.centerx - (n * size + (n - 1) * gap) // 2
         for i, hero in enumerate(HEROES):
-            r = pygame.Rect(x0 + i * (size + gap), 56, size, size)
+            r = pygame.Rect(x0 + i * (size + gap), top + 34, size, size)
             cur = me["hero"] == hero
             taken = other["ok"] and other["hero"] == hero
             self.hit(r, lambda pid=pid, hero=hero: self.pick_mouse(pid, hero, True),
@@ -191,7 +189,8 @@ class MenuScreensMixin:
             if taken:
                 img = self.tiny_text.render(tr("pick.taken"), True, WHITE)
                 s.blit(img, img.get_rect(midbottom=(r.centerx, r.bottom - 2)))
-        self.draw_pick_card(pid, pygame.Rect(area.x + 18, 136, area.w - 36, area.bottom - 136 - 8), bot)
+        y = top + 34 + size + 12
+        self.draw_pick_card(pid, pygame.Rect(area.x + 18, y, area.w - 36, area.bottom - y - 8), bot)
 
     def draw_pick_card(self, pid, card, bot):
         """Большая карточка героя: земля фоном, маг крупно (или сценка заклинания), имя, заклинания."""
