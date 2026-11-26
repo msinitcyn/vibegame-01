@@ -4,7 +4,7 @@ import math
 import pytest
 
 from duel.commands import Command
-from duel.config import (FOE_LAND_DPS, HERO_FADE, MAX_HP, TOP, TREE_LENGTH,
+from duel.config import (BULLET_DAMAGE, FOE_LAND_DPS, HERO_FADE, MAX_HP, TOP, TREE_LENGTH,
                          TREE_TIME, TREE_W)
 from duel.entities import Bullet, Mob
 from tests.conftest import DT, new_match, step
@@ -159,7 +159,7 @@ def test_zombie_absorbs_damage_for_owner():
     m.bullets = [Bullet(b.x - 40, b.y, 520, 0, m.red)]
     step(m, 0.2)
     assert b.hp == MAX_HP
-    assert sorted(x.hp for x in m.zombies_of(b)) == [4, 5]
+    assert sorted(x.hp for x in m.zombies_of(b)) == [5 - BULLET_DAMAGE, 5]   # пуля соперника ранила одного зомби
 
 
 def test_own_bullets_pass_zombies_foe_bullets_hit():
@@ -217,7 +217,7 @@ def test_bear_is_big_fast_melee_and_returns_old_hp_and_spot():
     m.apply_item(b, "bear")
     assert b.hp == BEAR_HP and b.radius == BASE_RADIUS * BEAR_SIZE
     assert b.speed == pytest.approx(speed0 * BEAR_SPEED) and BEAR_SPEED > 1 and not b.can_fire   # быстрее мага
-    assert BEAR_HP == 15
+    assert BEAR_HP == 30
     m.hurt_player(b, 10)
     assert b.hp == BEAR_HP - 10
     for _ in range(round(2 / DT)):                       # медведь ушёл
@@ -313,7 +313,7 @@ def test_former_common_items_belong_to_heroes():
         for seed in range(500):
             m = Match(seed=seed)
             m.set_heroes({"blue": hero, "red": "fire" if hero != "fire" else "light"})
-            mob = Mob(200, TOP + 60, 6)                  # толстый — может уронить любой уровень
+            mob = Mob(200, TOP + 60, 12)                 # толстый — может уронить любой уровень
             mob.target = m.blue
             m.drop_artifact(mob)
             seen.add(m.artifacts[0].kind)
@@ -476,11 +476,11 @@ def test_levels_cover_all_items():
 
 def test_level_by_mob_hp():
     from duel.items import item_level
-    thin = drops("fire", 3, 600)
+    thin = drops("fire", 6, 600)
     assert max(item_level(k) for k in thin) == 2                  # худой моб: только 1–2
-    mid = drops("fire", 5, 600)
+    mid = drops("fire", 10, 600)
     assert max(item_level(k) for k in mid) <= 3 and "firering" not in mid and "lasso" not in mid
-    fat = drops("fire", 6)
+    fat = drops("fire", 12)
     assert "firering" in fat and "lasso" in fat
 
 

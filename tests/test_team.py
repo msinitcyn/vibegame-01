@@ -157,3 +157,14 @@ def test_snapshot_burn_uses_2v2_field():
     assert snapshot(m)["players"][0]["burn"] is None          # раньше: по полю 1×1 x=700 — чужая земля
     b.x = 1100                                                # за нейтральной полосой — земля красных
     assert snapshot(m)["players"][0]["burn"] == "frost"
+
+
+def test_dead_mage_on_enemy_land_does_not_burn():
+    from duel.snapshot import snapshot
+    m = Match(seed=4, heroes={"blue": "fire", "red": "frost"}, mode="2v2")
+    b = m.player("blue")
+    b.x, b.y = 1100, 140
+    assert snapshot(m)["players"][0]["burn"] == "frost"
+    b.hp = 0
+    m.step(STEP)
+    assert b.dead_at is not None and snapshot(m)["players"][0]["burn"] is None   # лежит до возрождения — не горит

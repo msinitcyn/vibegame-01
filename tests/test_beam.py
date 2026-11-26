@@ -149,4 +149,4 @@ def test_beam_knocks_down_enemy_bullets(light):
     assert any(h[3] == "knock" for h in m.hits)          # вспышка сбитой пули
     step(m, 0.8)
     assert b.hp == MAX_HP                                 # сбитая пуля никого не ранила
-    assert r.hp == 50 - BEAM_DAMAGE == 46
+    assert r.hp == 50 - BEAM_DAMAGE == 42

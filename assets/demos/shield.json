@@ -23,7 +23,7 @@
       {
         "x": 560,
         "y": 240,
-        "hp": 6,
+        "hp": 12,
         "angry": true,
         "target": "blue"
       }

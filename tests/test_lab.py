@@ -103,7 +103,7 @@ def test_lab_run_saves_every_game_replay_with_index(tmp_path, capsys):
 
 def test_lab_main_says_progress_and_stops():
     lines, prog = [], []
-    rs = lab.main(["report", "--games", "6", "--workers", "1", "--limit", "30"], say=lines.append,
+    rs = lab.main(["report", "--games", "6", "--workers", "1", "--limit", "120"], say=lines.append,
                   progress=lambda i, n, t: prog.append((i, n)))
     assert len(rs) == 6 and any("герои" in str(x) for x in lines) and prog[-1] == (6, 6)
     with pytest.raises(lab.Stopped):

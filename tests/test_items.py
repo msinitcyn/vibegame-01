@@ -5,6 +5,7 @@ import pytest
 
 from duel.config import (
     AMMO_PACK,
+    BULLET_DAMAGE,
     DURATION,
     HEAL_AMOUNT,
     MAX_HP,
@@ -230,7 +231,7 @@ def test_shield_blocks_five_bullets(match):
     match.give(b, "shield")
     match.bullets = [bullet_at(b, r, 200 + i * 40) for i in range(SHIELD_HITS + 2)]
     step(match, 1.0)
-    assert b.hp == MAX_HP - 2
+    assert b.hp == MAX_HP - 2 * BULLET_DAMAGE
     assert "shield" not in b.effects
 
 
@@ -344,13 +345,13 @@ def still_clone(match, y):
     return c
 
 
-def test_clone_has_two_lives(match):
+def test_clone_survives_one_bullet(match):
     from duel.config import BULLET_SPEED, CLONE_HP
     c = still_clone(match, 300)
-    assert c.hp == CLONE_HP == 2
+    assert c.hp == CLONE_HP == 4
     match.bullets = [Bullet(400, 300, -BULLET_SPEED, 0, match.red)]
     step(match, 1.0)
-    assert c.alive and c.hp == 1 and match.blue.hp == MAX_HP
+    assert c.alive and c.hp == CLONE_HP - BULLET_DAMAGE and match.blue.hp == MAX_HP
     match.bullets = [Bullet(400, 300, -BULLET_SPEED, 0, match.red)]
     step(match, 1.0)
     assert not c.alive and match.blue.hp == MAX_HP

@@ -2,7 +2,7 @@
 import math
 
 from duel.commands import Command
-from duel.config import (ARENA, ARENA_DPS, ARENA_R, BULLET_SPEED, FOE_LAND_DPS, GUARDIAN_HP, GUARDIAN_RESPAWN, MAX_HP,
+from duel.config import (BULLET_DAMAGE, ARENA, ARENA_DPS, ARENA_R, BULLET_SPEED, FOE_LAND_DPS, GUARDIAN_HP, GUARDIAN_RESPAWN, MAX_HP,
                          TOP)
 from duel.entities import Bullet, zone_at
 from tests.conftest import DT, new_match, step
@@ -84,7 +84,7 @@ def test_hurt_only_from_inside():
     m.bullets = [Bullet(g.x - 30, g.y, BULLET_SPEED, 0, b)]
     for _ in range(4):
         m.step(DT)
-    assert g.hp == GUARDIAN_HP - 1
+    assert g.hp == GUARDIAN_HP - BULLET_DAMAGE
 
 
 def test_killed_drops_artifact_and_respawns():

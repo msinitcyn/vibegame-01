@@ -52,7 +52,7 @@
       "heroes": {"blue": "light", "red": "earth"},
       "camera": [330, 84, 360, 170],
       "mortal_mobs": true,
-      "setup": {"blue": {"x": 380, "y": 150}, "red": {"x": 900, "y": 600}, "mobs": [{"x": 540, "y": 125, "hp": 1}, {"x": 580, "y": 155, "hp": 1}, {"x": 540, "y": 185, "hp": 1}]},
+      "setup": {"blue": {"x": 380, "y": 150}, "red": {"x": 900, "y": 600}, "mobs": [{"x": 540, "y": 125, "hp": 2}, {"x": 580, "y": 155, "hp": 2}, {"x": 540, "y": 185, "hp": 2}]},
       "script": [
         {"t": 0.3, "do": "fire", "who": "blue", "at": [540, 125]},
         {"t": 0.7, "do": "fire", "who": "blue", "at": [580, 155]},
@@ -98,7 +98,7 @@
       "mortal_players": true,
       "heroes": {"blue": "fire", "red": "frost"},
       "camera": [360, 110, 340, 190],
-      "setup": {"blue": {"x": 400, "y": 222}, "red": {"x": 600, "y": 222, "hp_lost": 13}},
+      "setup": {"blue": {"x": 400, "y": 222}, "red": {"x": 600, "y": 222, "hp_lost": 26}},
       "script": [
         {"t": 0.0, "do": "aim", "who": "blue", "at": "red"},
         {"t": 0.0, "do": "aim", "who": "red", "at": "blue"},

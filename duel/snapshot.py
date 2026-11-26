@@ -55,7 +55,7 @@ def _snapshot(match):
             "dead": None if p.dead_at is None else _t(m.match_time - p.dead_at),
             "cleanse_fx": _t(p.cleanse_fx),
             "moving": bool(p.moving or p.moving_x), "shot": _t(p.shot_flash),
-            "burn": m.danger(p)[1],      # чья стихия жжёт (герой или "arena") или None
+            "burn": m.danger(p)[1] if p.dead_at is None else None,   # чья стихия жжёт; погибший (2×2 — лежит) не горит
             "team": p.team, "lasso_by": _pid(getattr(p, "lasso_by", None)) if "lassoed" in p.effects else None,
             "out": bool(getattr(p, "out", False)),
             "respawn": _t(max(0.0, p.respawn_at - m.match_time)) if getattr(p, "respawn_at", None) else None,

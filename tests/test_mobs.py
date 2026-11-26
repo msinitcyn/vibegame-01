@@ -4,6 +4,8 @@ import math
 import pytest
 
 from duel.config import (
+    BULLET_DAMAGE,
+    MOB_HP_STEP,
     BULLET_SPEED,
     MAX_HP,
     MOB_COUNT,
@@ -59,7 +61,7 @@ def test_mobs_appear_in_random_places_and_stand():
 
 
 def test_waves_grow_and_cap(match):
-    """Каждая волна — на 1 моба и 1 жизнь больше, но не больше MOB_MAX мобов и MOB_MAX_HP жизней.
+    """Каждая волна — на 1 моба и MOB_HP_STEP жизней больше, но не больше MOB_MAX мобов и MOB_MAX_HP жизней.
     Живые мобы при новой волне не меняются."""
     match.spawn_mob_wave()
     first = list(match.mobs)
@@ -68,7 +70,7 @@ def test_waves_grow_and_cap(match):
     new = [m for m in match.mobs if m not in first]
     assert len(match.mobs) == min(MOB_MAX, MOB_COUNT + (MOB_COUNT + 1))
     assert all(m.hp == MOB_HP for m in first)            # старые — без прибавки
-    assert all(m.hp == MOB_HP + 1 for m in new)          # новые — сильнее
+    assert all(m.hp == MOB_HP + MOB_HP_STEP for m in new)   # новые — сильнее
     for _ in range(10):
         match.spawn_mob_wave()
         assert len(match.mobs) <= MOB_MAX
@@ -98,8 +100,8 @@ def test_waves_speed_up_after_max(match):
     gaps = [round(b - a) for a, b in zip(times, times[1:])]
     from duel.config import MOB_LATE_EXTRA
     k_max = next(k for k in range(100)                     # волна, на которой дошли до максимума
-                 if MOB_COUNT + k + max(0, k - (MOB_MAX_HP - MOB_HP)) * MOB_LATE_EXTRA >= MOB_MAX
-                 and MOB_HP + k >= MOB_MAX_HP)
+                 if MOB_COUNT + k + max(0, k - (MOB_MAX_HP - MOB_HP) // MOB_HP_STEP) * MOB_LATE_EXTRA >= MOB_MAX
+                 and MOB_HP + k * MOB_HP_STEP >= MOB_MAX_HP)
     assert gaps[:k_max] == [MOB_EVERY] * k_max
     after = gaps[k_max:]
     expected = [max(MOB_EVERY_MIN, MOB_EVERY - MOB_SPEEDUP * (i + 1)) for i in range(len(after))]
@@ -109,9 +111,9 @@ def test_waves_speed_up_after_max(match):
 def test_wounded_mob_not_healed_by_wave(match):
     m = spawn(match)[0]
     shoot_mob(match, m, match.blue)
-    assert m.hp == MOB_HP - 1
+    assert m.hp == MOB_HP - BULLET_DAMAGE
     match.spawn_mob_wave()
-    assert m.hp == MOB_HP - 1 and m.max_hp == MOB_HP
+    assert m.hp == MOB_HP - BULLET_DAMAGE and m.max_hp == MOB_HP
 
 
 def test_wave_timer_draws(game):
@@ -123,7 +125,7 @@ def test_wave_timer_draws(game):
 def test_mob_blocks_bullets_and_goes_for_shooter(match):
     m = spawn(match)[0]
     shoot_mob(match, m, match.blue)
-    assert match.bullets == [] and m.hp == MOB_HP - 1 and m.target is match.blue
+    assert match.bullets == [] and m.hp == MOB_HP - BULLET_DAMAGE and m.target is match.blue
     x0 = m.x
     step(match, 1.0)
     assert m.x < x0                             # идёт к синему (влево)
@@ -405,7 +407,7 @@ def test_wall_reflects_mob_shot_into_owner_bullet(match):
     assert [x.owner for x in match.bullets] == [b] and match.bullets[0].vx > 0   # летит обратно
     step(match, 1.0)
     shooter.shot_cd = 99
-    assert shooter.hp == 4 and shooter.target is b                               # и попала в моба
+    assert shooter.hp == 5 - BULLET_DAMAGE and shooter.target is b                               # и попала в моба
 
 
 # --- удар ближнего моба: замах, удар, промах; дальнобойный вблизи не бьёт

@@ -19,7 +19,7 @@ def test_bullet_bounces_off_back_wall():
     assert b.alive and b.vx < 0 and b.bounces == 1 and b.x <= WIDTH - BULLET_R
 
 
-def test_bullet_dies_on_fourth_wall():
+def test_bullet_dies_on_third_wall():
     m = new_match()
     b = Bullet(WIDTH / 2, (TOP + BOTTOM) / 2, 900, 0, m.blue)    # туда-сюда между задними стенками
     walls = 0
@@ -27,7 +27,7 @@ def test_bullet_dies_on_fourth_wall():
         before = b.bounces
         b.update(DT)
         walls += b.bounces > before
-    assert BULLET_WALL_BOUNCES == 3 and walls == 4 and b.bounces == 4   # на четвёртой стенке гаснет
+    assert BULLET_WALL_BOUNCES == 2 and walls == 3 and b.bounces == 3   # на третьей стенке гаснет
 
 
 def test_mirror_bounce_is_not_counted():
@@ -61,7 +61,7 @@ def test_land_burn_does_not_thaw_freeze():
     m.apply_item(r, "foe_freeze")
     b.x = 800                                            # заморожен на чужой земле — горит, но не тает
     step(m, DURATION["freeze"] - 0.2)
-    assert b.hp < 15 and "freeze" in b.effects
+    assert b.hp < b.max_hp and "freeze" in b.effects
 
 
 def test_firmground_guardians_sleep():

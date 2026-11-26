@@ -28,6 +28,10 @@ from .commands import REACH_FAR, Command
 from .config import (
     MOB_LATE_EXTRA,
     START_AMMO,
+    LAND_DAMAGE,
+    BULLET_DAMAGE,
+    SENTRY_DAMAGE,
+    MOB_HP_STEP,
     RESPAWN_TIME,
     TEAM_LIVES,
     PEACE_FX,
@@ -686,7 +690,7 @@ class Match:
             while p.foe_land_t >= 1 / dps:
                 p.foe_land_t -= 1 / dps
                 if not p.shield_absorb():
-                    self.hurt_player(p, 1, hit=False)
+                    self.hurt_player(p, LAND_DAMAGE, hit=False)
         else:
             p.foe_land_t = 0.0
         # у огненной стены соперника хозяина — FIRE_RING_DPS в секунду
@@ -694,7 +698,7 @@ class Match:
             p.ring_t += dt
             while p.ring_t >= 1 / FIRE_RING_DPS:
                 p.ring_t -= 1 / FIRE_RING_DPS
-                self.hurt_player(p, 1, hit=False)
+                self.hurt_player(p, LAND_DAMAGE, hit=False)
         else:
             p.ring_t = 0.0
 
@@ -783,19 +787,19 @@ class Match:
                 continue                      # свои пули сквозь своих зомби
             if b.alive and m.alive and math.hypot(b.x - m.x, b.y - m.y) < m.radius + BULLET_R:
                 b.alive = False
-                m.hurt(b.shooter)         # моб злится на того, кто выстрелил (маг или двойник)
+                m.hurt(b.shooter, BULLET_DAMAGE)   # моб злится на того, кто выстрелил (маг или двойник)
                 self.hit_at(b, "zombie" if m.zombie_of else "mob", m)
         for st in self.sentries:          # пули соперника рубят стражей
             if b.alive and st.owner is not b.owner and st.alive and \
                     math.hypot(b.x - st.x, b.y - st.y) < st.radius + BULLET_R:
                 b.alive = False
-                st.hurt()
+                st.hurt(BULLET_DAMAGE)
                 self.hit_at(b, "sentry", st)
         for g in self.guardians:          # стражи арены: ранит только изнутри, иначе — рикошет
             if b.alive and g.alive and math.hypot(b.x - g.x, b.y - g.y) < g.radius + BULLET_R:
                 if self.can_hurt_guardian(g, b.owner):
                     b.alive = False
-                    self.hurt_guardian(g, 1)
+                    self.hurt_guardian(g, BULLET_DAMAGE)
                     self.hit_at(b, "guardian", g)
                 else:
                     g.reflect(b)
@@ -816,7 +820,7 @@ class Match:
             return True
         if math.hypot(b.x - target.x, b.y - target.y) < target.radius + BULLET_R:
             b.alive = False
-            self.hurt_player(target, 1)
+            self.hurt_player(target, BULLET_DAMAGE)
             self.hit_at(b, "mage", target)
             return True
         for c in self.clones:
@@ -828,7 +832,7 @@ class Match:
                 return True
             if math.hypot(b.x - c.x, b.y - c.y) < c.radius + BULLET_R:
                 b.alive = False
-                c.hurt(1)
+                c.hurt(BULLET_DAMAGE)
                 self.hit_at(b, "mage", c)
                 return True
         return False
@@ -1264,28 +1268,28 @@ class Match:
                 guard = SHIELD_GAP if "shield" in p.effects else 0
                 if math.hypot(s.x - p.x, s.y - p.y) < p.radius + guard + MOB_SHOT_R:
                     s.alive = False
-                    if not p.shield_absorb():
-                        self.hurt_unit(p, MOB_DAMAGE)
+                    if not p.shield_absorb():      # семя лесного стража — заклинание (урон ×2), снаряд крипа — нет
+                        self.hurt_unit(p, SENTRY_DAMAGE if s.owner is not None else MOB_DAMAGE)
                     break
         self.mob_shots = [s for s in self.mob_shots if s.alive]
 
     def spawn_mob_wave(self):
-        """Волна k (с нуля): MOB_COUNT + k мобов по MOB_HP + k жизней; живых мобов не трогает.
+        """Волна k (с нуля): MOB_COUNT + k мобов по MOB_HP + k·MOB_HP_STEP жизней; живых мобов не трогает.
         Не больше MOB_MAX мобов на поле и MOB_MAX_HP жизней. Возвращает True, если волна
         дошла до максимума (дальше волны будут приходить всё чаще)."""
         k = self.mob_wave
         self.mob_wave += 1
         # уже живые мобы не меняются: сильнее становятся только новые волны
-        late = max(0, k - (MOB_MAX_HP - MOB_HP))      # волны после максимума жизней — мобов прибавляется больше
+        late = max(0, k - (MOB_MAX_HP - MOB_HP) // MOB_HP_STEP)   # волны после максимума жизней — мобов прибавляется больше
         crowd = len(self.players) // 2             # 2×2 — мобов вдвое больше (поле больше, магов больше)
-        want, hp = (MOB_COUNT + k + late * MOB_LATE_EXTRA) * crowd, min(MOB_HP + k, MOB_MAX_HP)
+        want, hp = (MOB_COUNT + k + late * MOB_LATE_EXTRA) * crowd, min(MOB_HP + k * MOB_HP_STEP, MOB_MAX_HP)
         count = max(0, min(want, MOB_MAX * crowd - len(self.mobs)))
         for i in range(count):
             x, y = self.free_mob_spot()
             # каждый MOB_RANGED_EVERY-й моб волны — дальнобойный
             self.mobs.append(Mob(x, y, hp, ranged=(i + 1) % MOB_RANGED_EVERY == 0))
         self.emit("wave", k + 1, count, hp)
-        return want >= MOB_MAX * crowd and MOB_HP + k >= MOB_MAX_HP
+        return want >= MOB_MAX * crowd and MOB_HP + k * MOB_HP_STEP >= MOB_MAX_HP
 
     def free_mob_spot(self):
         """Случайное место в круглой арене, по возможности не на другом мобе."""

@@ -274,11 +274,12 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             display = 0
         want = not self.fullscreen
         flags = pygame.SCALED | (pygame.FULLSCREEN if want else 0)
-        # 1) окно заново на своём мониторе (из исходников — работает); 2) собранная игра: своя SDL не создаёт
-        # отрисовщик заново — переключаем само окно, не пересоздавая (масштаб SCALED остаётся); 3–4) запасные.
+        # 1) переключаем само окно SDL, не пересоздавая (масштаб SCALED остаётся, монитор — тот же). Пересоздание
+        # окна (set_mode) в pygame 2.6.1 / SDL 2.28 (собранная игра) падает «failed to create renderer» и оставляет
+        # pygame сломанным — следующий кадр роняет процесс; поэтому оно только запасное. 2–4) запасные.
         # pygame.display.toggle_fullscreen не берём: поле в углу большого экрана, а в ролике — падение SDL.
-        attempts = [lambda: pygame.display.set_mode((WIDTH, HEIGHT), flags, display=display),
-                    lambda: self.window_fullscreen(want),
+        attempts = [lambda: self.window_fullscreen(want),
+                    lambda: pygame.display.set_mode((WIDTH, HEIGHT), flags, display=display),
                     lambda: pygame.display.set_mode((WIDTH, HEIGHT), flags),
                     self.software_mode(flags)]
         for attempt in attempts:

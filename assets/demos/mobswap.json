@@ -24,14 +24,14 @@
       {
         "x": 470,
         "y": 115,
-        "hp": 5,
+        "hp": 10,
         "angry": true,
         "target": "blue"
       },
       {
         "x": 480,
         "y": 225,
-        "hp": 5,
+        "hp": 10,
         "angry": true,
         "target": "blue"
       }

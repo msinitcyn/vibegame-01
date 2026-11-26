@@ -7,8 +7,8 @@
     "blue": {"x": 340, "y": 170},
     "red": {"x": 900, "y": 600},
     "mobs": [
-      {"x": 480, "y": 115, "hp": 9, "angry": true, "target": "blue"},
-      {"x": 490, "y": 225, "hp": 9, "angry": true, "target": "blue"}
+      {"x": 480, "y": 115, "hp": 18, "angry": true, "target": "blue"},
+      {"x": 490, "y": 225, "hp": 18, "angry": true, "target": "blue"}
     ]
   },
   "script": [

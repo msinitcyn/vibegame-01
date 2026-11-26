@@ -186,7 +186,7 @@ def test_landswap_background_crossfades(game):
 
 
 def test_quake_pulses_come_often():
-    assert QUAKE_EVERY <= 1.0 and QUAKE_EVERY > QUAKE_STUN               # чаще, но между толчками можно сделать шаг
+    assert QUAKE_EVERY <= 1.5 and QUAKE_EVERY > QUAKE_STUN               # часто, но между толчками можно сделать шаг
 
 
 def test_speed_is_retired_and_gear_is_mob_land(game):

@@ -1076,7 +1076,7 @@ TEXTS = {
         "note.5": "Repeating any effect adds time (and hits for the shield). Clones get the shield, "
                   "weapons, size, speed and \"can't shoot\".",
         "note.6": "Ammo: {ammo} at start, 1 per shot. Packs of {pack} are picked up instantly.",
-        "note.7": "Mobs: a wave every {every} s in random spots of the round arena in the middle, each new wave +1 mob and +1 life "
+        "note.7": "Mobs: a wave every {every} s in random spots of the round arena in the middle, each new wave +1 mob and +{mstep} lives "
                   "(mobs already on the field don't heal); "
                   "at most {mmax} mobs with {mhp} lives, then waves come faster. One mob in {ranged} "
                   "is ranged (green, with a crystal): it keeps its distance and shoots up to {range} px.",

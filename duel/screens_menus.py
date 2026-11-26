@@ -34,6 +34,7 @@ from .config import (
     MOB_EVERY,
     MOB_MAX,
     MOB_MAX_HP,
+    MOB_HP_STEP,
     MOB_RANGE,
     MOB_RANGED_EVERY,
     QUEUE_SHOWN,
@@ -782,7 +783,7 @@ class MenuScreensMixin:
         s = self.screen
         numbers = dict(art_life=f"{ARTIFACT_LIFETIME:g}", queue=QUEUE_SHOWN, weapon=f"{WEAPON_TIME:.0f}", wmax=WEAPON_MAX,
                        ammo=START_AMMO, pack=AMMO_PACK, every=f"{MOB_EVERY:.0f}",
-                       mmax=MOB_MAX, mhp=MOB_MAX_HP, ranged=MOB_RANGED_EVERY, range=MOB_RANGE,
+                       mmax=MOB_MAX, mhp=MOB_MAX_HP, mstep=MOB_HP_STEP, ranged=MOB_RANGED_EVERY, range=MOB_RANGE,
                        melee=MELEE_DAMAGE, melee_cd=f"{MELEE_COOLDOWN:g}".replace(".", tr("decimal")), dps=FOE_LAND_DPS, arena_dps=ARENA_DPS)
         x0, y, width = 80, 100, WIDTH - 160
         for i in range(1, 11):

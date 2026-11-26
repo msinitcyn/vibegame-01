@@ -70,7 +70,7 @@ FOE_SHOT_GAP = 0.8               # издалека по сопернику — 
 FOE_SHOT_NEAR = 300               # ближе — стреляет как может
 PUNISH_DIST = 130
 STEAL_DEPTH = 70                  # пачку на чужой земле так близко к границе — можно украсть (обожжётся чуть)
-STEAL_HP = 6                      # меньше жизней — не ворует
+STEAL_HP = 12                      # меньше жизней — не ворует
 AMBUSH_FOE_AMMO = 6               # у соперника патронов меньше — пачка рядом с ним станет его целью: стреляем туда
 ARENA_LOOT_RANGE = 520            # «Твёрдая почва» — когда в арене есть лут не дальше этого                 # к замороженному сопернику — так близко (не промахнуться, добить мечом)
 
@@ -234,7 +234,7 @@ class SmartBot:
         st = self.style(me)
         steal = self.steal_target(me, foe)
         stealing = self.goal == "steal" and steal is not None
-        low = me.hp <= max(4, me.max_hp * 0.3)
+        low = me.hp <= max(8, me.max_hp * 0.3)
         options = []
         foe_p = self.foe()
         if foe is not None and "freeze" in foe_p.effects:      # соперник стоит — бить, пока не оттаял
@@ -565,7 +565,7 @@ class SmartBot:
             reach = None
             ok = False
             if kind == "heal":
-                ok = me.hp <= me.max_hp - 4
+                ok = me.hp <= me.max_hp - 8
             elif kind == "cleanse":
                 ok = bool(bad)
             elif kind == "immune":

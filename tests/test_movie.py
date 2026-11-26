@@ -210,7 +210,7 @@ def test_intro_plays_background_tracks_shuffled(game, monkeypatch):
 
 
 def test_sword_demo_mob_dies_and_drops_artifact():
-    """Сценка «удар мечом»: удар — 2 жизни; моб гибнет и роняет артефакт (как в игре)."""
+    """Сценка «удар мечом»: удар — MELEE_DAMAGE жизней; моб гибнет и роняет артефакт (как в игре)."""
     from duel import demos
     d = demos.Demo(demos.load("melee"))
     seen, dropped = [], False
@@ -221,13 +221,13 @@ def test_sword_demo_mob_dies_and_drops_artifact():
             if not seen or seen[-1] != hp:
                 seen.append(hp)
         dropped = dropped or bool(d.match.artifacts)
-    assert seen[:3] == [6, 4, 2] and dropped and len(d.match.mobs) < 2
+    assert seen[:3] == [12, 8, 4] and dropped and len(d.match.mobs) < 2
 
 
 def test_scene_mage_can_die_and_spirit_flies():
     """Сцена «Побеждай»: маг погибает, в снимке — сколько он мёртв (тело и дух), пули и вспышки не висят."""
     st = Stage({"length": 4, "mortal_players": True, "heroes": {"blue": "fire", "red": "frost"},
-                "setup": {"blue": {"x": 400, "y": 222}, "red": {"x": 600, "y": 222, "hp_lost": 14}},
+                "setup": {"blue": {"x": 400, "y": 222}, "red": {"x": 600, "y": 222, "hp_lost": 28}},
                 "script": [{"t": [0.1, 2.0], "every": 0.3, "do": "fire", "who": "blue", "at": "red"}]})
     run(st, 1.5)
     red = next(p for p in st.snapshot()["players"] if p["id"] == "red")
@@ -274,12 +274,12 @@ def test_death_event_and_sound_only_when_mage_really_dies(game, monkeypatch):
     game.handle_events([("dead", "red")])
     assert played == [1]
     st = Stage({"length": 4, "mortal_players": True, "heroes": {"blue": "fire", "red": "frost"},
-                "setup": {"blue": {"x": 400, "y": 222}, "red": {"x": 600, "y": 222, "hp_lost": 14}},
+                "setup": {"blue": {"x": 400, "y": 222}, "red": {"x": 600, "y": 222, "hp_lost": 28}},
                 "script": [{"t": [0.1, 2.0], "every": 0.3, "do": "fire", "who": "blue", "at": "red"}]})
     run(st, 1.5)
     assert ("dead", "red") in [tuple(e[:2]) for e in st.take_events()]
     st2 = Stage({"length": 4, "heroes": {"blue": "fire", "red": "frost"},
-                 "setup": {"blue": {"x": 400, "y": 222}, "red": {"x": 600, "y": 222, "hp_lost": 14}},
+                 "setup": {"blue": {"x": 400, "y": 222}, "red": {"x": 600, "y": 222, "hp_lost": 28}},
                  "script": [{"t": [0.1, 2.0], "every": 0.3, "do": "fire", "who": "blue", "at": "red"}]})
     run(st2, 1.5)
     assert all(e[0] != "dead" for e in st2.take_events())

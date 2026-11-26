@@ -143,7 +143,7 @@ def test_demos_show_their_point_even_at_low_fps():
         land = run_demo("foe_land", fps)
         assert "red" in land["zones"]["blue"] and "blue" in land["zones"]["red"], fps    # дошли до чужой земли
         assert land["burn"] == {"blue": {"fire"}, "red": {"frost"}}, fps
-        assert run_demo("bear", fps)["mob_min"] < 6, fps                                  # медведь добежал
+        assert run_demo("bear", fps)["mob_min"] < 12, fps                                 # медведь добежал
         ice = run_demo("icewalk", fps)
         assert "red" in ice["zones"]["blue"] and "blue" not in ice["burn"], fps           # Холод по земле Огня — не горит
         assert ice["burn"].get("red") == {"frost"}, fps                                   # Огонь на тропе — горит морозом
