@@ -1,6 +1,6 @@
 [project]
 name = "spellgunners"
-version = "0.10.4"
+version = "0.10.5"
 description = "Spellgunners — дуэль магов со стволами: артефакты, мобы, игра по сети"
 requires-python = ">=3.10"
 dependencies = ["pygame>=2.5"]
