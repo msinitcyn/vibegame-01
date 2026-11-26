@@ -104,9 +104,9 @@ def test_server_loop_skips_closed_sockets():
     b.close()
 
 
-def test_net_2v2_own_items_on_panel_partner_under_him(game, monkeypatch):
-    """По сети в 2×2 напарник (blue2) видит на панели свои артефакты и выбирает их своими клавишами;
-    под магом — только артефакты партнёра."""
+def test_net_2v2_all_items_on_panel_own_keys(game, monkeypatch):
+    """2×2: на панели артефакты всех четверых (ведущий сверху, со ★), под магами — ничего; по сети напарник
+    (blue2) выбирает свои ячейки своими клавишами."""
     from duel.match import Match
     from duel.snapshot import snapshot
 
@@ -117,18 +117,37 @@ def test_net_2v2_own_items_on_panel_partner_under_him(game, monkeypatch):
     m = Match(seed=1, mode="2v2")
     m.player("blue2").items[0] = "shield"
     m.player("blue").items[1] = "heal"
+    m.player("red2").items[2] = "beam"
     game.net, game.me, game.net_waiting, game.reconnect_until = Fake(), "blue2", False, None
     game.net_mode, game.net_seats = "2v2", {}
     game.snap = snapshot(m)
     drawn = []
-    monkeypatch.setattr("duel.screens.draw_icon", lambda s, kind, c, r, **kw: drawn.append((kind, c)))
+    monkeypatch.setattr("duel.screens.draw_icon", lambda s, kind, c, r, **kw: drawn.append(kind))
     try:
-        assert game.own_pid() == "blue2" and game.hud_pids() == ["blue2", "red"]
+        assert game.own_pid() == "blue2"
         game.armed = {}
         game.on_key(game.controls["blue"].items[0][0])       # своя первая ячейка — щит напарника, не ведущего
         assert game.armed.get("blue2") == (0, "shield") and "blue" not in game.armed
-        game.draw_mate_items(game.screen)
-        assert [k for k, _ in drawn] == ["heal"]              # под магом — только партнёр (ведущий синих)
+        game.draw_hud()
+        assert {"shield", "heal", "beam"} <= set(drawn)
+        drawn.clear()
+        game.draw_play_field()                               # на поле значков артефактов под магами нет
+        assert not {"shield", "heal", "beam"} & set(drawn)
     finally:
         game.net, game.me, game.net_mode = None, None, "1v1"
         game.armed = {}
+
+
+def test_sit_on_own_team_free_seat_and_on_bot_seat(server):
+    papa = Member(server, "Папа")
+    papa.send({"type": "team_game"})
+    papa.got("seat")
+    room = server.room
+    papa.send({"type": "switch", "seat": "blue2"})            # второе место своей команды
+    wait(server, lambda: room.seats["blue2"].conn is not None)
+    assert papa.last("seat")["you"] == "blue2"
+    papa.send({"type": "seat_bot", "seat": "red", "on": True})
+    wait(server, lambda: room.seats["red"].bot)
+    papa.send({"type": "switch", "seat": "red"})              # на место бота — бот садится на прежнее
+    wait(server, lambda: room.seats["red"].conn is not None)
+    assert room.seats["blue2"].bot and room.seats["blue2"].free and papa.last("seat")["you"] == "red"

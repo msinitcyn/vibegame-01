@@ -1170,7 +1170,7 @@ TEXTS = {
         "help.levels": "Dots under an icon show the artifact level (1–4). Higher is rarer: level 3 drops from mobs with 5+ lives, level 4 only from the fattest (6).",
         "hero.owner": "drops only for: {hero}",
         "help.clearfoe": "All opponent bullets currently on screen disappear.",
-        "help.slowfoe": "For {slowfoe} s the opponent's bullets hang in the air (don't touch!), then fly on. "
+        "help.slowfoe": "For {slowfoe} s the opponent's bullets hang in the air (don't touch!) and they can't fire new ones, then the bullets fly on. "
                         "Mobs coming at you are twice as slow.",
         "help.fastshots": "Your bullets fly {fast}× faster for {fastshots} s, and so do mobs "
                           "going after the opponent.",

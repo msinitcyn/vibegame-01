@@ -160,3 +160,19 @@ def test_death_animation_first_then_winner_or_draw():
     assert m2.winner == "draw"
     from duel.snapshot import snapshot
     assert snapshot(m2)["winner"] == "draw"
+
+
+def test_slowfoe_blocks_new_enemy_shots():
+    """«Остановка пуль» Холода: пока висят пули соперника, новые он выпускать не может."""
+    from duel.commands import Command
+    from duel.match import Match, STEP
+    m = Match(seed=3, heroes={"blue": "frost", "red": "fire"})
+    m.give(m.blue, "slowfoe")
+    ammo = m.red.ammo
+    for _ in range(20):
+        m.step(STEP, {"red": Command(fire=True, aim=3.14)})
+    assert m.red.ammo == ammo and not [b for b in m.bullets if b.owner is m.red]
+    m.blue.effects.pop("slowfoe")
+    for _ in range(5):
+        m.step(STEP, {"red": Command(fire=True, aim=3.14)})
+    assert m.red.ammo < ammo

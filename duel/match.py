@@ -270,7 +270,13 @@ class Match:
 
     # ------------------------------------------------------------------ действия игроков
 
+    def bullets_held(self, p):
+        """Действует «Остановка пуль» врага (slowfoe Холода): пули мага висят — новые выпускать нельзя."""
+        return any("slowfoe" in q.effects for q in self.enemies(p))
+
     def fire(self, p):
+        if self.bullets_held(p):
+            return
         if p.ammo <= 0 and p.can_fire:
             if self.match_time - self.no_ammo_at[p] >= NO_AMMO_EVERY:
                 self.no_ammo_at[p] = self.match_time
@@ -724,7 +730,9 @@ class Match:
         """Двойники бродят и стреляют; деревья и огненная стена их разворачивают; подбирают артефакты хозяину."""
         for c in self.clones:
             x0, y0 = c.x, c.y
-            self.bullets.extend(c.update(dt, self.other(c.owner)))
+            shots = c.update(dt, self.other(c.owner))
+            if not self.bullets_held(c.owner):            # двойники тоже не стреляют под «Остановкой пуль»
+                self.bullets.extend(shots)
             if "lassoed" in c.effects:                # двойника поймали лассо — тянет к тому, кто бросил
                 puller = getattr(c, "lasso_by", None) or self.other(c.owner)
                 dx, dy = puller.x - c.x, puller.y - c.y

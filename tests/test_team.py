@@ -146,3 +146,14 @@ def test_pick_1v1_two_dropdowns_bot_side(game):
     game.pick_confirm("red", True)
     assert game.state == "play" and game.test_bot and set(game.mates) == {"blue"} and game.human_pids() == []
     game.start()
+
+
+def test_snapshot_burn_uses_2v2_field():
+    """Горение в снимке считается по полю 2×2: маг в нейтральной полосе (x=700 из 1500) не горит, на земле врага (x=1100) — горит."""
+    from duel.snapshot import snapshot
+    m = Match(seed=4, heroes={"blue": "fire", "red": "frost"}, mode="2v2")
+    b = m.player("blue")
+    b.x, b.y = 700, 140                                       # над ареной
+    assert snapshot(m)["players"][0]["burn"] is None          # раньше: по полю 1×1 x=700 — чужая земля
+    b.x = 1100                                                # за нейтральной полосой — земля красных
+    assert snapshot(m)["players"][0]["burn"] == "frost"

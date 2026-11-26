@@ -282,7 +282,6 @@ class NetScreensMixin:
         s.blit(img, img.get_rect(center=(WIDTH // 2, 40)))
         seats = self.net_seats
         caps = getattr(self, "net_captains", {}) or {}
-        my_team = (self.me or "").rstrip("2") or None
         n, gap = len(HEROES), 12
         w = min(150, (WIDTH - 40 - gap * (n - 1)) // n)
         x0 = (WIDTH - n * w - (n - 1) * gap) // 2
@@ -314,14 +313,13 @@ class NetScreensMixin:
                     label = tr("net.free_seat")
                 img = self.small.render(label, True, WHITE if who else GREY)
                 s.blit(img, img.get_rect(midleft=(box.x + 10, box.centery)))
-                if who in (None, "bot") and not self.watching:        # свободно — бот или пересесть
+                if who in (None, "bot") and not self.watching:        # без человека — бот или пересесть
                     bw = 110
                     b1 = pygame.Rect(box.right - bw - 6, box.y + 6, bw, box.h - 12)
                     self.small_button(b1, tr("team.remove_bot") if who == "bot" else tr("team.add_bot"),
                                       lambda pid=pid, on=(who != "bot"): self.net_send({"type": "seat_bot", "seat": pid, "on": on}))
-                    if who is None and my_team != team:
-                        b2 = b1.move(-bw - 6, 0)
-                        self.small_button(b2, tr("team.sit"), lambda pid=pid: self.net_send({"type": "switch", "seat": pid}))
+                    b2 = b1.move(-bw - 6, 0)                    # пересесть можно на любое место без человека
+                    self.small_button(b2, tr("team.sit"), lambda pid=pid: self.net_send({"type": "switch", "seat": pid}))
             for i, h in enumerate(HEROES):
                 card = pygame.Rect(x0 + i * (w + gap), top + 84, w, 150)
                 cur = hero == h

@@ -171,9 +171,10 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         pygame.draw.rect(s, (30, 33, 45), (0, 0, WIDTH, HUD_H))
         pygame.draw.line(s, GREY, (0, HUD_H), (WIDTH, HUD_H), 2)
         self.draw_wave_timer()
-        # 2×2: на панели — по магу от команды (человек, если есть), у имени — возрождения команды; другие — на поле
-        shown = self.hud_pids()
-        for i_player, p in enumerate(q for q in self.snap["players"] if q["id"] in shown):
+        if len(self.snap["players"]) > 2:
+            self.draw_team_hud()
+            return
+        for i_player, p in enumerate(self.snap["players"]):
             pid = p["id"]
             color = self.side_color(pid)
             left = (p.get("team") or pid) == "blue"
@@ -276,40 +277,64 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
             self._field_bg = cached = (heroes, bg)
         return cached[1]
 
-    def hud_pids(self):
-        """Чьи артефакты на панели: 1×1 — оба; 2×2 — от каждой команды человек (ведущий, если оба) или ведущий.
-        По сети — свой маг (даже напарник) и ведущий соперников."""
-        players = self.snap["players"]
-        if len(players) <= 2:
-            return [p["id"] for p in players]
-        humans = set(self.my_pids())
-        out = []
+    def draw_team_hud(self):
+        """2×2: у каждой стороны две строки — сверху ведущий (★), ниже напарник: имя, патроны и действующие
+        артефакты, у центра — его ячейки. Свои ячейки подписаны клавишами, выбранная — в золотой рамке."""
+        s = self.screen
+        size, gap = 34, 3
+        mine = set(self.my_pids())
+        lives = self.snap.get("team_lives") or {}
         for team in ("blue", "red"):
-            ids = [p["id"] for p in players if (p.get("team") or p["id"]) == team]
-            out.append(next((i for i in ids if i in humans), ids[0]))
-        return out
-
-    def draw_mate_items(self, s):
-        """2×2: артефакты магов, которых нет на панели, — строкой значков под магом. По сети — только у партнёра
-        (артефакты соперников не видны, как и в 1×1 у второго)."""
-        shown = self.hud_pids()
-        me = getattr(self, "me", None) if self.net and not self.watching else None
-        for p in self.snap["players"]:
-            if p["id"] in shown or p.get("out") or p.get("dead") is not None:
-                continue
-            if me and (p.get("team") or p["id"]) != me.rstrip("2"):
-                continue
-            items = p.get("items") or []
-            r, gap = 9, 3
-            x0 = p["x"] - (len(items) * (2 * r + gap) - gap) / 2 + r
-            y = p["y"] + p["r"] + 16
-            for i, kind in enumerate(items):
-                c = (round(x0 + i * (2 * r + gap)), round(y))
-                pygame.draw.circle(s, (22, 24, 34), c, r + 1)
-                if kind:
-                    draw_icon(s, kind, c, r)
+            left = team == "blue"
+            for row, pid in enumerate((team, team + "2")):
+                p = next((q for q in self.snap["players"] if q["id"] == pid), None)
+                if p is None:
+                    continue
+                color = self.side_color(pid)
+                cy = 4 + row * 40 + 18
+                width = 4 * size + 3 * gap
+                x0 = WIDTH // 2 - HUD_CENTER - 6 - width if left else WIDTH // 2 + HUD_CENTER + 6
+                armed = self.armed_slot(pid) if pid in mine else None
+                for i, kind in enumerate(p["items"]):
+                    rect = pygame.Rect(x0 + i * (size + gap), cy - size // 2, size, size)
+                    pygame.draw.rect(s, (22, 24, 34), rect, border_radius=5)
+                    pygame.draw.rect(s, color if kind else GREY, rect, 1, border_radius=5)
+                    if i == armed:
+                        pygame.draw.rect(s, (255, 225, 80), rect.inflate(4, 4), 3, border_radius=7)
+                    if kind:
+                        draw_icon(s, kind, rect.center, size // 2 - 4)
+                        if "noitems" in p["effects"] and kind != "cleanse":
+                            pygame.draw.line(s, ITEMS["foe_noitems"][1], rect.bottomleft, rect.topright, 2)
+                    label = self.slot_key(pid, i) if pid in mine else ""
+                    if label:
+                        key = self.tiny.render(label, True, WHITE)
+                        s.blit(key, (rect.right - key.get_width() - 2, rect.bottom - key.get_height()))
+                name = ("★ " if row == 0 else "") + self.player_label(pid)
+                if row == 0 and team in lives:
+                    name += f"  ♥{lives[team]}"
+                if p.get("out"):
+                    name += "  ✕"
+                img = self.small.render(name, True, color)
+                chips = self.status_chips(p, self.snap)
+                chips = pygame.transform.smoothscale(chips, (round(chips.get_width() * 0.75),
+                                                             round(chips.get_height() * 0.75)))
+                room = (x0 - 16) if left else (WIDTH - (x0 + width) - 16)
+                if img.get_width() + 8 + chips.get_width() > room:
+                    w = max(10, room - img.get_width() - 8)
+                    chips = pygame.transform.smoothscale(chips, (w, chips.get_height()))
+                if left:
+                    s.blit(img, img.get_rect(midleft=(10, cy)))
+                    s.blit(chips, chips.get_rect(midleft=(18 + img.get_width(), cy)))
                 else:
-                    pygame.draw.circle(s, GREY, c, r, 1)
+                    s.blit(img, img.get_rect(midright=(WIDTH - 10, cy)))
+                    s.blit(chips, chips.get_rect(midright=(WIDTH - 18 - img.get_width(), cy)))
+
+    def draw_leader_stars(self, s):
+        """2×2: звезда над ведущим каждой команды."""
+        for p in self.snap["players"]:
+            if p["id"] in ("blue", "red") and p.get("dead") is None and not p.get("out"):
+                img = self.small.render("★", True, self.side_color(p["id"]))
+                s.blit(img, img.get_rect(midbottom=(int(p["x"]), int(p["y"] - p["r"] - 22))))
 
     def name_line(self, p, color):
         """Первая строка статуса: имя и снаряжение (4 значка: надетое — ярко в золотой рамке, нет — бледно)."""
@@ -634,7 +659,7 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
             self.addons.draw_field(s, self.snap, viewer or None, self.tiny)
         self.draw_armed_previews(s)
         if len(self.snap["players"]) > 2:
-            self.draw_mate_items(s)
+            self.draw_leader_stars(s)
         target = getattr(self, "walk_to", None)
         if target:                                     # «идти к курсору»: куда идёт маг — ромбик на земле
             x, y = int(target[0]), int(target[1])

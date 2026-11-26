@@ -30,6 +30,12 @@ def _pid(p):
 
 
 def snapshot(match):
+    """Снимок партии — с геометрией её поля (2×2: горение на чужой земле, арена — по большому полю)."""
+    with field.use(getattr(match, "geo", None)):
+        return _snapshot(match)
+
+
+def _snapshot(match):
     m = match
     return {
         "time": _t(m.match_time),

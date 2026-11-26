@@ -430,7 +430,9 @@ def test_slowfoe_stops_foe_bullets_then_they_fly(match):
     b, r = match.blue, match.red
     match.apply_item(b, "fastshots")
     match.apply_item(r, "slowfoe")               # пули синего замирают — даже быстрые
-    assert bullet_path(match, b) == 0
+    match.bullets, b.cooldown = [], 0
+    match.fire(b)
+    assert match.bullets == []                    # и новых синий выпустить не может
     bl = Bullet(300, 300, 520, 0, b)
     match.bullets = [bl]
     step(match, DURATION["slowfoe"] - 0.5)

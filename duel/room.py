@@ -189,13 +189,13 @@ class Room:
         self.log(f"{pid}: {'бот' if on else 'место открыто'}")
 
     def switch_seat(self, pid, to):
-        """2×2: пересесть на свободное место (в другую команду) до начала партии. Новое место — сразу клиенту."""
+        """2×2: пересесть на место без человека (свободное или с ботом — бот садится на прежнее место) до начала
+        партии. Новое место — сразу клиенту."""
         if self.mode != "2v2" or self.phase != "lobby" or not isinstance(to, str) or to not in self.seats \
                 or to == pid or not self.seats[to].free:
             return pid
         mine, other = self.seats[pid], self.seats[to]
-        other.bot = False
-        self.seats[pid], self.seats[to] = other, mine
+        self.seats[pid], self.seats[to] = other, mine       # бот (если был) — на прежнее место
         mine.ready = False
         self.pending[to] = Command()
         self.update_captains()
