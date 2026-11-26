@@ -38,10 +38,10 @@ from multiprocessing import get_context
 from pathlib import Path
 
 
-from . import tuning
+from . import config, tuning
 from .brain import LEVELS, STRATEGIES, SmartBot
 from .commands import Command
-from .config import HEROES, MAX_HP
+from .config import HEROES
 from .match import STEP, Match
 from .replay import Recorder, lab_root, read_index, summary as replay_summary, write_index
 
@@ -53,7 +53,6 @@ def say(*args):
 
 
 SAMPLE = 0.5                       # раз в столько секунд — снимок жизней (для камбэков)
-COMEBACK_HP = 5                    # отставал на столько жизней и победил — камбэк
 
 
 # ------------------------------------------------------------------ одна партия (в рабочем процессе)
@@ -234,7 +233,7 @@ def metrics(rs):
             "draws": sum(r["winner"] == "draw" for r in rs), "timeouts": sum(r["winner"] == "timeout" for r in rs),
             "length": sum(lengths) / len(lengths) if lengths else 0, "p90": pct(lengths, 0.9),
             "spread": (max(rates.values()) - min(rates.values())) if rates else None, "heroes": rates,
-            "comeback": sum(r["behind"][r["winner"]] >= COMEBACK_HP for r in d) / len(d) if d else None,
+            "comeback": sum(r["behind"][r["winner"]] >= comeback_hp() for r in d) / len(d) if d else None,
             "first": firsts}
 
 
@@ -291,7 +290,7 @@ def report(rs, title):
             say(f"  {RU[a]}-{RU[b]}-{left(side_w[x], side_n[x])}-{RU[b]}-{RU[a]}-{left(side_w[y], side_n[y])}"
                   f"   (n={side_n[x]}/{side_n[y]})")
     close_report(d)
-    say(f"\nкамбэки: победил, отставая на {COMEBACK_HP}+ жизней — {100 * m['comeback']:.0f}% побед")
+    say(f"\nкамбэки: победил, отставая на {comeback_hp()}+ жизней — {100 * m['comeback']:.0f}% побед")
     say("снежный ком (побеждает тот, кто первым…):")
     names = {"gear": "надел снаряжение", "item": "подобрал артефакт", "blood": "ранил соперника"}
     for key, name in names.items():
@@ -313,7 +312,14 @@ def report(rs, title):
         say(f"  {kind:12} {rate(used_w[kind], used_n[kind])}  применений {times[kind]}")
 
 
-BLOWOUT = 10                       # у победителя осталось столько жизней и больше — разгром
+def comeback_hp():
+    """Отставал на столько жизней (треть запаса) и победил — камбэк."""
+    return config.MAX_HP // 3
+
+
+def blowout_hp():
+    """У победителя осталось столько жизней (две трети запаса) и больше — разгром."""
+    return round(config.MAX_HP * 2 / 3)
 
 
 def close_report(d):
@@ -322,15 +328,18 @@ def close_report(d):
     if not rows:
         return
     n = len(rows)
-    say(f"\nнасколько ровные (жизней у победителя в конце, из {MAX_HP}): в среднем {sum(h for _, h in rows) / n:.1f}")
-    for name, lo, hi in (("на волоске 1–3", 1, 3), ("4–6", 4, 6), ("7–9", 7, 9), (f"разгром {BLOWOUT}+", BLOWOUT, 99)):
+    say(f"\nнасколько ровные (жизней у победителя в конце, из {config.MAX_HP}): в среднем {sum(h for _, h in rows) / n:.1f}")
+    k = config.MAX_HP / 15                            # пороги — в долях жизней (было рассчитано на 15)
+    b1, b2, b3 = round(3 * k), round(6 * k), round(9 * k)
+    for name, lo, hi in ((f"на волоске 1–{b1}", 1, b1), (f"{b1 + 1}–{b2}", b1 + 1, b2), (f"{b2 + 1}–{b3}", b2 + 1, b3),
+                         (f"разгром {b3 + 1}+", b3 + 1, 999)):
         say(f"  {name:16} {100 * sum(lo <= h <= hi for _, h in rows) / n:3.0f}%")
     say("  когда герой побеждает: жизней в среднем, разгромов")
     per = {}
     for hero, h in rows:
         per.setdefault(hero, []).append(h)
     for hero, hs in sorted(per.items(), key=lambda x: -sum(x[1]) / len(x[1])):
-        say(f"    {RU[hero]:8} {sum(hs) / len(hs):4.1f}   {100 * sum(h >= BLOWOUT for h in hs) / len(hs):3.0f}%   (побед {len(hs)})")
+        say(f"    {RU[hero]:8} {sum(hs) / len(hs):4.1f}   {100 * sum(h >= blowout_hp() for h in hs) / len(hs):3.0f}%   (побед {len(hs)})")
 
 
 RU = {"fire": "огонь", "frost": "лёд", "nature": "природа", "dark": "тьма", "light": "свет", "earth": "земля"}
@@ -485,7 +494,7 @@ def pick_games(rows, a):
         want = {"left": "blue", "right": "red"}.get(a.winner, a.winner)
         out = [r for r in out if r["winner"] == want]
     if a.comeback:
-        out = [r for r in out if r["winner"] in ("blue", "red") and r["behind"][r["winner"]] >= COMEBACK_HP]
+        out = [r for r in out if r["winner"] in ("blue", "red") and r["behind"][r["winner"]] >= comeback_hp()]
     if a.longest or a.shortest:
         out = sorted(out, key=lambda r: r["length"], reverse=bool(a.longest))
     return out[:a.count]

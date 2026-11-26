@@ -260,7 +260,7 @@ class NetScreensMixin:
         else:
             self.button((WIDTH // 2 - 110, 585), tr("net.btn_unready") if self.my_ready() else tr("net.btn_ready"),
                         lambda: self.send_ready(not self.my_ready()), w=200)
-            self.button((WIDTH // 2 + 110, 585), tr("net.btn_leave"), lambda: self.on_key(pygame.KSCAN_ESCAPE),
+            self.button((WIDTH // 2 + 110, 585), tr("net.btn_leave"), self.quit_match,
                         w=200)
             hint = tr("net.pick_hint", **self.hint_keys())
         img = self.small.render(hint, True, GREY)
@@ -341,7 +341,7 @@ class NetScreensMixin:
         else:
             self.button((WIDTH // 2 - 110, HEIGHT - 80), tr("net.btn_unready") if self.my_ready() else tr("net.btn_ready"),
                         lambda: self.send_ready(not self.my_ready()), w=200)
-            self.button((WIDTH // 2 + 110, HEIGHT - 80), tr("net.btn_leave"), lambda: self.on_key(pygame.KSCAN_ESCAPE),
+            self.button((WIDTH // 2 + 110, HEIGHT - 80), tr("net.btn_leave"), self.quit_match,
                         w=200)
         img = self.small.render(tr("team.hint", **self.hint_keys()), True, GREY)
         s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 36)))

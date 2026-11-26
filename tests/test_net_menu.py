@@ -662,3 +662,18 @@ def test_menu_while_connected_toast_challenge_and_back(game):
     game.menu_select()                                      # «Вернуться в партию»
     assert game.state == "play" and game.net
     masha.close()
+
+
+def test_leave_button_on_pick_goes_to_lobby(game):
+    """«Покинуть» на выборе героя по сети — в лобби (Esc — в меню, место держится)."""
+    srv = own_server_lobby(game)
+    masha = Bob(srv.port, "Маша")
+    frames(game, lambda: len(game.lobby_players) == 2, keep=(masha,))
+    game.challenge(next(p for p in game.lobby_players if p["name"] == "Маша"))
+    frames(game, lambda: game.state == "play" and game.net and game.net_seats, keep=(masha,))
+    game.hits = []
+    game.draw_lobby()
+    leave = [h for h in game.hits if h[0].h == 40 and h[0].centerx > 500][-1]
+    leave[1]()
+    assert game.state == "lobby" and game.net is None and game.lobby_conn
+    masha.close()
