@@ -91,3 +91,14 @@ def test_client_team_pick_screen_draws_and_only_captain_picks(game, tmp_path):
         assert [m["hero"] for m in sent if m["type"] == "hero"] == ["dark"]
     finally:
         game.net, game.me, game.net_waiting, game.net_mode = None, None, False, "1v1"
+
+
+def test_server_loop_skips_closed_sockets():
+    """Закрытый сокет в списке select (fileno -1) ронял поток своего сервера: ValueError."""
+    import socket
+
+    from duel.server import open_fd
+    a, b = socket.socketpair()
+    a.close()
+    assert not open_fd(a) and open_fd(b)
+    b.close()

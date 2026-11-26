@@ -55,6 +55,14 @@ MAX_PER_IP = 6                    # соединений с одного адр�
 MSG_BURST, MSG_RATE = 240, 150    # сообщений от соединения: запас и в секунду (игра шлёт ~65/с)
 
 
+def open_fd(sock):
+    """Сокет (или соединение) ещё открыт: select с закрытым (fileno -1) падает ValueError и роняет поток сервера."""
+    try:
+        return sock.fileno() >= 0
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
 class Server:
     def __init__(self, port=PORT, bot=False, host="0.0.0.0", proto=PROTO, log=print,
                  discovery_port=discovery.DISCOVERY_PORT, clock=time.monotonic, name=None, db=":memory:",
@@ -785,7 +793,7 @@ class Server:
             socks = [self.listener] + ([self.ws_listener] if self.ws_listener else []) + self.all_conns()
             if self.finder_sock:
                 socks.append(self.finder_sock)
-            select.select(socks, [], [], wait)
+            select.select([x for x in socks if open_fd(x)], [], [], wait)   # закрытый сокет — fileno -1: ValueError
             self.health.beat()
             try:
                 self.answer_finders()

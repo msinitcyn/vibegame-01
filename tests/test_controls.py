@@ -1,5 +1,6 @@
 """Управление: клавиши в любой раскладке, геймпады, меню."""
 import math
+import os
 
 import pygame
 
@@ -264,3 +265,24 @@ def test_artifacts_tab_lands_grid(game):
     game.on_key(pygame.KSCAN_A)                 # левее первой земли — предыдущая вкладка
     assert HELP_TABS[game.help_page] == "mages"
     game.state = "menu"
+
+
+def test_fullscreen_falls_back_and_never_crashes(game, monkeypatch):
+    """Собранная игра на Linux: set_mode с SCALED падал «failed to create renderer» — F11 закрывал игру."""
+    calls = []
+
+    def flaky(size, flags=0, **kw):
+        calls.append(os.environ.get("SDL_RENDER_DRIVER"))
+        if os.environ.get("SDL_RENDER_DRIVER") != "software":
+            raise pygame.error("failed to create renderer")
+        return pygame.Surface(size)
+    monkeypatch.setattr(pygame.display, "set_mode", flaky)
+    monkeypatch.delenv("SDL_RENDER_DRIVER", raising=False)
+    was = game.fullscreen
+    game.toggle_fullscreen()
+    assert game.fullscreen != was and calls[-1] == "software"
+    monkeypatch.setattr(pygame.display, "set_mode", lambda *a, **k: (_ for _ in ()).throw(pygame.error("нет")))
+    monkeypatch.setattr(pygame.display, "toggle_fullscreen", lambda: (_ for _ in ()).throw(pygame.error("нет")))
+    state = game.fullscreen
+    game.toggle_fullscreen()                       # ничего не вышло — остаёмся как есть, без падения
+    assert game.fullscreen == state and game.screen is not None

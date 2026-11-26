@@ -589,3 +589,29 @@ def test_lobby_chat_typed_sent_and_shown(game):
     game.on_key(pygame.KSCAN_ESCAPE)               # Esc — отмена ввода, а не уход с сервера
     assert game.state == "lobby" and not game.lobby_typing
     masha.close()
+
+
+def test_join_team_game_from_lobby_list(game):
+    """2×2 в списке партий: щелчок — войти игроком (раньше игра падала на заголовке окна для blue2)."""
+    srv = own_server_lobby(game)
+    papa = Bob(srv.port, "Папа")
+    papa.conn.send({"type": "team_game"})
+    frames(game, lambda: any(g.get("mode") == "2v2" for g in game.lobby_games), keep=(papa,))
+    game.lobby_index = row_of(game, "game")
+    game.draw_lobby_screen()
+    game.on_key(pygame.KSCAN_RETURN)              # join
+    frames(game, lambda: game.state == "play" and game.net and game.net_seats, keep=(papa,))
+    assert game.me == "blue2" and game.net_mode == "2v2" and not game.watching
+    game.draw_lobby()
+    game.net_send({"type": "switch", "seat": "red"})
+    frames(game, lambda: game.me == "red", keep=(papa,))
+    for pid in ("blue2", "red2"):
+        game.net_send({"type": "seat_bot", "seat": pid, "on": True})
+    frames(game, lambda: (game.net_seats.get("red2") or {}).get("who") == "bot", keep=(papa,))
+    game.on_key(pygame.KSCAN_RETURN)              # готов
+    papa.conn.send({"type": "ready", "ready": True})
+    frames(game, lambda: not game.net_waiting and len(game.snap["players"]) == 4, keep=(papa,), timeout=6)
+    for _ in range(30):
+        game.net_frame(1 / 60)
+    game.draw()
+    papa.close()

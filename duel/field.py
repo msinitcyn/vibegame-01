@@ -33,6 +33,23 @@ def size(geo):
     return (geo.get("WIDTH", config.WIDTH), geo.get("BOTTOM", config.BOTTOM) - config.TOP)
 
 
+_bindings = {"key": None, "list": []}     # где лежат константы поля: [(модуль, имя)] — собираем один раз
+
+
+def _targets(names):
+    """Модули duel.*, где имя привязано к тому же объекту, что в config (и сам config). Пересобирается, только
+    когда загрузились новые модули: подмена на каждом такте не перебирает все модули заново."""
+    mods = tuning._modules()
+    key = (len(mods), tuple(sorted(names)))
+    if _bindings["key"] != key:
+        out = []
+        for name in names:
+            old = getattr(config, name)
+            out += [(m, name) for m in mods if m is config or getattr(m, name, None) is old]
+        _bindings.update(key=key, list=out)
+    return _bindings["list"]
+
+
 @contextmanager
 def use(geo):
     """На время блока — константы поля этой геометрии во всех модулях игры (пустая — ничего)."""
@@ -41,10 +58,14 @@ def use(geo):
         return
     if _active[0] is not None:
         raise RuntimeError("геометрия поля уже подменена другой партией")
-    undo = tuning.apply(geo)
+    targets = _targets(geo)
+    saved = [(m, name, getattr(m, name)) for m, name in targets]
+    for m, name in targets:
+        setattr(m, name, geo[name])
     _active[0] = geo
     try:
         yield
     finally:
         _active[0] = None
-        undo()
+        for m, name, old in saved:
+            setattr(m, name, old)

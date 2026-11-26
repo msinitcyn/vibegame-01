@@ -9,7 +9,7 @@
     client_net.py     — сетевая партия
     screens*.py       — отрисовка (ScreensMixin)
 """
-
+import os
 
 import pygame
 
@@ -260,12 +260,37 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
             display = Window.from_display_module().display_index
         except Exception:
             display = 0
-        self.fullscreen = not self.fullscreen
-        flags = pygame.SCALED | (pygame.FULLSCREEN if self.fullscreen else 0)
-        try:
-            self.screen = pygame.display.set_mode((WIDTH, HEIGHT), flags, display=display)
-        except pygame.error:
-            self.screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
+        want = not self.fullscreen
+        flags = pygame.SCALED | (pygame.FULLSCREEN if want else 0)
+        attempts = [lambda: pygame.display.set_mode((WIDTH, HEIGHT), flags, display=display),
+                    lambda: pygame.display.set_mode((WIDTH, HEIGHT), flags),
+                    self.software_mode(flags),                      # собранная игра: своя SDL не создаёт ускоренный
+                    lambda: (pygame.display.toggle_fullscreen(), pygame.display.get_surface())[1]]
+        for attempt in attempts:
+            try:
+                surf = attempt()
+            except pygame.error as e:
+                log.warning("полный экран: %s", e)
+                continue
+            if surf is not None:
+                self.screen, self.fullscreen = surf, want
+                return
+        log.warning("полный экран не переключился — остаёмся как есть")
+        surf = pygame.display.get_surface()
+        if surf is None:                                            # окно пропало — вернуть обычное
+            try:
+                surf = self.software_mode(pygame.SCALED)()
+            except pygame.error:
+                surf = pygame.display.set_mode((WIDTH, HEIGHT))
+        self.screen = surf
+
+    @staticmethod
+    def software_mode(flags):
+        """Попытка с программной отрисовкой (SDL_RENDER_DRIVER=software) — когда ускоренная не создаётся."""
+        def attempt():
+            os.environ["SDL_RENDER_DRIVER"] = "software"
+            return pygame.display.set_mode((WIDTH, HEIGHT), flags)
+        return attempt
 
     @property
     def players(self):
@@ -704,7 +729,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         for p in self.snap.get("players", []):
             if p["id"] == pid and p.get("hero"):
                 return p["hero"]
-        return DEFAULT_HERO[pid]
+        return DEFAULT_HERO.get(pid) or DEFAULT_HERO["blue" if pid.startswith("blue") else "red"]
 
     def side_color(self, pid):
         return HERO_COLOR[self.side_hero(pid)]

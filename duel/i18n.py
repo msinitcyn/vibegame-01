@@ -614,6 +614,8 @@ TEXTS = {
     "en": {
         "title": "Spellgunners",
         "name.blue": "Blue",
+        "name.blue2": "Blue 2",
+        "name.red2": "Red 2",
         "name.red": "Red",
         "hero.fire": "Fire",
         "hero.frost": "Frost",
