@@ -54,7 +54,7 @@ jobs:
           python-version: "3.12"
 
       - name: Зависимости
-        run: python -m pip install pygame==2.6.1 pyinstaller pillow
+        run: python -m pip install pygame==2.5.2 pyinstaller pillow
 
       - name: Inno Setup (установщик Windows)
         if: runner.os == 'Windows'

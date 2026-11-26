@@ -280,10 +280,13 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         # окна (set_mode) в pygame 2.6.1 / SDL 2.28 (собранная игра) падает «failed to create renderer» и оставляет
         # pygame сломанным — следующий кадр роняет процесс; поэтому оно только запасное. 2–4) запасные.
         # pygame.display.toggle_fullscreen не берём: поле в углу большого экрана, а в ролике — падение SDL.
-        attempts = [lambda: self.window_fullscreen(want),
-                    lambda: pygame.display.set_mode((WIDTH, HEIGHT), flags, display=display),
+        recreate = lambda: pygame.display.set_mode((WIDTH, HEIGHT), flags, display=display)   # noqa: E731
+        switch = lambda: self.window_fullscreen(want)                                           # noqa: E731
+        attempts = [switch, recreate,
                     lambda: pygame.display.set_mode((WIDTH, HEIGHT), flags),
                     self.software_mode(flags)]
+        if pygame.version.vernum < (2, 6):    # pygame 2.5 (сборка): пересоздание работает и растягивает поле само
+            attempts = [recreate] + [a for a in attempts if a is not recreate]
         for attempt in attempts:
             try:
                 surf = attempt()
@@ -292,8 +295,9 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
                 continue
             if surf is not None:
                 self.screen, self.fullscreen = surf, want
-                if attempt is not attempts[0]:
-                    self.__dict__.pop("_sdl_window", None)   # окно пересоздано — старый объект окна не годится
+                if attempt is not switch:
+                    self.__dict__.pop("_sdl_window", None)   # окно пересоздано — старые объекты окна не годятся
+                    self.__dict__.pop("_sdl_renderer", None)
                 return
         log.warning("полный экран не переключился — остаёмся как есть")
         surf = pygame.display.get_surface()
@@ -314,12 +318,22 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         return window
 
     def window_fullscreen(self, on):
-        """Полный экран (на весь рабочий стол) или окно — у того же окна SDL, без пересоздания."""
+        """Полный экран (на весь рабочий стол) или окно — у того же окна SDL, без пересоздания. Масштаб SCALED
+        сам не пересчитывается (поле оставалось маленьким посреди экрана) — задаём отрисовщику логический размер
+        заново: SDL растягивает картинку на всё окно с сохранением пропорций."""
         window = self.sdl_window()
         if on:
             window.set_fullscreen(desktop=True)
         else:
             window.set_windowed()
+        try:
+            renderer = self.__dict__.get("_sdl_renderer")
+            if renderer is None:
+                from pygame._sdl2.video import Renderer
+                renderer = self._sdl_renderer = Renderer.from_window(window)    # один на всё время, как окно
+            renderer.logical_size = (WIDTH, HEIGHT)
+        except Exception as e:
+            log.warning("полный экран: масштаб не пересчитан — %s", e)
         return pygame.display.get_surface()
 
     @staticmethod

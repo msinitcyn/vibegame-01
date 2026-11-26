@@ -278,6 +278,7 @@ def test_fullscreen_falls_back_and_never_crashes(game, monkeypatch):
         return pygame.Surface(size)
     monkeypatch.setattr(pygame.display, "set_mode", flaky)
     monkeypatch.delenv("SDL_RENDER_DRIVER", raising=False)
+    monkeypatch.setattr(pygame.version, "vernum", (2, 6, 1))   # порядок попыток — как у pygame 2.6
     switched = []
     monkeypatch.setattr(game, "window_fullscreen", lambda on: switched.append(on) or pygame.display.get_surface())
     was = game.fullscreen
@@ -312,3 +313,14 @@ def test_garbage_collected_only_from_main_thread(game):
 def test_sdl_window_object_is_kept(game):
     """Объект окна SDL — один на всё время: новый на каждый F11 (и выброшенный) портил окно в pygame 2.6.1."""
     assert game.sdl_window() is game.sdl_window()
+
+
+def test_fullscreen_on_pygame_25_recreates_window_first(game, monkeypatch):
+    """pygame 2.5 (сборка): окно пересоздаётся — SCALED сам растягивает поле на весь экран."""
+    calls, switched = [], []
+    monkeypatch.setattr(pygame.version, "vernum", (2, 5, 2))
+    monkeypatch.setattr(pygame.display, "set_mode", lambda size, flags=0, **kw: calls.append(flags) or pygame.Surface(size))
+    monkeypatch.setattr(game, "window_fullscreen", lambda on: switched.append(on))
+    was = game.fullscreen
+    game.toggle_fullscreen()
+    assert game.fullscreen != was and len(calls) == 1 and not switched
