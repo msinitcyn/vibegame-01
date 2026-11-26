@@ -168,3 +168,28 @@ def test_dead_mage_on_enemy_land_does_not_burn():
     b.hp = 0
     m.step(STEP)
     assert b.dead_at is not None and snapshot(m)["players"][0]["burn"] is None   # лежит до возрождения — не горит
+
+
+def test_field_geometry_is_per_thread_turn():
+    """Свой сервер (поток) и игра (главный поток) в одном процессе: пока один считает партию 2×2, другой
+    с полем 1×1 ждёт — и никогда не видит чужого поля (раньше — RuntimeError или чужие размеры)."""
+    import threading
+    import time
+
+    geo = field.geometry("2v2")
+    seen, inside, done = [], threading.Event(), threading.Event()
+
+    def other():
+        inside.wait()
+        with field.use({}):                     # 1×1 в другом потоке — ждёт, пока 2×2 не кончится
+            seen.append(config.WIDTH)
+        done.set()
+
+    t = threading.Thread(target=other)
+    t.start()
+    with field.use(geo):
+        inside.set()
+        time.sleep(0.05)
+        assert config.WIDTH == 1500 and not done.is_set()
+    t.join(2)
+    assert seen == [1000] and config.WIDTH == 1000

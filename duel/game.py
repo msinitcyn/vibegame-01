@@ -374,6 +374,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.mates = {p.id: make_game_bot(self.match, p.id, self.level_of(p.id), 11 + i)
                       for i, p in enumerate(self.match.players)
                       if p.id not in humans and not (p.id == "red" and getattr(self, "test_bot", None))}
+        self.death_seen = {}          # часы анимации гибели — с новой партией заново
         self.popups = []              # [текст, x, y, время, цвет]
         self.pending = self.fresh_pending()   # нажатия до следующего такта
         self.time_acc = 0.0           # накопленное время кадров для фиксированного такта

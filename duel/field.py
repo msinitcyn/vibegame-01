@@ -6,6 +6,7 @@
 на время своего шага (use(geo) — тем же механизмом, что лаборатория, duel/tuning.py) и возвращает после: на
 сервере в одном процессе идут и 1×1, и 2×2 — каждая партия считается со своей геометрией.
 """
+import threading
 from contextlib import contextmanager
 
 from . import config, tuning
@@ -50,22 +51,28 @@ def _targets(names):
     return _bindings["list"]
 
 
+_lock = threading.RLock()   # константы поля общие для всего процесса: свой сервер (поток) и игра (главный поток)
+                            # меняют их по очереди — иначе игра рисовала бы 1×1 с полем 2×2 сервера и наоборот
+
+
 @contextmanager
 def use(geo):
-    """На время блока — константы поля этой геометрии во всех модулях игры (пустая — ничего)."""
-    if not geo or _active[0] is geo:
-        yield
-        return
-    if _active[0] is not None:
-        raise RuntimeError("геометрия поля уже подменена другой партией")
-    targets = _targets(geo)
-    saved = [(m, name, getattr(m, name)) for m, name in targets]
-    for m, name in targets:
-        setattr(m, name, geo[name])
-    _active[0] = geo
-    try:
-        yield
-    finally:
-        _active[0] = None
-        for m, name, old in saved:
-            setattr(m, name, old)
+    """На время блока — константы поля этой геометрии во всех модулях игры (пустая — поле 1×1, как в config).
+    Блок держит общий замок: другой поток (свой сервер в том же процессе) ждёт, пока он кончится."""
+    with _lock:
+        if _active[0] is (geo or None):
+            yield                          # уже подменено этим же потоком (вложенный вызов) — или 1×1
+            return
+        if _active[0] is not None:
+            raise RuntimeError("геометрия поля уже подменена другой партией")
+        targets = _targets(geo)
+        saved = [(m, name, getattr(m, name)) for m, name in targets]
+        for m, name in targets:
+            setattr(m, name, geo[name])
+        _active[0] = geo
+        try:
+            yield
+        finally:
+            _active[0] = None
+            for m, name, old in saved:
+                setattr(m, name, old)
