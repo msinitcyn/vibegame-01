@@ -144,3 +144,10 @@ class FakePad:
                 pygame.CONTROLLER_AXIS_LEFTX: self.stick_x,
                 pygame.CONTROLLER_AXIS_RIGHTX: self.right_x,
                 pygame.CONTROLLER_AXIS_RIGHTY: self.right_y}.get(axis, 0)
+
+
+@pytest.fixture
+def always_drop(monkeypatch):
+    """Погибший моб роняет артефакт всегда (без DROP_MISS) — для тестов того, что именно он роняет."""
+    import duel.match
+    monkeypatch.setattr(duel.match, "DROP_MISS", 0.0)

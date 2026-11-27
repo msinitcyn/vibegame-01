@@ -41,6 +41,8 @@ from .gamepad import PAD_ITEM_COLORS, PAD_ITEM_LABELS, PAD_ITEM_LAYOUT
 from .i18n import t as tr
 from .fx import earth as fx_earth
 from .icons import draw_ammo_icon, draw_icon
+from .items import ALLY, FOE, ITEM_RANGE, ITEM_TARGETS, LAND, MOB
+from .config import TARGET_RADIUS
 from .items import EFFECT_ICON, ITEMS, WEAPON_ITEMS
 from .render import draw_field
 from .snapshot import player as snap_player
@@ -539,6 +541,58 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         u = min(units, key=lambda u: math.hypot(u["x"] - mx, u["y"] - my))
         return None if "invisible" in u.get("effects", {}) and "owner" not in u else u   # невидимого не выдаём
 
+    def target_zone(self, p, pid, kind, aim):
+        """Центр зоны целевого артефакта на экране — как Match.target_center: курсор, не дальше ITEM_RANGE."""
+        rng = ITEM_RANGE.get(kind)
+        reach = self.reach_for(pid)
+        d = reach if reach < REACH_FAR else (rng or TARGET_RADIUS * 3)
+        if rng is not None:
+            d = min(d, rng)
+        return p["x"] + math.cos(aim) * d, p["y"] + math.sin(aim) * d
+
+    def zone_candidates(self, p, kind):
+        """Кого зона может выбрать (по снимку, как Match.find_target): маги, двойники, мобы."""
+        flags = ITEM_TARGETS.get(kind, frozenset())
+        team = p.get("team") or p["id"]
+        out = []
+        for q in self.snap["players"]:
+            mine = (q.get("team") or q["id"]) == team
+            if q.get("dead") is None and not q.get("out") and ((FOE in flags and not mine) or (ALLY in flags and mine)):
+                out.append(q)
+        for c in self.snap.get("clones", []):
+            owner = next((q for q in self.snap["players"] if q["id"] == c.get("owner")), None)
+            mine = owner is not None and (owner.get("team") or owner["id"]) == team
+            if (FOE in flags and not mine) or (ALLY in flags and mine):
+                out.append(c)
+        if MOB in flags or ALLY in flags:
+            for m in self.snap.get("mobs", []):
+                zombie = m.get("zombie")              # чей зомби (место мага) или None
+                mine = bool(zombie) and (zombie.rstrip("2") == team.rstrip("2"))
+                if (MOB in flags and not mine) or (ALLY in flags and mine):
+                    out.append(m)
+        return out
+
+    def draw_target_zone(self, s, p, pid, kind, aim, color, t):
+        cx, cy = self.target_zone(p, pid, kind, aim)
+        rng = ITEM_RANGE.get(kind)
+        if rng:                                    # дальность — тонкий круг вокруг мага
+            pygame.draw.circle(s, (*color, ), (int(p["x"]), int(p["y"])), int(rng), 1)
+        n = 24
+        for i in range(0, n, 2):                   # зона — пунктирный круг, бежит по кругу
+            a0 = (i + t * 3) * 2 * math.pi / n
+            a1 = a0 + 2 * math.pi / n
+            pts = [(cx + math.cos(a) * TARGET_RADIUS, cy + math.sin(a) * TARGET_RADIUS) for a in (a0, (a0 + a1) / 2, a1)]
+            pygame.draw.lines(s, (16, 12, 20), False, pts, 4)
+            pygame.draw.lines(s, color, False, pts, 2)
+        near = [u for u in self.zone_candidates(p, kind)
+                if math.hypot(u["x"] - cx, u["y"] - cy) <= TARGET_RADIUS + u.get("r", 0)]
+        if near:                                   # кого выберет — кольцо вокруг цели
+            u = min(near, key=lambda u: math.hypot(u["x"] - cx, u["y"] - cy))
+            pygame.draw.circle(s, (16, 12, 20), (int(u["x"]), int(u["y"])), int(u.get("r", 12)) + 7, 4)
+            pygame.draw.circle(s, (255, 230, 120), (int(u["x"]), int(u["y"])), int(u.get("r", 12)) + 7, 2)
+        elif LAND in ITEM_TARGETS.get(kind, ()):
+            pygame.draw.circle(s, color, (int(cx), int(cy)), 3)
+
     def draw_armed_previews(self, s):
         """Выбранный (ещё не применённый) артефакт — видно только себе, куда он пойдёт: огненный круг — контур
         кольца (центр под курсором, не дальше дальности), луч и стена деревьев — пунктир по прицелу."""
@@ -551,6 +605,8 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
             aim = p.get("aim") or 0.0
             color = self.side_color(pid)
             t = pygame.time.get_ticks() / 1000
+            if kind in ITEM_TARGETS:              # целевой артефакт: зона у курсора, цель в ней, круг дальности
+                self.draw_target_zone(s, p, pid, kind, aim, color, t)
             if kind == "firering":
                 reach = self.reach_for(pid)
                 d = min(FIRE_RING_RANGE, reach)

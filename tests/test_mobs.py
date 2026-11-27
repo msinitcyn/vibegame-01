@@ -24,6 +24,8 @@ from duel.entities import Bullet
 from duel.commands import Command
 from tests.conftest import DT, new_match, step
 
+pytestmark = pytest.mark.usefixtures("always_drop")   # мобы роняют всегда (DROP_MISS — в test_targets)
+
 
 def spawn(match):
     """Одна волна прямо сейчас; следующие не придут, пока тест сам не вызовет."""

@@ -12,6 +12,9 @@ from duel.match import Match
 from tests.conftest import DT, new_match, step
 
 
+pytestmark = pytest.mark.usefixtures("always_drop")   # мобы роняют всегда (DROP_MISS — в test_targets)
+
+
 @pytest.fixture
 def light():
     m = new_match()

@@ -1173,7 +1173,7 @@ TEXTS = {
         "help.boots": "Gear. +{gear_speed} to the mage's speed (px/s) until the end of the match. Goes into its own slot (under the artifact slots), never used up; stacks up to {gear_stack} times.",
         "help.armor": "Gear. +{gear_hp} max lives and +{gear_hp} lives right away, until the end of the match; stacks up to {gear_stack} times.",
         "help.gun": "Gear. {gear_fire} s less between shots until the end of the match; stacks up to {gear_stack} times.",
-        "help.sword": "Gear. The sword reaches {gear_reach} px further until the end of the match; stacks up to {gear_stack} times.",
+        "help.sword": "Gear. The sword reaches {gear_reach} px further until the end of the match; stacks up to {gear_stack} times. From the 3rd sword on, each one also adds +1 to melee damage.",
         "help.hero_note": "They drop from mobs that die on their hero's land (whoever finishes them) — anyone can pick them up and use them.",
         "help.levels": "Dots under an icon show the artifact level (1–4). Higher is rarer: level 3 drops from mobs with 5+ lives, level 4 only from the fattest (6).",
         "hero.owner": "drops only for: {hero}",

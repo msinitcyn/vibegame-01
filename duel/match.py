@@ -28,6 +28,10 @@ from .commands import REACH_FAR, Command
 from .config import (
     MOB_LATE_EXTRA,
     START_AMMO,
+    TARGET_RADIUS,
+    CARRY_MAX,
+    DROP_MISS,
+    GEAR_SWORD_FROM,
     LAND_DAMAGE,
     BULLET_DAMAGE,
     SENTRY_DAMAGE,
@@ -126,7 +130,7 @@ from .config import (
 )
 from .entities import (AmmoPack, Artifact, Beam, Clone, FireRing, Guardian, IceTrail, Mob, MobShot, Player, Sentry,
                        TreeWall, Wall, in_arena, zone_at)
-from .items import BAD_EFFECTS, INSTANT_ITEMS, ITEMS, item_level
+from .items import ALLY, BAD_EFFECTS, FOE, INSTANT_ITEMS, ITEM_RANGE, ITEM_TARGETS, ITEMS, LAND, MOB, item_level
 
 NO_AMMO_EVERY = 1.0               # «нет патронов» — не чаще раза в столько секунд партии
 STEP = 1 / 60                     # фиксированный такт матча
@@ -305,7 +309,8 @@ class Match:
         self.emit("melee", p.id)
         bear = "bear" in p.effects            # медведь бьёт дальше и сильнее
         reach = MELEE_RANGE + (BEAR_REACH if bear else 0) + GEAR_REACH * p.gear.count("sword")
-        damage = BEAR_MELEE_DAMAGE if bear else MELEE_DAMAGE
+        swords = max(0, p.gear.count("sword") - GEAR_SWORD_FROM + 1)     # меч с 3-го стака: +1 урона за стак
+        damage = BEAR_MELEE_DAMAGE if bear else MELEE_DAMAGE + swords
         for m in self.mobs:
             if m.zombie_of is p:
                 continue                      # своих зомби не бьём
@@ -707,7 +712,8 @@ class Match:
         не подобранный за ARTIFACT_LIFETIME — пропадает."""
         for p in self.players:
             for a in self.artifacts:
-                if not a.taken and math.hypot(a.x - p.x, a.y - p.y) < p.radius + ARTIFACT_R:
+                if not a.taken and math.hypot(a.x - p.x, a.y - p.y) < p.radius + ARTIFACT_R \
+                        and self.can_carry(p, a.kind):
                     self.take_artifact(p, a)
                     self.emit("pickup", p.id, a.kind)
         for a in self.artifacts:
@@ -751,7 +757,8 @@ class Match:
                 c.x, c.y = x0, y0                     # деревья и огненная стена — назад и в другую сторону
                 c.turn()
             for a in self.artifacts:              # двойник подбирает артефакт хозяину
-                if c.alive and not a.taken and math.hypot(a.x - c.x, a.y - c.y) < c.radius + ARTIFACT_R:
+                if c.alive and not a.taken and math.hypot(a.x - c.x, a.y - c.y) < c.radius + ARTIFACT_R \
+                        and self.can_carry(c.owner, a.kind):
                     self.take_artifact(c.owner, a)
                     self.emit("pickup_at", c.owner.id, c.x, c.y, a.kind)    # надпись над двойником
         self.artifacts = [a for a in self.artifacts if not a.taken]
@@ -854,6 +861,40 @@ class Match:
             return None
         return p.x + math.cos(p.aim) * p.reach, p.y + math.sin(p.aim) * p.reach
 
+    def target_center(self, p, kind):
+        """Центр зоны целевого артефакта: курсор (без курсора — по прицелу на дальность или TARGET_RADIUS·3),
+        не дальше ITEM_RANGE от мага."""
+        rng = ITEM_RANGE.get(kind)
+        at = self.cursor_point(p)
+        d = math.hypot(at[0] - p.x, at[1] - p.y) if at else (rng or TARGET_RADIUS * 3)
+        if rng is not None:
+            d = min(d, rng)
+        return p.x + math.cos(p.aim) * d, p.y + math.sin(p.aim) * d
+
+    def find_target(self, p, kind):
+        """Цель целевого артефакта kind (ITEM_TARGETS): видимая, ближайшая к центру зоны, в круге TARGET_RADIUS.
+        Маг, двойник, моб или точка (на землю) — или None: в зоне нет подходящей цели."""
+        flags = ITEM_TARGETS.get(kind, frozenset())
+        cx, cy = self.target_center(p, kind)
+        units = []
+        if FOE in flags:
+            for q in self.enemies(p):
+                if q.dead_at is None and not getattr(q, "out", False) and not q.offstage and not self.hidden(q):
+                    units.append(q)
+                units += [c for c in self.clones_of(q) if c.alive]
+        if MOB in flags:
+            units += [m for m in self.mobs if m.alive and not (m.zombie_of and m.zombie_of.team == p.team)]
+        if ALLY in flags:
+            for q in [p] + self.allies(p):
+                if q.dead_at is None and not getattr(q, "out", False):
+                    units.append(q)
+                units += [c for c in self.clones_of(q) if c.alive]
+            units += [m for m in self.mobs if m.alive and m.zombie_of and m.zombie_of.team == p.team]
+        near = [u for u in units if math.hypot(u.x - cx, u.y - cy) <= TARGET_RADIUS + u.radius]
+        if near:
+            return min(near, key=lambda u: math.hypot(u.x - cx, u.y - cy))
+        return (cx, cy) if LAND in flags else None
+
     def ally_at_cursor(self, p):
         """Союзник мага p под курсором — свой зомби или двойник (для лечения); None — курсор не на нём."""
         at = self.cursor_point(p)
@@ -934,6 +975,13 @@ class Match:
         if what == "mage":                    # попали в мага (или двойника — звучит так же) — звук
             self.emit("hit_mage", (owner or b.owner).id)
 
+    def can_carry(self, p, kind):
+        """Хватит ли места: мгновенные и снаряжение — всегда; прочие — не больше CARRY_MAX при себе
+        (ячейки и очередь). Нет места — артефакт остаётся лежать."""
+        if kind in INSTANT_ITEMS or kind in GEAR_ITEMS:
+            return True
+        return sum(1 for k in p.items if k) + len(p.queue) < CARRY_MAX
+
     def take_artifact(self, p, a):
         """Артефакт — магу p: мгновенный сразу применяется, остальные — в ячейку или очередь."""
         picked = self.stats[p.id]["picked"]
@@ -948,7 +996,7 @@ class Match:
         """Погибший моб роняет артефакт в месте гибели; какой — зависит только от места (artifact_kind):
         арена — снаряжение, полоса — общий, земля героя — артефакт его стихии. Уровень — по жизням моба."""
         self.emit("mob_dead", mob.x, mob.y)
-        if not self.drops:
+        if not self.drops or self.rng.random() < DROP_MISS:     # иногда моб ничего не роняет
             return
         m = ARTIFACT_R + 4
         x = max(m, min(WIDTH - m, mob.x))
@@ -1069,7 +1117,8 @@ class Match:
         if not g.alive:                       # убит: вернётся позже, роняет артефакт мобов
             g.respawn_at = self.match_time + GUARDIAN_RESPAWN
             self.emit("mob_dead", g.x, g.y)
-            self.artifacts.append(Artifact(g.x, self.artifact_kind("arena", g.max_hp), g.y))
+            if self.drops and self.rng.random() >= DROP_MISS:
+                self.artifacts.append(Artifact(g.x, self.artifact_kind("arena", g.max_hp), g.y))
 
     def update_guardians(self, dt):
         """Стражи: спят статуями, пока «их» игрок вне арены; проснулись — ближний идёт и бьёт,
