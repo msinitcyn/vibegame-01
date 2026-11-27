@@ -534,3 +534,20 @@ def test_mirror_is_area_spell_at_cursor_angled_and_resets_bounces(match):
     match.apply_item(b, "wall")
     w2 = match.walls[-1]
     assert math.hypot(w2.cx - b.x, w2.cy - b.y) == pytest.approx(WALL_RANGE, abs=1)
+
+
+def test_frozen_bullets_vanish_without_damage(match):
+    """«Остановка пуль»: висящая пуля соперника не ранит — задели, и она пропала."""
+    b, r = match.blue, match.red
+    match.apply_item(r, "slowfoe")                 # пули синего висят
+    bl = Bullet(r.x - 60, r.y, 520, 0, b)
+    match.bullets = [bl]
+    hp = r.hp
+    r.x -= 60                                      # красный сам вошёл в висящую пулю
+    step(match, 0.1)
+    assert not bl.alive and r.hp == hp
+
+
+def test_freeze_longer_and_needs_more_hits():
+    from duel.config import DURATION, FREEZE_BREAK_HITS
+    assert DURATION["freeze"] == 3.0 and FREEZE_BREAK_HITS == 4

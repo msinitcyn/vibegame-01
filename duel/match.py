@@ -788,7 +788,15 @@ class Match:
         self.clones = [c for c in self.clones if c.alive]
 
     def bullet_hits_units(self, b):
-        """Пуля и всё, что не маг: мобы (свои зомби — насквозь), лесные стражи, стражи арены."""
+        """Пуля и всё, что не маг: мобы (свои зомби — насквозь), лесные стражи, стражи арены. Висящая под
+        «Остановкой пуль» — никого не ранит: задели — пропала."""
+        if self.bullets_held(b.owner):
+            units = [m for m in self.mobs if m.alive and m.zombie_of is not b.owner] + \
+                [st for st in self.sentries if st.alive and st.owner is not b.owner] + [g for g in self.guardians if g.alive]
+            if any(math.hypot(b.x - u.x, b.y - u.y) < u.radius + BULLET_R for u in units):
+                b.alive = False
+                self.hit_at(b, "knock", None)
+            return
         for m in self.mobs:
             if m.zombie_of is b.owner:
                 continue                      # свои пули сквозь своих зомби
@@ -812,7 +820,16 @@ class Match:
                     g.reflect(b)
 
     def bullet_hits_side(self, b):
-        """Пуля и враги её хозяина (хозяин мог смениться после зеркала): щит, маг, двойники. Своих не ранит."""
+        """Пуля и враги её хозяина (хозяин мог смениться после зеркала): щит, маг, двойники. Своих не ранит.
+        Пуля висит под «Остановкой пуль» — не ранит: задели — просто пропала."""
+        if self.bullets_held(b.owner):
+            for u in [q for q in self.enemies(b.owner) if q.dead_at is None and not q.offstage] + \
+                    [c for q in self.enemies(b.owner) for c in self.clones_of(q)]:
+                if math.hypot(b.x - u.x, b.y - u.y) < u.radius + BULLET_R:
+                    b.alive = False
+                    self.hit_at(b, "knock", None)
+                    return
+            return
         for target in self.enemies(b.owner):
             if self.bullet_hits_mage(b, target):
                 return

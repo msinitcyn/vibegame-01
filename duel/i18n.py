@@ -1178,12 +1178,12 @@ TEXTS = {
         "help.levels": "Dots under an icon show the artifact level (1–4). Higher is rarer: level 3 drops from mobs with 5+ lives, level 4 only from the fattest (6).",
         "hero.owner": "drops only for: {hero}",
         "help.clearfoe": "All opponent bullets currently on screen disappear.",
-        "help.slowfoe": "For {slowfoe} s the opponent's bullets hang in the air (don't touch!) and they can't fire new ones, then the bullets fly on. "
+        "help.slowfoe": "For {slowfoe} s the opponent's bullets hang in the air and they can't fire new ones; a hanging bullet does no harm — whoever touches it just makes it vanish. Then the bullets fly on. "
                         "Mobs coming at you are twice as slow.",
         "help.fastshots": "Your bullets fly {fast}× faster for {fastshots} s, and so do mobs "
                           "going after the opponent.",
         "help.foe_grow": "The opponent is 2× bigger for {grow2} s — easier to hit.",
-        "help.foe_freeze": "The opponent can't move for {freeze} s. Can still shoot. Three hits on them and they thaw.",
+        "help.foe_freeze": "The opponent can't move for {freeze} s. Can still shoot. {thaw} hits on them and they thaw.",
         "help.foe_nofire": "The opponent can't shoot for {nofire} s.",
         "help.foe_invert": "The opponent's controls are reversed for {invert} s.",
         "help.foe_noitems": "The opponent can't use artifacts for {noitems} s "
