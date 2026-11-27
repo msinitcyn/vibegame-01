@@ -23,6 +23,8 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from duel.config import HEROES  # noqa: E402
+
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
 import torch.nn as nn  # noqa: E402
@@ -198,7 +200,7 @@ def imitate(net, opt, pool, n):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--name", required=True)
-    ap.add_argument("--hero", help="учить за этого героя (по умолчанию — за случайного)")
+    ap.add_argument("--hero", choices=HEROES, help="учить за этого героя (по умолчанию — за случайного): " + ", ".join(HEROES))
     ap.add_argument("--minutes", type=float, default=30)
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1))
     ap.add_argument("--envs", type=int, default=8, help="сред на процесс")

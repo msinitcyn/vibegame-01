@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from duel.ai_env import Env  # noqa: E402
 from duel.ai_policy import load  # noqa: E402
+from duel.config import HEROES  # noqa: E402
 
 ARGS = None
 
@@ -72,7 +73,7 @@ def details(games):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--name", required=True)
-    ap.add_argument("--hero", default=None)
+    ap.add_argument("--hero", default=None, choices=HEROES, help=", ".join(HEROES))
     ap.add_argument("--opponent", default="normal")
     ap.add_argument("--games", type=int, default=300)
     ap.add_argument("--details", action="store_true", help="по героям, артефактам, длительности")
