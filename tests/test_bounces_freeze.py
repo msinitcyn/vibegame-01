@@ -1,7 +1,7 @@
 """Отскоки пуль от стенок (не больше трёх), заморозка тает от попаданий, «Твёрдая почва» — свой для мобов."""
 import math
 
-from duel.config import ARENA, BOTTOM, BULLET_R, BULLET_WALL_BOUNCES, DURATION, FREEZE_BREAK_HITS, TOP, WIDTH
+from duel.config import ARENA, BOTTOM, BULLET_R, BULLET_WALL_BOUNCES, DURATION, FREEZE_BREAK_DAMAGE, TOP, WIDTH
 from duel.entities import Bullet, Mob
 from tests.conftest import DT, new_match, step
 
@@ -41,14 +41,14 @@ def test_mirror_bounce_is_not_counted():
     assert b.alive and b.vx < 0 and b.owner is r and b.bounces == 0     # отразило зеркало — не в счёт
 
 
-def test_freeze_thaws_after_three_hits():
+def test_freeze_thaws_after_enough_damage():
     m = new_match()
     b, r = m.blue, m.red
     m.apply_item(b, "foe_freeze")
     assert r.frozen
-    for i in range(FREEZE_BREAK_HITS):
+    for i in range(FREEZE_BREAK_DAMAGE // 2):           # пули по 2 урона
         assert "freeze" in r.effects, i
-        m.hurt_player(r, 1)
+        m.hurt_player(r, 2)
     assert "freeze" not in r.effects and not r.frozen
     m.apply_item(b, "foe_freeze")                        # новая заморозка — счёт заново
     m.hurt_player(r, 1)

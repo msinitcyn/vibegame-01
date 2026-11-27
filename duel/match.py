@@ -318,7 +318,7 @@ class Match:
                 m.hurt(p, damage)             # злится на ударившего; смерть — общим порядком
         for foe in self.enemies(p):           # враги (в 1×1 — один), их двойники и стражи; своих не бьём
             if foe.dead_at is None and math.hypot(foe.x - p.x, foe.y - p.y) <= p.radius + foe.radius + reach:
-                if not foe.shield_absorb():      # щит гасит удар целиком
+                if not foe.shield_absorb(damage):      # щит гасит удар целиком
                     self.hurt_player(foe, damage)
             for c in self.clones_of(foe):
                 if math.hypot(c.x - p.x, c.y - p.y) <= p.radius + c.radius + reach:
@@ -492,7 +492,7 @@ class Match:
         if p.dead_at is not None:
             return
         if hit:
-            p.struck()
+            p.struck(n)
         zombies = self.zombies_of(p)
         if zombies:
             z = zombies[0]
@@ -694,7 +694,7 @@ class Match:
             p.foe_land_t += dt
             while p.foe_land_t >= 1 / dps:
                 p.foe_land_t -= 1 / dps
-                if not p.shield_absorb():
+                if not p.shield_absorb(LAND_DAMAGE):
                     self.hurt_player(p, LAND_DAMAGE, hit=False)
         else:
             p.foe_land_t = 0.0
@@ -1094,7 +1094,7 @@ class Match:
                     m.x, m.y = x0, y0
             if m.swing == MOB_SWING_TIME:     # удар только что случился (попал или мимо) — звук
                 self.emit("mob_swing", m.x, m.y, m.swing_hit)
-            if p and not p.shield_absorb():   # щит гасит и удар моба
+            if p and not p.shield_absorb(MOB_DAMAGE):   # щит гасит и удар моба
                 self.hurt_unit(p, MOB_DAMAGE)
             shot = m.shoot(dt) if m.zombie_of is None else None
             if shot:
@@ -1178,7 +1178,7 @@ class Match:
                     g.swing_dir = math.atan2(target.y - g.y, target.x - g.x)
                     g.swing_hit = dist <= reach + MOB_REACH_EXTRA
                     self.emit("mob_swing", g.x, g.y, g.swing_hit)
-                    if g.swing_hit and not target.shield_absorb():
+                    if g.swing_hit and not target.shield_absorb(MOB_DAMAGE):
                         self.hurt_player(target, MOB_DAMAGE)
                 continue
             if dist > reach:
@@ -1265,7 +1265,7 @@ class Match:
             if m.swing_hit:
                 if isinstance(target, Mob):
                     target.hurt(owner)
-                elif not target.shield_absorb():
+                elif not target.shield_absorb(MOB_DAMAGE):
                     self.hurt_player(target, MOB_DAMAGE)
             return
         if dist > reach:
@@ -1291,7 +1291,7 @@ class Match:
                     self.hit_at(s, "knock", None, owner)
             for foe in self.enemies(owner):  # враги (в 1×1 — один) и их двойники; своих луч не задевает
                 if not foe.offstage and beam.tick(foe, beam.touches(foe.x, foe.y, foe.radius), dt):
-                    if foe.shield_absorb():
+                    if foe.shield_absorb(BEAM_DAMAGE):
                         self.hit_at(beam.head(), "shield", foe, owner)
                     else:
                         self.hurt_player(foe, BEAM_DAMAGE)
@@ -1334,7 +1334,7 @@ class Match:
                 guard = SHIELD_GAP if "shield" in p.effects else 0
                 if math.hypot(s.x - p.x, s.y - p.y) < p.radius + guard + MOB_SHOT_R:
                     s.alive = False
-                    if not p.shield_absorb():      # семя лесного стража — заклинание (урон ×2), снаряд крипа — нет
+                    if not p.shield_absorb(SENTRY_DAMAGE if s.owner is not None else MOB_DAMAGE):   # семя лесного стража — заклинание (урон ×2), снаряд крипа — нет
                         self.hurt_unit(p, SENTRY_DAMAGE if s.owner is not None else MOB_DAMAGE)
                     break
         self.mob_shots = [s for s in self.mob_shots if s.alive]

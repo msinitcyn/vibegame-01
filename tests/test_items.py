@@ -9,7 +9,7 @@ from duel.config import (
     DURATION,
     HEAL_AMOUNT,
     MAX_HP,
-    SHIELD_HITS,
+    SHIELD_HP,
     START_AMMO,
     TEST_HP,
 )
@@ -104,7 +104,7 @@ def test_two_shields_stack_time_and_hits(match):
     b = match.blue
     match.give(b, "shield")
     match.give(b, "shield")
-    assert b.effects["shield"] == 2 * DURATION["shield"] and b.shield_hits == 2 * SHIELD_HITS
+    assert b.effects["shield"] == 2 * DURATION["shield"] and b.shield_hits == 2 * SHIELD_HP
 
 
 def test_second_clones_extend_life_and_add_up_to_cap(match):
@@ -229,7 +229,7 @@ def test_cleanse_removes_all_debuffs_even_under_noitems(match):
 def test_shield_blocks_five_bullets(match):
     b, r = match.blue, match.red
     match.give(b, "shield")
-    match.bullets = [bullet_at(b, r, 200 + i * 40) for i in range(SHIELD_HITS + 2)]
+    match.bullets = [bullet_at(b, r, 200 + i * 40) for i in range(SHIELD_HP // BULLET_DAMAGE + 2)]
     step(match, 1.0)
     assert b.hp == MAX_HP - 2 * BULLET_DAMAGE
     assert "shield" not in b.effects
@@ -321,7 +321,7 @@ def test_clones_copy_and_receive_effects(match):
     match.give(b, "rapid")
     match.apply_item(b, "clones")
     c = match.clones_of(b)[0]
-    assert {"shield", "rapid"} <= set(c.effects) and c.shield_hits == SHIELD_HITS
+    assert {"shield", "rapid"} <= set(c.effects) and c.shield_hits == SHIELD_HP
     for e in ("wavy", "grow2", "speed"):
         match.give(b, e)
     match.apply_item(b, "triple")
@@ -372,7 +372,7 @@ def test_clone_shield_saves_it(match):
     match.give(match.blue, "shield")
     match.bullets = [Bullet(400, 300, -BULLET_SPEED, 0, match.red)]
     step(match, 1.0)
-    assert c.alive and c.shield_hits == SHIELD_HITS - 1
+    assert c.alive and c.shield_hits == SHIELD_HP - BULLET_DAMAGE
 
 
 # --- патроны
@@ -503,11 +503,11 @@ def test_mobswap_against_peaceful_foe_calms(match):
 
 def test_shield_absorbs_foe_land(match):
     """На чужой земле щит гасит каждую сгоревшую жизнь зарядом; кончился — жизни уходят."""
-    from duel.config import ARENA, FOE_LAND_DPS, TOP
+    from duel.config import ARENA, FOE_LAND_DPS, LAND_DAMAGE, TOP
     b = match.blue
     match.give(b, "shield")
     b.x, b.y = ARENA[0] + 300, TOP + 80                  # земля красного
-    step(match, (SHIELD_HITS - 0.5) / FOE_LAND_DPS)
+    step(match, (SHIELD_HP / LAND_DAMAGE - 0.5) / FOE_LAND_DPS)
     assert b.hp == MAX_HP and "shield" in b.effects
     step(match, 2.0)
     assert "shield" not in b.effects and b.hp < MAX_HP
@@ -548,6 +548,6 @@ def test_frozen_bullets_vanish_without_damage(match):
     assert not bl.alive and r.hp == hp
 
 
-def test_freeze_longer_and_needs_more_hits():
-    from duel.config import DURATION, FREEZE_BREAK_HITS
-    assert DURATION["freeze"] == 3.0 and FREEZE_BREAK_HITS == 4
+def test_freeze_and_shield_count_damage():
+    from duel.config import DURATION, FREEZE_BREAK_DAMAGE, SHIELD_HP
+    assert DURATION["freeze"] == 3.0 and FREEZE_BREAK_DAMAGE == 8 and SHIELD_HP == 10

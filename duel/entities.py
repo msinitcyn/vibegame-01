@@ -26,7 +26,7 @@ from .config import (
     BEAR_SIZE,
     BEAR_SPEED,
     BULLET_WALL_BOUNCES,
-    FREEZE_BREAK_HITS,
+    FREEZE_BREAK_DAMAGE,
     FIRE_RING_HEAT,
     FIRE_RING_R,
     FIRE_RING_TIME,
@@ -80,7 +80,8 @@ from .config import (
     SHIELD_GAP,
     SHIELD_FLASH,
     REVEAL_TIME,
-    SHIELD_HITS,
+    SHIELD_HP,
+    BULLET_DAMAGE,
     SHOT_COOLDOWN,
     START_AMMO,
     TOP,
@@ -209,17 +210,17 @@ class Unit:
         else:
             self.effects[effect] = self.effects.get(effect, 0) + DURATION[effect]
         if effect == "shield":
-            self.shield_hits += SHIELD_HITS
+            self.shield_hits += SHIELD_HP          # запас урона щита (имя поля — с тех пор, как считались пули)
         if effect == "freeze":                # новая заморозка — счёт попаданий заново
             self.freeze_hits = 0
 
-    def struck(self):
-        """Попадание (пуля, удар, снаряд — не горение земли): замороженный после FREEZE_BREAK_HITS
-        попаданий оттаивает."""
+    def struck(self, n=1):
+        """Попадание на n урона (пуля, удар, снаряд — не горение земли): замороженный, получив
+        FREEZE_BREAK_DAMAGE урона, оттаивает."""
         if "freeze" not in self.effects:
             return
-        self.freeze_hits = getattr(self, "freeze_hits", 0) + 1
-        if self.freeze_hits >= FREEZE_BREAK_HITS:
+        self.freeze_hits = getattr(self, "freeze_hits", 0) + n
+        if self.freeze_hits >= FREEZE_BREAK_DAMAGE:
             del self.effects["freeze"]
             self.freeze_hits = 0
 
@@ -249,13 +250,13 @@ class Unit:
             return False
         if math.hypot(b.x - self.x, b.y - self.y) >= self.radius + SHIELD_GAP + BULLET_R:
             return False
-        return self.shield_absorb()
+        return self.shield_absorb(BULLET_DAMAGE)
 
-    def shield_absorb(self):
-        """Щит гасит один удар (пулю или моба). Возвращает True, если щит был."""
+    def shield_absorb(self, n=1):
+        """Щит гасит удар целиком и тратит на него n из запаса (SHIELD_HP). Возвращает True, если щит был."""
         if "shield" not in self.effects:
             return False
-        self.shield_hits -= 1
+        self.shield_hits -= n
         self.shield_flash = SHIELD_FLASH
         if self.shield_hits <= 0:
             del self.effects["shield"]

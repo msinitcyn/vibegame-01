@@ -6,7 +6,7 @@ from duel.config import BULLET_WALL_BOUNCES
 import pytest
 
 from duel.commands import Command
-from duel.config import BEAM_DAMAGE, BEAM_LENGTH, BEAM_SPEED, BOTTOM, MAX_HP, SHIELD_HITS, TOP
+from duel.config import BEAM_DAMAGE, BEAM_LENGTH, BEAM_SPEED, BOTTOM, MAX_HP, SHIELD_HP, TOP
 from duel.entities import Artifact, Mob
 from duel.match import Match
 from tests.conftest import DT, new_match, step
@@ -101,7 +101,7 @@ def test_shield_and_clones(light):
         c.moving, c.turn_timer, c.hp = 0, 99, 1          # стоят на линии луча, по жизни
     m.apply_item(m.blue, "beam")
     step(m, 0.8)
-    assert r.hp == MAX_HP and r.shield_hits == SHIELD_HITS - 1 and not any(c.alive for c in m.clones)
+    assert r.hp == MAX_HP and r.shield_hits == SHIELD_HP - BEAM_DAMAGE and not any(c.alive for c in m.clones)
 
 
 def test_beam_drops_only_for_light():

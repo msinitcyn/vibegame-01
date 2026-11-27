@@ -1,7 +1,7 @@
 """Артефакты: таблица, справка, группы, цвета рамок. Названия и описания — в i18n."""
 
 from .config import (
-    FREEZE_BREAK_HITS,
+    FREEZE_BREAK_DAMAGE,
     QUAKE_EVERY,
     QUAKE_PULSES,
     QUAKE_STUN,
@@ -41,7 +41,7 @@ from .config import (
     HEAL_AMOUNT,
     RAPID_FACTOR,
     SELF_RING,
-    SHIELD_HITS,
+    SHIELD_HP,
     SHOT_COOLDOWN,
     WALL_RANGE,
     WALL_TIME,
@@ -129,9 +129,9 @@ def section_title(section):
 def item_help(kind):
     d = DURATION
     numbers = dict(
-        shield_hits=SHIELD_HITS, shield=f"{d['shield']:g}", heal=HEAL_AMOUNT,
+        shield_hits=SHIELD_HP, shield_hp=SHIELD_HP, shield=f"{d['shield']:g}", heal=HEAL_AMOUNT,
         shrink=f"{d['shrink']:g}", speed=f"{d['speed']:g}", slowfoe=f"{d['slowfoe']:g}",
-        grow2=f"{d['grow2']:g}", freeze=f"{d['freeze']:g}", thaw=FREEZE_BREAK_HITS, nofire=f"{d['nofire']:g}",
+        grow2=f"{d['grow2']:g}", freeze=f"{d['freeze']:g}", thaw=FREEZE_BREAK_DAMAGE, nofire=f"{d['nofire']:g}",
         invert=f"{d['invert']:g}", noitems=f"{d['noitems']:g}", triple=f"{d['triple']:.0f}",
         rapid_cd=f"{SHOT_COOLDOWN * RAPID_FACTOR:.1f}", cd=f"{SHOT_COOLDOWN:g}",
         rapid=f"{d['rapid']:.0f}", wavy=f"{d['wavy']:.0f}", clones=CLONE_COUNT,

@@ -2,7 +2,7 @@
 import pygame
 import pytest
 
-from duel.config import SHIELD_HITS, MAX_HP, MELEE_COOLDOWN, MELEE_DAMAGE, MELEE_RANGE
+from duel.config import SHIELD_HP, MAX_HP, MELEE_COOLDOWN, MELEE_DAMAGE, MELEE_RANGE
 from duel.entities import Mob
 from tests.conftest import DT, FakePad, step
 
@@ -80,7 +80,7 @@ def test_melee_on_foe_with_shield(match):
     b.x, b.y, r.x, r.y = 480, 120, 520, 120
     match.give(r, "shield")
     match.melee(b)
-    assert r.hp == MAX_HP and r.shield_hits == SHIELD_HITS - 1
+    assert r.hp == MAX_HP and r.shield_hits == SHIELD_HP - MELEE_DAMAGE
 
 
 def test_melee_misses_far_foe(match):
@@ -146,3 +146,14 @@ def test_melee_sound_loaded(game):
     if not game.audio.enabled:
         pytest.skip("нет аудио")
     assert "melee" in game.audio.shots
+
+
+def test_sword_adds_damage_from_first_stack(match):
+    """Меч — +1 к урону удара с первого стака (и дальше — за каждый)."""
+    from duel.entities import Mob
+    b = match.blue
+    mob = Mob(b.x + b.radius + 15, b.y, 50)
+    match.mobs = [mob]
+    b.gear = ["sword"]
+    match.melee(b)
+    assert mob.hp == 50 - MELEE_DAMAGE - 1

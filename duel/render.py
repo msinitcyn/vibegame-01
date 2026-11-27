@@ -34,6 +34,7 @@ from .config import (
     TREE_TIME,
     AMMO_PACK,
     ARTIFACT_R,
+    BULLET_DAMAGE,
     BULLET_R,
     DEFAULT_HERO,
     HERO_COLOR,
@@ -112,7 +113,8 @@ def draw_effects(surf, u, time=0.0):
         fx_mage.draw_oak_bark(surf, pos, u["r"], since_start("immune", effects["immune"]), effects["immune"], time)
     if "shield" in effects:                       # пузырь щита: соты, блик, заряды, рябь от удара
         fx_mage.draw_shield(surf, pos, u["r"], SHIELD_GAP, effects["shield"], since_start("shield", effects["shield"]),
-                              u.get("shield_hits", 0), u.get("shield_flash", 0) / SHIELD_FLASH, time)
+                              -(-u.get("shield_hits", 0) // BULLET_DAMAGE),      # заряды — сколько пуль ещё выдержит
+                              u.get("shield_flash", 0) / SHIELD_FLASH, time)
     if u.get("shield_break", 0) > 0:              # щит лопнул — осколки
         fx_mage.draw_shield_break(surf, pos, u["r"], SHIELD_GAP, 1 - u["shield_break"] / (SHIELD_FLASH * 1.5))
     if "nofire" in effects:                       # не стреляет — облачко с перечёркнутым автоматом над магом

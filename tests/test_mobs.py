@@ -4,6 +4,7 @@ import math
 import pytest
 
 from duel.config import (
+    MOB_DAMAGE,
     BULLET_DAMAGE,
     MOB_HP_STEP,
     BULLET_SPEED,
@@ -16,7 +17,7 @@ from duel.config import (
     MOB_MAX,
     MOB_MAX_HP,
     MOB_SPEEDUP,
-    SHIELD_HITS,
+    SHIELD_HP,
     TOP,
     WIDTH,
 )
@@ -163,7 +164,7 @@ def test_shield_absorbs_mob_hit(match):
     m.target = b
     m.x, m.y = b.x + 30, b.y
     step(match, 0.6)                              # замах, потом удар
-    assert b.hp == MAX_HP and b.shield_hits == SHIELD_HITS - 1
+    assert b.hp == MAX_HP and b.shield_hits == SHIELD_HP - MOB_DAMAGE
 
 
 def test_mob_dies_after_three_hits(match):
@@ -371,7 +372,7 @@ def test_mob_shot_blocked_by_shield(match):
     match.give(b, "shield")
     match.mob_shots = [MobShot(320, 300, b)]
     step(match, 1)
-    assert b.hp == MAX_HP and b.shield_hits == SHIELD_HITS - 1
+    assert b.hp == MAX_HP and b.shield_hits == SHIELD_HP - MOB_DAMAGE
 
 
 def test_mob_shot_speed_follows_slow_and_fast(match):

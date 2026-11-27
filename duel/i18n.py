@@ -1130,8 +1130,8 @@ TEXTS = {
         "item.fastshots": "fast bullets",
         "decimal": ".",
 
-        "help.shield": "Blocks {shield_hits} bullets or lasts {shield} s — whichever ends first. "
-                       "Hits and seconds left are shown in the status.",
+        "help.shield": "Absorbs {shield_hp} damage (a bullet — 2, a sword — 4, a beam — 8) or lasts {shield} s — whichever ends first. "
+                       "Damage and seconds left are shown in the status.",
         "help.heal": "+{heal} lives when you use it. Goes to the inventory like other artifacts — you can save it for later. Point the cursor at your zombie or clone to heal it instead.",
         "help.shrink": "You are 2× smaller for {shrink} s — harder to hit.",
         "help.speed": "Movement ×1.8 for {speed} s: easier to dodge and collect artifacts.",
@@ -1183,7 +1183,7 @@ TEXTS = {
         "help.fastshots": "Your bullets fly {fast}× faster for {fastshots} s, and so do mobs "
                           "going after the opponent.",
         "help.foe_grow": "The opponent is 2× bigger for {grow2} s — easier to hit.",
-        "help.foe_freeze": "The opponent can't move for {freeze} s. Can still shoot. {thaw} hits on them and they thaw.",
+        "help.foe_freeze": "The opponent can't move for {freeze} s. Can still shoot. After {thaw} damage from hits they thaw.",
         "help.foe_nofire": "The opponent can't shoot for {nofire} s.",
         "help.foe_invert": "The opponent's controls are reversed for {invert} s.",
         "help.foe_noitems": "The opponent can't use artifacts for {noitems} s "
