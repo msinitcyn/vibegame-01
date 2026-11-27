@@ -6,6 +6,7 @@
 на время своего шага (use(geo) — тем же механизмом, что лаборатория, duel/tuning.py) и возвращает после: на
 сервере в одном процессе идут и 1×1, и 2×2 — каждая партия считается со своей геометрией.
 """
+import sys
 import threading
 from contextlib import contextmanager
 
@@ -40,9 +41,9 @@ _bindings = {"key": None, "list": []}     # где лежат константы
 def _targets(names):
     """Модули duel.*, где имя привязано к тому же объекту, что в config (и сам config). Пересобирается, только
     когда загрузились новые модули: подмена на каждом такте не перебирает все модули заново."""
-    mods = tuning._modules()
-    key = (len(mods), tuple(sorted(names)))
+    key = (len(sys.modules), tuple(sorted(names)))      # перебор модулей дорог — только если загрузились новые
     if _bindings["key"] != key:
+        mods = tuning._modules()
         out = []
         for name in names:
             old = getattr(config, name)

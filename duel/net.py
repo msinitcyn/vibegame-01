@@ -104,7 +104,17 @@ class Conn:
     def send(self, msg):
         if self.closed:
             return
-        data = (json.dumps(msg, separators=(",", ":")) + "\n").encode()
+        self.send_line((json.dumps(msg, separators=(",", ":")) + "\n").encode())
+
+    @staticmethod
+    def encode(msg):
+        """Сообщение одной строкой — чтобы разослать одно и то же многим (send_line), сериализуя один раз."""
+        return (json.dumps(msg, separators=(",", ":")) + "\n").encode()
+
+    def send_line(self, data):
+        """Уже готовая строка (Conn.encode): сжатие — своё у каждого соединения."""
+        if self.closed:
+            return
         if self.comp is not None:
             data = self.comp.compress(data) + self.comp.flush(zlib.Z_SYNC_FLUSH)
         self.outbuf += data
@@ -138,7 +148,7 @@ class Conn:
         """Сервер: игра попросила сжатие — маркер (ещё несжатый) и дальше всё сжатое."""
         if self.comp is None and not self.closed:
             self.send({"type": "z"})
-            self.comp = zlib.compressobj(6)
+            self.comp = zlib.compressobj(6)     # 6: уровень 1 быстрее, но трафик вдвое больше (дальним игрокам — хуже)
 
     def recv(self):
         out = []

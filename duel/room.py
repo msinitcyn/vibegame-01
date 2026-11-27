@@ -13,6 +13,7 @@ import math
 import random
 from collections import deque
 import secrets
+import threading
 
 from . import testcmd
 from .replay import Recorder
@@ -21,6 +22,7 @@ from .commands import REACH_FAR, Command
 from . import config
 from .config import DEFAULT_HERO, HEROES
 from .match import STEP, Match
+from .net import Conn
 from .snapshot import snapshot
 
 RECENT_TICKS = 300                # команд скольких тактов помнить для файла ошибки (5 с)
@@ -258,9 +260,7 @@ class Room:
         if conn and close:
             conn.close()
         if self.phase in ("play", "countdown") and self.replays and self.recorder and not self.match.winner:
-            path = self.recorder.save(self.replays, self.match)      # оборванная партия — тоже повтор (разбирать)
-            if path:
-                self.log(f"повтор оборванной партии: {path.name}")
+            self.save_replay(self.recorder, self.match, "повтор оборванной партии")   # тоже повтор (разбирать)
             self.recorder = None
         self.seats[pid] = Seat()
         self.update_captains()
@@ -573,8 +573,12 @@ class Room:
                    "mode": self.mode, "captains": dict(self.captain),
                    "snap": snapshot(self.match), "events": self.events}
             self.events = []
+            line = Conn.encode(msg)           # снимок — в JSON один раз на всю комнату, а не каждому
             for conn in list(self.conns.values()) + self.spectators:
-                conn.send(msg)
+                if hasattr(conn, "send_line"):
+                    conn.send_line(line)
+                else:
+                    conn.send(msg)
 
     def rec(self):
         """Запись идущей партии (заводится в первом такте боя)."""
@@ -600,14 +604,22 @@ class Room:
         self.log(f"партия окончена: {res}; {self.who('blue')} против {self.who('red')}, "
                  f"{m.match_time:.0f} с, волна {m.mob_wave}, жизни: {hp}, зерно {m.seed}")
         if self.replays and self.recorder:
-            path = self.recorder.save(self.replays, m)
-            if path:
-                self.log(f"повтор: {path.name}")
+            self.save_replay(self.recorder, m, "повтор")
         if self.record:
             bots = self.bot_seats()
             self.record({**m.summary(), "room": self.id,
                          "players": {pid: "bot" if pid in bots else (self.seats[pid].name or "guest") for pid in self.pids}},
                         "net-bot" if bots else "net")
+
+    def save_replay(self, recorder, match, label):
+        """Повтор — в файл в фоновом потоке: JSON и gzip всей партии — сотни миллисекунд, а такт сервера общий
+        для всех комнат (раньше на это время вставали все партии). Партия и запись больше не меняются:
+        следующая партия — новый Match и новая запись."""
+        def save():
+            path = recorder.save(self.replays, match)
+            if path:
+                self.log(f"{label}: {path.name}")
+        threading.Thread(target=save, name=f"replay-room{self.id}", daemon=True).start()
 
     def save_net_report(self, pid, s, msg):
         """Отчёт клиента о разрыве: в лог — строка, в logs/net-reports/ — весь журнал (последние NET_REPORTS_KEEP)."""

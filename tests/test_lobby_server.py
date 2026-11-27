@@ -204,4 +204,9 @@ def test_aborted_match_saved_as_replay(tmp_path):
     room.phase = "play"
     room.rec()                                               # запись партии началась
     room.free_seat("blue", "не вернулся")
+    import threading
+    import time
+    end = time.monotonic() + 5                               # пишется в фоновом потоке — не задерживая такт
+    while any(t.name.startswith("replay-room") for t in threading.enumerate()) and time.monotonic() < end:
+        time.sleep(0.01)
     assert list((tmp_path / "replays").glob("*.json.gz"))

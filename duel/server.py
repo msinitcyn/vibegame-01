@@ -14,6 +14,7 @@
 """
 import argparse
 import base64
+import gc
 import json
 import re
 import select
@@ -910,6 +911,11 @@ def main(argv=None):
             log(f"страница состояния: http://{args.status_host}:{args.status_port}/ (и /health)")
         except OSError as e:
             log(f"страница состояния не запустилась (порт {args.status_port}): ошибка {e}")
+    # сборка мусора: то, что загружено при старте, — «заморожено» (полная сборка его не обходит), пороги выше:
+    # полные сборки реже — без пауз в десятки миллисекунд посреди такта (такт общий для всех партий)
+    gc.collect()
+    gc.freeze()
+    gc.set_threshold(20000, 20, 50)
     try:
         srv.run()
     except KeyboardInterrupt:
