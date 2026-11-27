@@ -70,6 +70,7 @@ class Health:
             "last_error": self.last_error,
             "tick_ms_max_last_min": round(max(times) * 1000, 1) if times else 0.0,
             "tick_ms_avg_last_min": round(sum(times) / len(times) * 1000, 2) if times else 0.0,
+            "tick_ms_p99_last_min": round(sorted(times)[int(len(times) * 0.99)] * 1000, 2) if times else 0.0,
             **extra}
 
     def public(self):
