@@ -1,0 +1,48 @@
+{
+  "heroes": {
+    "blue": "light",
+    "red": "fire"
+  },
+  "view": [
+    320,
+    86,
+    380,
+    180
+  ],
+  "length": 4.0,
+  "speed": 0.8,
+  "setup": {
+    "blue": {
+      "x": 420,
+      "y": 150
+    },
+    "red": {
+      "x": 600,
+      "y": 150
+    }
+  },
+  "script": [
+    {
+      "t": 0.0,
+      "do": "aim",
+      "who": "blue",
+      "at": "red"
+    },
+    {
+      "t": 0.5,
+      "do": "cast",
+      "who": "blue",
+      "item": "foe_grow"
+    },
+    {
+      "t": [
+        0.9,
+        3.5
+      ],
+      "every": 0.6,
+      "do": "fire",
+      "who": "blue",
+      "at": "red"
+    }
+  ]
+}

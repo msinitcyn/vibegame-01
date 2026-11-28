@@ -1,0 +1,50 @@
+{
+  "heroes": {
+    "blue": "light",
+    "red": "fire"
+  },
+  "view": [
+    320,
+    86,
+    380,
+    180
+  ],
+  "length": 3.8,
+  "speed": 0.8,
+  "setup": {
+    "blue": {
+      "x": 420,
+      "y": 150
+    },
+    "red": {
+      "x": 600,
+      "y": 150
+    }
+  },
+  "script": [
+    {
+      "t": 0.0,
+      "do": "aim",
+      "who": "blue",
+      "at": "red"
+    },
+    {
+      "t": 0.5,
+      "do": "cast",
+      "who": "blue",
+      "item": "foe_invert"
+    },
+    {
+      "t": [
+        0.9,
+        3.2
+      ],
+      "do": "move",
+      "who": "red",
+      "dir": [
+        1,
+        0
+      ]
+    }
+  ]
+}

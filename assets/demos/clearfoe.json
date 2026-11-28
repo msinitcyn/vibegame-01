@@ -1,0 +1,64 @@
+{
+  "heroes": {
+    "blue": "light",
+    "red": "frost"
+  },
+  "view": [
+    320,
+    86,
+    380,
+    180
+  ],
+  "length": 4.0,
+  "speed": 0.8,
+  "setup": {
+    "blue": {
+      "x": 420,
+      "y": 150
+    },
+    "red": {
+      "x": 600,
+      "y": 150
+    }
+  },
+  "script": [
+    {
+      "t": 0.0,
+      "do": "aim",
+      "who": "blue",
+      "at": "red"
+    },
+    {
+      "t": 0.0,
+      "do": "aim",
+      "who": "red",
+      "at": "blue"
+    },
+    {
+      "t": [
+        0.2,
+        1.2
+      ],
+      "every": 0.35,
+      "do": "fire",
+      "who": "red",
+      "at": "blue"
+    },
+    {
+      "t": 1.4,
+      "do": "cast",
+      "who": "blue",
+      "item": "clearfoe"
+    },
+    {
+      "t": [
+        1.8,
+        3.4
+      ],
+      "every": 0.4,
+      "do": "fire",
+      "who": "red",
+      "at": "blue"
+    }
+  ]
+}

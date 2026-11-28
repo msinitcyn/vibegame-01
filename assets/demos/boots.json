@@ -1,0 +1,48 @@
+{
+  "heroes": {
+    "blue": "earth",
+    "red": "fire"
+  },
+  "view": [
+    320,
+    86,
+    380,
+    180
+  ],
+  "length": 2.6,
+  "speed": 0.8,
+  "setup": {
+    "blue": {
+      "x": 420,
+      "y": 150
+    },
+    "red": {
+      "x": 600,
+      "y": 150
+    }
+  },
+  "script": [
+    {
+      "t": 0.0,
+      "do": "aim",
+      "who": "blue",
+      "at": "red"
+    },
+    {
+      "t": 0.45,
+      "do": "gear",
+      "who": "blue",
+      "kind": "boots"
+    },
+    {
+      "t": [
+        1.1,
+        2.2
+      ],
+      "every": 0.5,
+      "do": "fire",
+      "who": "blue",
+      "at": "red"
+    }
+  ]
+}

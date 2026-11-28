@@ -196,3 +196,23 @@ def test_offstage_player_is_never_hit():
             hits += [e for e in d.take_events() if e[0] == "hit_mage"]
         assert not hits, kind
     assert demos.load("triple")["heroes"]["blue"] == "fire"      # веер — артефакт Огня
+
+
+def test_new_animation_demos_show_their_effect():
+    for kind, check in (
+        ("shrink", lambda m: "shrink" in m.blue.effects),
+        ("slowfoe", lambda m: "slowfoe" in m.blue.effects),
+        ("clearfoe", lambda m: m.blue.clear_fx > 0),
+        ("foe_invert", lambda m: "invert" in m.red.effects),
+        ("foe_noitems", lambda m: "noitems" in m.red.effects),
+        ("foe_grow", lambda m: "grow2" in m.red.effects),
+        ("boots", lambda m: m.blue.gear_fx > 0 and "boots" in m.blue.gear),
+        ("armor", lambda m: m.blue.gear_fx > 0 and "armor" in m.blue.gear),
+        ("gun", lambda m: m.blue.gear_fx > 0 and "gun" in m.blue.gear),
+        ("sword", lambda m: m.blue.gear_fx > 0 and "sword" in m.blue.gear),
+    ):
+        d = demos.Demo(demos.load(kind))
+        target = {"clearfoe": 1.5, "slowfoe": 1.2}.get(kind, 0.8)
+        while d.t < target:
+            d.update(1 / 60)
+        assert check(d.match), kind
