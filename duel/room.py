@@ -399,6 +399,10 @@ class Room:
                 reach = msg.get("reach")              # до курсора (новые игры; старые не шлют — на всю дальность)
                 if isinstance(reach, (int, float)) and not isinstance(reach, bool) and math.isfinite(reach):
                     c.reach = max(0.0, min(float(reach), REACH_FAR))
+            elif kind == "buy":              # покупка в магазине: проверяет Match.buy (ассортимент, цена, место)
+                kind_item = msg.get("kind")
+                if self.phase == "play" and not self.match.winner and isinstance(kind_item, str):
+                    self.match.buy(self.match.player(pid), kind_item)
             elif kind == "name":
                 if not getattr(s.conn, "user", None):     # у вошедшего — всегда имя аккаунта
                     s.name = clean_name(msg.get("name"))

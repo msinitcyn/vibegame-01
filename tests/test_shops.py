@@ -248,3 +248,57 @@ def test_shop_click_with_short_money_changes_nothing(game):
     game.on_mouse_move(hit["rect"].center)
     game.on_mouse_button(1, hit["rect"].center)
     assert game.match.blue.money == 5 and all(k is None for k in game.match.blue.items)
+
+
+def test_shop_ui_in_network_shows_only_own_side(game):
+    game.start()
+    game.countdown = 0
+    stand(game.match, game.match.blue)
+    game.refresh_snap()
+    game.net, game.me, game.net_waiting = object(), "blue", False
+    game.server_info = {"version": "0.11.0", "features": {"shop"}}
+    try:
+        assert game.shops_visible()
+        game.draw()
+        assert {h["side"] for h in game.shop_hits} == {"blue"}
+    finally:
+        game.net, game.me = None, None
+        game.server_info = None
+
+
+def test_shop_ui_hides_when_server_cannot_buy(game):
+    game.start()
+    game.countdown = 0
+    stand(game.match, game.match.blue)
+    game.refresh_snap()
+    game.net, game.me, game.net_waiting = object(), "blue", False
+    game.server_info = {"version": "0.11.0", "features": set()}
+    try:
+        assert not game.shops_visible()
+    finally:
+        game.net, game.me = None, None
+        game.server_info = None
+
+
+def test_network_shop_click_sends_buy_not_local_purchase(game):
+    class FakeNet:
+        def __init__(self):
+            self.sent = []
+
+        def send(self, msg):
+            self.sent.append(msg)
+
+    game.start()
+    game.countdown = 0
+    game.match.blue.money = 100
+    stand(game.match, game.match.blue)
+    game.refresh_snap()
+    game.net, game.me, game.net_waiting = FakeNet(), "blue", False
+    game.server_info = {"version": "0.11.0", "features": {"shop"}}
+    try:
+        game.buy_item("blue", "shield")
+        assert game.net.sent == [{"type": "buy", "kind": "shield"}]
+        assert game.match.blue.money == 100                   # локально не списали
+    finally:
+        game.net, game.me = None, None
+        game.server_info = None

@@ -176,13 +176,15 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         s.blit(t2, t2.get_rect(midtop=(box.centerx, box.top + 47)))
 
     def shops_visible(self):
-        """Магазины — только в локальной партии 1×1. Сеть, разминка, повтор и 2×2 — вне этой итерации."""
+        """Магазины — в партии 1×1: локально, в разминке и по сети (если сервер умеет покупку)."""
         players = self.snap.get("players", [])
-        return (self.state == "play" and not self.net and not getattr(self, "warmup", False)
-                and not getattr(self, "replay", None) and not getattr(self, "watching", False)
-                and len(players) == 2 and not self.snap.get("winner")
-                and not self.paused and self.countdown_left() <= 0
-                and any(p.get("in_shop") for p in players))
+        if (self.state != "play" or getattr(self, "replay", None) or getattr(self, "watching", False)
+                or len(players) != 2 or self.snap.get("winner") or self.paused
+                or self.countdown_left() > 0 or (self.net and self.net_waiting)
+                or (self.net and not self.server_can("shop"))):
+            return False
+        mine = [p for p in players if p.get("id") in self.my_pids()]
+        return any(p.get("in_shop") for p in mine)
 
     def shop_cursor(self):
         """Где сейчас перекрестие/курсор в координатах окна (для наведения на магазин)."""
@@ -211,7 +213,7 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         players = {p["id"]: p for p in self.snap.get("players", [])}
         shops = {shop["kind"]: shop for shop in self.snap.get("shops", [])}
         cursor = self.shop_cursor() or (-1, -1)
-        for side in ("blue", "red"):
+        for side in self.my_pids():
             p = players.get(side)
             if p is None or not p.get("in_shop"):
                 continue

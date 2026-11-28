@@ -7,113 +7,627 @@
       "length": 5.6,
       "title": "zoom",
       "zoom_time": 4.4,
-      "battle": {"seed": 4, "heroes": ["frost", "light"], "skip": 21, "level": "hard", "view": [0, 84, 1000, 640]}
+      "battle": {
+        "seed": 4,
+        "heroes": [
+          "frost",
+          "light"
+        ],
+        "skip": 21,
+        "level": "hard",
+        "view": [
+          0,
+          84,
+          1000,
+          640
+        ]
+      }
     },
     {
       "length": 3.6,
       "transition": "flash",
-      "pick": {"blue": "fire", "red": "frost", "every": 0.3, "lock": [2.3, 2.7]}
+      "pick": {
+        "blue": "fire",
+        "red": "frost",
+        "every": 0.3,
+        "lock": [
+          2.3,
+          2.7
+        ]
+      }
     },
     {
       "length": 3.4,
       "transition": "flash",
-      "heroes": {"blue": "fire", "red": "frost"},
-      "camera": [320, 84, 380, 180],
-      "setup": {"blue": {"x": 360, "y": 150}, "red": {"x": 640, "y": 150}},
+      "heroes": {
+        "blue": "fire",
+        "red": "frost"
+      },
+      "camera": [
+        320,
+        84,
+        380,
+        180
+      ],
+      "setup": {
+        "blue": {
+          "x": 360,
+          "y": 150
+        },
+        "red": {
+          "x": 640,
+          "y": 150
+        }
+      },
       "script": [
-        {"t": [0.2, 9.0], "every": 0.35, "do": "fire", "who": "blue", "at": "red"},
-        {"t": [0.35, 9.0], "every": 0.4, "do": "fire", "who": "red", "at": "blue"},
-        {"t": [0.3, 1.0], "do": "move", "who": "red", "dir": [0, 1]},
-        {"t": [1.0, 2.2], "do": "move", "who": "red", "dir": [0, -1]},
-        {"t": [0.8, 1.4], "do": "move", "who": "blue", "dir": [0, 1]},
-        {"t": [2.2, 3.0], "do": "move", "who": "red", "dir": [0, 1]},
-        {"t": [3.0, 9.0], "do": "move", "who": "red", "dir": [0, -1]},
-        {"t": [1.4, 2.4], "do": "move", "who": "blue", "dir": [0, -1]},
-        {"t": [2.4, 9.0], "do": "move", "who": "blue", "dir": [0, 1]}
+        {
+          "t": [
+            0.2,
+            9.0
+          ],
+          "every": 0.35,
+          "do": "fire",
+          "who": "blue",
+          "at": "red"
+        },
+        {
+          "t": [
+            0.35,
+            9.0
+          ],
+          "every": 0.4,
+          "do": "fire",
+          "who": "red",
+          "at": "blue"
+        },
+        {
+          "t": [
+            0.3,
+            1.0
+          ],
+          "do": "move",
+          "who": "red",
+          "dir": [
+            0,
+            1
+          ]
+        },
+        {
+          "t": [
+            1.0,
+            2.2
+          ],
+          "do": "move",
+          "who": "red",
+          "dir": [
+            0,
+            -1
+          ]
+        },
+        {
+          "t": [
+            0.8,
+            1.4
+          ],
+          "do": "move",
+          "who": "blue",
+          "dir": [
+            0,
+            1
+          ]
+        },
+        {
+          "t": [
+            2.2,
+            3.0
+          ],
+          "do": "move",
+          "who": "red",
+          "dir": [
+            0,
+            1
+          ]
+        },
+        {
+          "t": [
+            3.0,
+            9.0
+          ],
+          "do": "move",
+          "who": "red",
+          "dir": [
+            0,
+            -1
+          ]
+        },
+        {
+          "t": [
+            1.4,
+            2.4
+          ],
+          "do": "move",
+          "who": "blue",
+          "dir": [
+            0,
+            -1
+          ]
+        },
+        {
+          "t": [
+            2.4,
+            9.0
+          ],
+          "do": "move",
+          "who": "blue",
+          "dir": [
+            0,
+            1
+          ]
+        }
       ]
     },
     {
       "length": 2.8,
       "transition": "wipe",
-      "heroes": {"blue": "nature", "red": "dark"},
-      "camera": [400, 95, 200, 112],
-      "setup": {"blue": {"x": 478, "y": 150}, "red": {"x": 522, "y": 150}},
+      "heroes": {
+        "blue": "nature",
+        "red": "dark"
+      },
+      "camera": [
+        400,
+        95,
+        200,
+        112
+      ],
+      "setup": {
+        "blue": {
+          "x": 478,
+          "y": 150
+        },
+        "red": {
+          "x": 522,
+          "y": 150
+        }
+      },
       "script": [
-        {"t": 0.0, "do": "gear", "who": "blue", "kind": "sword"},
-        {"t": 0.0, "do": "gear", "who": "red", "kind": "sword"},
-        {"t": [0.3, 9.0], "every": 0.6, "do": "melee", "who": "blue"},
-        {"t": [0.6, 9.0], "every": 0.6, "do": "melee", "who": "red"},
-        {"t": [0.3, 9.0], "every": 0.6, "do": "shake", "power": 4, "time": 0.25}
+        {
+          "t": 0.0,
+          "do": "gear",
+          "who": "blue",
+          "kind": "sword"
+        },
+        {
+          "t": 0.0,
+          "do": "gear",
+          "who": "red",
+          "kind": "sword"
+        },
+        {
+          "t": [
+            0.3,
+            9.0
+          ],
+          "every": 0.6,
+          "do": "melee",
+          "who": "blue"
+        },
+        {
+          "t": [
+            0.6,
+            9.0
+          ],
+          "every": 0.6,
+          "do": "melee",
+          "who": "red"
+        },
+        {
+          "t": [
+            0.3,
+            9.0
+          ],
+          "every": 0.6,
+          "do": "shake",
+          "power": 4,
+          "time": 0.25
+        }
       ]
     },
     {
       "length": 4.2,
       "transition": "dissolve",
-      "heroes": {"blue": "light", "red": "earth"},
-      "camera": [330, 84, 360, 170],
+      "heroes": {
+        "blue": "light",
+        "red": "earth"
+      },
+      "camera": [
+        330,
+        84,
+        360,
+        170
+      ],
       "mortal_mobs": true,
-      "setup": {"blue": {"x": 380, "y": 150}, "red": {"x": 900, "y": 600}, "mobs": [{"x": 540, "y": 125, "hp": 2}, {"x": 580, "y": 155, "hp": 2}, {"x": 540, "y": 185, "hp": 2}]},
+      "setup": {
+        "blue": {
+          "x": 380,
+          "y": 150
+        },
+        "red": {
+          "x": 900,
+          "y": 600
+        },
+        "mobs": [
+          {
+            "x": 540,
+            "y": 125,
+            "hp": 2
+          },
+          {
+            "x": 580,
+            "y": 155,
+            "hp": 2
+          },
+          {
+            "x": 540,
+            "y": 185,
+            "hp": 2
+          }
+        ]
+      },
       "script": [
-        {"t": 0.3, "do": "fire", "who": "blue", "at": [540, 125]},
-        {"t": 0.7, "do": "fire", "who": "blue", "at": [580, 155]},
-        {"t": 1.1, "do": "fire", "who": "blue", "at": [540, 185]},
-        {"t": 1.9, "do": "walk_to", "who": "blue", "x": 540, "y": 125},
-        {"t": 2.7, "do": "walk_to", "who": "blue", "x": 580, "y": 155},
-        {"t": 3.3, "do": "walk_to", "who": "blue", "x": 540, "y": 185},
-        {"t": [3.7, 9.0], "do": "move", "who": "blue", "dir": [1, 0]}
+        {
+          "t": 0.3,
+          "do": "fire",
+          "who": "blue",
+          "at": [
+            540,
+            125
+          ]
+        },
+        {
+          "t": 0.7,
+          "do": "fire",
+          "who": "blue",
+          "at": [
+            580,
+            155
+          ]
+        },
+        {
+          "t": 1.1,
+          "do": "fire",
+          "who": "blue",
+          "at": [
+            540,
+            185
+          ]
+        },
+        {
+          "t": 1.9,
+          "do": "walk_to",
+          "who": "blue",
+          "x": 540,
+          "y": 125
+        },
+        {
+          "t": 2.7,
+          "do": "walk_to",
+          "who": "blue",
+          "x": 580,
+          "y": 155
+        },
+        {
+          "t": 3.3,
+          "do": "walk_to",
+          "who": "blue",
+          "x": 540,
+          "y": 185
+        },
+        {
+          "t": [
+            3.7,
+            9.0
+          ],
+          "do": "move",
+          "who": "blue",
+          "dir": [
+            1,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "length": 4.4,
+      "transition": "dissolve",
+      "heroes": {
+        "blue": "fire",
+        "red": "frost"
+      },
+      "camera": [
+        220,
+        84,
+        300,
+        169
+      ],
+      "setup": {
+        "blue": {
+          "x": 500,
+          "y": 200,
+          "money": 100
+        },
+        "red": {
+          "x": 900,
+          "y": 600,
+          "offstage": true
+        }
+      },
+      "shop": {
+        "kind": "neutral_tl",
+        "side": "blue",
+        "show_at": 1.7
+      },
+      "script": [
+        {
+          "t": 0.2,
+          "do": "walk_to",
+          "who": "blue",
+          "x": 334,
+          "y": 108,
+          "time": 1.8
+        },
+        {
+          "t": 2.2,
+          "do": "buy",
+          "who": "blue",
+          "kind": "heal"
+        },
+        {
+          "t": 2.7,
+          "do": "buy",
+          "who": "blue",
+          "kind": "cleanse"
+        },
+        {
+          "t": 3.2,
+          "do": "buy",
+          "who": "blue",
+          "kind": "shrink"
+        }
       ]
     },
     {
       "length": 3.6,
       "transition": "flash",
-      "heroes": {"blue": "fire", "red": "frost"},
-      "camera": [300, 84, 400, 200],
-      "setup": {"blue": {"x": 380, "y": 150}, "red": {"x": 620, "y": 150}},
+      "heroes": {
+        "blue": "fire",
+        "red": "frost"
+      },
+      "camera": [
+        300,
+        84,
+        400,
+        200
+      ],
+      "setup": {
+        "blue": {
+          "x": 380,
+          "y": 150
+        },
+        "red": {
+          "x": 620,
+          "y": 150
+        }
+      },
       "script": [
-        {"t": 0.3, "do": "cast", "who": "blue", "item": "lasso"},
-        {"t": [0.4, 1.6], "do": "move", "who": "red", "dir": [1, 0]},
-        {"t": 1.7, "do": "cast", "who": "red", "item": "foe_freeze"},
-        {"t": 1.9, "do": "shake", "power": 5, "time": 0.4},
-        {"t": 2.4, "do": "cast", "who": "blue", "item": "firering", "at": "red"},
-        {"t": 2.5, "do": "shake", "power": 7, "time": 0.6},
-        {"t": [2.7, 9.0], "every": 0.35, "do": "fire", "who": "blue", "at": "red"},
-        {"t": [2.6, 9.0], "every": 0.5, "do": "fire", "who": "red", "at": "blue"}
+        {
+          "t": 0.3,
+          "do": "cast",
+          "who": "blue",
+          "item": "lasso"
+        },
+        {
+          "t": [
+            0.4,
+            1.6
+          ],
+          "do": "move",
+          "who": "red",
+          "dir": [
+            1,
+            0
+          ]
+        },
+        {
+          "t": 1.7,
+          "do": "cast",
+          "who": "red",
+          "item": "foe_freeze"
+        },
+        {
+          "t": 1.9,
+          "do": "shake",
+          "power": 5,
+          "time": 0.4
+        },
+        {
+          "t": 2.4,
+          "do": "cast",
+          "who": "blue",
+          "item": "firering",
+          "at": "red"
+        },
+        {
+          "t": 2.5,
+          "do": "shake",
+          "power": 7,
+          "time": 0.6
+        },
+        {
+          "t": [
+            2.7,
+            9.0
+          ],
+          "every": 0.35,
+          "do": "fire",
+          "who": "blue",
+          "at": "red"
+        },
+        {
+          "t": [
+            2.6,
+            9.0
+          ],
+          "every": 0.5,
+          "do": "fire",
+          "who": "red",
+          "at": "blue"
+        }
       ]
     },
     {
       "length": 4.0,
       "transition": "fade",
-      "heroes": {"blue": "nature", "red": "fire"},
-      "camera": [540, 84, 360, 200],
-      "setup": {"blue": {"x": 640, "y": 150}, "red": {"x": 900, "y": 600}},
+      "heroes": {
+        "blue": "nature",
+        "red": "fire"
+      },
+      "camera": [
+        540,
+        84,
+        360,
+        200
+      ],
+      "setup": {
+        "blue": {
+          "x": 640,
+          "y": 150
+        },
+        "red": {
+          "x": 900,
+          "y": 600
+        }
+      },
       "script": [
-        {"t": 0.3, "do": "walk_to", "who": "blue", "x": 820, "y": 150, "time": 1.6},
-        {"t": 0.3, "do": "follow", "who": "blue", "w": 360},
-        {"t": 2.2, "do": "walk_to", "who": "blue", "x": 620, "y": 150, "time": 1.8}
+        {
+          "t": 0.3,
+          "do": "walk_to",
+          "who": "blue",
+          "x": 820,
+          "y": 150,
+          "time": 1.6
+        },
+        {
+          "t": 0.3,
+          "do": "follow",
+          "who": "blue",
+          "w": 360
+        },
+        {
+          "t": 2.2,
+          "do": "walk_to",
+          "who": "blue",
+          "x": 620,
+          "y": 150,
+          "time": 1.8
+        }
       ]
     },
     {
       "length": 3.8,
       "transition": "flash",
       "mortal_players": true,
-      "heroes": {"blue": "fire", "red": "frost"},
-      "camera": [360, 110, 340, 190],
-      "setup": {"blue": {"x": 400, "y": 222}, "red": {"x": 600, "y": 222, "hp_lost": 26}},
+      "heroes": {
+        "blue": "fire",
+        "red": "frost"
+      },
+      "camera": [
+        360,
+        110,
+        340,
+        190
+      ],
+      "setup": {
+        "blue": {
+          "x": 400,
+          "y": 222
+        },
+        "red": {
+          "x": 600,
+          "y": 222,
+          "hp_lost": 26
+        }
+      },
       "script": [
-        {"t": 0.0, "do": "aim", "who": "blue", "at": "red"},
-        {"t": 0.0, "do": "aim", "who": "red", "at": "blue"},
-        {"t": [0.2, 1.4], "every": 0.3, "do": "fire", "who": "blue", "at": "red"},
-        {"t": [0.3, 1.4], "every": 0.45, "do": "fire", "who": "red", "at": "blue"},
-        {"t": 0.7, "do": "camera", "view": [470, 100, 260, 146], "time": 1.0}
+        {
+          "t": 0.0,
+          "do": "aim",
+          "who": "blue",
+          "at": "red"
+        },
+        {
+          "t": 0.0,
+          "do": "aim",
+          "who": "red",
+          "at": "blue"
+        },
+        {
+          "t": [
+            0.2,
+            1.4
+          ],
+          "every": 0.3,
+          "do": "fire",
+          "who": "blue",
+          "at": "red"
+        },
+        {
+          "t": [
+            0.3,
+            1.4
+          ],
+          "every": 0.45,
+          "do": "fire",
+          "who": "red",
+          "at": "blue"
+        },
+        {
+          "t": 0.7,
+          "do": "camera",
+          "view": [
+            470,
+            100,
+            260,
+            146
+          ],
+          "time": 1.0
+        }
       ]
     },
     {
       "length": 4.1,
       "title": "slide",
       "transition": "cut",
-      "slide": [1.1, 1.7, 1.0],
+      "slide": [
+        1.1,
+        1.7,
+        1.0
+      ],
       "shake": 7,
-      "battle": {"seed": 12, "heroes": ["nature", "light"], "skip": 21, "level": "hard", "view": [0, 84, 1000, 640]}
+      "battle": {
+        "seed": 12,
+        "heroes": [
+          "nature",
+          "light"
+        ],
+        "skip": 21,
+        "level": "hard",
+        "view": [
+          0,
+          84,
+          1000,
+          640
+        ]
+      }
     }
   ]
 }

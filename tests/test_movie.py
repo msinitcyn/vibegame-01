@@ -109,7 +109,7 @@ def test_intro_is_valid():
                 assert a["hero"] in HEROES
     for lang in ("ru", "en", "fi"):
         subs = load_subs("intro", lang)
-        assert len(subs) == 7 and subs[-1][1] <= total
+        assert len(subs) == 8 and subs[-1][1] <= total
 
 
 def test_movie_plays_scenes_with_transitions_and_subtitles(game):
@@ -353,6 +353,15 @@ def test_pick_scene_scrolls_heroes_and_locks(game):
     img = st.render_frame(game, movie.FRAME.size)          # раньше: AttributeError «captain» — ролик падал
     assert img.get_size() == movie.FRAME.size
     assert not hasattr(game, "pick") or game.state != "pick"              # экран игры не тронут
+
+
+def test_intro_has_shop_scene_with_purchases():
+    from duel.scene import Scene
+    data = next(sc for sc in movie.load("intro")["scenes"] if sc.get("shop"))
+    st = Scene(data, movie.ASPECT)
+    for _ in range(int(3.3 / (1 / 60))):
+        st.step()
+    assert set(st.bought) == {"heal", "cleanse", "shrink"}
 
 
 def test_intro_second_scene_is_hero_pick_with_subtitle():

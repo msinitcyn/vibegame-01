@@ -9,7 +9,7 @@ import pygame
 import pytest
 
 from duel import i18n
-from duel.config import HEROES
+from duel.config import HEROES, ITEM_PRICES
 from duel.net import PROTO, Conn, connect, parse_address
 from duel.room import HOLD, SEND_EVERY, SILENCE
 from duel.server import JOIN_WAIT, Server, start_in_thread
@@ -242,6 +242,22 @@ def test_command_moves_and_fires(server):
     wait(server, lambda: blue.y > y0, clients=(b,))
     snap = a.last()["snap"]
     assert any(x["owner"] == "blue" for x in snap["bullets"])
+
+
+def test_shop_buy_over_network(server):
+    a, b = Client(server), Client(server)
+    playing(server, a, b)
+    m = server.room.match
+    blue = m.blue
+    shop = next(s for s in m.shops if s.kind == "blue")
+    kind = m.shop_stock(shop)[0]
+    blue.x, blue.y = shop.x, shop.y
+    blue.money = 100
+    wait(server, lambda: m.stats["blue"]["bought"].get(kind, 0) == 0 and a.last()["snap"]["players"][0]["in_shop"],
+         clients=(b,))
+    a.conn.send({"type": "buy", "kind": kind})
+    wait(server, lambda: m.stats["blue"]["bought"].get(kind, 0) == 1, clients=(b,))
+    assert blue.money == 100 - ITEM_PRICES[kind]
 
 
 def test_bad_command_values_are_clamped(server):

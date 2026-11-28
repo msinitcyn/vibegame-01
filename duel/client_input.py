@@ -610,8 +610,13 @@ class InputMixin:
         return self._DIRS[round(math.atan2(dy, dx) / (math.pi / 4)) % 8]
 
     def buy_item(self, side, kind):
-        """Купить артефакт для стороны магазина (локальная партия): правило — в Match.buy."""
-        if not self.shops_visible() or self.match is None:
+        """Купить артефакт для стороны магазина. По сети решает сервер; локально — Match.buy."""
+        if not self.shops_visible() or not isinstance(kind, str):
+            return False
+        if self.net and not self.warmup:
+            self.net.send({"type": "buy", "kind": kind})
+            return True
+        if self.match is None:
             return False
         if self.match.buy(self.match.player(side), kind):
             self.refresh_snap()

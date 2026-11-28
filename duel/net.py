@@ -29,6 +29,7 @@
 В комнате, клиент -> сервер:
     {"type": "cmd", "move": [dx, dy], "fire": bool, "melee": bool, "slot": int|null, "aim": float, "reach": float}
                                                          reach — до курсора, пикс (огненный круг — там)
+    {"type": "buy", "kind": "shield"}                     купить товар в магазине под своим магом (решает сервер)
     {"type": "ready", "ready": bool}   {"type": "name", "name"}   {"type": "hero", "hero"}
     {"type": "bot"}                                      бот на свободное место (в лобби комнаты)
     {"type": "leave"}                                    вышел из комнаты — снова в лобби сервера
@@ -47,7 +48,7 @@ import socket
 
 # Что умеет сервер сверх протокола (сервер шлёт в hello). Протокол тот же, но старый сервер чего-то
 # из этого не знает — клиент подключается и честно говорит, что не будет работать.
-FEATURES = ("chat", "pause", "stats", "test", "replay", "crash", "lobby_chat", "recent", "team")
+FEATURES = ("chat", "pause", "stats", "test", "replay", "crash", "lobby_chat", "recent", "team", "shop")
 BASELINE_FEATURES = ("chat", "pause", "stats")     # у серверов 0.7.4, которые ещё не присылали features
 
 

@@ -32,9 +32,12 @@
 """
 import math
 import time
+from collections import Counter
+
+import pygame
 
 from .commands import Command
-from .config import REVEAL_TIME, TOP, WIDTH, HEIGHT
+from .config import ITEM_PRICES, MONEY_COLOR, REVEAL_TIME, SHOP_PAD, SHOP_ROW_H, SHOP_WIDTH, TOP, WIDTH, HEIGHT
 from .entities import Artifact, Mob
 from .match import STEP, Match
 from .snapshot import snapshot
@@ -44,7 +47,7 @@ DIRS8 = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
 
 # методы Scene, которые может вызывать сценарий
 API = ("move", "walk_to", "aim", "fire", "melee", "cast", "use", "teleport", "appear", "vanish", "hero", "mob",
-       "drop", "gear", "camera", "follow", "shake", "speed")
+       "drop", "gear", "buy", "camera", "follow", "shake", "speed")
 
 
 def ease(k):
@@ -122,6 +125,8 @@ class Scene:
         self.match = m
         self.mortal = bool(d.get("mortal_mobs"))
         self.mortal_players = bool(d.get("mortal_players"))   # маг может погибнуть (сцена «Побеждай»)
+        self.shop = d.get("shop")                  # сцена магазина: панель и покупки
+        self.bought = Counter()
         self.dead_at = None                   # когда партия сцены встала (итог)
         self.death_seen = {}                  # погибший маг -> время сцены, когда погиб (для анимации духа)
         self.lands = tuple(d["lands"]) if d.get("lands") else None
@@ -133,6 +138,7 @@ class Scene:
             p.hp = p.max_hp = int(spot.get("hp", p.max_hp))
             p.hp -= int(spot.get("hp_lost", 0))            # ранен с начала (сценка лечения)
             p.ammo = int(spot.get("ammo", 999))
+            p.money = int(spot.get("money", p.money))
             if spot.get("hidden"):
                 self.hidden.add(p.id)
             if spot.get("offstage"):          # соперник «где-то далеко»: не виден, пули сквозь него
@@ -247,6 +253,49 @@ class Scene:
 
     def gear(self, who, kind, time=None):
         self.match.take_gear(self.player(who), kind)
+
+    def buy(self, who, kind, time=None):
+        """Купить артефакт в магазине, на котором стоит маг (для сцены ролика)."""
+        if self.match.buy(self.player(who), kind):
+            self.bought[kind] += 1
+
+    def overlay(self, img, game):
+        """Панель магазина поверх кадра сцены: список товаров и отметки о покупках."""
+        cfg = self.shop
+        if not cfg:
+            return
+        if isinstance(cfg, str):
+            cfg = {"kind": cfg}
+        if self.t < float(cfg.get("show_at", 0)):
+            return
+        shop = next((x for x in self.match.shops if x.kind == cfg.get("kind")), None)
+        if shop is None:
+            return
+        stock = self.match.shop_stock(shop)
+        if not stock:
+            return
+        side = cfg.get("side", "blue")
+        x0 = 4 if side == "blue" else img.get_width() - SHOP_WIDTH - 4
+        y0 = 4
+        h = 2 * SHOP_PAD + SHOP_ROW_H * len(stock)
+        panel = pygame.Surface((SHOP_WIDTH, h), pygame.SRCALPHA)
+        panel.fill((8, 9, 15, 245))
+        pygame.draw.rect(panel, (245, 210, 120), panel.get_rect(), 2)
+        for i in range(1, len(stock)):
+            y = SHOP_PAD + i * SHOP_ROW_H - 1
+            pygame.draw.line(panel, (34, 32, 44), (3, y), (SHOP_WIDTH - 4, y), 1)
+        img.blit(panel, (x0, y0))
+        from .icons import draw_icon
+        for i, kind in enumerate(stock):
+            cy = y0 + SHOP_PAD + i * SHOP_ROW_H + SHOP_ROW_H // 2
+            row = pygame.Rect(x0 + 1, y0 + SHOP_PAD + i * SHOP_ROW_H, SHOP_WIDTH - 2, SHOP_ROW_H)
+            if self.bought.get(kind):
+                pygame.draw.rect(img, (44, 64, 48), row)
+                pygame.draw.rect(img, (245, 210, 120), row, 1)
+            draw_icon(img, kind, (x0 + 11, cy), 8, level=False)
+            price = ITEM_PRICES.get(kind, 0)
+            txt = game.tiny.render(str(price), True, MONEY_COLOR)
+            img.blit(txt, txt.get_rect(midleft=(x0 + 22, cy)))
 
     def camera(self, view, time=0.0):
         """Камера на участок view ([x, y, w, h]) — сразу или плавно за time секунд."""
