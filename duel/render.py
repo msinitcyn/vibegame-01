@@ -125,6 +125,9 @@ def draw_effects(surf, u, time=0.0):
     if "slowfoe" in effects:                      # «Остановка пуль»: кольца и часы у соперника
         fx_mage.draw_slowfoe(surf, pos, u["r"], since_start("slowfoe", effects["slowfoe"]),
                              effects["slowfoe"], time)
+    if "shrink" in effects:                       # «Уменьшение»: кольца сжимаются к магу
+        fx_mage.draw_shrink(surf, pos, u["r"], since_start("shrink", effects["shrink"]),
+                            effects["shrink"], time)
 
 
 def draw_hp(surf, u, color, font, hp=None, max_hp=None, shield=None, scale=1.0):

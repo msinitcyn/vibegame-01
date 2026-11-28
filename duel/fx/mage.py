@@ -753,3 +753,32 @@ def draw_slowfoe(surf, pos, r, since, left, time):
     hand = -math.pi / 2 + math.sin(time * 0.9) * 1.1
     pygame.draw.line(surf, spark, (cx, gy), (cx + math.cos(hand) * (cr - 2), gy + math.sin(hand) * (cr - 2)), 2)
     pygame.draw.circle(surf, spark, (cx, gy), 2)
+
+
+def draw_shrink(surf, pos, r, since, left, time):
+    """«Уменьшение»: кольца сжимаются к магу, искры летят внутрь; потом — лёгкая пульсация."""
+    if left <= 0:
+        return
+    P = params("shrink")
+    r = int(r)
+    cx, cy = int(pos[0]), int(pos[1])
+    ring = rgb(P.get("ring_color"), (114, 230, 230))
+    spark = rgb(P.get("spark_color"), (216, 255, 255))
+    cast = max(0.01, float(P.get("cast_time", 0.45)))
+    if since < cast:
+        k = max(0.0, min(1.0, since / cast))
+        for i in range(3):
+            q = max(0.0, min(1.0, k - i * 0.12))
+            radius = int(r * (2.3 - 1.25 * q))
+            alpha = int(190 * (1 - q) + 35)
+            pygame.draw.circle(surf, (*ring, alpha), (cx, cy), radius, 3)
+        for i in range(10):
+            a = i * math.pi / 5 + time * 0.8
+            d = r * (2.2 - 1.5 * k) + 4
+            pygame.draw.line(surf, (*spark, int(220 * (1 - k))),
+                             (cx + math.cos(a) * d, cy + math.sin(a) * d),
+                             (cx + math.cos(a) * (d - 6), cy + math.sin(a) * (d - 6)), 2)
+        return
+    phase = (time * float(P.get("pulse", 2.2))) % 1.0
+    radius = int(r * (1.15 + 0.12 * math.sin(phase * math.tau)))
+    pygame.draw.circle(surf, (*ring, 80), (cx, cy), radius, 1)
