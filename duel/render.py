@@ -10,6 +10,7 @@ import pygame
 from .config import (
     DURATION,
     CLEANSE_FX,
+    CLEAR_FX,
     HEAL_FX,
     WEAPON_TIME,
     ZOMBIE_RISE,
@@ -128,6 +129,9 @@ def draw_effects(surf, u, time=0.0):
     if "shrink" in effects:                       # «Уменьшение»: кольца сжимаются к магу
         fx_mage.draw_shrink(surf, pos, u["r"], since_start("shrink", effects["shrink"]),
                             effects["shrink"], time)
+    clear = u.get("clear_fx", 0)
+    if clear > 0:                                 # «Убрать пули соперника»: волна от мага
+        fx_mage.draw_clearfoe(surf, pos, u["r"], 1 - clear / CLEAR_FX, time)
 
 
 def draw_hp(surf, u, color, font, hp=None, max_hp=None, shield=None, scale=1.0):

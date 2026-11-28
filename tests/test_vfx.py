@@ -58,6 +58,12 @@ def test_shrink_animation_draws():
                                                    DURATION["shrink"] - since, 2.3))
 
 
+def test_clearfoe_animation_draws():
+    from duel.config import CLEAR_FX
+    for clear in (CLEAR_FX, CLEAR_FX * 0.6, 0.01):
+        assert _drew(lambda s: fx_mage.draw_clearfoe(s, (200, 150), 14, 1 - clear / CLEAR_FX, 2.3))
+
+
 def test_triple_bear_zombie_draw_in_all_phases():
     for k in (0.0, 0.3, 1.0):
         assert _drew(lambda s: fx_mage.draw_triple(s, (200, 150), 14, 1, k, shot=1 - k))
@@ -181,3 +187,18 @@ def test_own_clones_see_through_only_for_owner():
         draw_clone(s, c, heroes, None, None, 0.0, viewer)
         pics[viewer] = pygame.image.tobytes(s, "RGB")
     assert pics[None] == pics["red"] != pics["blue"]      # за одним компьютером и сопернику — как маг
+
+
+def test_clearfoe_sets_wave_and_removes_enemy_bullets():
+    from duel.config import CLEAR_FX
+    from duel.entities import Bullet
+    from duel.snapshot import snapshot
+    from tests.conftest import new_match
+
+    m = new_match()
+    p, foe = m.blue, m.red
+    b = Bullet(p.x + 80, p.y, -520, 0, foe)
+    m.bullets = [b]
+    m.apply_item(p, "clearfoe")
+    assert not b.alive and p.clear_fx == CLEAR_FX
+    assert snapshot(m)["players"][0]["clear_fx"] == CLEAR_FX

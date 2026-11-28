@@ -782,3 +782,23 @@ def draw_shrink(surf, pos, r, since, left, time):
     phase = (time * float(P.get("pulse", 2.2))) % 1.0
     radius = int(r * (1.15 + 0.12 * math.sin(phase * math.tau)))
     pygame.draw.circle(surf, (*ring, 80), (cx, cy), radius, 1)
+
+
+def draw_clearfoe(surf, pos, r, k, time):
+    """«Убрать пули соперника»: зелёная волна расходится от мага, осколки пуль летят наружу."""
+    P = params("clearfoe")
+    r = int(r)
+    cx, cy = int(pos[0]), int(pos[1])
+    ring = rgb(P.get("ring_color"), (150, 255, 196))
+    core = rgb(P.get("core_color"), (232, 255, 240))
+    shard = rgb(P.get("shard_color"), (185, 255, 208))
+    k = max(0.0, min(1.0, k))
+    radius = int(r * (1.0 + float(P.get("wave", 3.2)) * k))
+    alpha = int(230 * (1 - k))
+    pygame.draw.circle(surf, (*ring, alpha), (cx, cy), radius, max(1, int(5 * (1 - k)) + 1))
+    pygame.draw.circle(surf, (*core, alpha // 2), (cx, cy), max(1, radius - 5), 1)
+    for i in range(int(P.get("shards", 12))):
+        a = i * math.tau / max(1, int(P.get("shards", 12))) + time * 0.7
+        d = radius * 0.75
+        x, y = cx + math.cos(a) * d, cy + math.sin(a) * d
+        pygame.draw.line(surf, (*shard, alpha), (x, y), (x + math.cos(a) * 5, y + math.sin(a) * 5), 2)

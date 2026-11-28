@@ -45,6 +45,7 @@ from .config import (
     WALL_MIN,
     WALL_RANGE,
     CLEANSE_FX,
+    CLEAR_FX,
     HEAL_FX,
     AMMO_PACK,
     AMMO_SPAWN,
@@ -422,6 +423,7 @@ class Match:
         elif kind == "wall":
             self.walls.append(Wall(p, self.wall_spot(p)))   # зеркало — под курсор, лицом от мага
         elif kind == "clearfoe":
+            p.clear_fx = CLEAR_FX          # анимация волны
             for b in self.bullets:
                 if b.owner is foe:
                     b.alive = False
