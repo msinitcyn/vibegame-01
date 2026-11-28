@@ -64,6 +64,13 @@ def test_clearfoe_animation_draws():
         assert _drew(lambda s: fx_mage.draw_clearfoe(s, (200, 150), 14, 1 - clear / CLEAR_FX, 2.3))
 
 
+def test_invert_animation_draws():
+    from duel.config import DURATION
+    for since in (0.0, 0.2, 0.4, 2.0):
+        assert _drew(lambda s: fx_mage.draw_invert(s, (200, 150), 14, since,
+                                                   DURATION["invert"] - since, 2.3))
+
+
 def test_triple_bear_zombie_draw_in_all_phases():
     for k in (0.0, 0.3, 1.0):
         assert _drew(lambda s: fx_mage.draw_triple(s, (200, 150), 14, 1, k, shot=1 - k))

@@ -802,3 +802,34 @@ def draw_clearfoe(surf, pos, r, k, time):
         d = radius * 0.75
         x, y = cx + math.cos(a) * d, cy + math.sin(a) * d
         pygame.draw.line(surf, (*shard, alpha), (x, y), (x + math.cos(a) * 5, y + math.sin(a) * 5), 2)
+
+
+def draw_invert(surf, pos, r, since, left, time):
+    """«Перевод стрелок»: вокруг соперника вращаются две стрелки в противоположные стороны."""
+    if left <= 0:
+        return
+    P = params("invert")
+    r = int(r)
+    cx, cy = int(pos[0]), int(pos[1])
+    ring = rgb(P.get("ring_color"), (192, 120, 255))
+    arrow = rgb(P.get("arrow_color"), (255, 224, 138))
+    cast = max(0.01, float(P.get("cast_time", 0.4)))
+    if since < cast:
+        k = max(0.0, min(1.0, since / cast))
+        pygame.draw.circle(surf, (*ring, int(220 * (1 - k))), (cx, cy), int(r * (1.1 + 1.8 * k)), 3)
+    spin = time * float(P.get("turn", 1.6))
+    rad = r + 10
+    box = pygame.Rect(cx - rad, cy - rad, 2 * rad, 2 * rad)
+    for i in range(int(P.get("arrows", 2))):
+        direction = 1 if i == 0 else -1
+        a0 = spin * direction + i * math.pi
+        span = 1.5
+        # pygame arc: углы против часовой стрелки, поэтому экранный угол = -a
+        start, end = -(a0 + span), -a0
+        pygame.draw.arc(surf, (*arrow, 230), box, start, end, 3)
+        tip = (a0 + span * direction)
+        tx, ty = cx + math.cos(tip) * rad, cy + math.sin(tip) * rad
+        dx, dy = math.cos(tip + direction * 0.35), math.sin(tip + direction * 0.35)
+        nx, ny = -dy, dx
+        pygame.draw.polygon(surf, arrow, [(tx, ty), (tx - dx * 8 + nx * 4, ty - dy * 8 + ny * 4),
+                                          (tx - dx * 8 - nx * 4, ty - dy * 8 - ny * 4)])
