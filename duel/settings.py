@@ -34,6 +34,7 @@ DEFAULTS = {"lang": "en", "name": "", "last_address": "localhost",
             "crash_reports": "ask",               # отчёты о падениях серверу: "ask" — спросить, "yes", "no"
             "last_update_check": None,            # {"at": время, "result": "latest"|"new"|"offline", "v"}
             "bot_level": "normal",                # сложность бота: easy / normal / hard
+            "quick_items": True,                  # «Дополнительно»: артефакт применяется сразу, без выбора
             "save_replays": True,                 # «Дополнительно»: писать повторы партий
             "replay_dir": "",                     # папка повторов; пусто — logs/replays рядом с настройками
             "intro_on_start": True,               # ролик (assets/movies/intro) при каждом запуске — галка в «Об игре»

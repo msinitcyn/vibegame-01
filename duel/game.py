@@ -110,7 +110,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.menu = self.base_menu()
         self.replay_list, self.replay_index = [], 0       # экран «Повторы»: файлы и выбранный
         self.replay_back = None       # повтор открыт из «Повторов» — Esc возвращает туда, а не закрывает игру
-        self.advanced_rows = ["save_replays", "replay_dir", "replays", "addons", "back"]   # «Настройки → Дополнительно»
+        self.advanced_rows = ["quick_items", "save_replays", "replay_dir", "replays", "addons", "back"]   # «Настройки → Дополнительно»
         self.addons = None            # аддоны (duel/addons.py) — только настольная игра
         if not WEB:
             try:

@@ -138,3 +138,27 @@ def test_folder_without_index_is_read_lazily(game, tmp_path, monkeypatch):
     assert len(reads) == 9                                     # только видимые строки, по одной за кадр
     assert game.replay_list[0]["mode"] == "lab"
     game.settings["replay_dir"] = ""
+
+
+def test_quick_items_setting_lives_in_advanced(game):
+    from duel import settings
+    open_advanced(game)
+    game.settings_index = game.settings_rows.index("quick_items")
+    assert game.settings.get("quick_items", True) is True
+    game.on_key(pygame.KSCAN_RETURN)
+    assert game.settings["quick_items"] is False and settings.load()["quick_items"] is False
+    game.on_key(pygame.KSCAN_RETURN)
+    assert game.settings["quick_items"] is True
+    game.close_advanced()
+
+
+def test_settings_index_cannot_go_out_of_range(game):
+    game.state = "settings"
+    game.settings_page, game.settings_rows = "advanced", game.advanced_rows
+    game.settings_index = 99
+    game.draw_settings()                                      # раньше: IndexError при открытии
+    assert game.settings_index == len(game.advanced_rows) - 1
+    game.settings_index = 99
+    game.on_key(pygame.KSCAN_DOWN)
+    assert 0 <= game.settings_index < len(game.settings_rows)
+    game.settings_page, game.settings_rows, game.settings_index = "main", game.main_rows, 0

@@ -221,6 +221,7 @@ class InputMixin:
             self.held.clear()
         elif row == "settings":
             self.settings_back = "play"
+            self.settings_page, self.settings_rows = "main", self.main_rows
             self.settings_index = 0
             self.state = "settings"
         else:
@@ -242,12 +243,14 @@ class InputMixin:
             chars = "".join(ch for ch in text if ch.isprintable())
             self.entry_name = (self.entry_name + chars)[:settings.NAME_MAX]
             return
-        if self.state == "settings" and self.settings_rows[self.settings_index] == "name":
+        if self.state == "settings" and self.settings_rows and \
+                self.settings_rows[min(self.settings_index, len(self.settings_rows) - 1)] == "name":
             chars = "".join(ch for ch in text if ch.isprintable())
             self.set_name((self.settings["name"] + chars)[:settings.NAME_MAX])
         elif self.state == "addon":
             self.addon_text(text)
-        elif self.state == "settings" and self.settings_rows[self.settings_index] == "replay_dir":
+        elif self.state == "settings" and self.settings_rows and \
+                self.settings_rows[min(self.settings_index, len(self.settings_rows) - 1)] == "replay_dir":
             self.set_replay_dir(self.settings.get("replay_dir", "") + "".join(ch for ch in text if ch.isprintable()))
 
     def pad_keys(self):
@@ -433,6 +436,10 @@ class InputMixin:
         items = p.get("items", []) if p else []
         kind = items[slot] if 0 <= slot < len(items) else None
         if kind is None:
+            self.armed.pop(pid, None)
+            return
+        if self.settings.get("quick_items", True):
+            self.pending[pid].use_slot = slot     # быстро: сразу применить
             self.armed.pop(pid, None)
             return
         if self.armed.get(pid) == (slot, kind):

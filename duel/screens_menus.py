@@ -345,6 +345,9 @@ class MenuScreensMixin:
         title = "settings.advanced_title" if self.settings_page == "advanced" else "settings.title"
         img = self.big.render(tr(title), True, WHITE)
         s.blit(img, img.get_rect(center=(WIDTH // 2, 92)))
+        if not self.settings_rows:
+            return
+        self.settings_index = max(0, min(self.settings_index, len(self.settings_rows) - 1))
         row = self.settings_rows[self.settings_index]
         rdir = self.settings.get("replay_dir", "")
         if row == "replay_dir":
@@ -368,6 +371,7 @@ class MenuScreensMixin:
                   "check_now": tr("settings.check_now"),
                   "crash_reports": f"◀  {tr('settings.crash', v=tr('yes' if self.settings.get('crash_reports') == 'yes' else 'no'))}  ▶",
                   "advanced": tr("settings.advanced"),
+                  "quick_items": f"◀  {tr('settings.quick_items', v=tr('yes' if self.settings.get('quick_items', True) else 'no'))}  ▶",
                   "save_replays": f"◀  {tr('settings.save_replays', v=tr('yes' if self.settings.get('save_replays', True) else 'no'))}  ▶",
                   "replay_dir": tr("settings.replay_dir", path=rdir if rdir.strip() else tr("settings.replay_dir_default")),
                   "replays": tr("settings.replays"),

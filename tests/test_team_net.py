@@ -125,6 +125,7 @@ def test_net_2v2_all_items_on_panel_own_keys(game, monkeypatch):
     monkeypatch.setattr("duel.screens.draw_icon", lambda s, kind, c, r, **kw: drawn.append(kind))
     try:
         assert game.own_pid() == "blue2"
+        game.settings["quick_items"] = False
         game.armed = {}
         game.on_key(game.controls["blue"].items[0][0])       # своя первая ячейка — щит напарника, не ведущего
         assert game.armed.get("blue2") == (0, "shield") and "blue" not in game.armed
@@ -135,6 +136,7 @@ def test_net_2v2_all_items_on_panel_own_keys(game, monkeypatch):
         assert not {"shield", "heal", "beam"} & set(drawn)
     finally:
         game.net, game.me, game.net_mode = None, None, "1v1"
+        game.settings["quick_items"] = True
         game.armed = {}
 
 

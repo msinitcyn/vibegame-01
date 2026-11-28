@@ -302,3 +302,19 @@ def test_network_shop_click_sends_buy_not_local_purchase(game):
     finally:
         game.net, game.me = None, None
         game.server_info = None
+
+
+def test_shop_row_is_highlighted_under_cursor(game):
+    game.start()
+    game.countdown = 0
+    game.mouse_captured = False
+    stand(game.match, game.match.blue)
+    game.refresh_snap()
+    game.draw()
+    hit = next(h for h in game.shop_hits if h["side"] == "blue")
+    game.ui_mouse = hit["rect"].center
+    game.draw()
+    assert game.shop_hover == {"side": "blue", "kind": hit["kind"]}
+    game.ui_mouse = (hit["rect"].centerx, hit["rect"].centery + 500)
+    game.draw()
+    assert game.shop_hover is None

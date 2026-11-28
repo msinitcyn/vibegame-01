@@ -208,6 +208,7 @@ class MenusMixin:
         elif action == "settings":
             self.state = "settings"
             self.settings_back = "menu"
+            self.settings_page, self.settings_rows = "main", self.main_rows
             self.settings_index = 0
         elif action == "test":
             self.open_pick(MAX_HP, bot=True)
@@ -240,10 +241,12 @@ class MenusMixin:
     def open_advanced(self):
         """«Настройки → Дополнительно»: та же страница настроек, другие строки."""
         self.settings_page, self.settings_rows, self.settings_index = "advanced", self.advanced_rows, 0
+        self.hits = []                        # старые строки главной страницы не должны выбирать новые
 
     def close_advanced(self):
         self.settings_page, self.settings_rows = "main", self.main_rows
         self.settings_index = self.settings_rows.index("advanced")
+        self.hits = []
 
     def open_replays(self, i=0):
         """Экран «Повторы»: записанные партии (новые сверху) — сами пишутся после каждой партии; ←/→ — другая
@@ -511,6 +514,9 @@ class MenusMixin:
         """Экран настроек: W/S — строка, A/D или Enter — изменить, Esc — назад.
         На строке «Имя» буквы набирают имя (on_text), строки листаются только стрелками."""
         K = pygame
+        if not self.settings_rows:
+            return
+        self.settings_index = max(0, min(self.settings_index, len(self.settings_rows) - 1))
         row = self.settings_rows[self.settings_index]
         if row == "replay_dir":                  # путь к папке: набирать, Ctrl+V — вставить, Backspace — стереть
             if sc == K.KSCAN_ESCAPE:
@@ -584,6 +590,11 @@ class MenusMixin:
         elif row == "addons":
             if sc in (K.KSCAN_RETURN, K.KSCAN_KP_ENTER, K.KSCAN_SPACE, K.KSCAN_D, K.KSCAN_RIGHT) and self.addons:
                 self.open_addons()
+        elif row == "quick_items":
+            if sc in (K.KSCAN_A, K.KSCAN_LEFT, K.KSCAN_D, K.KSCAN_RIGHT, K.KSCAN_RETURN, K.KSCAN_KP_ENTER,
+                      K.KSCAN_SPACE):
+                self.settings["quick_items"] = not self.settings.get("quick_items", True)
+                settings.save(self.settings)
         elif row == "save_replays":
             if sc in (K.KSCAN_A, K.KSCAN_LEFT, K.KSCAN_D, K.KSCAN_RIGHT, K.KSCAN_RETURN, K.KSCAN_KP_ENTER,
                       K.KSCAN_SPACE):

@@ -61,7 +61,8 @@ def test_invert_swaps_both_axes(game):
     assert b.x < 200 and b.y > 300
 
 
-def test_keyboard_fire_and_items(game):
+def test_keyboard_fire_and_items(game, monkeypatch):
+    monkeypatch.setitem(game.settings, "quick_items", False)   # старый режим: выбрать, потом применить
     b, r = game.match.blue, game.match.red
     game.on_key(pygame.KSCAN_SPACE)
     game.on_key(pygame.KSCAN_RETURN)
@@ -328,3 +329,14 @@ def test_fullscreen_on_pygame_25_recreates_window_first(game, monkeypatch):
     was = game.fullscreen
     game.toggle_fullscreen()
     assert game.fullscreen != was and len(calls) == 1 and not switched
+
+
+def test_quick_item_use_is_default(game):
+    assert game.settings.get("quick_items", True) is True
+    r = game.match.red
+    r.items = ["speed", None, None, None]
+    game.refresh_snap()
+    game.on_key(pygame.KSCAN_9)                   # один клик — сразу применить
+    game.update(DT)
+    assert "speed" in r.effects and r.items[0] is None
+    assert not game.armed

@@ -481,7 +481,7 @@ def test_recent_servers_remembered_and_asked_directly(game):
     game.close_finder()
 
 
-def test_red_uses_1234_and_sees_1234(game):
+def test_red_uses_1234_and_sees_1234(game, monkeypatch):
     srv = start_in_thread(port=0, log=lambda text: None, discovery_port=None)
     try:
         masha = Bob(srv.port, "Маша")
@@ -497,6 +497,7 @@ def test_red_uses_1234_and_sees_1234(game):
         frames(game, lambda: not game.net_waiting, keep=(masha,))
         assert [game.slot_key("red", i) for i in range(4)] == list("1234")
         assert [game.slot_key("blue", i) for i in range(4)] == [""] * 4
+        monkeypatch.setitem(game.settings, "quick_items", False)   # проверяем выбор по сети, а не быстрое применение
         red = srv.room.match.red
         red.items = ["speed", None, None, None]
         from duel.snapshot import player as snap_player

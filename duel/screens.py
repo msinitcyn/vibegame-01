@@ -210,6 +210,7 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         не подсвечивается, при наведении на предмет видна стрелка курсора."""
         s = self.screen
         self.shop_hits = []
+        self.shop_hover = None
         players = {p["id"]: p for p in self.snap.get("players", [])}
         shops = {shop["kind"]: shop for shop in self.snap.get("shops", [])}
         cursor = self.shop_cursor() or (-1, -1)
@@ -234,11 +235,16 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
             s.blit(panel, (x0, y0))
             for i, kind in enumerate(stock):
                 cy = y0 + SHOP_PAD + i * SHOP_ROW_H + SHOP_ROW_H // 2
+                rect = pygame.Rect(x0 + 1, y0 + SHOP_PAD + i * SHOP_ROW_H, SHOP_WIDTH - 2, SHOP_ROW_H)
+                hovered = rect.collidepoint(cursor)
+                if hovered:
+                    pygame.draw.rect(s, (42, 48, 68), rect, border_radius=3)
+                    pygame.draw.rect(s, accent, rect, 1, border_radius=3)
+                    self.shop_hover = {"side": side, "kind": kind}
                 draw_icon(s, kind, (x0 + 11, cy), 8, level=False)
                 price = ITEM_PRICES[kind]
-                txt = self.tiny.render(str(price), True, MONEY_COLOR)
+                txt = self.tiny.render(str(price), True, WHITE if hovered else MONEY_COLOR)
                 s.blit(txt, txt.get_rect(midleft=(x0 + 22, cy)))
-                rect = pygame.Rect(x0 + 1, y0 + SHOP_PAD + i * SHOP_ROW_H, SHOP_WIDTH - 2, SHOP_ROW_H)
                 self.shop_hits.append({"rect": rect, "side": side, "kind": kind, "price": price})
         if self.mouse_captured and self.shop_at(cursor):
             self.draw_shop_cursor(cursor)
@@ -838,6 +844,7 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
             self.draw_shops()
         else:
             self.shop_hits = []
+            self.shop_hover = None
         self.draw_hud()
         self.draw_countdown()
 
