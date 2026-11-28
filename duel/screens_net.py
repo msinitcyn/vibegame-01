@@ -15,14 +15,12 @@ from .config import (
     BLUE,
     GREY,
     HEIGHT,
-    HERO_COLOR,
-    HERO_SPRITE,
     HEROES,
     WHITE,
     WIDTH,
 )
 from .i18n import t as tr
-from .sprites import draw_unit
+from .screens_menus import PICK_TOP
 
 LOBBY_ROWS = 6                    # строк в колонках лобби (игроки, партии) — ниже чат
 
@@ -208,147 +206,108 @@ class NetScreensMixin:
         s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 30)))
         pygame.display.flip()
 
-    def draw_lobby(self):
-        """Выбор героя по сети: ряд синего и ряд красного, как за одним компьютером. Свой ряд —
-        выбирать (←/→, щелчок) и подтверждать (Enter, щелчок по выбранному); ряд соперника — смотреть."""
+    def _net_pick_model(self):
+        """Данные сетевого выбора в том же виде, что у локального: герой/готовность на сторону."""
+        seats = self.net_seats or {}
+        if not hasattr(self, "pick"):
+            self.pick = {}
+        if not hasattr(self, "pick_spell"):
+            self.pick_spell = {}
+        for team in ("blue", "red"):
+            seat = seats.get(team) or {}
+            hero = seat.get("hero") or (seats.get(team + "2") or {}).get("hero") or HEROES[0]
+            self.pick[team] = {"hero": hero, "ok": bool(seat.get("ready"))}
+            self.pick_spell.setdefault(team, None)
+
+    def _net_pick_interactive(self, pid):
+        if self.watching or pid != self.me or self.net is None:
+            return False
+        seat = self.net_seats.get(pid) or {}
+        if seat.get("who") != "human":
+            return False
         if getattr(self, "net_mode", "1v1") == "2v2":
-            self.draw_team_lobby()
-            return
+            team = "blue" if pid.startswith("blue") else "red"
+            return (getattr(self, "net_captains", {}) or {}).get(team) == self.me
+        return True
+
+    def _net_pick_hero(self, pid, hero, click=False):
+        """Наведение только подсвечивает; выбор отправляется щелчком."""
+        if click and self._net_pick_interactive(pid):
+            self.choose_hero(hero)
+
+    def _net_seat_row(self, team, x, w):
+        """Слоты команды над её половиной: лидер/второй, боты и свободные места."""
+        s = self.screen
+        pids = (team, team + "2") if getattr(self, "net_mode", "1v1") == "2v2" else (team,)
+        n = len(pids)
+        gap = 8
+        sw = (w - gap * (n - 1)) // n
+        caps = getattr(self, "net_captains", {}) or {}
+        for k, pid in enumerate(pids):
+            seat = self.net_seats.get(pid) or {}
+            who = seat.get("who")
+            box = pygame.Rect(x + k * (sw + gap), 6, sw, 38)
+            pygame.draw.rect(s, (26, 29, 40), box, border_radius=8)
+            pygame.draw.rect(s, (120, 220, 140) if who == "human" else (60, 64, 80), box, 1, border_radius=8)
+            if who in ("human", "away"):
+                label = ("★ " if caps.get(team) == pid else "") + (seat.get("name") or "?")
+                label += "  —  " + (tr("net.away") if who == "away" else
+                                    tr("pick.chosen") if seat.get("ready") else tr("pick.choosing"))
+                if pid == self.me:
+                    label += "   (" + tr("net.you") + ")"
+            elif who == "bot":
+                label = tr("name.bot")
+            else:
+                label = tr("net.free_seat")
+            img = self.small.render(label, True, WHITE if who else GREY)
+            if img.get_width() > box.w - 56:
+                img = pygame.transform.smoothscale(img, (box.w - 56, img.get_height()))
+            s.blit(img, img.get_rect(midleft=(box.x + 9, box.centery)))
+            if self.watching:
+                continue
+            if who in (None, "bot"):
+                # пустой слот — сесть (на бота — заменить его собой)
+                self.hit(box, lambda pid=pid: self.net_send({"type": "switch", "seat": pid}))
+                if getattr(self, "net_mode", "1v1") == "2v2":
+                    bw = 62
+                    btn = pygame.Rect(box.right - bw - 5, box.y + 6, bw, box.h - 12)
+                    self.small_button(btn, tr("team.remove_bot") if who == "bot" else tr("team.add_bot"),
+                                      lambda pid=pid, on=(who != "bot"): self.net_send({"type": "seat_bot", "seat": pid, "on": on}))
+
+    def draw_lobby(self):
+        """Выбор героя по сети тем же экраном, что локально: слоты, ряд земель, большая карточка."""
         s = self.screen
         s.fill(BG)
-        img = self.big.render(tr("pick.title"), True, WHITE)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 50)))
-        n, gap = len(HEROES), 16
-        w = min(170, (WIDTH - 40 - gap * (n - 1)) // n)
-        x0 = (WIDTH - n * w - (n - 1) * gap) // 2
-        for row, pid in enumerate(("blue", "red")):
-            seat = self.net_seats.get(pid) or {}
-            other = self.net_seats.get("red" if pid == "blue" else "blue") or {}
-            who, hero, ready = seat.get("who"), seat.get("hero"), seat.get("ready")
-            mine = pid == self.me and who == "human"
-            top = 105 + row * 225
-            label = self.player_label(pid) if who else tr("net.free_seat")
-            if who == "away":
-                label += "  —  " + tr("net.away")
-            elif who:
-                label += "  —  " + (tr("pick.chosen") if ready else tr("pick.choosing"))
-            if mine:
-                label += "   (" + tr("net.you") + ")"
-            img = self.font.render(label, True, self.side_color(pid) if who else GREY)
-            s.blit(img, (x0, top))
-            for i, h in enumerate(HEROES):
-                card = pygame.Rect(x0 + i * (w + gap), top + 32, w, 170)
-                cur = hero == h
-                taken = other.get("who") not in (None, "", "bot") and other.get("hero") == h      # героя бота взять можно
-                if mine:
-                    self.hit(card, lambda h=h: self.choose_hero(h))
-                on = cur or (mine and not taken and self.hovered(card))
-                pygame.draw.rect(s, (40, 46, 66) if on else (26, 29, 40), card, border_radius=12)
-                pygame.draw.rect(s, HERO_COLOR[h] if cur else (60, 64, 80), card,
-                                 4 if cur and ready else (2 if on else 1), border_radius=12)
-                draw_unit(s, HERO_SPRITE[h], (card.centerx, card.top + 62), 36, 1 if pid == "blue" else -1,
-                          alpha=90 if taken else 255)
-                img = self.font.render(tr("hero." + h), True, HERO_COLOR[h] if not taken else GREY)
-                s.blit(img, img.get_rect(center=(card.centerx, card.top + 122)))
-                note = tr("pick.chosen") if cur and ready else (tr("pick.taken") if taken else "")
-                if note:
-                    img = self.small.render(note, True, AMMO_COLOR if cur else GREY)
-                    s.blit(img, img.get_rect(center=(card.centerx, card.top + 150)))
+        self._net_pick_model()
+        half = WIDTH // 2
+        for side, team in enumerate(("blue", "red")):
+            x = side * half
+            area = pygame.Rect(x, PICK_TOP, half, HEIGHT - PICK_TOP - 130)
+            self._net_seat_row(team, x + 18, half - 36)
+            st = (self.net_seats.get(team) or {})
+            self.draw_pick_half(team, area, interactive=self._net_pick_interactive(team),
+                                on_hero=self._net_pick_hero, label="", bot=st.get("who") == "bot")
         if self.watching:
-            self.button((WIDTH // 2, 585), tr("net.btn_leave"), lambda: self.on_key(pygame.KSCAN_ESCAPE), w=200)
+            self.button((WIDTH // 2, HEIGHT - 78), tr("net.btn_leave"), lambda: self.on_key(pygame.KSCAN_ESCAPE), w=200)
             hint = tr("net.watch_hint")
         else:
-            self.button((WIDTH // 2 - 110, 585), tr("net.btn_unready") if self.my_ready() else tr("net.btn_ready"),
+            self.button((WIDTH // 2 - 110, HEIGHT - 78), tr("net.btn_unready") if self.my_ready() else tr("net.btn_ready"),
                         lambda: self.send_ready(not self.my_ready()), w=200)
-            self.button((WIDTH // 2 + 110, 585), tr("net.btn_leave"), self.quit_match,
-                        w=200)
+            self.button((WIDTH // 2 + 110, HEIGHT - 78), tr("net.btn_leave"), self.quit_match, w=200)
             hint = tr("net.pick_hint", **self.hint_keys())
         img = self.small.render(hint, True, GREY)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 640)))
+        s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 34)))
         if self.net_spectators:
             img = self.small.render(tr("net.spectators", n=self.net_spectators), True, GREY)
-            s.blit(img, img.get_rect(center=(WIDTH // 2, 665)))
+            s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 14)))
         self.draw_watch_banner()
         self.draw_chat()
         self.draw_net_notice()
         pygame.display.flip()
 
     def draw_team_lobby(self):
-        """Выбор по сети в 2×2: у каждой команды — её места (человек, бот или «свободно» — поставить бота,
-        пересесть) и герой команды: его выбирает капитан (★)."""
-        s = self.screen
-        s.fill(BG)
-        img = self.big.render(tr("team.title"), True, WHITE)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, 40)))
-        seats = self.net_seats
-        caps = getattr(self, "net_captains", {}) or {}
-        n, gap = len(HEROES), 12
-        w = min(150, (WIDTH - 40 - gap * (n - 1)) // n)
-        x0 = (WIDTH - n * w - (n - 1) * gap) // 2
-        for row, team in enumerate(("blue", "red")):
-            top = 80 + row * 255
-            team_seats = [team, team + "2"]
-            hero = (seats.get(team) or {}).get("hero") or (seats.get(team + "2") or {}).get("hero")
-            foe = "red" if team == "blue" else "blue"
-            foe_hero = (seats.get(foe) or {}).get("hero")
-            color = HERO_COLOR.get(hero, GREY)
-            img = self.font.render(tr("team.name." + team) + (f"  —  {tr('hero.' + hero)}" if hero else ""), True, color)
-            s.blit(img, (x0, top))
-            captain = caps.get(team) == self.me and self.me is not None
-            for k, pid in enumerate(team_seats):
-                seat = seats.get(pid) or {}
-                who = seat.get("who")
-                box = pygame.Rect(x0 + k * ((WIDTH - 2 * x0) // 2 + 6), top + 34, (WIDTH - 2 * x0) // 2 - 6, 40)
-                pygame.draw.rect(s, (26, 29, 40), box, border_radius=8)
-                pygame.draw.rect(s, color if who in ("human", "away") else (60, 64, 80), box, 1, border_radius=8)
-                if who in ("human", "away"):
-                    label = ("★ " if caps.get(team) == pid else "") + (seat.get("name") or "?")
-                    label += "  —  " + (tr("net.away") if who == "away" else
-                                        tr("pick.chosen") if seat.get("ready") else tr("pick.choosing"))
-                    if pid == self.me:
-                        label += "   (" + tr("net.you") + ")"
-                elif who == "bot":
-                    label = tr("name.bot")
-                else:
-                    label = tr("net.free_seat")
-                img = self.small.render(label, True, WHITE if who else GREY)
-                s.blit(img, img.get_rect(midleft=(box.x + 10, box.centery)))
-                if who in (None, "bot") and not self.watching:        # без человека — бот или пересесть
-                    bw = 110
-                    b1 = pygame.Rect(box.right - bw - 6, box.y + 6, bw, box.h - 12)
-                    self.small_button(b1, tr("team.remove_bot") if who == "bot" else tr("team.add_bot"),
-                                      lambda pid=pid, on=(who != "bot"): self.net_send({"type": "seat_bot", "seat": pid, "on": on}))
-                    b2 = b1.move(-bw - 6, 0)                    # пересесть можно на любое место без человека
-                    self.small_button(b2, tr("team.sit"), lambda pid=pid: self.net_send({"type": "switch", "seat": pid}))
-            for i, h in enumerate(HEROES):
-                card = pygame.Rect(x0 + i * (w + gap), top + 84, w, 150)
-                cur = hero == h
-                taken = foe_hero == h
-                if captain and not taken:
-                    self.hit(card, lambda h=h: self.choose_hero(h))
-                on = cur or (captain and not taken and self.hovered(card))
-                pygame.draw.rect(s, (40, 46, 66) if on else (26, 29, 40), card, border_radius=12)
-                pygame.draw.rect(s, HERO_COLOR[h] if cur else (60, 64, 80), card, 3 if cur else 1, border_radius=12)
-                draw_unit(s, HERO_SPRITE[h], (card.centerx, card.top + 56), 32, 1 if team == "blue" else -1,
-                          alpha=90 if taken else 255)
-                img = self.small.render(tr("hero." + h), True, HERO_COLOR[h] if not taken else GREY)
-                s.blit(img, img.get_rect(center=(card.centerx, card.top + 112)))
-                if taken:
-                    img = self.tiny_text.render(tr("pick.taken"), True, GREY)
-                    s.blit(img, img.get_rect(center=(card.centerx, card.top + 134)))
-        if self.watching:
-            self.button((WIDTH // 2, HEIGHT - 80), tr("net.btn_leave"), lambda: self.on_key(pygame.KSCAN_ESCAPE), w=200)
-        else:
-            self.button((WIDTH // 2 - 110, HEIGHT - 80), tr("net.btn_unready") if self.my_ready() else tr("net.btn_ready"),
-                        lambda: self.send_ready(not self.my_ready()), w=200)
-            self.button((WIDTH // 2 + 110, HEIGHT - 80), tr("net.btn_leave"), self.quit_match,
-                        w=200)
-        img = self.small.render(tr("team.hint", **self.hint_keys()), True, GREY)
-        s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 36)))
-        self.draw_watch_banner()
-        self.draw_chat()
-        self.draw_net_notice()
-        pygame.display.flip()
+        """Совместимость: 2×2 использует тот же сетевой выбор."""
+        self.draw_lobby()
 
     def small_button(self, rect, label, click):
         s = self.screen

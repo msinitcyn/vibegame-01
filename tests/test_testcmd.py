@@ -293,3 +293,32 @@ def test_test_with_bot_is_a_normal_game(game):
     game.menu_index = game.menu.index("test")
     game.menu_select()
     assert game.state == "pick" and game.pick_hp == MAX_HP
+
+
+def test_console_opens_without_bots_and_test_commands_are_locked(game):
+    set_lang("en")
+    game.start(config.TEST_HP, {"blue": "fire", "red": "frost"}, bot=False)
+    game.countdown = 0
+    try:
+        game.on_key(pygame.KSCAN_GRAVE)
+        assert game.chat_typing and game.console
+        game.chat_command("give lasso")
+        assert "lasso" not in game.match.blue.items and "bot" in game.chat_lines[-1][2]
+        game.on_key(pygame.KSCAN_GRAVE)
+        assert not game.chat_typing and not game.console
+    finally:
+        game.start()
+
+
+def test_console_test_commands_work_when_local_2v2_has_bots(game):
+    set_lang("en")
+    game.start(config.TEST_HP, mode="2v2")
+    game.countdown = 0
+    try:
+        assert game.has_bots()
+        game.on_key(pygame.KSCAN_GRAVE)
+        game.chat_command("give lasso")
+        assert "lasso" in game.match.blue.items
+    finally:
+        game.on_key(pygame.KSCAN_ESCAPE)
+        game.start()

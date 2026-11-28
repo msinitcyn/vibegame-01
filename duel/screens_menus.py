@@ -158,21 +158,25 @@ class MenuScreensMixin:
 
     PICK_ICON = 66                     # иконка мага в ряду выбора, пикс
 
-    def draw_pick_half(self, pid, area):
-        """Половина экрана одного игрока: подпись клавиш, ряд иконок магов, карточка выбранного."""
+    def draw_pick_half(self, pid, area, interactive=True, on_hero=None, label=None, bot=None):
+        """Половина экрана одного игрока: подпись клавиш, ряд иконок магов, карточка выбранного.
+        interactive/on_hero/label/bot переопределяют локальные подписи и обработку клика — этим пользуется
+        сетевой выбор, чтобы не держать второй интерфейс."""
         s = self.screen
         me, other = self.pick[pid], self.pick["red" if pid == "blue" else "blue"]
-        bot = self.side_is_bot(pid)
+        if bot is None:
+            bot = self.side_is_bot(pid)
         dev = self.side_device(pid)
         top = area.y
-        left, right, ok = self.pick_keys(pid)
-        first = (lambda ks: ks[0] if ks else None)          # клавиши можно снять — тогда «—»
-        if dev and dev.startswith("pad:"):
-            label = tr("pick.pad_line", n=int(dev[4:]) + 1)
-        else:
-            label = tr("pick.bot" if bot else "pick.keys",
-                       left=keys.label(first(left)), right=keys.label(first(right)),
-                       ok=" / ".join(keys.label(k) for k in ok[:1] + ok[-1:]) if ok else keys.label(None))
+        if label is None:
+            left, right, ok = self.pick_keys(pid)
+            first = (lambda ks: ks[0] if ks else None)          # клавиши можно снять — тогда «—»
+            if dev and dev.startswith("pad:"):
+                label = tr("pick.pad_line", n=int(dev[4:]) + 1)
+            else:
+                label = tr("pick.bot" if bot else "pick.keys",
+                           left=keys.label(first(left)), right=keys.label(first(right)),
+                           ok=" / ".join(keys.label(k) for k in ok[:1] + ok[-1:]) if ok else keys.label(None))
         img = self.small.render(label, True, WHITE)
         s.blit(img, img.get_rect(center=(area.centerx, top + 16)))
         # ряд иконок магов
@@ -182,8 +186,9 @@ class MenuScreensMixin:
             r = pygame.Rect(x0 + i * (size + gap), top + 34, size, size)
             cur = me["hero"] == hero
             taken = other["ok"] and other["hero"] == hero
-            self.hit(r, lambda pid=pid, hero=hero: self.pick_mouse(pid, hero, True),
-                     lambda pid=pid, hero=hero: self.pick_mouse(pid, hero))
+            if interactive:
+                self.hit(r, lambda pid=pid, hero=hero: (on_hero or self.pick_mouse)(pid, hero, True),
+                         lambda pid=pid, hero=hero: (on_hero or self.pick_mouse)(pid, hero))
             s.blit(self.land_picture(hero, r.size), r)
             shade = pygame.Surface(r.size, pygame.SRCALPHA)
             shade.fill((10, 10, 16, 150 if not cur else 60))
@@ -196,9 +201,10 @@ class MenuScreensMixin:
                 img = self.tiny_text.render(tr("pick.taken"), True, WHITE)
                 s.blit(img, img.get_rect(midbottom=(r.centerx, r.bottom - 2)))
         y = top + 34 + size + 12
-        self.draw_pick_card(pid, pygame.Rect(area.x + 18, y, area.w - 36, area.bottom - y - 8), bot)
+        self.draw_pick_card(pid, pygame.Rect(area.x + 18, y, area.w - 36, area.bottom - y - 8), bot,
+                            interactive=interactive)
 
-    def draw_pick_card(self, pid, card, bot):
+    def draw_pick_card(self, pid, card, bot, interactive=True):
         """Большая карточка героя: земля фоном, маг крупно (или сценка заклинания), имя, заклинания."""
         s = self.screen
         me = self.pick[pid]
@@ -228,17 +234,30 @@ class MenuScreensMixin:
         else:
             draw_unit(s, HERO_SPRITE[hero], (view.centerx, view.centery + 10), view.h * 0.42,
                       1 if pid == "blue" else -1)
-        img = self.big.render(tr("hero." + hero), True, color)
-        s.blit(img, img.get_rect(center=(card.centerx, view.bottom + 34)))
+        # Название фракции — в верхнем внутреннем углу карточки: у левого справа, у правого слева.
+        # Так оно не пересекается с рядом заклинаний внизу; шрифт — меньше прежнего большого.
+        left_side = str(pid).startswith("blue")
+        name = self.font.render(tr("hero." + hero), True, color)
+        nx = card.right - 10 if left_side else card.x + 10
+        ny = card.y + 9
+        name_rect = name.get_rect(topright=(nx, ny)) if left_side else name.get_rect(topleft=(nx, ny))
+        back = name_rect.inflate(10, 4)
+        back_surf = pygame.Surface(back.size, pygame.SRCALPHA)
+        back_surf.fill((8, 8, 14, 175))
+        s.blit(back_surf, back)
+        s.blit(name, name_rect)
         if me["ok"] or bot:
-            img = self.font.render(tr("pick.chosen") if me["ok"] else tr("pick.bot_side"), True, AMMO_COLOR)
-            s.blit(img, img.get_rect(center=(card.centerx, view.bottom + 72)))
+            status = self.small.render(tr("pick.chosen") if me["ok"] else tr("pick.bot_side"), True, AMMO_COLOR)
+            sy = name_rect.bottom + 3
+            status_rect = status.get_rect(topright=(nx, sy)) if left_side else status.get_rect(topleft=(nx, sy))
+            s.blit(status, status_rect)
         for kind, r in rects:
             sel = kind == focus
             pygame.draw.circle(s, (20, 22, 30), r.center, icon_r + 4)
             draw_icon(s, kind, r.center, icon_r)
             pygame.draw.circle(s, ITEMS[kind][1] if sel else (70, 74, 92), r.center, icon_r + 4, 3 if sel else 1)
-            self.hit(r, lambda pid=pid, kind=kind: self.pick_spell.__setitem__(pid, kind))
+            if interactive:
+                self.hit(r, lambda pid=pid, kind=kind: self.pick_spell.__setitem__(pid, kind))
         if focus:                                          # что делает заклинание
             name = self.font.render(item_name(focus), True, ITEMS[focus][1])
             s.blit(name, name.get_rect(center=(card.centerx, icons_y + icon_r + 22)))

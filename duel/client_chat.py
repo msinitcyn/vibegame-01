@@ -71,28 +71,44 @@ class ChatMixin:
     def chat_shown(self):
         return bool(self.net) or self.warmup or self.local_test()
 
+    def can_console(self):
+        """Консоль (~) — в любом игровом режиме, кроме просмотра и повтора."""
+        return (self.state == "play" and not getattr(self, "watching", False)
+                and not getattr(self, "replay", None))
+
+    def has_bots(self):
+        """Есть ли в текущей партии бот (тогда доступны тестовые команды)."""
+        if self.warmup:
+            return bool(getattr(self, "warm_bot", None))
+        if self.local_test():
+            return bool(self.test_bot)
+        if self.net:
+            return any((seat or {}).get("who") == "bot" for seat in (self.net_seats or {}).values())
+        return bool(getattr(self, "mates", {}) or getattr(self, "test_bot", None))
+
     def test_context(self):
         """Где выполнять тестовую команду: ("local", бот, мой цвет) — свой матч, ("net", None, мой цвет) —
-        сервер; None — не игра с ботом."""
-        if self.state != "play":
+        сервер; None — в партии нет ботов."""
+        if not self.has_bots():
             return None
         if self.warmup:
             return "local", self.warm_bot, self.me
         if self.local_test():
             return "local", self.test_bot, "blue"
-        if self.net and not self.watching and self.me in ("blue", "red"):
-            foe = "red" if self.me == "blue" else "blue"
-            if (self.net_seats.get(foe) or {}).get("who") == "bot":
-                return "net", None, self.me
-        return None
+        if self.net and not self.watching and self.me in ("blue", "red", "blue2", "red2"):
+            return "net", None, self.me
+        # 2×2 за одним компьютером: команды идут от синего, бот — любой из напарников
+        return "local", next(iter(getattr(self, "mates", {}).values()), None), "blue"
 
     def chat_key(self, sc):
         """Клавиша, пока открыт чат или консоль. True — клавиша съедена.
         T — одна строка (Enter — выполнить и закрыть), ~ — консоль (Enter — выполнить, ввод остаётся)."""
         if not self.chat_typing:
-            if (sc in self.chat_key_code() or sc == CONSOLE_KEY) and self.can_chat():    # и на паузе — команды
+            console = sc == CONSOLE_KEY and self.can_console()
+            chat = sc in self.chat_key_code() and self.can_chat()
+            if console or chat:
                 self.chat_typing, self.chat_text, self.chat_swallow = True, "", True
-                self.console, self.console_scroll = sc == CONSOLE_KEY, 0
+                self.console, self.console_scroll = console, 0
                 self.held.clear()
                 return True
             return False
@@ -277,13 +293,13 @@ class ChatMixin:
 
     def draw_chat(self):
         """Последние сообщения внизу слева (гаснут), пузыри над магами, поле ввода."""
-        if not self.chat_shown():
-            return
         now = time.monotonic()
         if self.console and self.chat_typing:
             if not self.net_waiting:
                 self.draw_bubbles(now)
             self.draw_console(now)
+            return
+        if not self.chat_shown():
             return
         self.draw_netstats()
         s = self.screen

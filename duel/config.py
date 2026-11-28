@@ -256,7 +256,7 @@ ITEM_SOUNDS = {"beam": ("sun-ray.mp3", 0.9), "firering": ("fire-ring.mp3", 0.45)
                "immune": ("oak-bark.mp3", 0.6),        # дубовая кора: скрип дерева
                "mobpeace": ("mob-truce.mp3", 0.6)}     # мир с мобами
 # звуки-циклы: играют, пока это происходит (шаги — маг идёт; чужая земля — горит; ледяная тропа — действует)
-LOOP_SOUNDS = {"steps": ("steps.mp3", 0.5), "enemy-land": ("enemy-land.mp3", 0.35), "ice-road": ("ice-road.mp3", 0.5)}
+LOOP_SOUNDS = {"steps": ("steps.mp3", 0.32), "enemy-land": ("enemy-land.mp3", 0.35), "ice-road": ("ice-road.mp3", 0.5)}
 LOOP_FADE_MS = 150
 HIT_SOUND = ("hit-into-body.mp3", 0.6)   # пуля попала в мага
 DEATH_SOUND = ("dying.mp3", 0.8)         # маг погиб (вылетает дух)

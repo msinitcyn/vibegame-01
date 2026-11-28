@@ -318,3 +318,13 @@ def test_shop_row_is_highlighted_under_cursor(game):
     game.ui_mouse = (hit["rect"].centerx, hit["rect"].centery + 500)
     game.draw()
     assert game.shop_hover is None
+
+
+def test_shop_works_in_2v2(game):
+    game.start(mode="2v2")
+    game.countdown = 0
+    stand(game.match, game.match.blue)
+    game.refresh_snap()
+    game.draw()
+    assert len(game.match.players) == 4 and game.shops_visible()
+    assert any(h["side"] == "blue" for h in game.shop_hits)

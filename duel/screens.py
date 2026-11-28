@@ -179,7 +179,7 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         """Магазины — в партии 1×1: локально, в разминке и по сети (если сервер умеет покупку)."""
         players = self.snap.get("players", [])
         if (self.state != "play" or getattr(self, "replay", None) or getattr(self, "watching", False)
-                or len(players) != 2 or self.snap.get("winner") or self.paused
+                or len(players) not in (2, 4) or self.snap.get("winner") or self.paused
                 or self.countdown_left() > 0 or (self.net and self.net_waiting)
                 or (self.net and not self.server_can("shop"))):
             return False
@@ -222,7 +222,7 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
             if shop is None:
                 continue
             stock = shop.get("stock", [])
-            x0 = 0 if side == "blue" else WIDTH - SHOP_WIDTH
+            x0 = 0 if side.startswith("blue") else WIDTH - SHOP_WIDTH
             y0 = TOP
             accent = pygame.Color(self.side_color(side))
             panel_h = 2 * SHOP_PAD + SHOP_ROW_H * len(stock)

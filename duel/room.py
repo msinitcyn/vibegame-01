@@ -440,10 +440,11 @@ class Room:
                 s.stats = clean_stats(msg.get("stats"))
             elif kind == "chat":              # чат: пересылаем обоим игрокам и зрителям
                 self.chat(pid, s, msg.get("text"), now)
-            elif kind == "test":              # тестовая команда — только в бою против бота
-                foe = next(x for x in PIDS if x != pid)
-                if self.phase == "play" and not self.match.winner and foe in self.bot_seats() \
-                        and testcmd.run(self.match, self.bots[foe], pid, msg):
+            elif kind == "test":              # тестовые команды — если в партии есть бот
+                bots = self.bot_seats()
+                bot = self.bots.get(bots[0]) if bots else None
+                if self.phase == "play" and not self.match.winner and bot is not None \
+                        and testcmd.run(self.match, bot, pid, msg):
                     self.rec().action(pid, {k: v for k, v in msg.items() if k != "type"})
                     self.log(f"{pid} тест: {msg.get('do')} {msg.get('kind') or msg.get('mode') or msg.get('use') or msg.get('on')}")
             elif kind == "menu":              # открыл/закрыл меню — игра у него идёт

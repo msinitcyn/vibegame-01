@@ -121,7 +121,7 @@ def test_own_server_lobby_buttons_and_pick(game):
     click(game, buttons[1][0].center)                 # Играть с ботом
     frames(game, lambda: game.net and game.net_seats.get("blue", {}).get("hero"))
     redraw(game, game.draw_lobby)
-    cards = [h for h in game.hits if h[0].h == 170]   # свой ряд — 6 карточек
+    cards = [h for h in game.hits if h[0].h == 66 and h[0].w == 66]   # ряд земель — 6 иконок
     assert len(cards) == 6
     click(game, cards[4][0].center)                   # Свет
     frames(game, lambda: game.net_seats["blue"]["hero"] == "light")
