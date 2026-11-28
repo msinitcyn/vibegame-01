@@ -99,7 +99,7 @@ def test_bullets_hits_burn_for_every_hero():
     from duel.config import HIT_SHOW
     for hero in V.STYLES:
         assert _drew(lambda s: V.draw_bullet(s, 200, 150, 0.5, hero, 1.3, 2, 4))
-        for on in ("mage", "mob", "zombie", "shield", "sentry", "guardian"):
+        for on in ("mage", "mob", "zombie", "shield", "sentry", "column"):
             assert _drew(lambda s: V.draw_hit(s, 200, 150, hero, on, HIT_SHOW * 0.3))
         assert _drew(lambda s: V.draw_burn(s, (200, 150), 14, hero, 0.7))
 

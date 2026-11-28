@@ -1,9 +1,8 @@
-"""Поле: нейтральная полоса, замедление, арена открыта; стражи арены."""
+"""Поле: нейтральная полоса, замедление, арена открыта; каменные колонны арены."""
 import math
 
 from duel.commands import Command
-from duel.config import (BULLET_DAMAGE, ARENA, ARENA_DPS, ARENA_R, BULLET_SPEED, FOE_LAND_DPS, GUARDIAN_HP, GUARDIAN_RESPAWN, MAX_HP,
-                         TOP)
+from duel.config import ARENA, ARENA_DPS, ARENA_R, BULLET_SPEED, FOE_LAND_DPS, MAX_HP, MOB_RADIUS, TOP
 from duel.entities import Bullet, zone_at
 from tests.conftest import DT, new_match, step
 
@@ -27,29 +26,8 @@ def test_neutral_strip_does_not_burn_arena_does():
     assert b.hp <= MAX_HP - FOE_LAND_DPS
 
 
-def guards(m, side):
+def columns(m, side):
     return {g.kind: g for g in m.guardians if g.side == side}
-
-
-def test_four_guardians_on_posts_asleep():
-    m = new_match()
-    assert len(m.guardians) == 4
-    left, right = guards(m, "blue"), guards(m, "red")
-    assert all(g.x < ARENA[0] for g in left.values()) and all(g.x > ARENA[0] for g in right.values())
-    assert left["ranged"].y < ARENA[1] < left["melee"].y
-    step(m, 0.5)
-    assert not any(g.awake for g in m.guardians) and m.mob_shots == []
-
-
-def test_statue_reflects_bullets():
-    m = new_match()
-    g = guards(m, "blue")["ranged"]
-    r = m.red
-    b = Bullet(g.x + 60, g.y, -BULLET_SPEED, 0, r)   # красный (вне арены) стреляет в статую
-    m.bullets = [b]
-    for _ in range(6):                               # долетела и отскочила (дальше её ждёт статуя напротив)
-        m.step(DT)
-    assert g.hp == GUARDIAN_HP and b.alive and b.vx > 0
 
 
 def walk_into_arena(m):
@@ -59,58 +37,66 @@ def walk_into_arena(m):
     step(m, DT)
 
 
-def test_guardians_wake_and_attack_their_player():
+def test_four_columns_on_posts_stay_still():
     m = new_match()
+    assert len(m.guardians) == 4
+    left, right = columns(m, "blue"), columns(m, "red")
+    assert all(g.x < ARENA[0] for g in left.values()) and all(g.x > ARENA[0] for g in right.values())
+    assert left["ranged"].y < ARENA[1] < left["melee"].y
+    posts = [(g.x, g.y) for g in m.guardians]
+    step(m, 1.0)
+    assert not any(g.awake for g in m.guardians) and m.mob_shots == []
+    assert [(g.x, g.y) for g in m.guardians] == posts
+
+
+def test_column_reflects_bullets_from_outside():
+    m = new_match()
+    g = columns(m, "blue")["ranged"]
+    b = Bullet(g.x + 60, g.y, -BULLET_SPEED, 0, m.red)   # красный (вне арены) стреляет в колонну
+    m.bullets = [b]
+    for _ in range(6):
+        m.step(DT)
+    assert g.hp == 1 and b.alive and b.vx > 0
+
+
+def test_columns_do_not_wake_inside_arena():
+    m = new_match()
+    m.blue.apply("firmground")                       # чтобы арена не жгла и не мешала проверке
     walk_into_arena(m)
-    left, right = guards(m, "blue"), guards(m, "red")
-    assert all(g.awake for g in left.values()) and not any(g.awake for g in right.values())
+    gs = columns(m, "blue")
+    posts = [(g.x, g.y) for g in gs.values()]
     hp = m.blue.hp
     step(m, 3.0)
-    assert m.blue.hp < hp                            # ближний бьёт, дальнобойный стреляет
-    mg = left["melee"]
-    assert math.hypot(mg.x - ARENA[0], mg.y - ARENA[1]) <= ARENA_R - mg.radius + 0.01   # из арены не выходит
+    assert not any(g.awake for g in gs.values()) and m.mob_shots == []
+    assert [(g.x, g.y) for g in gs.values()] == posts
+    assert m.blue.hp == hp
 
 
-def test_hurt_only_from_inside():
+def test_columns_are_invulnerable_from_inside():
     m = new_match()
     walk_into_arena(m)
-    g = guards(m, "blue")["melee"]
-    r = m.red                                        # красный снаружи — пули отскакивают
-    m.bullets = [Bullet(g.x + 50, g.y, -BULLET_SPEED, 0, r)]
-    m.step(DT)
-    m.step(DT)
-    assert g.hp == GUARDIAN_HP
-    b = m.blue                                       # синий в арене — ранит
-    m.bullets = [Bullet(g.x - 30, g.y, BULLET_SPEED, 0, b)]
+    g = columns(m, "blue")["melee"]
+    b = m.blue
+    bullet = Bullet(g.x - 30, g.y, BULLET_SPEED, 0, b)
+    m.bullets = [bullet]
     for _ in range(4):
         m.step(DT)
-    assert g.hp == GUARDIAN_HP - BULLET_DAMAGE
+    assert g.hp == 1 and bullet.alive
 
 
-def test_killed_drops_money_and_respawns():
-    m = new_match()
-    walk_into_arena(m)
-    g = guards(m, "blue")["ranged"]
-    g.hp = 1
-    m.hurt_guardian(g, 1)
-    assert not g.alive and m.money and not m.artifacts
-    assert zone_at(m.money[-1].x, m.money[-1].y) == "arena"
-    m.blue.x, m.blue.y = 100, 300                    # ушёл из арены
-    step(m, GUARDIAN_RESPAWN + 0.5)
-    assert g.alive and g.hp == GUARDIAN_HP and (g.x, g.y) == g.post
+def test_mobs_do_not_spawn_on_columns():
+    for seed in range(12):
+        m = new_match(seed=seed)
+        for _ in range(10):
+            m.spawn_mob_wave()
+        for mob in m.mobs:
+            assert all(math.hypot(mob.x - g.x, mob.y - g.y) > g.radius + MOB_RADIUS
+                       for g in m.guardians)
+        assert len(m.mobs) == 0 or all(math.hypot(m.x - ARENA[0], m.y - ARENA[1]) + m.radius <= ARENA_R
+                                       for m in m.mobs)
 
 
-def test_guardians_go_back_to_statues():
-    m = new_match()
-    walk_into_arena(m)
-    step(m, 1.0)
-    m.blue.x, m.blue.y = 100, 300
-    step(m, 3.0)
-    for g in guards(m, "blue").values():
-        assert not g.awake and math.hypot(g.x - g.post[0], g.y - g.post[1]) < 1
-
-
-def test_screen_draws_guardians_and_strip(game):
+def test_screen_draws_columns_and_strip(game):
     m = game.match
     m.blue.x, m.blue.y = ARENA[0] - 40, ARENA[1]
     m.step(DT, {"blue": Command()})

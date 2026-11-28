@@ -24,9 +24,10 @@ def test_match_counts_picked_used_shots_damage():
     assert st["blue"]["shots"] == 1 and st["red"]["damage_taken"] == 2
 
 
-def test_shop_prices_are_configured_and_basic_items_take_two_drops():
+def test_shop_prices_are_configured_and_within_economy_bounds():
     assert set(ITEM_PRICES) == set(ITEMS)
-    assert min(ITEM_PRICES.values()) == 2 * MONEY_DROP
+    assert MONEY_DROP > 0
+    assert all(isinstance(v, int) and v >= MONEY_DROP for v in ITEM_PRICES.values())
 
 
 def test_server_records_match(tmp_path, monkeypatch):

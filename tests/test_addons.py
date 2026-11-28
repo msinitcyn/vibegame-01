@@ -177,10 +177,35 @@ def test_clipboard_set_uses_external_tool_on_linux(monkeypatch):
         calls.append((cmd, kw.get("input")))
         return SimpleNamespace(returncode=0)
 
+    monkeypatch.setattr(client_menus.sys, "platform", "linux")
     monkeypatch.setattr(client_menus.shutil, "which", lambda name: "/usr/bin/" + name if name == "xclip" else None)
     monkeypatch.setattr(client_menus.subprocess, "run", fake_run)
     assert client_menus.clipboard_set("отчёт")
     assert calls == [(["xclip", "-selection", "clipboard", "-i"], "отчёт")]
+
+
+def test_economy_addon_apply_is_visible_and_idempotent(game, addon_dir, monkeypatch):
+    from duel.addons import TextView
+    m = fresh(game)
+    a = m.items["economy"]
+    m.set_enabled(a, True)
+    mod = a.module
+    calls = []
+    monkeypatch.setattr(mod.economy, "apply_to_config",
+                        lambda prices, drop: (calls.append((dict(prices), drop)), "/tmp/config.py")[1])
+    mod.state.update(prices={"wall": 30}, drop=8, done=True, applied=False,
+                     summary=["ИТОГ: изменено 1 цен, дроп 10 → 8", "  wall: 20 → 30"], lines=["отчёт"])
+    game.open_addon_screen(a, *a.screens[0])
+    game.draw_addon()
+    mod.apply_config()
+    assert mod.state["applied"] and "записано" in mod.state["status"] and len(calls) == 1
+    mod.apply_config()
+    assert len(calls) == 1
+    game.draw_addon()
+    text = next(r for r in game.addon_rows if isinstance(r, TextView))
+    assert text.lines[0].startswith("ИТОГ")
+    mod.state.update(prices=None, drop=None, done=False, applied=False, summary=[], lines=[], status="")
+    m.set_enabled(a, False)
 
 
 def test_economy_addon_screen_builds(game, addon_dir):

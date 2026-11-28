@@ -6,7 +6,7 @@ from duel.match import Match
 
 def test_arena_burns_one_per_second_shield_and_icewalk_save():
     m = Match(seed=1)
-    m.guardians, m.mobs, m.next_wave = [], [], 1e9     # только жжение арены, без стражей и мобов
+    m.guardians, m.mobs, m.next_wave = [], [], 1e9     # только жжение арены, без колонн и мобов
     b = m.blue
     b.x, b.y = ARENA
     for _ in range(int(2.05 * 60)):

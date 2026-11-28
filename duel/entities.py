@@ -10,10 +10,8 @@ from .config import (
     QUAKE_STUN,
     SPEEDSTEAL,
     SHOT_FLASH,
-    GUARDIAN_HP,
     GUARDIAN_POST,
     GUARDIAN_RADIUS,
-    GUARDIAN_SHOT_EVERY,
     ARENA_SLOW,
     FOE_LAND_SLOW,
     NEUTRAL_HALF,
@@ -364,7 +362,7 @@ class Player(Unit):
         self.y = max(TOP + r, min(BOTTOM - r, self.y))
 
     def random_spot(self, margin):
-        """Случайная точка на своей земле вне арены (для пачек патронов, стражей)."""
+        """Случайная точка на своей земле вне арены (для пачек патронов, лесных стражей)."""
         for _ in range(80):
             x = self.rng.uniform(self.land[0] + margin, self.land[1] - margin)
             y = self.rng.uniform(TOP + margin, BOTTOM - margin)
@@ -435,44 +433,27 @@ class Sentry:
 
 
 class Guardian:
-    """Страж арены: охраняет её от игрока side. Пока тот вне арены — статуя на посту (неуязвима,
-    пули отскакивают); игрок в арене — просыпается: ближний (melee) идёт к нему и бьёт, дальнобойный
-    (ranged) стреляет с поста. Ранить можно, только когда проснулся и бьющий сам в арене."""
+    """Колонна арены: стоит на посту, не просыпается и не нападает; пули отскакивают.
+    Имя класса историческое (раньше это были стражи, которые оживали)."""
 
     def __init__(self, side, kind):
         self.id = None
         self.side, self.kind = side, kind
         d = ARENA_R * GUARDIAN_POST / math.sqrt(2)
-        sx = -1 if side == "blue" else 1               # стражи левого игрока — в левой половине арены
-        sy = -1 if kind == "ranged" else 1             # дальнобойный — сверху, ближний — снизу
+        sx = -1 if side == "blue" else 1               # колонны левого игрока — в левой половине арены
+        sy = -1 if kind == "ranged" else 1             # верхняя/нижняя пара
         self.post = (ARENA[0] + sx * d, ARENA[1] + sy * d)
         self.x, self.y = self.post
         self.radius = GUARDIAN_RADIUS
-        self.hp = self.max_hp = GUARDIAN_HP
+        self.hp = self.max_hp = 1
         self.alive = True
-        self.respawn_at = 0.0
         self.awake = False
-        self.petrify = 0.0            # заснул — сколько ещё каменеет (анимация)
+        self.petrify = 0.0
         self.facing = -sx
-        self.hit_cd = self.windup = self.swing = 0.0
-        self.swing_dir, self.swing_hit = 0.0, False
-        self.shot_timer = GUARDIAN_SHOT_EVERY
         self.flash = 0.0
 
-    def revive(self):
-        self.x, self.y = self.post
-        self.hp = self.max_hp
-        self.alive, self.awake = True, False
-        self.windup = self.swing = self.hit_cd = 0.0
-
-    def hurt(self, n=1):
-        self.hp -= n
-        self.flash = 0.12
-        if self.hp <= 0:
-            self.alive = False
-
     def reflect(self, b):
-        """Отразить пулю от стража (по нормали к его поверхности) и вытолкнуть её наружу."""
+        """Отразить пулю от колонны (по нормали к её поверхности) и вытолкнуть её наружу."""
         nx, ny = b.x - self.x, b.y - self.y
         d = math.hypot(nx, ny) or 1.0
         nx, ny = nx / d, ny / d
@@ -528,7 +509,7 @@ class Bullet:
         self.wave_nx, self.wave_ny = 0.0, 1.0      # куда смещает волна (поперёк полёта)
         self.wave_w = 0.0
         self.wave_phase = 0.0
-        self.bounces = 0              # сколько раз отскочила от стенок поля (стражи и зеркало — не в счёт)
+        self.bounces = 0              # сколько раз отскочила от стенок поля (колонны и зеркало — не в счёт)
 
     def bounce(self):
         """Отскок от стенки поля; сверх BULLET_WALL_BOUNCES — пуля гаснет."""

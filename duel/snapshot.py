@@ -102,10 +102,7 @@ def _snapshot(match):
                    "life": _t(t.life),
                    "start": _xy(t.start), "len": _xy(t.length)} for t in m.trees],
         "guardians": [{"id": g.id, "side": g.side, "kind": g.kind, "x": _xy(g.x), "y": _xy(g.y),
-                       "r": _xy(g.radius), "hp": g.hp, "max_hp": g.max_hp, "awake": g.awake,
-                       "facing": g.facing, "flash": _t(g.flash), "windup": _t(g.windup), "swing": _t(g.swing),
-                       "swing_dir": _t(g.swing_dir), "swing_hit": g.swing_hit,
-                       "petrify": _t(g.petrify)}
+                       "r": _xy(g.radius), "facing": g.facing}
                       for g in m.guardians if g.alive],
         "rings": [{"id": r.id, "owner": r.owner.id, "x": _xy(r.x), "y": _xy(r.y), "life": _t(r.life)}
                   for r in m.rings],

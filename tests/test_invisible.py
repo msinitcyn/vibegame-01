@@ -1,4 +1,4 @@
-"""«Невидимость» Света: мобы, зомби, лесные стражи и стражи арены мага не замечают."""
+"""«Невидимость» Света: мобы, зомби и лесные стражи мага не замечают; колонны арены всегда неподвижны."""
 from duel.config import ARENA, DURATION, HERO_ONLY_ITEMS
 from duel.entities import Mob
 from tests.conftest import new_match, step
@@ -22,12 +22,12 @@ def test_mobs_lose_invisible_target():
     assert "invisible" not in b.effects
 
 
-def test_guardians_stay_statues_for_invisible():
+def test_columns_stay_still_for_invisible():
     m = new_match()
     b = m.blue
     b.x, b.y, b.hp = ARENA[0] - 40, ARENA[1], 1000
     b.apply("invisible")
-    b.apply("icewalk")                               # арена жжёт — ледяная тропа спасает (тут проверяем стражей)
+    b.apply("icewalk")                               # арена жжёт — ледяная тропа спасает (тут проверяем колонны)
     step(m, 1.0)
     assert not any(g.awake for g in m.guardians)
     hp = b.hp

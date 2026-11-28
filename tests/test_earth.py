@@ -50,7 +50,7 @@ def test_firmground_arena_does_not_burn():
     assert zone_at(b.x, b.y) == "arena" and m.danger(b) == (ARENA_DPS, "arena")
     m.apply_item(b, "firmground")
     assert m.danger(b) == (0, None)
-    m.guardians = []                                     # стражи арены бьют сами по себе — не о том
+    m.guardians = []                                     # колонны арены не бьют — не о том
     hp = b.hp
     run(m, 3)
     assert b.hp == hp

@@ -1,6 +1,4 @@
 """Отскоки пуль от стенок (не больше трёх), заморозка тает от попаданий, «Твёрдая почва» — свой для мобов."""
-import math
-
 from duel.config import ARENA, BOTTOM, BULLET_R, BULLET_WALL_BOUNCES, DURATION, FREEZE_BREAK_DAMAGE, TOP, WIDTH
 from duel.entities import Bullet, Mob
 from tests.conftest import DT, new_match, step
@@ -32,7 +30,7 @@ def test_bullet_dies_on_third_wall():
 
 def test_mirror_bounce_is_not_counted():
     m = new_match()
-    m.guardians = []                              # только зеркало: стражи арены не рикошетят пулю
+    m.guardians = []                              # только зеркало: колонны арены не рикошетят пулю
     r = m.red
     m.apply_item(r, "wall")
     w = m.walls[0]
@@ -65,7 +63,7 @@ def test_land_burn_does_not_thaw_freeze():
     assert b.hp < b.max_hp and "freeze" in b.effects
 
 
-def test_firmground_guardians_sleep():
+def test_firmground_does_not_wake_columns():
     m = new_match()
     m.set_heroes({"blue": "earth", "red": "fire"})
     b = m.blue
@@ -75,7 +73,7 @@ def test_firmground_guardians_sleep():
     assert not any(g.awake for g in m.guardians if g.side == "blue")
     del b.effects["firmground"]
     step(m)
-    assert any(g.awake for g in m.guardians if g.side == "blue")
+    assert not any(g.awake for g in m.guardians if g.side == "blue")
 
 
 def test_firmground_breaks_when_earth_attacks_a_mob():
@@ -89,23 +87,6 @@ def test_firmground_breaks_when_earth_attacks_a_mob():
     assert "firmground" not in b.effects and calm.target is b
 
 
-def test_firmground_turns_awake_guardians_back_to_statues():
-    from duel.config import GUARDIAN_PETRIFY
-    m = new_match()
-    m.set_heroes({"blue": "earth", "red": "fire"})
-    b = m.blue
-    b.x, b.y = ARENA
-    step(m)
-    mine = [g for g in m.guardians if g.side == "blue"]
-    assert all(g.awake for g in mine)
-    m.apply_item(b, "firmground")
-    step(m)
-    assert not any(g.awake for g in mine) and all(g.petrify > 0 for g in mine)     # каменеют
-    step(m, GUARDIAN_PETRIFY)
-    assert all(g.petrify == 0 and not g.awake for g in mine)
-    assert math.isclose(m.danger(b)[0], 0)
-
-
 def test_demo_view_keeps_box_proportions():
     from duel.scene import fit_view
     assert fit_view((340, 90, 640, 150), 2.0, (0, 84, 1000, 640)) == (340, 84, 640, 320)   # шире — выше
@@ -114,14 +95,9 @@ def test_demo_view_keeps_box_proportions():
     assert w == 2 * h and x + w <= 1000 and y + h <= 724                       # за край поля не выходит
 
 
-def test_firmground_demo_shows_guardians_waking_and_petrifying():
+def test_firmground_demo_shows_static_columns():
     from duel import demos
     d = demos.Demo(demos.load("firmground"))
-    woke = slept_after = False
     while d.t < d.length - 0.1:
         d.update(1 / 60)
-        gs = d.match.guardians
-        woke = woke or any(g.awake for g in gs)
-        if "firmground" in d.match.blue.effects and d.t > 3.6:
-            slept_after = slept_after or not any(g.awake for g in gs)
-    assert d.match.guardians and woke and slept_after
+        assert d.match.guardians and not any(g.awake for g in d.match.guardians)

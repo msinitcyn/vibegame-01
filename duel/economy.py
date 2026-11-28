@@ -16,7 +16,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from . import config, lab, tuning
-from .config import RETIRED_ITEMS
+from .config import GEAR_ITEMS, GEAR_STACK, RETIRED_ITEMS
 
 
 def active_items():
@@ -76,10 +76,11 @@ def analyze(rs):
                 it["hero_use"][h][1] += won
                 it["use_wins"] += won
     for kind, it in items.items():
+        it["passive"] = kind in GEAR_ITEMS
         it["buy_rate"] = it["buyers"] / (2 * n)
-        it["use_rate"] = it["used"] / it["bought"] if it["bought"] else 0.0
+        it["use_rate"] = None if it["passive"] else (it["used"] / it["bought"] if it["bought"] else 0.0)
         it["win_buy"] = it["buy_wins"] / it["buyers"] if it["buyers"] else 0.0
-        it["win_use"] = it["use_wins"] / it["use_buyers"] if it["use_buyers"] else 0.0
+        it["win_use"] = None if it["passive"] else (it["use_wins"] / it["use_buyers"] if it["use_buyers"] else 0.0)
         # средняя поправка на героя: item winrate минус winrate этого героя
         delta, weight = 0.0, 0
         for h, (hn, hw) in it["hero_buy"].items():
@@ -106,8 +107,9 @@ def propose(report, prices, drop, step=5, floor=10, cap=60, drop_step=1, drop_fl
         it = report["items"].get(kind, {})
         price = new[kind]
         bought = it.get("bought", 0)
+        buyers = it.get("buyers", 0)
         buy_rate = it.get("buy_rate", 0.0)
-        use_rate = it.get("use_rate", 0.0)
+        use_rate = it.get("use_rate")
         delta = it.get("delta", 0.0)
         if bought == 0:
             if price > floor:
@@ -115,13 +117,24 @@ def propose(report, prices, drop, step=5, floor=10, cap=60, drop_step=1, drop_fl
                 notes.append(f"{kind}: не покупают → {new[kind]}")
             else:
                 notes.append(f"{kind}: не покупают даже на минимуме — чинить артефакт/бота")
-        elif buy_rate >= 0.12 and delta >= 0.04 and price < cap:
-            new[kind] = min(cap, price + step)
-            notes.append(f"{kind}: сильный и частый (Δ{delta:+.0%}) → {new[kind]}")
+                continue
         elif buy_rate <= 0.02 and price > floor:
             new[kind] = max(floor, price - step)
             notes.append(f"{kind}: почти не покупают → {new[kind]}")
-        if bought >= 10 and use_rate < 0.5:
+        else:
+            # сила с поправкой на героя, сжатая для малых выборок: n/(n+20)
+            strength = delta * buyers / (buyers + 20)
+            if abs(strength) >= 0.015:
+                want = price * (1 + 3.0 * strength)
+                want = max(floor, min(cap, want))
+                stepped = int(round(want / step) * step)
+                if stepped == price and abs(want - price) >= step * 0.6:
+                    stepped = price + (step if want > price else -step)
+                stepped = max(floor, min(cap, stepped))
+                if stepped != price:
+                    new[kind] = stepped
+                    notes.append(f"{kind}: сила {delta:+.0%} (n={buyers}) → {stepped}")
+        if use_rate is not None and bought >= 10 and use_rate < 0.5:
             notes.append(f"{kind}: покупают, но применяют {use_rate:.0%} — проблема применения")
     if report["purchases"] > target[1] and drop > drop_floor:
         drop = max(drop_floor, drop - drop_step)
@@ -144,10 +157,15 @@ def report_lines(report, prices, drop):
              "артефакт       цена  куплено  на 100  use%   Δwin   применений"]
     for kind in sorted(active_items(), key=lambda k: -report["items"].get(k, {}).get("buyers", 0)):
         it = report["items"].get(kind, {})
+        passive = kind in GEAR_ITEMS
+        use = "  —" if it.get("use_rate") is None else f"{100 * it['use_rate']:3.0f}%"
+        used = "    —" if passive else f"{it.get('used', 0):5}"
         lines.append(f"{kind:12} {prices.get(kind, 0):5}  {it.get('bought', 0):7}  "
-                     f"{100 * it.get('buy_rate', 0):5.1f}  {100 * it.get('use_rate', 0):4.0f}  "
-                     f"{100 * it.get('delta', 0):+5.0f}%  {it.get('used', 0):5}")
+                     f"{100 * it.get('buy_rate', 0):5.1f}  {use}  "
+                     f"{100 * it.get('delta', 0):+5.0f}%  {used}")
     lines.append(f"дроп: {drop}")
+    lines.append(f"снаряжение (boots/armor/gun/sword) — пассивное, до {GEAR_STACK} каждого; "
+                 "use% для него не считается")
     return lines
 
 

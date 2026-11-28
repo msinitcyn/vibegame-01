@@ -9,7 +9,6 @@ import pygame
 
 from .config import (
     DURATION,
-    GUARDIAN_PETRIFY,
     CLEANSE_FX,
     HEAL_FX,
     WEAPON_TIME,
@@ -562,35 +561,16 @@ def draw_fire_ring(surf, ring, t):
 
 
 def draw_guardian(surf, g, font, heroes):
-    """Страж арены: спит — серая каменная статуя на постаменте; проснулся — живой, с кольцом цвета
-    игрока, на которого охотится, и полоской жизней."""
+    """Колонна арены: каменная статуя на постаменте, пули отскакивают."""
     pos = _pos(g)
     r = g["r"]
     pygame.draw.ellipse(surf, (16, 12, 20), (pos[0] - r - 4, pos[1] + r * 0.55, 2 * r + 8, r * 0.7))
     pygame.draw.ellipse(surf, (110, 110, 120), (pos[0] - r - 2, pos[1] + r * 0.6, 2 * r + 4, r * 0.55))
-    if g["awake"]:
-        draw_mob_attack(surf, g, font)
-        pygame.draw.circle(surf, side_color(heroes, g["side"]), pos, int(r) + 5, 3)
-    draw_unit(surf, "mob_ranged" if g["kind"] == "ranged" else "mob", pos, r, g["facing"],
-              white=g["flash"] > 0)
-    if not g["awake"]:                            # статуя: серый камень поверх (засыпает — каменеет снизу вверх)
-        k = 1.0 - g.get("petrify", 0) / GUARDIAN_PETRIFY
-        size = int(2 * r + 4)
-        stone = pygame.Surface((size, size), pygame.SRCALPHA)
-        pygame.draw.circle(stone, (150, 150, 160, 170), (size // 2,) * 2, int(r + 1))
-        if k < 1:
-            h = int(size * k)
-            pygame.draw.line(stone, (230, 230, 240, 230), (0, size - h), (size, size - h), 2)   # край камня
-            stone.fill((0, 0, 0, 0), (0, 0, size, size - h))
-            for i in range(6):                    # каменная крошка разлетается от края
-                a = i * math.pi / 3 + k * 2
-                d = r * (0.6 + 0.9 * k)
-                pygame.draw.circle(surf, (170, 170, 180), (int(pos[0] + math.cos(a) * d),
-                                                           int(pos[1] + r - 2 * r * k + math.sin(a) * d * 0.4)), 2)
-        surf.blit(stone, stone.get_rect(center=pos))
-        return
-    fx_mage.draw_hp_bar(surf, pos[0], fx_mage.hp_bar_top(pos[1], r), g["hp"], g["max_hp"], 0,
-                        side_color(heroes, g["side"]), g["flash"] > 0, font)    # как у мобов: секции и число
+    draw_unit(surf, "mob_ranged" if g["kind"] == "ranged" else "mob", pos, r, g["facing"])
+    size = int(2 * r + 4)
+    stone = pygame.Surface((size, size), pygame.SRCALPHA)
+    pygame.draw.circle(stone, (150, 150, 160, 170), (size // 2,) * 2, int(r + 1))
+    surf.blit(stone, stone.get_rect(center=pos))
 
 
 def draw_shop(surf, shop, heroes):

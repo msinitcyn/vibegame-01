@@ -110,7 +110,7 @@ def draw_bullet(surf, x, y, angle, hero, time, seed=0, radius=4):
 
 
 def draw_hit(surf, x, y, hero, on, age):
-    """Попадание пули героя hero во что-то (on: mage, mob, zombie, shield, sentry, guardian), age — сколько прошло."""
+    """Попадание пули героя hero во что-то (on: mage, mob, zombie, shield, sentry, column), age — сколько прошло."""
     P = params("bullets")
     style, core, body, edge, _ = _style(hero)
     k = max(0.0, min(1.0, age / HIT_SHOW))
