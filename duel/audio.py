@@ -149,10 +149,15 @@ class Audio:
         if not self.enabled:
             return
         self.apply_music_volume()
-        for key, channel in self.loops.items():   # звучащие циклы — сразу с новой громкостью
-            snd = self.loop_sounds.get(key[-1])
-            if snd is not None:
-                channel.set_volume(self.volume_of(snd))
+        if self.sfx_level <= 0:                   # тишина: циклы не дожидаются fade-in
+            for channel in list(self.loops.values()):
+                channel.stop()
+            self.loops.clear()
+        else:
+            for key, channel in self.loops.items():   # звучащие циклы — сразу с новой громкостью
+                snd = self.loop_sounds.get(key[-1])
+                if snd is not None:
+                    channel.set_volume(self.volume_of(snd))
 
     def apply_music_volume(self):
         """Громкость музыки: уровень из настроек × MUSIC_VOLUME × громкость этого трека (MUSIC_GAIN)."""
@@ -228,7 +233,10 @@ class Audio:
 
     def play(self, snd, **kw):
         """Проиграть звук с нужной громкостью. Громкость ставится и на канал: в браузере громкость
-        самого звука не действует — без этого всё звучало на полную."""
+        самого звука не действует — без этого всё звучало на полную. При нулевой громкости звук
+        вообще не запускается: иначе fade-in успевает дать слышимый щелчок/шаг."""
+        if self.sfx_level <= 0:
+            return None
         channel = snd.play(**kw)
         if channel is not None:
             try:
@@ -256,6 +264,11 @@ class Audio:
     def set_loops(self, wanted):
         """Звуки-циклы: wanted — {(откуда, кто, звук)}; новые — включить, пропавшие — плавно выключить."""
         if not self.enabled:
+            return
+        if self.sfx_level <= 0:                  # тишина: новые циклы не начинаем, старые глушим
+            for channel in self.loops.values():
+                channel.stop()
+            self.loops.clear()
             return
         for key in list(self.loops):
             if key not in wanted or not self.loops[key].get_busy():

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from duel.brain import LEVELS, STYLES, SmartBot
 from duel.commands import Command
-from duel.entities import Bullet, zone_at
+from duel.entities import Bullet, Money, zone_at
 from duel.match import STEP, Match
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
@@ -168,19 +168,48 @@ def test_icewalk_arena_neither_burns_nor_slows():
 
 
 def test_earth_uses_firmground_to_loot_arena():
-    """Земля с «Твёрдой почвой» и лутом в арене — надевает почву и идёт в арену за ним."""
+    """Земля с «Твёрдой почвой» и деньгами в арене — надевает почву и идёт в арену за ними."""
     from duel.config import ARENA
-    from duel.entities import Artifact, zone_at
     m = Match(seed=5, heroes={"blue": "earth", "red": "fire"})
     m.mobs.clear()
     m.blue.x, m.blue.y = ARENA[0] - 230, ARENA[1]
     m.red.x, m.red.y = 950, 650
     m.blue.add_item("firmground")
-    m.artifacts.append(Artifact(ARENA[0] - 60, "triple", ARENA[1]))
+    m.money.append(Money(ARENA[0] - 60, ARENA[1], 30))
     assert zone_at(ARENA[0] - 60, ARENA[1]) == "arena"
     bot = SmartBot(m, "blue", "hard", 1)
     run(m, {"blue": bot, "red": Idle()}, 4.0)
-    assert m.stats["blue"]["used"].get("firmground") and m.stats["blue"]["picked"].get("triple")
+    assert m.stats["blue"]["used"].get("firmground") and m.blue.money >= 30
+
+
+def test_bot_collects_money_and_buys_in_own_shop():
+    m = Match(seed=5, heroes={"blue": "frost", "red": "fire"})
+    m.mobs.clear()
+    m.next_wave = 1e9
+    m.ammo_packs.clear()
+    m.money = [Money(m.blue.x, m.blue.y, 30)]
+    m.red.x, m.red.y = 900, 650
+    bot = SmartBot(m, "blue", "hard", 1)
+    run(m, {"blue": bot, "red": Idle()}, 3.0)
+    assert m.blue.money < 30 and m.stats["blue"]["picked"]
+
+
+def test_bot_buys_from_enemy_shop_and_ignores_short_money():
+    m = Match(seed=5, heroes={"blue": "frost", "red": "fire"})
+    m.mobs.clear()
+    m.next_wave = 1e9
+    m.ammo_packs.clear()
+    shop = next(s for s in m.shops if s.kind == "red")
+    m.blue.x, m.blue.y = shop.x, shop.y
+    m.blue.money = 30
+    bot = SmartBot(m, "blue", "hard", 1)
+    run(m, {"blue": bot, "red": Idle()}, 1.0)
+    assert m.blue.money == 10 and m.stats["blue"]["picked"].get("triple")
+    m.stats["blue"]["picked"].clear()
+    m.blue.money = 5
+    m.blue.x, m.blue.y = shop.x, shop.y
+    run(m, {"blue": bot, "red": Idle()}, 1.0)
+    assert m.blue.money == 5 and not m.stats["blue"]["picked"]
 
 
 def test_bot_steals_ammo_pack_near_border():

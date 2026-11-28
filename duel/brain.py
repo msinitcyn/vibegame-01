@@ -13,8 +13,8 @@ import math
 import random
 from collections import deque
 
-from .config import (ARENA, NEUTRAL_HALF, BOTTOM, BULLET_R, BULLET_SPEED, FIRE_RING_RANGE, MELEE_RANGE, MOB_SHOT_R, MOB_SHOT_SPEED, TOP,
-                     WALL_RANGE, WIDTH, ZOMBIE_RADIUS)
+from .config import (ARENA, NEUTRAL_HALF, BOTTOM, BULLET_R, BULLET_SPEED, FIRE_RING_RANGE, GEAR_ITEMS, GEAR_STACK,
+                     ITEM_PRICES, MELEE_RANGE, MOB_SHOT_R, MOB_SHOT_SPEED, TOP, WALL_RANGE, WIDTH, ZOMBIE_RADIUS)
 from . import field
 from .entities import in_arena, zone_at
 from .items import BAD_EFFECTS, ITEMS
@@ -101,6 +101,7 @@ class SmartBot:
         self.aim = None
         self.strafe = self.rng.choice((-1, 1))
         self.item_cd = 0.0
+        self.buy_cd = 0.0
         self.bound_to = self.match
 
     @property
@@ -162,6 +163,9 @@ class SmartBot:
             return (0, 0), False, False, None, None, None
         foe, foe_vel, threats = self.perceived()
         self.item_cd = max(0.0, self.item_cd - STEP)
+        self.buy_cd = max(0.0, self.buy_cd - STEP)
+        if self.buy_cd <= 0 and self.try_buy(me):
+            self.buy_cd = 0.5
         self.think_left -= STEP
         if self.think_left <= 0:
             self.think_left = self.L["think"] * self.rng.uniform(0.8, 1.2)
@@ -255,6 +259,14 @@ class SmartBot:
             if a.life < 4 and d / max(1.0, me.speed) < a.life:   # скоро пропадёт, а успеваем — не пропускать
                 score += 0.3
             options.append((score, "ammo", (a.x, a.y)))
+        money = self.nearest_money(me)
+        if money:                                     # деньги с мобов — на них покупаются артефакты
+            d = math.hypot(money[0] - me.x, money[1] - me.y)
+            options.append((max(1.0, 1.55 - d / 900), "money", money))
+        shop, value = self.best_shop(me)
+        if shop is not None:                          # есть деньги и нужный товар — дойти до магазина
+            d = math.hypot(shop.x - me.x, shop.y - me.y)
+            options.append((1.15 + min(0.35, value * 0.1) - d / 1400, "shop", (shop, value)))
         if steal is not None:                         # пачка у самой границы на чужой земле — украсть
             options.append((1.05 + 1.0 * need + (STICK if stealing else 0.0), "steal", steal))
         if firm_loot := self.arena_loot(me):          # «Твёрдая почва» действует — бегом за лутом в арену
@@ -280,8 +292,15 @@ class SmartBot:
         if goal != self.goal:
             self.goal_since = self.match.match_time       # с какого времени этим делом занят (ИИ видит)
         self.goal = goal
-        if goal in ("pickup", "ammo", "home"):
+        if goal in ("pickup", "ammo", "home", "money"):
             self.move = self.step_toward(me, data)
+            self.pick_target(me, foe)
+        elif goal == "shop":
+            shop = data[0]
+            if self.match.shop_for(me) is shop:
+                self.move = (0, 0)                    # уже стоим на магазине — покупка идёт в _act
+            else:
+                self.move = self.step_toward(me, (shop.x, shop.y), anywhere=True)
             self.pick_target(me, foe)
         elif goal == "steal":                         # за чужой пачкой — напрямик (обжечься немного можно)
             self.move = self.step_toward(me, data, anywhere=True)
@@ -349,24 +368,83 @@ class SmartBot:
         return (z == "arena" and "firmground" not in me.effects) or z not in (me.team, "neutral", "arena")
 
     def wants_hot_ground(self, me, foe):
-        """Есть ли зачем на жгучую землю: соперник там рядом или там лежит артефакт."""
+        """Есть ли зачем на жгучую землю: соперник, деньги или артефакт рядом."""
         if foe is not None and math.hypot(foe[0] - me.x, foe[1] - me.y) < 520 and self.hot_for(me, *foe):
             return True
-        return any(self.hot_for(me, a.x, a.y) and math.hypot(a.x - me.x, a.y - me.y) < 400
-                   for a in self.match.artifacts)
+        points = [(a.x, a.y) for a in self.match.artifacts] + [(c.x, c.y) for c in self.match.money]
+        return any(self.hot_for(me, x, y) and math.hypot(x - me.x, y - me.y) < 400 for x, y in points)
 
-    def arena_artifacts(self, me):
-        """Артефакты в арене мобов не дальше ARENA_LOOT_RANGE."""
-        return [a for a in self.match.artifacts if zone_at(a.x, a.y) == "arena"
-                and math.hypot(a.x - me.x, a.y - me.y) < ARENA_LOOT_RANGE]
+    def arena_money(self, me):
+        """Деньги в арене мобов не дальше ARENA_LOOT_RANGE."""
+        return [c for c in self.match.money if zone_at(c.x, c.y) == "arena"
+                and math.hypot(c.x - me.x, c.y - me.y) < ARENA_LOOT_RANGE]
 
     def arena_loot(self, me):
-        """Под «Твёрдой почвой» — ближайший артефакт в арене (или None)."""
+        """Под «Твёрдой почвой» — ближайшие деньги в арене (или None)."""
         if "firmground" not in me.effects:
             return None
-        arts = self.arena_artifacts(me)
-        a = min(arts, key=lambda a: math.hypot(a.x - me.x, a.y - me.y)) if arts else None
-        return (a.x, a.y) if a else None
+        coins = self.arena_money(me)
+        c = min(coins, key=lambda c: math.hypot(c.x - me.x, c.y - me.y)) if coins else None
+        return (c.x, c.y) if c else None
+
+    def nearest_money(self, me, limit=700):
+        """Ближайшие деньги, до которых можно безопасно дойти."""
+        return self.nearest_safe(me, [(c.x, c.y) for c in self.match.money if c.life > 0.3], limit)
+
+    def shop_want(self, me, shop):
+        """Что из этого магазина бот хочет и может купить прямо сейчас."""
+        if me.money <= 0:
+            return []
+        have = {k for k in me.items if k} | set(me.queue)
+        out = []
+        for kind in self.match.shop_stock(shop):
+            if kind in have:
+                continue
+            if kind in GEAR_ITEMS:
+                if me.gear.count(kind) >= GEAR_STACK:
+                    continue
+            elif not self.match.can_carry(me, kind):
+                continue
+            price = ITEM_PRICES.get(kind)
+            if price is not None and price <= me.money:
+                out.append(kind)
+        return out
+
+    @staticmethod
+    def item_value(me, shop, kind):
+        """Насколько боту нужен товар: своя земля важнее чужой, снаряжение — всегда полезно."""
+        if kind in GEAR_ITEMS:
+            return 2.6
+        if shop.kind == me.team:
+            return 3.0
+        if shop.kind in ("neutral_tl", "neutral_br"):
+            return 2.0
+        return 1.4
+
+    def best_shop(self, me):
+        """Лучший магазин, где есть желанный и доступный товар: (Shop, ценность) или (None, 0)."""
+        best, best_score = None, 0.0
+        for shop in self.match.shops:
+            want = self.shop_want(me, shop)
+            if not want:
+                continue
+            value = max(self.item_value(me, shop, kind) for kind in want)
+            d = math.hypot(shop.x - me.x, shop.y - me.y)
+            score = value - d / 1400
+            if best is None or score > best_score:
+                best, best_score = shop, score
+        return best, max(0.0, best_score)
+
+    def try_buy(self, me):
+        """Стоим на магазине — купить самый нужный товар из его ассортимента."""
+        shop = self.match.shop_for(me)
+        if shop is None:
+            return False
+        want = self.shop_want(me, shop)
+        if not want:
+            return False
+        kind = max(want, key=lambda k: self.item_value(me, shop, k))
+        return self.match.buy(me, kind)
 
     def steal_target(self, me, foe):
         """Пачка на чужой земле у самой границы (не глубже STEAL_DEPTH), путь — не через арену, соперник не рядом,
@@ -582,8 +660,8 @@ class SmartBot:
             elif kind == "wall":
                 ok = foe is not None and fd < 600 and self.threat_score(me.x, me.y, self.perceived()[2], 1.0) > 0
                 reach = min(WALL_RANGE, max(90, fd * 0.4))
-            elif kind == "firmground":            # «Твёрдая почва» — за лутом в арену мобов (там его обычно много)
-                ok = bool(self.arena_artifacts(me)) and "firmground" not in me.effects
+            elif kind == "firmground":            # «Твёрдая почва» — за деньгами в арену мобов
+                ok = bool(self.arena_money(me)) and "firmground" not in me.effects
             elif kind == "icewalk":               # тропа — чтобы зайти туда, где жжёт: к сопернику или артефакту
                 ok = self.wants_hot_ground(me, foe)
             elif kind == "foe_freeze":            # заморозка: добить самому, отдать мобам или остановить натиск

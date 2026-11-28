@@ -67,6 +67,28 @@ def test_switching_demo_stops_its_sounds(game, monkeypatch):
     assert len(stopped) == n + 2
 
 
+def test_sfx_zero_does_not_start_loops_or_oneshots(game):
+    a = game.audio
+    if not a.enabled:
+        pytest.skip("нет звука")
+    old = (a.music_level, a.sfx_level)
+    try:
+        a.set_volumes(0, 5)
+        a.set_loops({("play", "blue", "steps")})
+        assert a.loops
+        a.set_volumes(0, 0)
+        assert not a.loops
+        a.set_loops({("play", "blue", "steps")})
+        assert not a.loops
+        assert a.play(a.loop_sounds["steps"]) is None
+        a.set_volumes(0, 5)
+        a.set_loops({("play", "blue", "steps")})
+        assert ("play", "blue", "steps") in a.loops
+    finally:
+        a.set_loops(set())
+        a.set_volumes(*old)
+
+
 def test_hit_on_mage_sounds():
     from duel.entities import Bullet
     from duel.match import Match

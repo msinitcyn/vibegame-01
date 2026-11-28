@@ -68,11 +68,11 @@ def test_slot_labels_follow_keys(game):
     assert game.settings["keys"] == {} and game.slot_key("blue", 0) == "1"
 
 
-def test_volume_rows(game):
+def test_volume_rows(game, monkeypatch):
     calls = []
-    game.audio.set_volumes = lambda music=None, sfx=None: calls.append((music, sfx))
+    monkeypatch.setattr(game.audio, "set_volumes", lambda music=None, sfx=None: calls.append((music, sfx)))
     played = []
-    game.audio.melee = lambda: played.append(1)
+    monkeypatch.setattr(game.audio, "melee", lambda: played.append(1))
     game.state = "settings"
     game.settings_index = game.settings_rows.index("music")
     for _ in range(3):
