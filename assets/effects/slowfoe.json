@@ -1,0 +1,9 @@
+{
+  "ring_color": "#78d2aa",
+  "spark_color": "#d8fff0",
+  "clock_color": "#bfeed8",
+  "cast_time": 0.38,
+  "pulse": 1.8,
+  "rings": 2,
+  "clock_gap": 15
+}

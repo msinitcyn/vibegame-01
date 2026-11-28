@@ -122,6 +122,9 @@ def draw_effects(surf, u, time=0.0):
         fx_mage.draw_shield_break(surf, pos, u["r"], SHIELD_GAP, 1 - u["shield_break"] / (SHIELD_FLASH * 1.5))
     if "nofire" in effects:                       # не стреляет — облачко с перечёркнутым автоматом над магом
         fx_mage.draw_nofire(surf, pos, u["r"], since_start("nofire", effects["nofire"]), effects["nofire"], time)
+    if "slowfoe" in effects:                      # «Остановка пуль»: кольца и часы у соперника
+        fx_mage.draw_slowfoe(surf, pos, u["r"], since_start("slowfoe", effects["slowfoe"]),
+                             effects["slowfoe"], time)
 
 
 def draw_hp(surf, u, color, font, hp=None, max_hp=None, shield=None, scale=1.0):

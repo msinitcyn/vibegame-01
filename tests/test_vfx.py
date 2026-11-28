@@ -44,6 +44,13 @@ def _drew(fn):
     return pygame.image.tobytes(surf, "RGB") != before
 
 
+def test_slowfoe_animation_draws():
+    from duel.config import DURATION
+    for since in (0.0, 0.1, 0.35, 1.0, 4.0):
+        assert _drew(lambda s: fx_mage.draw_slowfoe(s, (200, 150), 14, since,
+                                                    DURATION["slowfoe"] - since, 2.3))
+
+
 def test_triple_bear_zombie_draw_in_all_phases():
     for k in (0.0, 0.3, 1.0):
         assert _drew(lambda s: fx_mage.draw_triple(s, (200, 150), 14, 1, k, shot=1 - k))

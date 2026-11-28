@@ -710,3 +710,46 @@ def draw_nofire(surf, pos, r, since, left, time):
     pygame.draw.line(layer, red, (cx - off, cy + 1 + off), (cx + off, cy + 1 - off), max(2, int(2.5 * g)))
     bob = math.sin(time * 2.4) * 1.5
     surf.blit(layer, layer.get_rect(center=(int(pos[0] + r * 2.1), int(pos[1] - r * 2.5 + bob))))   # выше и правее полоски жизней
+
+
+def draw_slowfoe(surf, pos, r, since, left, time):
+    """«Остановка пуль»: вокруг соперника медленные кольца и крошечные часы — время пуль замерло.
+    since — сколько уже действует, left — сколько осталось, time — время партии (для поворота стрелки)."""
+    if left <= 0:
+        return
+    P = params("slowfoe")
+    r = int(r)
+    cx, cy = int(pos[0]), int(pos[1])
+    ring = rgb(P.get("ring_color"), (120, 210, 170))
+    spark = rgb(P.get("spark_color"), (216, 255, 240))
+    clock = rgb(P.get("clock_color"), (190, 238, 216))
+    cast = max(0.01, float(P.get("cast_time", 0.38)))
+    if since < cast:                                  # каст: кольцо разлетается и гаснет
+        k = max(0.0, min(1.0, since / cast))
+        layer = pygame.Surface((4 * r + 80, 4 * r + 80), pygame.SRCALPHA)
+        c = layer.get_width() // 2
+        radius = int(r * (0.7 + 2.4 * k))
+        pygame.draw.circle(layer, (*ring, int(210 * (1 - k))), (c, c), radius, 3)
+        pygame.draw.circle(layer, (*spark, int(130 * (1 - k))), (c, c), max(2, radius - 7), 1)
+        for i in range(8):
+            a = time * 2 + i * math.pi / 4
+            d = r * (0.7 + 2.7 * k)
+            pygame.draw.line(layer, (*spark, int(180 * (1 - k))),
+                             (c + math.cos(a) * (d - 6), c + math.sin(a) * (d - 6)),
+                             (c + math.cos(a) * d, c + math.sin(a) * d), 2)
+        surf.blit(layer, layer.get_rect(center=(cx, cy)))
+    # медленные кольца у ног: фаза от времени, не от кадра
+    phase = (time * float(P.get("pulse", 1.8))) % 1.0
+    for i in range(int(P.get("rings", 2))):
+        k = (phase + i / max(1, int(P.get("rings", 2)))) % 1.0
+        radius = int(r * (1.0 + 0.9 * k))
+        alpha = int(float(P.get("ring_alpha", 90)) * (1 - k))
+        pygame.draw.circle(surf, (*ring, alpha), (cx, cy), radius, 2)
+    # часы над головой: круг и медленная стрелка
+    gy = cy - r - int(P.get("clock_gap", 15))
+    cr = max(5, r // 3)
+    pygame.draw.circle(surf, (16, 12, 20), (cx, gy), cr + 2)
+    pygame.draw.circle(surf, (*clock, 220), (cx, gy), cr, 2)
+    hand = -math.pi / 2 + math.sin(time * 0.9) * 1.1
+    pygame.draw.line(surf, spark, (cx, gy), (cx + math.cos(hand) * (cr - 2), gy + math.sin(hand) * (cr - 2)), 2)
+    pygame.draw.circle(surf, spark, (cx, gy), 2)
