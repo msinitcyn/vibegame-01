@@ -216,6 +216,11 @@ class Api:
         компьютером — видно обоих)."""
         self._a.overlays.append(fn)
 
+    def copy_text(self, text):
+        """Положить текст в буфер обмена (кнопки «Копировать» в аддонах)."""
+        from .client_menus import clipboard_set
+        return clipboard_set(str(text))
+
     def run_background(self, fn):
         """fn(progress, stop) — в фоновом потоке; возвращает Job."""
         job = Job(fn, lambda e: self._m.report(self._a, e, disable=False))
@@ -359,5 +364,5 @@ class Addons:
 
 def builtin_names():
     """Встроенные аддоны (явный импорт — чтобы сборка их включила)."""
-    from .addons_builtin import lab, ranges
-    return [m.__name__.rsplit(".", 1)[1] for m in (lab, ranges)]
+    from .addons_builtin import economy, lab, ranges
+    return [m.__name__.rsplit(".", 1)[1] for m in (economy, lab, ranges)]

@@ -106,6 +106,12 @@ class AddonsMixin:
         self.addon_index = 0
         self.addon_scroll = 0
         self.addon_rows = []
+        self.addon_sel = None
+        self.addon_sel_anchor = None
+        self.addon_drag = False
+        self.addon_text_box = None
+        self.addon_notice_until = 0
+        self.addon_notice_text = ""
 
     def addon_build(self):
         """Строки экрана аддона на этот кадр; ошибка — аддон выключен, назад в список."""
@@ -133,6 +139,53 @@ class AddonsMixin:
         if fn:
             self.addons.call(a, fn, *args)
 
+    def addon_text_click(self, i, box, pos, shift=False):
+        """Щелчок по тексту: поставить якорь или (Shift) выделить строки; тянем мышь — диапазон."""
+        w = self.addon_rows[i]
+        lines = [str(x) for x in w.lines]
+        if not lines or pos is None:
+            return
+        line = self.addon_scroll + int((pos[1] - box.y - 6) // TEXT_LINE)
+        line = max(0, min(len(lines) - 1, line))
+        if shift and self.addon_sel_anchor is not None:
+            a = self.addon_sel_anchor
+        else:
+            a = self.addon_sel_anchor = line
+        self.addon_sel = (min(a, line), max(a, line))
+        self.addon_text_box = box
+        self.addon_drag = True
+        self.addon_index = i
+
+    def addon_text_drag(self, pos):
+        """Продолжить выделение за мышью (кнопка зажата)."""
+        if not self.addon_sel or self.addon_text_box is None:
+            return
+        w = self.addon_current()
+        if not isinstance(w, TextView) or not w.lines:
+            return
+        box = self.addon_text_box
+        line = self.addon_scroll + int((pos[1] - box.y - 6) // TEXT_LINE)
+        line = max(0, min(len(w.lines) - 1, line))
+        a = self.addon_sel_anchor if self.addon_sel_anchor is not None else self.addon_sel[0]
+        self.addon_sel = (min(a, line), max(a, line))
+
+    def addon_selection_text(self):
+        w = self.addon_current()
+        if not isinstance(w, TextView):
+            return ""
+        lines = [str(x) for x in w.lines]
+        if self.addon_sel:
+            a, b = self.addon_sel
+            a, b = max(0, a), min(len(lines) - 1, b)
+            return "\n".join(lines[a:b + 1])
+        return "\n".join(lines)
+
+    def addon_copy(self):
+        from .client_menus import clipboard_set
+        ok = clipboard_set(self.addon_selection_text())
+        self.addon_notice_text = t("addons.copied" if ok else "addons.copy_failed")
+        self.addon_notice_until = pygame.time.get_ticks() + 1600
+
     def addon_key(self, sc):
         K = pygame
         self.addon_build()                            # свежие значения: за кадр может прийти несколько нажатий
@@ -140,6 +193,28 @@ class AddonsMixin:
             return
         w = self.addon_current()
         sel = self.addon_selectable()
+        mods = pygame.key.get_mods()
+        if isinstance(w, TextView):
+            lines = [str(x) for x in w.lines]
+            if mods & K.KMOD_CTRL and sc == K.KSCAN_A:
+                self.addon_sel_anchor = 0
+                self.addon_sel = (0, max(0, len(lines) - 1))
+                return
+            if mods & K.KMOD_CTRL and sc == K.KSCAN_C:
+                self.addon_copy()
+                return
+            if mods & K.KMOD_SHIFT and sc in (K.KSCAN_UP, K.KSCAN_DOWN, K.KSCAN_PAGEUP, K.KSCAN_PAGEDOWN):
+                step = {K.KSCAN_UP: -1, K.KSCAN_DOWN: 1, K.KSCAN_PAGEUP: -15, K.KSCAN_PAGEDOWN: 15}[sc]
+                cur = (self.addon_sel[1] if self.addon_sel else self.addon_scroll)
+                cur = max(0, min(len(lines) - 1, cur + step))
+                if self.addon_sel_anchor is None:
+                    self.addon_sel_anchor = self.addon_scroll
+                a = self.addon_sel_anchor
+                self.addon_sel = (min(a, cur), max(a, cur))
+                return
+            if sc == K.KSCAN_ESCAPE and self.addon_sel:
+                self.addon_sel = self.addon_sel_anchor = None
+                return
         if isinstance(w, TextInput) and sc == K.KSCAN_BACKSPACE:
             self.addon_fire(w.on_change, w.value[:-1])
             return
@@ -192,6 +267,8 @@ class AddonsMixin:
     def addon_click(self, i, rect):
         self.addon_index = i
         w = self.addon_rows[i]
+        if not isinstance(w, TextView):
+            self.addon_drag = False
         if isinstance(w, (Choice, Number)):
             left = self.ui_mouse is not None and self.ui_mouse[0] < rect.centerx
             self.on_key(pygame.KSCAN_LEFT if left else pygame.KSCAN_RIGHT)
@@ -266,21 +343,30 @@ class AddonsMixin:
             sel = i == self.addon_index
             pygame.draw.rect(s, (20, 22, 30), box, border_radius=8)
             pygame.draw.rect(s, BLUE if sel else (50, 54, 70), box, 1, border_radius=8)
-            self.hit(box, lambda i=i: setattr(self, "addon_index", i))
+            self.hit(box, lambda i=i, box=box: self.addon_text_click(
+                i, box, self.ui_mouse or pygame.mouse.get_pos(),
+                bool(pygame.key.get_mods() & pygame.KMOD_SHIFT)))
             lines = [str(x) for x in w.lines]
             fit = max(1, (box.height - 12) // TEXT_LINE)
             self.addon_scroll = min(self.addon_scroll, max(0, len(lines) - fit))
             clip = s.get_clip()
             s.set_clip(box)
+            a, b = (self.addon_sel or (0, -1))
             for k, line in enumerate(lines[self.addon_scroll:self.addon_scroll + fit]):
-                img = self.mono.render(line, True, (205, 210, 225))
+                abs_line = self.addon_scroll + k
+                if a <= abs_line <= b:
+                    pygame.draw.rect(s, (38, 62, 95),
+                                     (box.x + 4, box.y + 4 + k * TEXT_LINE, box.width - 8, TEXT_LINE))
+                img = self.mono.render(line, True, WHITE if a <= abs_line <= b else (205, 210, 225))
                 s.blit(img, (box.x + 10, box.y + 6 + k * TEXT_LINE))
             s.set_clip(clip)
             if len(lines) > fit:
                 img = self.tiny_text.render(f"{self.addon_scroll + 1}–{min(len(lines), self.addon_scroll + fit)} / "
                                             f"{len(lines)}", True, GREY)
                 s.blit(img, img.get_rect(bottomright=(box.right - 6, box.bottom - 4)))
-        img = self.tiny_text.render(t("addons.screen_hint"), True, GREY)
+        hint = (self.addon_notice_text or t("addons.copied")) \
+            if pygame.time.get_ticks() < self.addon_notice_until else t("addons.screen_hint")
+        img = self.tiny_text.render(hint, True, GREY)
         s.blit(img, img.get_rect(center=(WIDTH // 2, HEIGHT - 16)))
         self.back_button()
         pygame.display.flip()

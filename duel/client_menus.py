@@ -2,6 +2,9 @@
 
 Подмешивается в Game (duel/game.py); состояние — поля Game."""
 import os
+import shutil
+import subprocess
+import sys
 
 import pygame
 
@@ -32,6 +35,42 @@ def clipboard_text():
     except Exception:                                    # нет окна, нет буфера, другая система — без вставки
         return ""
     return "".join(ch for ch in (text or "").strip() if ch.isprintable())
+
+
+def _clipboard_command():
+    """Внешняя команда для копирования (Linux/Wayland/X11), если SDL не умеет."""
+    if sys.platform.startswith("linux"):
+        for cmd in (["wl-copy"], ["xclip", "-selection", "clipboard", "-i"],
+                    ["xsel", "--clipboard", "--input"]):
+            if shutil.which(cmd[0]):
+                return cmd
+    elif sys.platform == "darwin" and shutil.which("pbcopy"):
+        return ["pbcopy"]
+    return None
+
+
+def clipboard_set(text):
+    """Положить текст в буфер обмена. SDL часто не умеет в Wayland — сначала wl-copy/xclip/xsel,
+    потом SDL. Возвращает True, если хоть один способ сработал."""
+    cmd = _clipboard_command()
+    if cmd:
+        try:
+            done = subprocess.run(cmd, input=text, text=True, timeout=2, check=False)
+            if done.returncode == 0:
+                return True
+        except (OSError, subprocess.SubprocessError):
+            pass
+    try:
+        if hasattr(pygame.scrap, "put_text"):            # pygame-ce
+            pygame.scrap.put_text(text)
+            return True
+        if not pygame.scrap.get_init():
+            pygame.scrap.init()
+        pygame.scrap.put(pygame.SCRAP_TEXT, text.encode("utf-8"))
+        return True
+    except Exception:                                    # SDL не умеет этот буфер
+        pass
+    return False
 from .update import restart as restart_updated
 from .client_common import Controls, PLAYER_IDS
 

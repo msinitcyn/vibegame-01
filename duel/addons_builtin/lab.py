@@ -76,6 +76,8 @@ def build():
             rows.append(api.Button("Смотреть повторы прогона", lambda: api.open_replays(state["folder"])))
     if state["file"]:
         rows.append(api.Label(f"отчёт: {state['file']}"))
+    if state["lines"]:
+        rows.append(api.Button("Копировать отчёт", lambda: api.copy_text("\n".join(state["lines"]))))
     rows.append(api.TextView(state["lines"] or ["Отчёт появится здесь. Партии считаются в фоне — можно играть."]))
     return rows
 

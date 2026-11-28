@@ -99,6 +99,10 @@ def play(job, record=False):
         return {**saved, "seed": job["seed"], "winner": w or "timeout", "length": round(m.match_time, 1),
                 "heroes": heroes, "blue": job["blue"], "red": job["red"], "behind": lows, "first": first,
                 "used": {pid: m.stats[pid]["used"] for pid in ("blue", "red")},
+                "bought": {pid: m.stats[pid]["bought"] for pid in ("blue", "red")},
+                "spent": {pid: m.stats[pid]["spent"] for pid in ("blue", "red")},
+                "earned": {pid: m.stats[pid]["earned"] for pid in ("blue", "red")},
+                "money": {p.id: p.money for p in m.players},
                 "gear": {p.id: len(p.gear) for p in m.players}, "tag": job.get("tag"),
                 "hp": {p.id: max(0, p.hp) for p in m.players},
                 "set": list(job.get("set") or []), "limit": job["limit"],
@@ -310,6 +314,55 @@ def report(rs, title):
                 times[kind] += k
     for kind in sorted(used_n, key=lambda k: -used_w[k] / used_n[k]):
         say(f"  {kind:12} {rate(used_w[kind], used_n[kind])}  применений {times[kind]}")
+    economy_report(rs, d)
+
+
+def economy_report(rs, decided_rows):
+    """Покупки, расход денег и winrate покупателя — для подбора цен артефактов."""
+    if not rs or not any("bought" in r for r in rs):
+        return
+    n = len(rs)
+    bought, buy_matches, used = Counter(), Counter(), Counter()
+    buy_w, buy_games = Counter(), Counter()
+    use_w, use_games = Counter(), Counter()
+    for r in rs:
+        for pid in ("blue", "red"):
+            for kind, k in (r.get("bought", {}).get(pid) or {}).items():
+                bought[kind] += k
+                buy_matches[kind] += 1
+            for kind, k in (r.get("used", {}).get(pid) or {}).items():
+                used[kind] += k
+    for r in decided_rows:
+        for pid in ("blue", "red"):
+            for kind in (r.get("bought", {}).get(pid) or {}):
+                buy_games[kind] += 1
+                buy_w[kind] += r["winner"] == pid
+            for kind in (r.get("used", {}).get(pid) or {}):
+                use_games[kind] += 1
+                use_w[kind] += r["winner"] == pid
+    earned = sum(r.get("earned", {}).get(pid, 0) for r in rs for pid in ("blue", "red")) / (2 * n)
+    spent = sum(r.get("spent", {}).get(pid, 0) for r in rs for pid in ("blue", "red")) / (2 * n)
+    left = sum(r.get("money", {}).get(pid, 0) for r in rs for pid in ("blue", "red")) / (2 * n)
+    buys = sum(bought.values()) / (2 * n)
+    say(f"\nэкономика на игрока за матч: заработал {earned:.0f}, потратил {spent:.0f}, "
+        f"осталось {left:.0f}, покупок {buys:.1f}")
+    say("\nартефакты: цена, куплено, покупок на 100 матчей, использовано, побед у купившего/применившего")
+    kinds = [k for k in config.ITEM_PRICES if k not in config.RETIRED_ITEMS]
+    for kind in sorted(kinds, key=lambda k: (-buy_matches[k], -(buy_w[k] / buy_games[k] if buy_games[k] else 0), k)):
+        price = config.ITEM_PRICES.get(kind, "—")
+        rate100 = 100 * buy_matches[kind] / (2 * n)
+        use_rate = used[kind] / bought[kind] if bought[kind] else 0
+        win_buy = rate(buy_w[kind], buy_games[kind])
+        win_use = rate(use_w[kind], use_games[kind])
+        flag = ""
+        if bought[kind] == 0:
+            flag = "не покупают"
+        elif bought[kind] >= 10 and use_rate < 0.5:
+            flag = "не используют"
+        elif use_games[kind] >= 20 and use_w[kind] / use_games[kind] >= 0.6:
+            flag = "сильный?"
+        say(f"  {kind:12} {str(price):>3}  {bought[kind]:5}  {rate100:5.1f}  {use_rate:4.0%}  "
+            f"куп. {win_buy}  прим. {win_use}  {flag}")
 
 
 def comeback_hp():

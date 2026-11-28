@@ -100,7 +100,9 @@ TEXTS = {
         "addons.error": "ошибка: {error}",
         "addons.folder": "свои аддоны: {path}",
         "addons.warning": "Аддон — обычный код с полными правами на компьютере: ставьте только свои и доверенные.",
-        "addons.screen_hint": "↑/↓ — строка, ◀ ▶ — изменить, Enter — нажать, колесо — листать текст, Esc — назад",
+        "addons.screen_hint": "↑/↓ — строка, ◀ ▶ — изменить, Enter — нажать, колесо — листать; в тексте: Shift+↑/↓ или мышь — выделить, Ctrl+C — копировать; Esc — назад",
+        "addons.copied": "скопировано",
+        "addons.copy_failed": "не удалось скопировать",
         
         "replays.title": "Повторы",
         "replays.game_folder": "Повторы игры",
@@ -696,7 +698,9 @@ TEXTS = {
         "addons.error": "error: {error}",
         "addons.folder": "your add-ons: {path}",
         "addons.warning": "An add-on is ordinary code with full rights on your computer: install only your own and trusted ones.",
-        "addons.screen_hint": "↑/↓ — row, ◀ ▶ — change, Enter — press, wheel — scroll text, Esc — back",
+        "addons.screen_hint": "↑/↓ — row, ◀ ▶ — change, Enter — press, wheel — scroll; in text: Shift+↑/↓ or mouse — select, Ctrl+C — copy; Esc — back",
+        "addons.copied": "copied",
+        "addons.copy_failed": "could not copy",
         
         "replays.title": "Replays",
         "replays.game_folder": "Game replays",
@@ -1255,7 +1259,9 @@ TEXTS = {
         "addons.error": "virhe: {error}",
         "addons.folder": "omat lisäosat: {path}",
         "addons.warning": "Lisäosa on tavallista koodia täysin oikeuksin tietokoneellasi: asenna vain omia ja luotettuja.",
-        "addons.screen_hint": "↑/↓ — rivi, ◀ ▶ — muuta, Enter — paina, rulla — vieritä tekstiä, Esc — takaisin",
+        "addons.screen_hint": "↑/↓ — rivi, ◀ ▶ — muuta, Enter — paina, rulla — vieritä; tekstissä: Shift+↑/↓ tai hiiri — valitse, Ctrl+C — kopioi; Esc — takaisin",
+        "addons.copied": "kopioitu",
+        "addons.copy_failed": "kopiointi ei onnistunut",
         
         "replays.title": "Uusinnat",
         "replays.game_folder": "Pelin uusinnat",

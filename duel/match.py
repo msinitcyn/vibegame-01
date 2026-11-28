@@ -214,7 +214,8 @@ class Match:
         self.end_at = None                    # погиб маг: когда кончится анимация и будет итог
         self.drops = True             # мобы роняют артефакты (тестовая команда /drops off выключает)
         # статистика партии для баланса (logs/matches.jsonl, tools/balance.py): только счётчики, без случайностей
-        self.stats = {p.id: {"picked": {}, "used": {}, "shots": 0, "damage_taken": 0} for p in self.players}
+        self.stats = {p.id: {"picked": {}, "used": {}, "bought": {}, "spent": 0, "earned": 0,
+                             "shots": 0, "damage_taken": 0} for p in self.players}
         self.events = []              # копятся до конца шага, step() их отдаёт
 
     # ------------------------------------------------------------------ общее
@@ -771,6 +772,7 @@ class Match:
                 if not m.taken and math.hypot(m.x - p.x, m.y - p.y) < p.radius + MONEY_RADIUS:
                     m.taken = True
                     p.money += m.amount
+                    self.stats[p.id]["earned"] += m.amount
                     self.emit("money", p.id, m.amount)
         for m in self.money:
             m.life -= dt
@@ -1083,6 +1085,9 @@ class Match:
         if price is None or p.money < price or not self.can_carry(p, kind):
             return False
         p.money -= price
+        self.stats[p.id]["spent"] += price
+        bought = self.stats[p.id]["bought"]
+        bought[kind] = bought.get(kind, 0) + 1
         self.receive_item(p, kind)
         self.emit("buy", p.id, kind)
         return True

@@ -529,6 +529,8 @@ class InputMixin:
                 self.hover_from = pos
                 self.mouse_quiet = False
             self.ui_mouse = pos
+            if self.state == "addon" and getattr(self, "addon_drag", False) and pygame.mouse.get_pressed()[0]:
+                self.addon_text_drag(pos)
             if self.in_ui() and not getattr(self, "mouse_quiet", False):
                 hit = self.ui_hit(pos)
                 if hit and hit[2]:
@@ -618,6 +620,8 @@ class InputMixin:
 
     def on_mouse_up(self, button):
         """Кнопка мыши отпущена — «клавиша» отпущена."""
+        if self.state == "addon":
+            self.addon_drag = False
         code = keys.mouse_code(button)
         if code is not None:
             self.held.discard(code)

@@ -66,7 +66,7 @@ def test_discover_builtin_and_user_and_enable(game, addon_dir):
     (addon_dir / "probe.py").write_text(GOOD, encoding="utf-8")
     m = fresh(game)
     names = [a.name for a in m.listed()]
-    assert names[:2] == ["lab", "ranges"] and "probe" in names
+    assert names[:3] == ["economy", "lab", "ranges"] and "probe" in names
     probe = m.items["probe"]
     assert not probe.loaded                                  # по умолчанию выключен
     m.set_enabled(probe, True)
@@ -141,6 +141,58 @@ def test_addon_screen_widgets_keys(game, addon_dir):
     game.close_advanced()
 
 
+def test_addon_text_can_be_selected_and_copied(game, addon_dir, monkeypatch):
+    from duel.addons import TextView
+    from duel import client_menus
+    (addon_dir / "probe.py").write_text(GOOD, encoding="utf-8")
+    m = fresh(game)
+    a = m.items["probe"]
+    m.set_enabled(a, True)
+    game.open_addon_screen(a, *a.screens[0])
+    game.draw_addon()
+    i = next(i for i, r in enumerate(game.addon_rows) if isinstance(r, TextView))
+    box = pygame.Rect(40, 100, 900, 400)
+    game.addon_text_click(i, box, (50, box.y + 6 + 2 * 19))
+    assert game.addon_sel == (2, 2)
+    game.addon_text_drag((50, box.y + 6 + 4 * 19))
+    assert game.addon_sel == (2, 4)
+    copied = []
+    monkeypatch.setattr(client_menus, "clipboard_set", copied.append)
+    game.addon_copy()
+    assert "строка 2" in copied[-1] and "строка 4" in copied[-1]
+    monkeypatch.setattr(pygame.key, "get_mods", lambda: pygame.KMOD_CTRL)
+    game.on_key(pygame.KSCAN_A)
+    assert game.addon_sel == (0, len(game.addon_current().lines) - 1)
+    game.on_key(pygame.KSCAN_C)
+    assert copied[-1].startswith("строка 0\n") and copied[-1].endswith("строка 199")
+    m.set_enabled(a, False)
+
+
+def test_clipboard_set_uses_external_tool_on_linux(monkeypatch):
+    from types import SimpleNamespace
+    from duel import client_menus
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append((cmd, kw.get("input")))
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(client_menus.shutil, "which", lambda name: "/usr/bin/" + name if name == "xclip" else None)
+    monkeypatch.setattr(client_menus.subprocess, "run", fake_run)
+    assert client_menus.clipboard_set("отчёт")
+    assert calls == [(["xclip", "-selection", "clipboard", "-i"], "отчёт")]
+
+
+def test_economy_addon_screen_builds(game, addon_dir):
+    m = fresh(game)
+    a = m.items["economy"]
+    m.set_enabled(a, True)
+    game.open_addon_screen(a, *a.screens[0])
+    game.draw_addon()
+    assert a.loaded and game.state == "addon" and game.addon_rows
+    m.set_enabled(a, False)
+
+
 def test_field_overlay_drawn_in_match(game, addon_dir):
     (addon_dir / "probe.py").write_text(GOOD, encoding="utf-8")
     m = fresh(game)
@@ -172,7 +224,7 @@ def test_lab_addon_runs_report_and_opens_replays(game, addon_dir):
         time.sleep(0.05)
     assert not job.running and job.error is None
     text = "\n".join(mod.state["lines"])
-    assert "герои" in text and "готово" in text and "земля" in text
+    assert "герои" in text and "экономика" in text and "готово" in text and "земля" in text
     assert mod.state["file"] and mod.state["folder"]
     game.open_replays_at(mod.state["folder"])
     assert game.state == "replays" and game.replay_folder_i > 0 and len(game.replay_list) == 10

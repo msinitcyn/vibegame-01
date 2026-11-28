@@ -33,7 +33,7 @@ def test_money_has_lifetime_and_is_picked_by_touch():
     coin = Money(p.x, p.y)
     m.money = [coin]
     m.step(0.01)
-    assert m.money == [] and p.money == MONEY_DROP
+    assert m.money == [] and p.money == MONEY_DROP and m.stats[p.id]["earned"] == MONEY_DROP
     coin2 = Money(p.x + 200, p.y)
     coin2.life = 0.01
     m.money = [coin2]
@@ -61,6 +61,7 @@ def test_buy_spends_money_and_uses_normal_inventory(match):
     assert match.buy(p, "shield")
     assert p.money == 1 and "shield" in p.items
     assert match.events[-1] == ("buy", "blue", "shield")
+    assert match.stats[p.id]["bought"]["shield"] == 1 and match.stats[p.id]["spent"] == ITEM_PRICES["shield"]
 
 
 def test_buy_rejects_short_money_wrong_hero_and_full_inventory(match):
