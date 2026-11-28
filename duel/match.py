@@ -46,6 +46,7 @@ from .config import (
     WALL_RANGE,
     CLEANSE_FX,
     CLEAR_FX,
+    GEAR_FX,
     HEAL_FX,
     AMMO_PACK,
     AMMO_SPAWN,
@@ -400,6 +401,7 @@ class Match:
         if p.gear.count(kind) >= GEAR_STACK:
             return
         p.gear.append(kind)
+        p.gear_fx, p.gear_fx_kind = GEAR_FX, kind
         if kind == "armor":                   # броня: запас жизней больше, и сразу столько же жизней
             p.max_hp += GEAR_HP
             if p.bear_saved is not None:

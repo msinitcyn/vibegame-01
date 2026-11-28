@@ -309,6 +309,8 @@ class Player(Unit):
         self.heal_fx = 0.0            # для анимации: только что вылечился
         self.cleanse_fx = 0.0         # …только что очистился
         self.clear_fx = 0.0           # …только что убрал пули соперника
+        self.gear_fx = 0.0            # …только что надел снаряжение
+        self.gear_fx_kind = None
 
     @property
     def speed(self):
@@ -346,6 +348,7 @@ class Player(Unit):
         self.heal_fx = max(0.0, self.heal_fx - dt)
         self.cleanse_fx = max(0.0, self.cleanse_fx - dt)
         self.clear_fx = max(0.0, self.clear_fx - dt)
+        self.gear_fx = max(0.0, self.gear_fx - dt)
         self.melee_cd = max(0.0, self.melee_cd - dt)
         self.melee_flash = max(0.0, self.melee_flash - dt)
         self.shot_flash = max(0.0, self.shot_flash - dt)

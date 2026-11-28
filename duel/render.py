@@ -11,6 +11,7 @@ from .config import (
     DURATION,
     CLEANSE_FX,
     CLEAR_FX,
+    GEAR_FX,
     HEAL_FX,
     WEAPON_TIME,
     ZOMBIE_RISE,
@@ -62,6 +63,7 @@ from .config import (
 from . import fx
 from .fx import bullets as fx_bullets, earth as fx_earth, mage as fx_mage, spells as fx_spells
 from .icons import draw_coin, draw_icon
+from .items import ITEMS
 from .sprites import SPRITE_TO_HITBOX, draw_unit, recolored_image, sprite, sprite_px
 
 DIR = {"blue": 1, "red": -1, "blue2": 1, "red2": -1}   # +1 стреляет вправо, -1 влево (стороны поля; 2×2 — и напарники)
@@ -140,6 +142,11 @@ def draw_effects(surf, u, time=0.0):
     clear = u.get("clear_fx", 0)
     if clear > 0:                                 # «Убрать пули соперника»: волна от мага
         fx_mage.draw_clearfoe(surf, pos, u["r"], 1 - clear / CLEAR_FX, time)
+    gear = u.get("gear_fx", 0)
+    if gear > 0:                                  # надето снаряжение — вспышка
+        kind = u.get("gear_fx_kind")
+        fx_mage.draw_gear(surf, pos, u["r"], 1 - gear / GEAR_FX, kind,
+                          ITEMS.get(kind, (None, (224, 192, 112)))[1], time)
 
 
 def draw_hp(surf, u, color, font, hp=None, max_hp=None, shield=None, scale=1.0):

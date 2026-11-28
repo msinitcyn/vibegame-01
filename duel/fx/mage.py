@@ -898,3 +898,23 @@ def draw_speed(surf, pos, r, time):
         pygame.draw.line(surf, (*streak, 150),
                          (cx + math.cos(a) * d0, cy + math.sin(a) * d0),
                          (cx + math.cos(a) * d1, cy + math.sin(a) * d1), 2)
+
+
+def draw_gear(surf, pos, r, k, kind, color, time):
+    """Надевание снаряжения: вспышка-кольцо и искры цвета предмета."""
+    if k <= 0:
+        return
+    P = params("gear")
+    r = int(r)
+    cx, cy = int(pos[0]), int(pos[1])
+    ring = color or rgb(P.get("ring_color"), (224, 192, 112))
+    spark = rgb(P.get("spark_color"), (255, 244, 200))
+    k = max(0.0, min(1.0, k))
+    radius = int(r * (1.2 + 1.6 * k))
+    pygame.draw.circle(surf, (*ring, int(220 * (1 - k))), (cx, cy), radius, 3)
+    for i in range(8):
+        a = i * math.tau / 8 + time * 2
+        d = radius * (0.8 + 0.2 * k)
+        pygame.draw.line(surf, (*spark, int(220 * (1 - k))),
+                         (cx + math.cos(a) * (d - 7), cy + math.sin(a) * (d - 7)),
+                         (cx + math.cos(a) * d, cy + math.sin(a) * d), 2)

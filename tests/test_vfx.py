@@ -80,6 +80,18 @@ def test_noitems_grow_speed_animations_draw():
         assert _drew(lambda s: fx_mage.draw_speed(s, (200, 150), 14, t))
 
 
+def test_gear_animation_draws_and_snapshot():
+    from duel.config import GEAR_FX
+    from duel.snapshot import snapshot
+    from tests.conftest import new_match
+    for k in (0.01, 0.4, 1.0):
+        assert _drew(lambda s: fx_mage.draw_gear(s, (200, 150), 14, k, "boots", (205, 150, 95), 2.3))
+    m = new_match()
+    m.take_gear(m.blue, "boots")
+    assert m.blue.gear_fx == GEAR_FX and m.blue.gear_fx_kind == "boots"
+    assert snapshot(m)["players"][0]["gear_fx"] == GEAR_FX
+
+
 def test_triple_bear_zombie_draw_in_all_phases():
     for k in (0.0, 0.3, 1.0):
         assert _drew(lambda s: fx_mage.draw_triple(s, (200, 150), 14, 1, k, shot=1 - k))
