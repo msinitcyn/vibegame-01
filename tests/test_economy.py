@@ -27,7 +27,7 @@ def test_apply_to_config_rewrites_only_values(tmp_path):
     economy.apply_to_config(prices, 7, path, live=False)
     data = ast.literal_eval(path.read_text(encoding="utf-8").split("ITEM_PRICES = ", 1)[1]
                             .split("\n\nMONEY_DROP", 1)[0])
-    assert data["wall"] == 50 and data["trees"] == 30 and data["triple"] == 20
+    assert data["wall"] == 50 and data["trees"] == prices["trees"] and data["triple"] == prices["triple"]
     assert "MONEY_DROP = 7" in path.read_text(encoding="utf-8")
     assert "X = 1" in path.read_text(encoding="utf-8")
 

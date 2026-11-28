@@ -33,7 +33,7 @@ def unit(size):
 
 
 # Деньги: моб оставляет эту сумму, её нужно подобрать касанием.
-MONEY_DROP = 10
+MONEY_DROP = 8
 MONEY_RADIUS = unit(12)
 MONEY_LIFETIME = 20.0
 MONEY_COLOR = (255, 210, 80)
@@ -42,16 +42,44 @@ SHOP_RADIUS = unit(18)        # радиус постройки: герой «в
 SHOP_X = SHOP_SPRITE_SIZE // 2  # боковые магазины прижаты к краям
 
 # Экспериментальный баланс магазина: обычный предмет — после двух первых мобов.
-ITEM_PRICES = {
-    "triple": 20, "shrink": 20, "speed": 20, "wall": 20, "rapid": 20,
-    "slowfoe": 20, "fastshots": 20, "shield": 20, "heal": 20, "clones": 30,
-    "wavy": 20, "clearfoe": 20, "cleanse": 20, "mobpeace": 20, "invisible": 30,
-    "mobswap": 30, "beam": 30, "icewalk": 30, "trees": 30, "lasso": 40,
-    "zombies": 30, "bear": 40, "immune": 30, "sentries": 30, "firering": 40,
-    "landswap": 40, "firmground": 30, "speedsteal": 20, "quake": 30,
-    "foe_grow": 20, "foe_freeze": 20, "foe_nofire": 20, "foe_invert": 20,
-    "foe_noitems": 20, "boots": 20, "armor": 20, "gun": 20, "sword": 20,
-}
+ITEM_PRICES = {'triple': 20,
+ 'shrink': 20,
+ 'speed': 20,
+ 'wall': 20,
+ 'rapid': 20,
+ 'slowfoe': 20,
+ 'fastshots': 20,
+ 'shield': 20,
+ 'heal': 20,
+ 'clones': 40,
+ 'wavy': 20,
+ 'clearfoe': 20,
+ 'cleanse': 20,
+ 'mobpeace': 20,
+ 'invisible': 30,
+ 'mobswap': 40,
+ 'beam': 20,
+ 'icewalk': 20,
+ 'trees': 25,
+ 'lasso': 45,
+ 'zombies': 30,
+ 'bear': 35,
+ 'immune': 20,
+ 'sentries': 35,
+ 'firering': 30,
+ 'landswap': 20,
+ 'firmground': 20,
+ 'speedsteal': 20,
+ 'quake': 20,
+ 'foe_grow': 20,
+ 'foe_freeze': 20,
+ 'foe_nofire': 20,
+ 'foe_invert': 20,
+ 'foe_noitems': 20,
+ 'boots': 20,
+ 'armor': 20,
+ 'gun': 20,
+ 'sword': 20}
 
 
 ARENA_R = 190                    # радиус арены, пикс
