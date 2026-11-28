@@ -14,7 +14,7 @@ from duel.config import (
     TEST_HP,
 )
 from duel.entities import AmmoPack, Artifact, Bullet
-from duel.items import BAD_EFFECTS, HELP_SECTIONS, ITEMS, item_help, ring_color
+from duel.items import BAD_EFFECTS, HELP_SECTIONS, ITEMS, item_help, ring_color, shop_items
 from tests.conftest import DT, new_match, step
 
 
@@ -42,6 +42,15 @@ def test_every_item_in_exactly_one_help_section():
 def test_every_item_has_help_and_ring(kind):
     assert item_help(kind)
     ring_color(kind)
+
+
+def test_shop_catalog_has_mob_neutral_and_hero_artifacts():
+    from duel.config import GEAR_ITEMS, HERO_ONLY_ITEMS, RETIRED_ITEMS
+    frost, fire = shop_items("frost"), shop_items("fire")
+    assert frost["mob"] == GEAR_ITEMS
+    assert set(frost["neutral"]) == {k for k in ITEMS if k not in set(GEAR_ITEMS) | set(HERO_ONLY_ITEMS) | set(RETIRED_ITEMS)}
+    assert set(frost["land"]) == {k for k, hero in HERO_ONLY_ITEMS.items() if hero == "frost"}
+    assert set(fire["land"]) == {k for k, hero in HERO_ONLY_ITEMS.items() if hero == "fire"}
 
 
 def test_ring_colors_follow_groups():

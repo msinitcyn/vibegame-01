@@ -607,17 +607,26 @@ class InputMixin:
             return (0, 0)
         return self._DIRS[round(math.atan2(dy, dx) / (math.pi / 4)) % 8]
 
+    def buy_item(self, side, kind):
+        """Купить артефакт для стороны магазина (локальная партия): правило — в Match.buy."""
+        if not self.shops_visible() or self.match is None:
+            return False
+        if self.match.buy(self.match.player(side), kind):
+            self.refresh_snap()
+            return True
+        return False
+
     def on_mouse_up(self, button):
         """Кнопка мыши отпущена — «клавиша» отпущена."""
         code = keys.mouse_code(button)
         if code is not None:
             self.held.discard(code)
 
-    def on_mouse_button(self, button):
+    def on_mouse_button(self, button, pos=None):
         """В меню: левая — нажать то, что под курсором, правая — назад (как Esc); на экране «Клавиши»,
         пока ждём клавишу, — щелчок назначается (кнопка мыши — тоже клавиша).
         В партии кнопка мыши — клавиша: что ей назначено в «Клавишах» (по умолчанию левая — выстрел,
-        правая — удар, средняя — прицел прямо)."""
+        правая — удар, средняя — прицел прямо). Левая по полосе магазина — покупка для её стороны."""
         code = keys.mouse_code(button)
         if self.state == "keys" and self.keys_wait and code is not None:
             self.keys_key(code)
@@ -631,6 +640,12 @@ class InputMixin:
                 self.on_key(pygame.KSCAN_ESCAPE)      # назад (в главном меню Esc — выход из игры, а в лобби
                                                       # комнаты — уход из неё: там только кнопками)
             return
+        if button == 1 and self.shops_visible():
+            at = self.shop_cursor() if self.mouse_captured else (pos or self.ui_mouse)
+            hit = self.shop_at(at)
+            if hit:
+                self.buy_item(hit["side"], hit["kind"])
+                return
         side = self.mouse_button_side()
         if self.state != "play" or side is None or (self.net and self.net_waiting and not self.warmup):
             return

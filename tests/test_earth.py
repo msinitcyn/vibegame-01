@@ -178,22 +178,21 @@ def test_landswap_background_crossfades(game):
     from duel.snapshot import snapshot
     surf = pygame.Surface(game.screen.get_size())
     game.blit_field(surf, snapshot(m))
-    left_before = surf.get_at((100, 400))
+    left_before = surf.get_at((200, 400))
     m.apply_item(m.blue, "landswap")
     m.blue.effects["landswap"] = DURATION["landswap"] - 2          # середина эффекта — земли поменялись
     game.blit_field(surf, snapshot(m))
-    assert surf.get_at((100, 400)) != left_before
+    assert surf.get_at((200, 400)) != left_before
 
 
 def test_quake_pulses_come_often():
     assert QUAKE_EVERY <= 1.5 and QUAKE_EVERY > QUAKE_STUN               # часто, но между толчками можно сделать шаг
 
 
-def test_speed_is_retired_and_gear_is_mob_land(game):
+def test_speed_is_retired_and_gear_is_in_mob_shop(game):
     from duel.config import GEAR_ITEMS, HELP_TABS
-    m = new_match()
-    drops = {m.artifact_kind("neutral", 6) for _ in range(400)}
-    assert "speed" not in drops and "heal" in drops
+    from duel.items import shop_items
+    assert "speed" not in shop_items("earth")["neutral"] and "heal" in shop_items("earth")["neutral"]
     game.help_page = HELP_TABS.index("artifacts")
     game.open_land("neutral")
     assert "speed" not in game.help_kinds() and not set(GEAR_ITEMS) & set(game.help_kinds())

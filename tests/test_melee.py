@@ -89,7 +89,7 @@ def test_melee_misses_far_foe(match):
     assert r.hp == MAX_HP
 
 
-def test_melee_kill_drops_artifact_on_own_land(match):
+def test_melee_kill_drops_money_on_own_land(match):
     b = match.blue
     b.x = 200
     m = mob_near(match, b, 5, hp=2)
@@ -97,7 +97,8 @@ def test_melee_kill_drops_artifact_on_own_land(match):
     match.melee(b)
     step(match)
     assert m not in match.mobs
-    assert len(match.artifacts) == 1 and (match.artifacts[0].x, match.artifacts[0].y) == (x, y)
+    assert not match.artifacts
+    assert len(match.money) == 1 and (match.money[0].x, match.money[0].y) == (x, y)
 
 
 def test_melee_keys(game):

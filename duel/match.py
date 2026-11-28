@@ -17,6 +17,8 @@
     ("pickup", pid, kind)         подобрал артефакт
     ("used", target_pid, kind)    артефакт подействовал на target
     ("ammo", pid, n)              подобрал пачку патронов
+    ("money", pid, n)             подобрал денежную награду
+    ("buy", pid, kind)            купил артефакт в магазине
     ("mob_dead", x, y)            моб погиб
     ("wave", n, count, hp)        пришла волна мобов (count — сколько новых, hp — их жизни)
 """
@@ -30,7 +32,6 @@ from .config import (
     START_AMMO,
     TARGET_RADIUS,
     CARRY_MAX,
-    DROP_MISS,
     GEAR_SWORD_FROM,
     LAND_DAMAGE,
     BULLET_DAMAGE,
@@ -46,16 +47,12 @@ from .config import (
     GUARDIAN_PETRIFY,
     CLEANSE_FX,
     HEAL_FX,
-    RETIRED_ITEMS,
     GUARDIAN_RESPAWN,
     GUARDIAN_SHOT_EVERY,
     GUARDIAN_SPEED,
     MOB_RANGE,
     AMMO_PACK,
     AMMO_SPAWN,
-    HERO_ONLY_ITEMS,
-    LEVEL_MIN_MOB_HP,
-    LEVEL_WEIGHT,
     ICE_STEP,
     LASSO_SPEED,
     BEAR_HP,
@@ -103,6 +100,15 @@ from .config import (
     MELEE_RANGE,
     EXPOSE_CAST,
     EXPOSE_SHOT,
+    FIELD_LEFT,
+    FIELD_RIGHT,
+    NEUTRAL_HALF,
+    ITEM_PRICES,
+    MONEY_DROP,
+    MONEY_RADIUS,
+    SHOP_RADIUS,
+    SHOP_SPRITE_SIZE,
+    SHOP_X,
     GEAR_HP,
     GEAR_STACK,
     GEAR_ITEMS,
@@ -128,9 +134,10 @@ from .config import (
     TOP,
     WIDTH,
 )
-from .entities import (AmmoPack, Artifact, Beam, Clone, FireRing, Guardian, IceTrail, Mob, MobShot, Player, Sentry,
-                       TreeWall, Wall, in_arena, zone_at)
-from .items import ALLY, BAD_EFFECTS, FOE, INSTANT_ITEMS, ITEM_RANGE, ITEM_TARGETS, ITEMS, LAND, MOB, item_level
+from .entities import (AmmoPack, Beam, Clone, FireRing, Guardian, IceTrail, Mob, MobShot, Money, Player, Sentry,
+                       Shop, TreeWall, Wall, in_arena, zone_at)
+from .items import (ALLY, BAD_EFFECTS, FOE, INSTANT_ITEMS, ITEM_RANGE, ITEM_TARGETS, ITEMS, LAND, MOB,
+                    shop_items)
 
 NO_AMMO_EVERY = 1.0               # «нет патронов» — не чаще раза в столько секунд партии
 STEP = 1 / 60                     # фиксированный такт матча
@@ -153,24 +160,36 @@ class Match:
         self.last_id = 0
         if self.mode == "2v2":
             mid, dy = (TOP + BOTTOM) / 2, (BOTTOM - TOP) * 0.2
-            self.players = (Player("blue", 60, BLUE, 1, BLUE_LAND, "blue", mid - dy),
-                            Player("blue2", 60, BLUE, 1, BLUE_LAND, "blue", mid + dy),
-                            Player("red", WIDTH - 60, RED, -1, RED_LAND, "red", mid - dy),
-                            Player("red2", WIDTH - 60, RED, -1, RED_LAND, "red", mid + dy))
+            self.players = (Player("blue", FIELD_LEFT + 60, BLUE, 1, BLUE_LAND, "blue", mid - dy),
+                            Player("blue2", FIELD_LEFT + 60, BLUE, 1, BLUE_LAND, "blue", mid + dy),
+                            Player("red", FIELD_RIGHT - 60, RED, -1, RED_LAND, "red", mid - dy),
+                            Player("red2", FIELD_RIGHT - 60, RED, -1, RED_LAND, "red", mid + dy))
             self.blue, self.red = self.players[0], self.players[2]     # «первый» мага команды (старые места)
             self.team_lives = {"blue": TEAM_LIVES, "red": TEAM_LIVES}
         else:
-            self.blue = Player("blue", 60, BLUE, 1, BLUE_LAND)
-            self.red = Player("red", WIDTH - 60, RED, -1, RED_LAND)
+            self.blue = Player("blue", FIELD_LEFT + 60, BLUE, 1, BLUE_LAND)
+            self.red = Player("red", FIELD_RIGHT - 60, RED, -1, RED_LAND)
             self.players = (self.blue, self.red)
             self.team_lives = None
         self.by_id = {p.id: p for p in self.players}
+        # пять магазинов: два боковых, два в нейтральной полосе (верх-лево и низ-право)
+        # и один в центре арены мобов
+        side_y = (TOP + BOTTOM) / 2
+        edge = SHOP_SPRITE_SIZE // 2 + 4
+        self.shops = [
+            Shop("blue", SHOP_X, side_y),
+            Shop("red", WIDTH - SHOP_X, side_y),
+            Shop("neutral_tl", ARENA[0] - NEUTRAL_HALF + edge, TOP + edge),
+            Shop("neutral_br", ARENA[0] + NEUTRAL_HALF - edge, BOTTOM - SHOP_RADIUS),
+            Shop("arena", ARENA[0], ARENA[1]),
+        ]
         self.set_heroes(heroes)
         for p in self.players:
             p.rng = self.rng
             p.reset(hp)
         self.bullets = []
         self.artifacts = []
+        self.money = []               # денежные награды на поле (подбираются касанием)
         self.walls = []               # стены могут стоять одновременно, у каждой свой таймер
         self.clones = []
         self.ammo_packs = []
@@ -213,6 +232,30 @@ class Match:
     def team(self, t):
         return [p for p in self.players if p.team == t]
 
+    def shop_for(self, p):
+        """Ближайший магазин, на котором стоит маг p (касание постройки), или None.
+        Магазин может быть любым, в том числе чужим или нейтральным."""
+        if getattr(p, "dead_at", None) is not None:
+            return None
+        found, best = None, None
+        for shop in self.shops:
+            d = math.hypot(p.x - shop.x, p.y - shop.y)
+            if d <= p.radius + shop.radius and (best is None or d < best):
+                found, best = shop, d
+        return found
+
+    def at_shop(self, p):
+        return self.shop_for(p) is not None
+
+    def shop_stock(self, shop):
+        """Товары магазина: боковые — артефакты земли своего героя, нейтральные — общие
+        (поделены между двумя), арена — снаряжение мобов."""
+        if shop.kind in ("blue", "red"):
+            return shop_items(self.player(shop.kind).hero)["land"]
+        if shop.kind in ("neutral_tl", "neutral_br"):
+            return shop_items(self.blue.hero)["neutral"]      # оба нейтральных — все общие товары
+        return shop_items(self.blue.hero)["mob"]
+
     def allies(self, p):
         """Союзники мага (без него самого)."""
         return [q for q in self.players if q.team == p.team and q is not p]
@@ -238,8 +281,9 @@ class Match:
 
     def objects(self):
         """Все объекты поля, кроме магов."""
-        return (self.bullets + self.mobs + self.mob_shots + self.artifacts + self.ammo_packs
-                + self.walls + self.clones + self.beams + self.ice + self.trees + self.rings + self.sentries + self.guardians)
+        return (self.bullets + self.mobs + self.mob_shots + self.artifacts + self.ammo_packs + self.money
+                + self.walls + self.clones + self.beams + self.ice + self.trees + self.rings + self.sentries
+                + self.guardians + self.shops)
 
     def number_new(self):
         """Выдать номера объектам, появившимся за шаг (в порядке появления в списках)."""
@@ -570,7 +614,7 @@ class Match:
     def constrain(self, p):
         """Маг: в пределах поля, не в арене, не в деревьях."""
         r = p.radius
-        p.x = max(r, min(WIDTH - r, p.x))
+        p.x = max(FIELD_LEFT + r, min(FIELD_RIGHT - r, p.x))
         p.y = max(TOP + r, min(BOTTOM - r, p.y))
         for t in self.trees:
             if t.owner.team != p.team and t.hits(p.x, p.y, r):  # сквозь свои ёлки хозяин (и союзник) проходит
@@ -595,6 +639,7 @@ class Match:
             self.update_player(p, dt, moves.get(p.id, (0, 0)))
         self.update_mobs(dt)
         self.pick_artifacts(dt)
+        self.pick_money(dt)
         self.update_ammo(dt)
         for w in self.walls:
             w.life -= dt
@@ -708,8 +753,7 @@ class Match:
             p.ring_t = 0.0
 
     def pick_artifacts(self, dt):
-        """Маг, коснувшийся артефакта, подбирает его (артефакты только выпадают из мобов — drop_artifact);
-        не подобранный за ARTIFACT_LIFETIME — пропадает."""
+        """Маг, коснувшийся артефакта, подбирает его; не подобранный за ARTIFACT_LIFETIME — пропадает."""
         for p in self.players:
             for a in self.artifacts:
                 if not a.taken and math.hypot(a.x - p.x, a.y - p.y) < p.radius + ARTIFACT_R \
@@ -719,6 +763,18 @@ class Match:
         for a in self.artifacts:
             a.life -= dt
         self.artifacts = [a for a in self.artifacts if not a.taken and a.life > 0]
+
+    def pick_money(self, dt):
+        """Деньги подбираются касанием, как артефакты; не подобранные — исчезают по таймеру."""
+        for p in self.players:
+            for m in self.money:
+                if not m.taken and math.hypot(m.x - p.x, m.y - p.y) < p.radius + MONEY_RADIUS:
+                    m.taken = True
+                    p.money += m.amount
+                    self.emit("money", p.id, m.amount)
+        for m in self.money:
+            m.life -= dt
+        self.money = [m for m in self.money if not m.taken and m.life > 0]
 
     def update_ammo(self, dt):
         """Пачки патронов: появляются на земле игрока по таймеру, подбираются всеми, исчезают сами."""
@@ -862,13 +918,13 @@ class Match:
         return False
 
     def bury_mobs(self):
-        """Погибшие мобы: обычный роняет артефакт, зомби — нет; мёртвые и пули — с поля."""
+        """Погибшие мобы: обычный оставляет деньги, зомби — нет; мёртвые и пули — с поля."""
         for m in self.mobs:
             if not m.alive:
                 if m.zombie_of is None:
-                    self.drop_artifact(m)
+                    self.drop_money(m)
                 else:
-                    self.emit("mob_dead", m.x, m.y)   # зомби артефакт не роняет
+                    self.emit("mob_dead", m.x, m.y)   # зомби деньги не роняет
         self.mobs = [m for m in self.mobs if m.alive]
         self.bullets = [b for b in self.bullets if b.alive]
 
@@ -959,7 +1015,7 @@ class Match:
         """Куда встанет огненное кольцо мага p: по прицелу, под курсор — центр кольца там, где курсор; курсор
         дальше FIRE_RING_RANGE (или его нет — стик, бот) — на всю дальность. Не за краем поля."""
         d = FIRE_RING_RANGE if p.reach is None else min(FIRE_RING_RANGE, p.reach)
-        x = max(FIRE_RING_R, min(WIDTH - FIRE_RING_R, p.x + math.cos(p.aim) * d))
+        x = max(FIELD_LEFT + FIRE_RING_R, min(FIELD_RIGHT - FIRE_RING_R, p.x + math.cos(p.aim) * d))
         y = max(TOP + FIRE_RING_R, min(BOTTOM - FIRE_RING_R, p.y + math.sin(p.aim) * d))
         return x, y
 
@@ -973,7 +1029,7 @@ class Match:
         for k in range(n):
             a = -math.pi / 2 + k * 2 * math.pi / n
             x, y = x0 + math.cos(a) * gap, y0 + math.sin(a) * gap
-            off = not (p.radius < x < WIDTH - p.radius and TOP + p.radius < y < BOTTOM - p.radius)
+            off = not (FIELD_LEFT + p.radius < x < FIELD_RIGHT - p.radius and TOP + p.radius < y < BOTTOM - p.radius)
             if off or zone_at(x, y) == p.foe_zone or self.blocked(x, y, p.radius) or in_arena(x, y, p.radius):
                 x, y = x0, y0                         # нет места — прямо там, где маг
             spots.append((x, y))
@@ -999,40 +1055,47 @@ class Match:
             return True
         return sum(1 for k in p.items if k) + len(p.queue) < CARRY_MAX
 
+    def receive_item(self, p, kind):
+        """Выдать магу артефакт обычным путём: снаряжение надеть, остальное — в ячейку или очередь."""
+        picked = self.stats[p.id]["picked"]
+        picked[kind] = picked.get(kind, 0) + 1
+        if kind in INSTANT_ITEMS or kind in GEAR_ITEMS:
+            self.apply_item(p, kind)
+        else:
+            p.add_item(kind)
+
     def take_artifact(self, p, a):
         """Артефакт — магу p: мгновенный сразу применяется, остальные — в ячейку или очередь."""
-        picked = self.stats[p.id]["picked"]
-        picked[a.kind] = picked.get(a.kind, 0) + 1
-        if a.kind in INSTANT_ITEMS or a.kind in GEAR_ITEMS:
-            self.apply_item(p, a.kind)
-        else:
-            p.add_item(a.kind)
+        self.receive_item(p, a.kind)
         a.taken = True
 
-    def drop_artifact(self, mob):
-        """Погибший моб роняет артефакт в месте гибели; какой — зависит только от места (artifact_kind):
-        арена — снаряжение, полоса — общий, земля героя — артефакт его стихии. Уровень — по жизням моба."""
-        self.emit("mob_dead", mob.x, mob.y)
-        if not self.drops or self.rng.random() < DROP_MISS:     # иногда моб ничего не роняет
-            return
-        m = ARTIFACT_R + 4
-        x = max(m, min(WIDTH - m, mob.x))
-        y = max(TOP + m, min(BOTTOM - m, mob.y))
-        self.artifacts.append(Artifact(x, self.artifact_kind(zone_at(mob.x, mob.y), mob.max_hp), y))
+    def buy(self, p, kind):
+        """Купить kind для мага p: проверить ассортимент, цену и место, списать деньги и выдать предмет.
+        p — Player или его id. Возвращает True, только если покупка состоялась."""
+        if isinstance(p, str):
+            p = self.player(p)
+        shop = self.shop_for(p)
+        if p.dead_at is not None or shop is None or kind not in self.shop_stock(shop):
+            return False
+        if kind in GEAR_ITEMS and p.gear.count(kind) >= GEAR_STACK:
+            return False                      # снаряжение уже на максимуме — деньги не тратим
+        price = ITEM_PRICES.get(kind)
+        if price is None or p.money < price or not self.can_carry(p, kind):
+            return False
+        p.money -= price
+        self.receive_item(p, kind)
+        self.emit("buy", p.id, kind)
+        return True
 
-    def artifact_kind(self, zone, max_hp):
-        """Случайный артефакт зоны с уровнем по жизням моба: в арене мобов — только снаряжение;
-        на нейтральной полосе — общие артефакты; на земле героя — только артефакты его стихии."""
-        if zone == "arena":
-            return self.rng.choice(GEAR_ITEMS)
-        owner = self.player(zone) if zone in ("blue", "red") else None
-        if owner:
-            pool = [k for k in ITEMS if HERO_ONLY_ITEMS.get(k) == owner.hero]
-        else:
-            pool = [k for k in ITEMS if k not in HERO_ONLY_ITEMS and k not in GEAR_ITEMS and k not in RETIRED_ITEMS]
-        kinds = [k for k in pool if max_hp >= LEVEL_MIN_MOB_HP[item_level(k)]] or pool
-        weights = [LEVEL_WEIGHT[item_level(k)] for k in kinds]
-        return self.rng.choices(kinds, weights)[0]
+    def drop_money(self, mob):
+        """Погибший моб (или страж) оставляет на месте гибели подбираемые деньги."""
+        self.emit("mob_dead", mob.x, mob.y)
+        if not self.drops:                    # тестовая команда /drops off
+            return
+        m = MONEY_RADIUS + 4
+        x = max(FIELD_LEFT + m, min(FIELD_RIGHT - m, mob.x))
+        y = max(TOP + m, min(BOTTOM - m, mob.y))
+        self.money.append(Money(x, y, MONEY_DROP))
 
     def bullet_speed(self, owner):
         """Множитель скорости пуль owner: «быстрые пули» у него; «пули соперника замирают» у цели — стоят."""
@@ -1131,11 +1194,9 @@ class Match:
 
     def hurt_guardian(self, g, n):
         g.hurt(n)
-        if not g.alive:                       # убит: вернётся позже, роняет артефакт мобов
+        if not g.alive:                       # убит: вернётся позже, оставляет деньги
             g.respawn_at = self.match_time + GUARDIAN_RESPAWN
-            self.emit("mob_dead", g.x, g.y)
-            if self.drops and self.rng.random() >= DROP_MISS:
-                self.artifacts.append(Artifact(g.x, self.artifact_kind("arena", g.max_hp), g.y))
+            self.drop_money(g)
 
     def update_guardians(self, dt):
         """Стражи: спят статуями, пока «их» игрок вне арены; проснулись — ближний идёт и бьёт,

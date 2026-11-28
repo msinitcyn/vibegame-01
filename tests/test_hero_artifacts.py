@@ -4,12 +4,11 @@ import math
 import pytest
 
 from duel.commands import Command
-from duel.config import (BULLET_DAMAGE, FOE_LAND_DPS, HERO_FADE, MAX_HP, TOP, TREE_LENGTH,
+from duel.config import (BULLET_DAMAGE, FIELD_RIGHT, FOE_LAND_DPS, HERO_FADE, MAX_HP, TOP, TREE_LENGTH,
                          TREE_TIME, TREE_W)
 from duel.entities import Bullet, Mob
 from tests.conftest import DT, new_match, step
 
-pytestmark = pytest.mark.usefixtures("always_drop")   # мобы роняют всегда (DROP_MISS — в test_targets)
 
 
 def walk(m, pid, move, seconds):
@@ -70,6 +69,7 @@ def test_trees_grow_and_block_mage():
     m = new_match()
     t = nature(m, aim=0.0)                               # стена вправо от синего
     assert t.length == TREE_LENGTH
+    assert t.x + t.length + TREE_W / 2 <= FIELD_RIGHT + 0.01   # не выходит за поле
     r = m.red
     r.x, r.y = 400, t.y - 60                             # над стеной, идёт вниз
     r.hp = 1000
@@ -304,23 +304,16 @@ def test_ring_keeps_outsiders_out():
 
 # ------------------------------------------------------------------ чьи артефакты
 
-def test_former_common_items_belong_to_heroes():
-    from duel.match import Match
+def test_hero_items_are_only_in_their_own_shop():
+    from duel.items import shop_items
     owners = {"shield": "frost", "foe_freeze": "frost", "slowfoe": "frost",
               "clearfoe": "light", "mobpeace": "light",
               "triple": "fire", "rapid": "fire",
               "mobswap": "dark", "clones": "dark", "wall": "dark"}
     for hero in ("fire", "frost", "nature", "dark", "light"):
-        seen = set()
-        for seed in range(500):
-            m = Match(seed=seed)
-            m.set_heroes({"blue": hero, "red": "fire" if hero != "fire" else "light"})
-            mob = Mob(200, TOP + 60, 12)                 # толстый — может уронить любой уровень
-            mob.target = m.blue
-            m.drop_artifact(mob)
-            seen.add(m.artifacts[0].kind)
+        land = set(shop_items(hero)["land"])
         for kind, owner in owners.items():
-            assert (kind in seen) == (hero == owner), (hero, kind)
+            assert (kind in land) == (hero == owner), (hero, kind)
 
 
 # ------------------------------------------------------------------ звуки
@@ -455,42 +448,11 @@ def test_sentries_wither():
 
 # ------------------------------------------------------------------ уровни
 
-def drops(hero, mob_hp, n=1500):
-    from collections import Counter
-    from duel.match import Match
-    seen = Counter()
-    for seed in range(n):
-        m = Match(seed=seed)
-        m.set_heroes({"blue": hero, "red": "light" if hero != "light" else "fire"})
-        mob = Mob(200, TOP + 60, mob_hp)
-        mob.target = m.blue
-        m.drop_artifact(mob)
-        seen[m.artifacts[0].kind] += 1
-    return seen
-
-
 def test_levels_cover_all_items():
     from duel.items import ITEMS, item_level
     assert {item_level(k) for k in ITEMS} == {1, 2, 3, 4}
     assert item_level("bear") == item_level("firering") == item_level("lasso") == 4
     assert {item_level(k) for k in ("zombies", "icewalk", "sentries")} == {3}
-
-
-def test_level_by_mob_hp():
-    from duel.items import item_level
-    thin = drops("fire", 6, 600)
-    assert max(item_level(k) for k in thin) == 2                  # худой моб: только 1–2
-    mid = drops("fire", 10, 600)
-    assert max(item_level(k) for k in mid) <= 3 and "firering" not in mid and "lasso" not in mid
-    fat = drops("fire", 12)
-    assert "firering" in fat and "lasso" in fat
-
-
-def test_heavy_items_are_rarer():
-    fat = drops("fire", 6, 3000)
-    assert max(fat["firering"], fat["lasso"]) < fat["triple"]      # личные: чем тяжелее, тем реже
-    assert fat["fastshots"] == 0                                    # «быстрые пули» убраны
-    assert fat["heal"] == 0                                         # на земле героя — только артефакты его стихии
 
 
 def test_zombie_stands_still_while_rising():

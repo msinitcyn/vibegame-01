@@ -166,11 +166,11 @@ def test_drops_off():
     from duel.entities import Mob
     m = Match(seed=1)
     assert testcmd.run(m, None, "blue", {"do": "drops", "on": False})
-    m.drop_artifact(Mob(500, 300, 3))
-    assert not m.artifacts
+    m.drop_money(Mob(500, 300, 3))
+    assert not m.money
     testcmd.run(m, None, "blue", {"do": "drops", "on": True})
-    m.drop_artifact(Mob(500, 300, 3))
-    assert m.artifacts
+    m.drop_money(Mob(500, 300, 3))
+    assert m.money and not m.artifacts
 
 
 def test_console_stays_open(game):

@@ -11,7 +11,7 @@ from tests.conftest import DT, new_match, step
 def test_zones():
     assert zone_at(*ARENA) == "arena"
     assert zone_at(ARENA[0] + 100, TOP + 20) == "neutral" and zone_at(ARENA[0] - 100, TOP + 20) == "neutral"
-    assert zone_at(100, 300) == "blue" and zone_at(900, 300) == "red"
+    assert zone_at(150, 300) == "blue" and zone_at(850, 300) == "red"
 
 
 def test_neutral_strip_does_not_burn_arena_does():
@@ -87,14 +87,14 @@ def test_hurt_only_from_inside():
     assert g.hp == GUARDIAN_HP - BULLET_DAMAGE
 
 
-def test_killed_drops_artifact_and_respawns():
+def test_killed_drops_money_and_respawns():
     m = new_match()
     walk_into_arena(m)
     g = guards(m, "blue")["ranged"]
     g.hp = 1
     m.hurt_guardian(g, 1)
-    assert not g.alive and m.artifacts
-    assert zone_at(m.artifacts[-1].x, m.artifacts[-1].y) == "arena"
+    assert not g.alive and m.money and not m.artifacts
+    assert zone_at(m.money[-1].x, m.money[-1].y) == "arena"
     m.blue.x, m.blue.y = 100, 300                    # ушёл из арены
     step(m, GUARDIAN_RESPAWN + 0.5)
     assert g.alive and g.hp == GUARDIAN_HP and (g.x, g.y) == g.post

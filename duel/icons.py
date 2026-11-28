@@ -4,7 +4,7 @@ import math
 
 import pygame
 
-from .config import AMMO_COLOR, ICON_BG, MOB_IDLE_COLOR, RED, WHITE
+from .config import AMMO_COLOR, ICON_BG, MOB_IDLE_COLOR, MONEY_COLOR, RED, WHITE
 from .items import ITEMS, item_level, ring_color
 
 
@@ -21,6 +21,14 @@ def draw_ammo_icon(surf, center, r):
 
 
 LEVEL_DOT = (255, 215, 80)
+
+
+def draw_coin(surf, center, r):
+    """Монета — значок денег в статусе и на поле."""
+    cx, cy = center
+    pygame.draw.circle(surf, (120, 82, 20), (cx, cy), r)
+    pygame.draw.circle(surf, MONEY_COLOR, (cx, cy), r, max(1, r // 3))
+    pygame.draw.circle(surf, (255, 245, 190), (cx - r * 0.3, cy - r * 0.3), max(1, r // 4))
 
 
 def draw_icon(surf, kind, center, r, level=True):

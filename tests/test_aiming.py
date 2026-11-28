@@ -63,7 +63,8 @@ def test_clones_aim_at_foe(match):
     c.moving, c.shot_timer = 0, 0
     shots = c.update(DT, match.blue)
     to_foe = math.atan2(match.blue.y - c.y, match.blue.x - c.x)
-    assert shots and abs(angle_of(shots[0]) - to_foe) <= 0.36
+    diff = abs((angle_of(shots[0]) - to_foe + math.pi) % (2 * math.pi) - math.pi)
+    assert shots and diff <= 0.36
 
 
 def test_snapshot_has_aim(match):

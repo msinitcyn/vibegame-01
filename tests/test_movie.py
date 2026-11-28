@@ -62,7 +62,7 @@ def test_stage_script_fire_kills_mortal_mobs_and_drops():
                           "mobs": [{"x": 520, "y": 150, "hp": 1}]},
                 "script": [{"t": [0.1, 1.0], "every": 0.4, "do": "fire", "who": "blue", "at": [520, 150]}]})
     run(st, 1.5)
-    assert not st.match.mobs and st.match.artifacts                       # моб погиб, артефакт выпал
+    assert not st.match.mobs and st.match.money                           # моб погиб, деньги выпали
     st2 = Stage({"length": 3, "setup": {"blue": {"x": 400, "y": 150}, "mobs": [{"x": 520, "y": 150, "hp": 1}]},
                  "script": [{"t": [0.1, 1.0], "every": 0.4, "do": "fire", "who": "blue", "at": [520, 150]}]})
     run(st2, 1.5)
@@ -209,8 +209,8 @@ def test_intro_plays_background_tracks_shuffled(game, monkeypatch):
     assert a.kind == "menu" and a.track.name.startswith("menu-")           # меню — своя музыка, как была
 
 
-def test_sword_demo_mob_dies_and_drops_artifact():
-    """Сценка «удар мечом»: удар — MELEE_DAMAGE жизней; моб гибнет и роняет артефакт (как в игре)."""
+def test_sword_demo_mob_dies_and_drops_money():
+    """Сценка «удар мечом»: удар — MELEE_DAMAGE жизней; моб гибнет и оставляет деньги (как в игре)."""
     from duel import demos
     d = demos.Demo(demos.load("melee"))
     seen, dropped = [], False
@@ -220,7 +220,7 @@ def test_sword_demo_mob_dies_and_drops_artifact():
             hp = d.match.mobs[0].hp
             if not seen or seen[-1] != hp:
                 seen.append(hp)
-        dropped = dropped or bool(d.match.artifacts)
+        dropped = dropped or bool(d.match.money)
     assert seen[:3] == [12, 8, 4] and dropped and len(d.match.mobs) < 2
 
 

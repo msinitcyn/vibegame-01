@@ -39,6 +39,7 @@ from .config import (
     HERO_COLOR,
     MAX_HP,
     MOB_IDLE_COLOR,
+    MONEY_COLOR,
     POPUP_TIME,
     TOP,
     WIDTH,
@@ -141,6 +142,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         self.net_countdown = 0.0      # отсчёт с сервера (сетевая партия)
         self.go_flash = 0.0           # сколько ещё показывать «В бой!»
         self.hits = []                # [(Rect, по щелчку, при наведении)] — отмечает экран при отрисовке
+        self.shop_hits = []           # артефакты магазинов: {rect, side, kind, price}
         self.ui_mouse = None          # где курсор (в меню)
         self.lobby_notice = None      # надпись в лобби («Соперник пришёл!»)
         self.lobby_id = None          # номер сервера (для запомненного входа)
@@ -608,7 +610,7 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
         elif e.type == pygame.MOUSEBUTTONDOWN:
             if not self.mouse_captured:
                 self.on_mouse_move(e.pos)
-            self.on_mouse_button(e.button)
+            self.on_mouse_button(e.button, e.pos)
         elif e.type == pygame.MOUSEBUTTONUP:
             self.on_mouse_up(e.button)
         elif e.type == pygame.TEXTINPUT:
@@ -745,8 +747,9 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
                 self.audio.hit()
             elif kind == "dead":                  # маг погиб
                 self.audio.death()
-            elif kind == "used":
-                log.info("артефакт: %s → %s", ev[2], ev[1])
+            elif kind in ("used", "buy"):
+                if kind == "used":
+                    log.info("артефакт: %s → %s", ev[2], ev[1])
                 self.audio.item(ev[2])
 
     def handle_events(self, events):
@@ -770,6 +773,10 @@ class Game(ScreensMixin, NetClientMixin, LobbyMixin, MenusMixin, InputMixin, Cha
                 self.popup(item_name(ev[2]) + "!", ev[1], ITEMS[ev[2]][1])
             elif kind == "ammo":
                 self.popup(t("popup.ammo", n=ev[2]), ev[1], AMMO_COLOR)
+            elif kind == "money":
+                self.popup(t("popup.money", n=ev[2]), ev[1], MONEY_COLOR)
+            elif kind == "buy":
+                self.popup(t("popup.buy", item=item_name(ev[2])), ev[1], ITEMS[ev[2]][1])
             elif kind == "mob_dead":
                 self.popups.append([t("popup.mobdead"), ev[1], ev[2], POPUP_TIME, MOB_IDLE_COLOR])
             elif kind == "wave":

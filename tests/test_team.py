@@ -12,7 +12,7 @@ def test_teams_field_and_allies():
     ids = [p.id for p in m.players]
     assert ids == ["blue", "blue2", "red", "red2"]
     assert [p.hero for p in m.players] == ["fire", "fire", "frost", "frost"]       # одна стихия на команду
-    assert m.red.x == field.geometry("2v2")["WIDTH"] - 60 and config.WIDTH == 1000  # поле больше, константы — назад
+    assert m.red.x == field.geometry("2v2")["FIELD_RIGHT"] - 60 and config.WIDTH == 1000  # поле больше, константы — назад
     b, b2 = m.players[0], m.players[1]
     assert m.allies(b) == [b2] and {p.id for p in m.enemies(b)} == {"red", "red2"}
     assert m.team_lives == {"blue": config.TEAM_LIVES, "red": config.TEAM_LIVES}
@@ -50,7 +50,8 @@ def test_respawn_then_team_elimination():
 def test_bots_finish_a_2v2_game():
     m = Match(seed=5, mode="2v2")
     bots = {p.id: SmartBot(m, p.id, "hard", i) for i, p in enumerate(m.players)}
-    for _ in range(int(400 / STEP)):
+    # без магазинов боты не получают артефактов и побеждают медленнее — даём больше времени
+    for _ in range(int(800 / STEP)):
         m.step(STEP, {pid: Command(*b.act()) for pid, b in bots.items()})
         if m.winner:
             break

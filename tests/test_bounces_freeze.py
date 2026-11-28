@@ -32,6 +32,7 @@ def test_bullet_dies_on_third_wall():
 
 def test_mirror_bounce_is_not_counted():
     m = new_match()
+    m.guardians = []                              # только зеркало: стражи арены не рикошетят пулю
     r = m.red
     m.apply_item(r, "wall")
     w = m.walls[0]

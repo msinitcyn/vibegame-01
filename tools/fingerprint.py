@@ -36,14 +36,17 @@ def state_of(m):
     return {
         "time": r6(m.match_time), "wave": m.mob_wave, "next_wave": r6(m.next_wave),
         "winner": getattr(m.winner, "dir", m.winner) if m.winner else None,      # маг или "draw"
-        "players": [(r6(p.x), r6(p.y), p.hp, p.ammo, r6(p.cooldown), r6(p.melee_cd), eff(p),
-                     p.shield_hits, list(p.items), list(p.queue)) for p in m.players],
+        "players": [(r6(p.x), r6(p.y), p.hp, p.ammo, p.money, r6(p.cooldown), r6(p.melee_cd), eff(p),
+                     p.shield_hits, list(p.items), list(p.queue),
+                     m.shop_for(p).kind if m.shop_for(p) else None) for p in m.players],
         "bullets": [(r6(b.x), r6(b.y), r6(b.vx), r6(b.vy), b.owner.dir, r6(b.wave_amp))
                     for b in m.bullets],
         "mobs": [(r6(x.x), r6(x.y), x.hp, x.max_hp, x.ranged, x.target.dir if x.target else 0)
                  for x in m.mobs],
         "mob_shots": [(r6(s.x), r6(s.y), r6(s.travelled)) for s in m.mob_shots],
         "artifacts": [(a.kind, r6(a.x), r6(a.y)) for a in m.artifacts],
+        "money": [(a.amount, r6(a.x), r6(a.y), r6(a.life)) for a in m.money],
+        "shops": [(s.kind, r6(s.x), r6(s.y), r6(s.radius)) for s in m.shops],
         "ammo_packs": [(r6(a.x), r6(a.y), r6(a.life)) for a in m.ammo_packs],
         "walls": [(w.owner.dir, r6(w.x), r6(w.y1), r6(w.life)) for w in m.walls],
         "clones": [(c.owner.dir, r6(c.x), r6(c.y), r6(c.life), eff(c)) for c in m.clones],

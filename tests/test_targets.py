@@ -2,7 +2,7 @@
 import pytest
 
 from duel import items
-from duel.config import CARRY_MAX, DROP_MISS, GEAR_SWORD_FROM, MELEE_DAMAGE, TARGET_RADIUS
+from duel.config import CARRY_MAX, GEAR_SWORD_FROM, MELEE_DAMAGE, TARGET_RADIUS
 from duel.entities import Artifact, Mob
 from duel.match import Match
 from tests.conftest import step
@@ -27,12 +27,12 @@ def test_carry_limit_leaves_artifact_on_ground():
     assert g.taken
 
 
-def test_some_mobs_drop_nothing():
+def test_mob_always_drops_money_not_artifact():
     m = Match(seed=2)
-    for _ in range(400):
-        m.drop_artifact(Mob(500, 300, 6))
-    share = 1 - len(m.artifacts) / 400
-    assert 0 < DROP_MISS and abs(share - DROP_MISS) < 0.06
+    for _ in range(20):
+        m.drop_money(Mob(500, 300, 6))
+    assert len(m.money) == 20 and all(x.amount > 0 for x in m.money)
+    assert not m.artifacts
 
 
 def test_sword_from_third_stack_adds_damage():

@@ -34,12 +34,15 @@ from .config import (
     FOE_RING,
     GEAR_FIRE,
     GEAR_HP,
+    GEAR_ITEMS,
     GEAR_REACH,
     GEAR_RING,
     GEAR_SPEED,
     GEAR_STACK,
     HEAL_AMOUNT,
+    HERO_ONLY_ITEMS,
     RAPID_FACTOR,
+    RETIRED_ITEMS,
     SELF_RING,
     SHIELD_HP,
     SHOT_COOLDOWN,
@@ -116,6 +119,16 @@ HELP_SECTIONS = [
 def item_level(kind):
     """Уровень артефакта 1..4 (по умолчанию 1)."""
     return ITEM_LEVEL.get(kind, 1)
+
+
+def shop_items(hero):
+    """Артефакты магазина стороны: снаряжение мобов, общие и личные для героя."""
+    available = tuple(kind for kind in ITEMS if kind not in RETIRED_ITEMS)
+    return {
+        "mob": tuple(kind for kind in GEAR_ITEMS if kind in available),
+        "neutral": tuple(kind for kind in available if kind not in GEAR_ITEMS and kind not in HERO_ONLY_ITEMS),
+        "land": tuple(kind for kind in available if HERO_ONLY_ITEMS.get(kind) == hero),
+    }
 
 
 def item_name(kind):

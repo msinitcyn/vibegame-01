@@ -27,6 +27,7 @@ def geometry(mode):
     bottom = top + round((config.BOTTOM - top) * k)
     return {"WIDTH": width, "BOTTOM": bottom, "ARENA": (width / 2, (top + bottom) / 2),
             "ARENA_R": config.ARENA_R * k, "NEUTRAL_HALF": config.NEUTRAL_HALF * k,
+            "FIELD_LEFT": 0, "FIELD_RIGHT": width, "FIELD_WIDTH": width,
             "BLUE_LAND": (0, width / 2), "RED_LAND": (width / 2, width)}
 
 

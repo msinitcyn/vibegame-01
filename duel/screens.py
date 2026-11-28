@@ -11,6 +11,8 @@ from .config import (
     BEAM_LENGTH,
     FIRE_RING_R,
     FIRE_RING_RANGE,
+    FIELD_LEFT,
+    FIELD_RIGHT,
     NEUTRAL_HALF,
     WALL_H,
     WALL_MIN,
@@ -30,6 +32,11 @@ from .config import (
     LANDSWAP_FADE,
     HUD_CENTER,
     HUD_H,
+    ITEM_PRICES,
+    MONEY_COLOR,
+    SHOP_PAD,
+    SHOP_ROW_H,
+    SHOP_WIDTH,
     INVENTORY_SIZE,
     MOB_IDLE_COLOR,
     QUEUE_SHOWN,
@@ -40,7 +47,7 @@ from .config import (
 from .gamepad import PAD_ITEM_COLORS, PAD_ITEM_LABELS, PAD_ITEM_LAYOUT
 from .i18n import t as tr
 from .fx import earth as fx_earth
-from .icons import draw_ammo_icon, draw_icon
+from .icons import draw_ammo_icon, draw_coin, draw_icon
 from .items import ALLY, FOE, ITEM_RANGE, ITEM_TARGETS, LAND, MOB
 from .config import TARGET_RADIUS
 from .items import EFFECT_ICON, ITEMS, WEAPON_ITEMS
@@ -168,6 +175,80 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         s.blit(t1, t1.get_rect(midtop=(box.centerx, box.top + 30)))
         s.blit(t2, t2.get_rect(midtop=(box.centerx, box.top + 47)))
 
+    def shops_visible(self):
+        """Магазины — только в локальной партии 1×1. Сеть, разминка, повтор и 2×2 — вне этой итерации."""
+        players = self.snap.get("players", [])
+        return (self.state == "play" and not self.net and not getattr(self, "warmup", False)
+                and not getattr(self, "replay", None) and not getattr(self, "watching", False)
+                and len(players) == 2 and not self.snap.get("winner")
+                and not self.paused and self.countdown_left() <= 0
+                and any(p.get("in_shop") for p in players))
+
+    def shop_cursor(self):
+        """Где сейчас перекрестие/курсор в координатах окна (для наведения на магазин)."""
+        if self.mouse_captured and self.mouse_pos:
+            k = self.field_scale()
+            return self.mouse_pos[0] / k, TOP + (self.mouse_pos[1] - TOP) / k
+        return getattr(self, "ui_mouse", None) or getattr(self, "mouse_pos", None)
+
+    def shop_at(self, pos):
+        """Артефакт магазина под точкой окна: {"side", "kind", "price", "rect"} или None."""
+        if pos is None:
+            return None
+        for hit in getattr(self, "shop_hits", []):
+            if hit["rect"].collidepoint(pos):
+                return hit
+        return None
+
+    def draw_shops(self):
+        """Компактная панель покупок у верхнего угла игрока, пока он стоит на магазине.
+
+        Левому игроку — верхний левый угол, правому — верхний правый. Внутри только значок
+        и цена, вертикальным списком, без заголовка и пустых полей. Доступность по деньгам
+        не подсвечивается, при наведении на предмет видна стрелка курсора."""
+        s = self.screen
+        self.shop_hits = []
+        players = {p["id"]: p for p in self.snap.get("players", [])}
+        shops = {shop["kind"]: shop for shop in self.snap.get("shops", [])}
+        cursor = self.shop_cursor() or (-1, -1)
+        for side in ("blue", "red"):
+            p = players.get(side)
+            if p is None or not p.get("in_shop"):
+                continue
+            shop = shops.get(p.get("shop"))
+            if shop is None:
+                continue
+            stock = shop.get("stock", [])
+            x0 = 0 if side == "blue" else WIDTH - SHOP_WIDTH
+            y0 = TOP
+            accent = pygame.Color(self.side_color(side))
+            panel_h = 2 * SHOP_PAD + SHOP_ROW_H * len(stock)
+            panel = pygame.Surface((SHOP_WIDTH, panel_h), pygame.SRCALPHA)
+            panel.fill((8, 9, 15, 255))
+            pygame.draw.rect(panel, accent, panel.get_rect(), 2)
+            for i in range(1, len(stock)):
+                y = SHOP_PAD + i * SHOP_ROW_H - 1
+                pygame.draw.line(panel, (34, 32, 44), (3, y), (SHOP_WIDTH - 4, y), 1)
+            s.blit(panel, (x0, y0))
+            for i, kind in enumerate(stock):
+                cy = y0 + SHOP_PAD + i * SHOP_ROW_H + SHOP_ROW_H // 2
+                draw_icon(s, kind, (x0 + 11, cy), 8, level=False)
+                price = ITEM_PRICES[kind]
+                txt = self.tiny.render(str(price), True, MONEY_COLOR)
+                s.blit(txt, txt.get_rect(midleft=(x0 + 22, cy)))
+                rect = pygame.Rect(x0 + 1, y0 + SHOP_PAD + i * SHOP_ROW_H, SHOP_WIDTH - 2, SHOP_ROW_H)
+                self.shop_hits.append({"rect": rect, "side": side, "kind": kind, "price": price})
+        if self.mouse_captured and self.shop_at(cursor):
+            self.draw_shop_cursor(cursor)
+
+    def draw_shop_cursor(self, pos):
+        """Обычная стрелка мыши поверх магазина: в партии системный курсор спрятан."""
+        x, y = int(pos[0]), int(pos[1])
+        pts = [(x, y), (x, y + 17), (x + 5, y + 13), (x + 9, y + 21),
+               (x + 12, y + 19), (x + 8, y + 12), (x + 14, y + 11)]
+        pygame.draw.polygon(self.screen, (16, 12, 20), pts)
+        pygame.draw.polygon(self.screen, (245, 245, 245), pts, 2)
+
     def draw_hud(self):
         s = self.screen
         pygame.draw.rect(s, (30, 33, 45), (0, 0, WIDTH, HUD_H))
@@ -243,8 +324,10 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         if cached is None or cached[0] != heroes or cached[1].get_size() != (WIDTH, BOTTOM - TOP):
             h = BOTTOM - TOP
             bg = pygame.Surface((WIDTH, h))
-            half = WIDTH // 2
-            for (x, w, side), hero in zip(((0, half, "left"), (half, WIDTH - half, "right")), heroes):
+            bg.fill((26, 29, 40))
+            half = (FIELD_RIGHT - FIELD_LEFT) // 2
+            spans = ((FIELD_LEFT, half, "left"), (FIELD_LEFT + half, FIELD_RIGHT - FIELD_LEFT - half, "right"))
+            for (x, w, side), hero in zip(spans, heroes):
                 name, drawn_for = HERO_LAND[hero]
                 img = sprite_image(name, (w, h))
                 if drawn_for != side:
@@ -372,7 +455,8 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         с таймерами (сначала оружие, потом остальное, стены, двойники) и очередь подобранных
         артефактов (после «│», до QUEUE_SHOWN и «+N»). p — маг из снимка snap."""
         ammo = p["ammo"]
-        chips = [("ammo", str(ammo), AMMO_COLOR if ammo > 0 else BAD_TEXT)]
+        chips = [("money", str(p.get("money", 0)), MONEY_COLOR),
+                 ("ammo", str(ammo), AMMO_COLOR if ammo > 0 else BAD_TEXT)]
         effects = sorted(p["effects"].items(), key=lambda e: (e[0] not in WEAPON_ITEMS, -e[1]))
         for name, t in effects:
             kind = EFFECT_ICON.get(name, name)
@@ -407,7 +491,9 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
         surf = pygame.Surface((max(1, width), 2 * r + 2), pygame.SRCALPHA)
         x = 0
         for kind, txt in rendered:
-            if kind == "ammo":
+            if kind == "money":
+                draw_coin(surf, (x + r, r + 1), r)
+            elif kind == "ammo":
                 draw_ammo_icon(surf, (x + r, r + 1), r)
             elif kind == "|":
                 pygame.draw.line(surf, GREY, (x, 2), (x, 2 * r), 2)
@@ -722,8 +808,8 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
             pts = [(x, y - 6), (x + 9, y), (x, y + 6), (x - 9, y)]
             pygame.draw.polygon(s, (16, 12, 20), pts, 4)
             pygame.draw.polygon(s, self.side_color(self.mouse_button_side() or "blue"), pts, 2)
-        if self.mouse_captured and self.mouse_pos:     # перекрестие мыши
-            x, y = int(self.mouse_pos[0]), int(self.mouse_pos[1])
+        if self.mouse_captured and self.mouse_pos and not self.shop_at(self.shop_cursor()):
+            x, y = int(self.mouse_pos[0]), int(self.mouse_pos[1])     # перекрестие мыши
             for color, w in (((16, 12, 20), 4), ((255, 255, 255), 2)):
                 pygame.draw.circle(s, color, (x, y), 9, w)
                 pygame.draw.line(s, color, (x - 14, y), (x - 5, y), w)
@@ -746,6 +832,10 @@ class ScreensMixin(MenuScreensMixin, NetScreensMixin):
     def draw_play_ui(self):
         """Поверх поля — в координатах окна: панель, отсчёт, итог, пауза, чат."""
         s = self.screen
+        if self.shops_visible():
+            self.draw_shops()
+        else:
+            self.shop_hits = []
         self.draw_hud()
         self.draw_countdown()
 

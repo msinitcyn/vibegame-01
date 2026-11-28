@@ -47,6 +47,7 @@ def test_clones_go_invisible_with_owner():
     snap = snapshot(m)
     owner = next(x for x in snap["players"] if x["id"] == "blue")
     for c in snap["clones"]:
+        c["exposed"] = c["shot"] = 0.0       # двойник мог выстрелить и выдать себя — проверяем саму невидимость
         assert blank_after(lambda s: render.draw_clone(s, c, heroes, owner, None, 1.0, viewer="red"))
         assert not blank_after(lambda s: render.draw_clone(s, c, heroes, owner, None, 1.0, viewer="blue"))
     assert m.ring_spot(m.red) is not None

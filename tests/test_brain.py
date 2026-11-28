@@ -125,7 +125,7 @@ def test_icewalk_not_wasted_on_own_land():
     m = Match(seed=5, heroes={"blue": "frost", "red": "fire"})
     m.mobs.clear()
     m.blue.add_item("icewalk")
-    m.red.x, m.red.y = m.blue.x + 150, m.blue.y        # соперник рядом, но на нейтральной/своей стороне синего
+    m.red.x, m.red.y = m.blue.x + 80, m.blue.y         # соперник рядом, на своей земле синего
     from duel.entities import zone_at
     assert zone_at(m.red.x, m.red.y) in ("blue", "neutral")
     bot = SmartBot(m, "blue", "hard", 1)

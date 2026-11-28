@@ -26,6 +26,7 @@ from .config import (
     ICE_R,
     BEAR_REACH,
     SENTRY_R,
+    SHOP_SPRITE_SIZE,
     FIRE_RING_HEAT,
     FIRE_RING_R,
     ZOMBIE_RADIUS,
@@ -34,10 +35,13 @@ from .config import (
     TREE_TIME,
     AMMO_PACK,
     ARTIFACT_R,
+    MONEY_RADIUS,
+    MONEY_COLOR,
     BULLET_DAMAGE,
     BULLET_R,
     DEFAULT_HERO,
     HERO_COLOR,
+    HERO_EDGE,
     HERO_SPRITE,
     MELEE_FLASH,
     MELEE_RANGE,
@@ -57,9 +61,9 @@ from .config import (
 )
 from . import fx
 from .fx import bullets as fx_bullets, earth as fx_earth, mage as fx_mage, spells as fx_spells
-from .icons import draw_icon
+from .icons import draw_coin, draw_icon
 from .items import ITEMS
-from .sprites import SPRITE_TO_HITBOX, draw_unit, sprite, sprite_px
+from .sprites import SPRITE_TO_HITBOX, draw_unit, recolored_image, sprite, sprite_px
 
 DIR = {"blue": 1, "red": -1, "blue2": 1, "red2": -1}   # +1 стреляет вправо, -1 влево (стороны поля; 2×2 — и напарники)
 
@@ -390,6 +394,20 @@ def draw_timer(surf, font, life, midleft):
     surf.blit(txt, txt.get_rect(center=box.center))
 
 
+def draw_money(surf, m, font=None):
+    """Денежная награда на земле: монета, сумма и таймер жизни."""
+    life = m.get("life")
+    if life is not None and life < 3 and int(life * 6) % 2 == 0:
+        return
+    pos = _pos(m)
+    draw_coin(surf, pos, MONEY_RADIUS)
+    if font is not None:
+        txt = font.render(str(m.get("amount", 0)), True, MONEY_COLOR)
+        surf.blit(txt, txt.get_rect(midtop=(pos[0], pos[1] + MONEY_RADIUS + 1)))
+        if life is not None:
+            draw_timer(surf, font, life, (pos[0] + MONEY_RADIUS + 3, pos[1] + MONEY_RADIUS - 4))
+
+
 def draw_ammo_pack(surf, a, font):
     if a["life"] < 2 and int(a["life"] * 8) % 2 == 0:
         return
@@ -575,18 +593,30 @@ def draw_guardian(surf, g, font, heroes):
                         side_color(heroes, g["side"]), g["flash"] > 0, font)    # как у мобов: секции и число
 
 
+def draw_shop(surf, shop, heroes):
+    """Постройка-магазин на поле: навес в цвет героя (у нейтральных — серый)."""
+    hero = shop.get("hero")
+    accent = HERO_EDGE[hero][0] if hero else "#6a6a76"
+    img = recolored_image("shop_building", (("#983e34", accent),), (SHOP_SPRITE_SIZE, SHOP_SPRITE_SIZE))
+    surf.blit(img, img.get_rect(midbottom=(int(shop["x"]), int(shop["y"] + shop["r"]))))
+
+
 def draw_field(surf, snap, font, viewer=None):
     """Все объекты поля в порядке слоёв: стены, артефакты, пачки, двойники, мобы,
     снаряды, пули, маги. Цвета и маги — по героям сторон."""
     heroes = heroes_of(snap)
     for t in snap.get("ice", []):
         draw_ice(surf, t, heroes, snap.get("time", 0))
+    for shop in snap.get("shops", []):
+        draw_shop(surf, shop, heroes)
     for w in snap["walls"]:
         draw_wall(surf, w, heroes, snap.get("time", 0))
     for a in snap["artifacts"]:
         draw_artifact(surf, a, font)
     for a in snap["ammo_packs"]:
         draw_ammo_pack(surf, a, font)
+    for m in snap.get("money", []):
+        draw_money(surf, m, font)
     owners = {p["id"]: p for p in snap["players"]}
     for c in snap["clones"]:
         draw_clone(surf, c, heroes, owners.get(c["owner"]), font, snap.get("time", 0), viewer)

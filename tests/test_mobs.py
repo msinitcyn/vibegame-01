@@ -18,14 +18,11 @@ from duel.config import (
     MOB_MAX_HP,
     MOB_SPEEDUP,
     SHIELD_HP,
-    TOP,
-    WIDTH,
 )
 from duel.entities import Bullet
 from duel.commands import Command
 from tests.conftest import DT, new_match, step
 
-pytestmark = pytest.mark.usefixtures("always_drop")   # мобы роняют всегда (DROP_MISS — в test_targets)
 
 
 def spawn(match):
@@ -174,11 +171,11 @@ def test_mob_dies_after_three_hits(match):
     assert m not in match.mobs and len(match.mobs) == MOB_COUNT - 1
 
 
-# --- артефакты только из мобов
+# --- деньги только из мобов
 
-def test_no_artifacts_without_mob_kills(match):
+def test_no_money_without_mob_kills(match):
     step(match, 60)                              # мобов нет (фикстура их отключила)
-    assert match.artifacts == []
+    assert match.money == [] and match.artifacts == []
 
 
 def kill_mob_at(match, killer, x, y):
@@ -193,30 +190,30 @@ def kill_mob_at(match, killer, x, y):
 
 
 def test_drop_on_own_land_at_death_spot(match):
-    """Моб добит на земле добившего — артефакт падает ровно на месте гибели."""
+    """Моб добит — деньги падают ровно на месте гибели, артефакт не появляется."""
     r = match.red
     x, y = r.land[0] + 150, 300
     kill_mob_at(match, r, x, y)
-    assert len(match.artifacts) == 1
-    art = match.artifacts[0]
+    assert len(match.money) == 1 and not match.artifacts
+    art = match.money[0]
     assert (art.x, art.y) == (x, y)
 
 
-def test_artifact_lies_for_a_while_then_vanishes(match):
-    from duel.config import ARTIFACT_LIFETIME
-    from duel.entities import Artifact
+def test_money_lies_for_a_while_then_vanishes(match):
+    from duel.config import MONEY_LIFETIME
+    from duel.entities import Money
     r = match.red
-    art = Artifact(r.land[0] + 150, "speed", 150)
-    match.artifacts = [art]
-    step(match, ARTIFACT_LIFETIME - 1)
-    assert match.artifacts == [art] and 0.5 < art.life < 1.5   # ещё лежит, таймер почти вышел
-    r.x, r.y = art.x, art.y
+    coin = Money(r.land[0] + 150, 150)
+    match.money = [coin]
+    step(match, MONEY_LIFETIME - 1)
+    assert match.money == [coin] and 0.5 < coin.life < 1.5   # ещё лежит, таймер почти вышел
+    r.x, r.y = coin.x, coin.y
     step(match)
-    assert match.artifacts == [] and "speed" in r.items
-    art2 = Artifact(r.land[0] + 150, "shield", 150)
-    match.artifacts = [art2]
-    step(match, ARTIFACT_LIFETIME + 0.1)
-    assert match.artifacts == []                             # не подобрали — пропал
+    assert match.money == [] and r.money == coin.amount
+    coin2 = Money(r.land[0] + 150, 150)
+    match.money = [coin2]
+    step(match, MONEY_LIFETIME + 0.1)
+    assert match.money == []                                 # не подобрали — пропал
 
 
 def test_ammo_packs_still_expire(match):
@@ -487,41 +484,8 @@ def test_ammo_and_clones_outside_arena(match):
 
 # ------------------------------------------------------------------ артефакт — по месту гибели моба
 
-def kinds_dropped_at(x, y, killer_pid="red", n=400, mob_hp=6):
-    """Какие артефакты выпадают из моба, погибшего в точке (x, y): синий — Холод, красный — Огонь."""
-    from duel.entities import Mob
-    from duel.match import Match
-    seen = set()
-    for seed in range(n):
-        m = Match(seed=seed)
-        m.set_heroes({"blue": "frost", "red": "fire"})
-        mob = Mob(x, y, mob_hp)
-        mob.target = m.player(killer_pid)
-        m.drop_artifact(mob)
-        assert len(m.artifacts) == 1
-        seen.add(m.artifacts[0].kind)
-    return seen
-
-
-def test_drop_depends_on_place_not_killer():
-    from duel.config import HERO_ONLY_ITEMS
-    frost = {k for k, h in HERO_ONLY_ITEMS.items() if h == "frost"}
-    fire = {k for k, h in HERO_ONLY_ITEMS.items() if h == "fire"}
-    on_ice = kinds_dropped_at(150, 300, killer_pid="red")   # красный добил моба на льду синего
-    assert on_ice & frost and not on_ice & fire               # артефакт земли синего (Холода)
-    on_lava = kinds_dropped_at(850, 300, killer_pid="red")
-    assert on_lava & fire and not on_lava & frost
-
-
-def test_neutral_and_arena_drop_common_only():
-    from duel.config import ARENA, HERO_ONLY_ITEMS
-    hero_items = set(HERO_ONLY_ITEMS)
-    assert not kinds_dropped_at(WIDTH / 2, TOP + 40) & hero_items        # нейтральная полоса
-    assert not kinds_dropped_at(ARENA[0] + 40, ARENA[1]) & hero_items    # арена мобов
-
-
 def test_drop_lies_where_mob_died(match):
     from duel.config import ARENA
-    kill_mob_at(match, match.red, ARENA[0] + 40, ARENA[1])   # в арене — артефакт тоже в арене
-    art = match.artifacts[0]
-    assert (art.x, art.y) == (ARENA[0] + 40, ARENA[1])
+    kill_mob_at(match, match.red, ARENA[0] + 40, ARENA[1])   # в арене — деньги тоже в арене
+    coin = match.money[0]
+    assert (coin.x, coin.y) == (ARENA[0] + 40, ARENA[1])

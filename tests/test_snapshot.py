@@ -8,13 +8,13 @@ import pygame
 import pytest
 
 from duel.commands import Command
-from duel.entities import AmmoPack, Artifact, Bullet, Clone, Mob, MobShot, Wall
+from duel.entities import AmmoPack, Artifact, Bullet, Clone, Mob, MobShot, Money, Wall
 from duel.match import Match
 from duel.snapshot import snapshot
 from tests.conftest import DT
 
 ROOT = Path(__file__).resolve().parent.parent
-KINDS = ("players", "bullets", "mobs", "mob_shots", "artifacts", "ammo_packs", "walls", "clones")
+KINDS = ("players", "bullets", "mobs", "mob_shots", "artifacts", "ammo_packs", "money", "shops", "walls", "clones")
 
 
 def full_scene(m):
@@ -35,6 +35,7 @@ def full_scene(m):
     m.bullets += [Bullet(300, 300, 400, 0, b), Bullet(700, 420, -400, 50, r)]
     m.artifacts.append(Artifact(200, "shield", 500))
     m.ammo_packs.append(AmmoPack(260, 160))
+    m.money.append(Money(240, 180, 10))
     m.step(DT)                                  # номера объектов выдаются в конце шага
     return m
 

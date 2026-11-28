@@ -37,6 +37,7 @@ def snapshot(match):
 
 def _snapshot(match):
     m = match
+    shop_of = {p.id: m.shop_for(p) for p in m.players}
     return {
         "time": _t(m.match_time),
         "wave": m.mob_wave,
@@ -50,7 +51,7 @@ def _snapshot(match):
             "ammo": p.ammo, "effects": _effects(p), "shield_hits": p.shield_hits,
             "shield_flash": _t(p.shield_flash), "shield_break": _t(p.shield_break), "reveal": _t(p.reveal),
             "exposed": _t(p.exposed),
-            "items": list(p.items), "queue": list(p.queue), "gear": list(p.gear),
+            "items": list(p.items), "queue": list(p.queue), "gear": list(p.gear), "money": p.money,
             "hit_flash": _t(p.hit_flash), "melee_flash": _t(p.melee_flash), "heal_fx": _t(p.heal_fx),
             "dead": None if p.dead_at is None else _t(m.match_time - p.dead_at),
             "cleanse_fx": _t(p.cleanse_fx),
@@ -58,6 +59,8 @@ def _snapshot(match):
             "burn": m.danger(p)[1] if p.dead_at is None else None,   # чья стихия жжёт; погибший (2×2 — лежит) не горит
             "team": p.team, "lasso_by": _pid(getattr(p, "lasso_by", None)) if "lassoed" in p.effects else None,
             "out": bool(getattr(p, "out", False)),
+            "in_shop": bool(shop_of[p.id]),
+            "shop": shop_of[p.id].kind if shop_of[p.id] else None,
             "respawn": _t(max(0.0, p.respawn_at - m.match_time)) if getattr(p, "respawn_at", None) else None,
         } for p in m.players],
         "bullets": [{"id": b.id, "x": _xy(b.x), "y": _xy(b.y), "owner": b.owner.id,
@@ -82,6 +85,12 @@ def _snapshot(match):
                       for a in m.artifacts],
         "ammo_packs": [{"id": a.id, "x": _xy(a.x), "y": _xy(a.y), "life": _t(a.life)}
                        for a in m.ammo_packs],
+        "money": [{"id": a.id, "x": _xy(a.x), "y": _xy(a.y), "amount": a.amount, "life": _t(a.life)}
+                  for a in m.money],
+        "shops": [{"id": s.id, "kind": s.kind, "x": _xy(s.x), "y": _xy(s.y), "r": _xy(s.radius),
+                   "hero": m.player(s.kind).hero if s.kind in ("blue", "red") else None,
+                   "stock": list(m.shop_stock(s))}
+                  for s in m.shops],
         "walls": [{"id": w.id, "owner": w.owner.id, "x": _xy(w.x), "y1": _xy(w.y1),
                    "y2": _xy(w.y2), "cx": _xy(w.cx), "cy": _xy(w.cy), "angle": round(w.angle, 3),
                    "life": _t(w.life)} for w in m.walls],

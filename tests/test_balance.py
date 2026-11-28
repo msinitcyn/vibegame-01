@@ -4,6 +4,8 @@ import json
 from duel import logs
 from duel.entities import Artifact
 from duel.match import Match
+from duel.config import ITEM_PRICES, MONEY_DROP
+from duel.items import ITEMS
 from tests.test_network import Client, make_server, playing, wait
 from tools import balance
 
@@ -20,6 +22,11 @@ def test_match_counts_picked_used_shots_damage():
     st = m.summary()["stats"]
     assert st["blue"]["picked"] == {"speed": 1} and st["blue"]["used"] == {"speed": 1}
     assert st["blue"]["shots"] == 1 and st["red"]["damage_taken"] == 2
+
+
+def test_shop_prices_are_configured_and_basic_items_take_two_drops():
+    assert set(ITEM_PRICES) == set(ITEMS)
+    assert min(ITEM_PRICES.values()) == 2 * MONEY_DROP
 
 
 def test_server_records_match(tmp_path, monkeypatch):

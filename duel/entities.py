@@ -67,6 +67,11 @@ from .config import (
     CLONE_RADIUS,
     CLONE_SHOT_EVERY,
     EXPOSE_SHOT,
+    FIELD_LEFT,
+    FIELD_RIGHT,
+    MONEY_DROP,
+    MONEY_LIFETIME,
+    SHOP_RADIUS,
     GEAR_FIRE,
     MIN_SHOT_COOLDOWN,
     GEAR_SPEED,
@@ -91,7 +96,6 @@ from .config import (
     WALL_W,
     WAVE_AMP,
     WAVE_FREQ,
-    WIDTH,
 )
 from .items import WEAPON_ITEMS
 
@@ -294,6 +298,7 @@ class Player(Unit):
         self.bear_at = None           # …и где он превратился (туда вернётся маг)
         self.ring_t = 0.0             # сколько стоит у огненной стены с последнего урона
         self.reset_effects()
+        self.money = 0                 # подобранные деньги — на покупки в магазине
         self.items = [None] * INVENTORY_SIZE
         self.queue = []               # собранные артефакты, ждущие свободной ячейки
         self.gear = []                # снаряжение (GEAR_ITEMS) — действует до конца партии
@@ -355,16 +360,24 @@ class Player(Unit):
             self.x += dx * k
             self.y += dy * k
         r = self.radius
-        self.x = max(r, min(WIDTH - r, self.x))         # по всему полю: чужая земля, полоса, арена
+        self.x = max(FIELD_LEFT + r, min(FIELD_RIGHT - r, self.x))  # по всему полю: чужая земля, полоса, арена
         self.y = max(TOP + r, min(BOTTOM - r, self.y))
 
     def random_spot(self, margin):
-        """Случайная точка на своей земле вне арены (для пачек патронов)."""
-        for _ in range(50):
+        """Случайная точка на своей земле вне арены (для пачек патронов, стражей)."""
+        for _ in range(80):
             x = self.rng.uniform(self.land[0] + margin, self.land[1] - margin)
             y = self.rng.uniform(TOP + margin, BOTTOM - margin)
-            if not in_arena(x, y, margin):
+            if not in_arena(x, y, margin) and zone_at(x, y) == ("blue" if self.dir > 0 else "red"):
                 return x, y
+        # запасной вариант — у своей стороны, но точно не в нейтральной полосе и не в арене
+        side = "blue" if self.dir > 0 else "red"
+        x = (self.land[0] + margin) if side == "blue" else (self.land[1] - margin)
+        if side == "blue":
+            x = min(x, ARENA[0] - NEUTRAL_HALF - margin)
+        else:
+            x = max(x, ARENA[0] + NEUTRAL_HALF + margin)
+        y = (TOP + BOTTOM) / 2
         return push_out_of_arena(x, y, margin)
 
     def on_foe_land(self):
@@ -543,12 +556,12 @@ class Bullet:
             self.y = BOTTOM - BULLET_R
             self.vy = -abs(self.vy)
             self.bounce()
-        if self.x - BULLET_R < 0:
-            self.x = BULLET_R
+        if self.x - BULLET_R < FIELD_LEFT:
+            self.x = FIELD_LEFT + BULLET_R
             self.vx = abs(self.vx)
             self.bounce()
-        elif self.x + BULLET_R > WIDTH:
-            self.x = WIDTH - BULLET_R
+        elif self.x + BULLET_R > FIELD_RIGHT:
+            self.x = FIELD_RIGHT - BULLET_R
             self.vx = -abs(self.vx)
             self.bounce()
 
@@ -662,6 +675,27 @@ class AmmoPack:
         self.id = None
         self.x, self.y = x, y
         self.life = AMMO_LIFETIME
+
+
+class Money:
+    """Денежная награда моба на земле: подбирается касанием, лежит MONEY_LIFETIME секунд."""
+
+    def __init__(self, x, y, amount=MONEY_DROP):
+        self.id = None
+        self.x, self.y = x, y
+        self.amount = amount
+        self.life = MONEY_LIFETIME
+        self.taken = False
+
+
+class Shop:
+    """Постройка-магазин: герой подходит и встаёт на неё, чтобы открыть её товары."""
+
+    def __init__(self, kind, x, y):
+        self.id = None
+        self.kind = kind              # blue / red / neutral_tl / neutral_br / arena
+        self.x, self.y = x, y
+        self.radius = SHOP_RADIUS
 
 
 class Mob:
@@ -831,7 +865,7 @@ class MobShot:
         self.x += self.dx * step
         self.y += self.dy * step
         self.travelled += step
-        if self.travelled >= MOB_RANGE or not (0 <= self.x <= WIDTH and TOP <= self.y <= BOTTOM):
+        if self.travelled >= MOB_RANGE or not (FIELD_LEFT <= self.x <= FIELD_RIGHT and TOP <= self.y <= BOTTOM):
             self.alive = False
 
 
@@ -847,7 +881,8 @@ class IceTrail:
 
     def __init__(self, x, y, owner):
         self.id = None
-        self.x, self.y = x, y
+        self.x = max(FIELD_LEFT + ICE_R, min(FIELD_RIGHT - ICE_R, x))
+        self.y = y
         self.owner = owner
         self.life = ICE_LIFE
 
@@ -864,8 +899,21 @@ class TreeWall:
         self.owner = owner
         self.angle = owner.aim
         gap = owner.radius + TREE_W / 2 + 4          # растёт от края мага, а не из него
-        self.x = owner.x + math.cos(self.angle) * gap
-        self.y = owner.y + math.sin(self.angle) * gap
+        cos, sin = math.cos(self.angle), math.sin(self.angle)
+        self.x = max(FIELD_LEFT + TREE_W / 2, min(FIELD_RIGHT - TREE_W / 2,
+                                                  owner.x + cos * gap))
+        self.y = max(TOP + TREE_W / 2, min(BOTTOM - TREE_W / 2, owner.y + sin * gap))
+        # не выпускаем деревья в полосы магазинов
+        self.max_length = TREE_LENGTH
+        if cos > 1e-9:
+            self.max_length = min(self.max_length, (FIELD_RIGHT - TREE_W / 2 - self.x) / cos)
+        elif cos < -1e-9:
+            self.max_length = min(self.max_length, (FIELD_LEFT + TREE_W / 2 - self.x) / cos)
+        if sin > 1e-9:
+            self.max_length = min(self.max_length, (BOTTOM - TREE_W / 2 - self.y) / sin)
+        elif sin < -1e-9:
+            self.max_length = min(self.max_length, (TOP + TREE_W / 2 - self.y) / sin)
+        self.max_length = max(0.0, self.max_length)
         self.length = 0.0
         self.life = TREE_TIME
 
@@ -875,7 +923,7 @@ class TreeWall:
 
     def update(self, dt):
         self.life -= dt
-        self.length = min(TREE_LENGTH, self.length + TREE_SPEED * dt)
+        self.length = min(self.max_length, self.length + TREE_SPEED * dt)
 
     def hits(self, x, y, r):
         """Круг (x, y, r) задевает деревья."""
@@ -934,11 +982,11 @@ class Beam:
             elif self.hy > BOTTOM:
                 self.hy, self.vy = 2 * BOTTOM - self.hy, -abs(self.vy)
                 self.bounces += 1
-            if self.hx < 0:
-                self.hx, self.vx = -self.hx, abs(self.vx)
+            if self.hx < FIELD_LEFT:
+                self.hx, self.vx = 2 * FIELD_LEFT - self.hx, abs(self.vx)
                 self.bounces += 1
-            elif self.hx > WIDTH:
-                self.hx, self.vx = 2 * WIDTH - self.hx, -abs(self.vx)
+            elif self.hx > FIELD_RIGHT:
+                self.hx, self.vx = 2 * FIELD_RIGHT - self.hx, -abs(self.vx)
                 self.bounces += 1
         self.path.append((self.hx, self.hy))
         # хвост — не длиннее BEAM_LENGTH: старые точки отрезаем, последний отрезок укорачиваем
@@ -952,7 +1000,7 @@ class Beam:
             total += seg
             keep.append((x0, y0))
         self.path = keep[::-1]
-        out = all(x < -BEAM_WIDTH or x > WIDTH + BEAM_WIDTH or y < TOP - BEAM_WIDTH or y > BOTTOM + BEAM_WIDTH
+        out = all(x < FIELD_LEFT - BEAM_WIDTH or x > FIELD_RIGHT + BEAM_WIDTH or y < TOP - BEAM_WIDTH or y > BOTTOM + BEAM_WIDTH
                   for x, y in self.path)
         if out:                                   # целиком вылетел за поле (после последнего рикошета)
             self.alive = False
@@ -1000,7 +1048,7 @@ class Wall:
         self.tx, self.ty = -self.ny, self.nx       # вдоль стены
         half = WALL_H / 2
         ex, ey = abs(self.tx) * half, abs(self.ty) * half      # не выходить за поле
-        self.cx = max(ex, min(WIDTH - ex, at[0]))
+        self.cx = max(FIELD_LEFT + ex, min(FIELD_RIGHT - ex, at[0]))
         self.cy = max(TOP + ey, min(BOTTOM - ey, at[1]))
         self.x = self.cx
         self.y1, self.y2 = self.cy - ey - WALL_W / 2, self.cy + ey + WALL_W / 2

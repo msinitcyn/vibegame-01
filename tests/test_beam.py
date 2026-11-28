@@ -8,11 +8,9 @@ import pytest
 from duel.commands import Command
 from duel.config import BEAM_DAMAGE, BEAM_LENGTH, BEAM_SPEED, BOTTOM, MAX_HP, SHIELD_HP, TOP
 from duel.entities import Artifact, Mob
-from duel.match import Match
 from tests.conftest import DT, new_match, step
 
 
-pytestmark = pytest.mark.usefixtures("always_drop")   # мобы роняют всегда (DROP_MISS — в test_targets)
 
 
 @pytest.fixture
@@ -20,7 +18,7 @@ def light():
     m = new_match()
     m.set_heroes({"blue": "light", "red": "dark"})
     b, r = m.blue, m.red
-    b.x, b.y, r.x, r.y = 100, TOP + 60, 600, TOP + 60    # на одной линии над ареной
+    b.x, b.y, r.x, r.y = 150, TOP + 60, 600, TOP + 60    # на одной линии над ареной (не в полосе магазина)
     b.aim = 0.0
     return m
 
@@ -75,7 +73,7 @@ def test_beam_ricochets_off_side_wall(light):
     b.aim = math.pi                                     # прямо в левую стенку
     m.apply_item(b, "beam")
     beam = m.beams[0]
-    for _ in range(int(1.0 / DT)):
+    for _ in range(int(0.5 / DT)):
         m.step(DT)
     assert beam.vx > 0 and beam.bounces >= 1
 
@@ -104,17 +102,10 @@ def test_shield_and_clones(light):
     assert r.hp == MAX_HP and r.shield_hits == SHIELD_HP - BEAM_DAMAGE and not any(c.alive for c in m.clones)
 
 
-def test_beam_drops_only_for_light():
+def test_beam_is_only_in_light_shop():
+    from duel.items import shop_items
     for hero, can in (("light", True), ("frost", False)):
-        seen = set()
-        for seed in range(400):
-            m = Match(seed=seed)
-            m.set_heroes({"blue": hero, "red": "fire"})
-            mob = Mob(200, TOP + 60, 1)
-            mob.target = m.blue
-            m.drop_artifact(mob)
-            seen.add(m.artifacts[0].kind)
-        assert ("beam" in seen) == can
+        assert ("beam" in shop_items(hero)["land"]) == can
 
 
 def test_anyone_picks_up_and_uses_beam():

@@ -2,7 +2,7 @@
 выпадают только в арене мобов."""
 import pytest
 from duel import config, testcmd
-from duel.config import ARENA, GEAR_ITEMS
+from duel.config import GEAR_ITEMS
 from duel.entities import Artifact
 from duel.match import Match
 from duel.snapshot import snapshot
@@ -42,13 +42,10 @@ def test_boots_gun_sword_armor():
     assert snapshot(m)["players"][0]["gear"].count("boots") == 2
 
 
-def test_gear_drops_only_in_arena():
-    m = Match(seed=2)
-    arena = [m.artifact_kind("arena", 6) for _ in range(400)]
-    assert set(arena) == set(GEAR_ITEMS)                    # в арене — только снаряжение
-    for zone in ("blue", "red", "neutral"):
-        assert not [k for k in (m.artifact_kind(zone, 6) for _ in range(300)) if k in GEAR_ITEMS]
-    assert ARENA
+def test_gear_is_in_every_mob_shop():
+    from duel.items import shop_items
+    for hero in ("frost", "fire", "nature", "dark", "light", "earth"):
+        assert set(shop_items(hero)["mob"]) == set(GEAR_ITEMS)   # снаряжение — в обеих полосах
 
 
 def test_give_gear_command_and_bear_armor():
