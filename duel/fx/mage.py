@@ -833,3 +833,68 @@ def draw_invert(surf, pos, r, since, left, time):
         nx, ny = -dy, dx
         pygame.draw.polygon(surf, arrow, [(tx, ty), (tx - dx * 8 + nx * 4, ty - dy * 8 + ny * 4),
                                           (tx - dx * 8 - nx * 4, ty - dy * 8 - ny * 4)])
+
+
+def draw_noitems(surf, pos, r, since, left, time):
+    """«Без артефактов»: над соперником висит перечёркнутая сумка, у ног — красное кольцо."""
+    if left <= 0:
+        return
+    P = params("noitems")
+    r = int(r)
+    cx, cy = int(pos[0]), int(pos[1])
+    ring = rgb(P.get("ring_color"), (255, 130, 170))
+    box = rgb(P.get("box_color"), (255, 208, 221))
+    slash = rgb(P.get("slash_color"), (255, 68, 102))
+    cast = max(0.01, float(P.get("cast_time", 0.42)))
+    if since < cast:
+        k = max(0.0, min(1.0, since / cast))
+        pygame.draw.circle(surf, (*ring, int(220 * (1 - k))), (cx, cy), int(r * (1.1 + 1.6 * k)), 3)
+    bob = math.sin(time * 2.2) * float(P.get("bob", 3))
+    by = cy - r - 18 + bob
+    w, h = max(12, r + 4), max(9, int(r * 0.75))
+    rect = pygame.Rect(int(cx - w / 2), int(by - h / 2), w, h)
+    pygame.draw.rect(surf, (16, 12, 20), rect.inflate(4, 4), border_radius=3)
+    pygame.draw.rect(surf, (*box, 220), rect, 2, border_radius=3)
+    pygame.draw.line(surf, (*slash, 240), (rect.left, rect.bottom), (rect.right, rect.top), 3)
+    pygame.draw.line(surf, (*ring, 120), (rect.left + 3, rect.centery), (rect.right - 3, rect.centery), 1)
+
+
+def draw_grow(surf, pos, r, since, left, time):
+    """«Соперник ×2»: от мага разлетается фиолетово-золотое кольцо, потом — пульс большого тела."""
+    if left <= 0:
+        return
+    P = params("grow")
+    r = int(r)
+    cx, cy = int(pos[0]), int(pos[1])
+    ring = rgb(P.get("ring_color"), (192, 120, 255))
+    spark = rgb(P.get("spark_color"), (255, 224, 138))
+    cast = max(0.01, float(P.get("cast_time", 0.5)))
+    if since < cast:
+        k = max(0.0, min(1.0, since / cast))
+        radius = int(r * (1.0 + float(P.get("expand", 2.2)) * k))
+        pygame.draw.circle(surf, (*ring, int(220 * (1 - k))), (cx, cy), radius, 4)
+        for i in range(10):
+            a = i * math.tau / 10 + k * 1.4
+            d = radius * (0.75 + 0.25 * k)
+            pygame.draw.line(surf, (*spark, int(220 * (1 - k))),
+                             (cx + math.cos(a) * (d - 8), cy + math.sin(a) * (d - 8)),
+                             (cx + math.cos(a) * d, cy + math.sin(a) * d), 2)
+    phase = (time * 1.7) % 1.0
+    pygame.draw.circle(surf, (*ring, int(90 * (1 - phase))), (cx, cy), int(r * (1.02 + 0.12 * phase)), 2)
+
+
+def draw_speed(surf, pos, r, time):
+    """«Скорость»: зелёное кольцо и короткие штрихи ветра вокруг мага."""
+    P = params("speed")
+    r = int(r)
+    cx, cy = int(pos[0]), int(pos[1])
+    ring = rgb(P.get("ring_color"), (120, 255, 120))
+    streak = rgb(P.get("streak_color"), (216, 255, 216))
+    pygame.draw.circle(surf, (*ring, 90), (cx, cy), r + 8, 1)
+    n = int(P.get("streaks", 4))
+    for i in range(n):
+        a = time * 2.4 + i * math.tau / n
+        d0, d1 = r + 10, r + 22
+        pygame.draw.line(surf, (*streak, 150),
+                         (cx + math.cos(a) * d0, cy + math.sin(a) * d0),
+                         (cx + math.cos(a) * d1, cy + math.sin(a) * d1), 2)

@@ -62,7 +62,6 @@ from .config import (
 from . import fx
 from .fx import bullets as fx_bullets, earth as fx_earth, mage as fx_mage, spells as fx_spells
 from .icons import draw_coin, draw_icon
-from .items import ITEMS
 from .sprites import SPRITE_TO_HITBOX, draw_unit, recolored_image, sprite, sprite_px
 
 DIR = {"blue": 1, "red": -1, "blue2": 1, "red2": -1}   # +1 стреляет вправо, -1 влево (стороны поля; 2×2 — и напарники)
@@ -110,7 +109,7 @@ def draw_effects(surf, u, time=0.0):
     if "freeze" in effects:                       # ледяная глыба: нарастает, держит, трескается
         fx_spells.draw_freeze(surf, pos, u["r"], since_start("freeze", effects["freeze"]), effects["freeze"], time)
     if "speed" in effects:
-        pygame.draw.circle(surf, ITEMS["speed"][1], pos, r + 8, 1)
+        fx_mage.draw_speed(surf, pos, r, time)
     if "mobpeace" in effects:                     # мир с мобами — волна, сияние, листочки (assets/effects/peace.json)
         fx_mage.draw_mob_peace(surf, pos, u["r"], since_start("mobpeace", effects["mobpeace"]), effects["mobpeace"], time)
     if "immune" in effects:                       # дубовая кора — пластины коры вокруг мага (assets/effects/oak.json)
@@ -132,6 +131,12 @@ def draw_effects(surf, u, time=0.0):
     if "invert" in effects:                       # «Перевод стрелок»: стрелки в противоположные стороны
         fx_mage.draw_invert(surf, pos, u["r"], since_start("invert", effects["invert"]),
                             effects["invert"], time)
+    if "noitems" in effects:                      # «Без артефактов»: перечёркнутая сумка
+        fx_mage.draw_noitems(surf, pos, u["r"], since_start("noitems", effects["noitems"]),
+                             effects["noitems"], time)
+    if "grow2" in effects:                        # «Соперник ×2»: разлетающееся кольцо
+        fx_mage.draw_grow(surf, pos, u["r"], since_start("grow2", effects["grow2"]),
+                          effects["grow2"], time)
     clear = u.get("clear_fx", 0)
     if clear > 0:                                 # «Убрать пули соперника»: волна от мага
         fx_mage.draw_clearfoe(surf, pos, u["r"], 1 - clear / CLEAR_FX, time)

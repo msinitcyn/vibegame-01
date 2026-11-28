@@ -71,6 +71,15 @@ def test_invert_animation_draws():
                                                    DURATION["invert"] - since, 2.3))
 
 
+def test_noitems_grow_speed_animations_draw():
+    from duel.config import DURATION
+    for fn, key in ((fx_mage.draw_noitems, "noitems"), (fx_mage.draw_grow, "grow2")):
+        for since in (0.0, 0.2, 0.6, 2.0):
+            assert _drew(lambda s: fn(s, (200, 150), 20, since, DURATION[key] - since, 2.3))
+    for t in (0.0, 1.0, 3.0):
+        assert _drew(lambda s: fx_mage.draw_speed(s, (200, 150), 14, t))
+
+
 def test_triple_bear_zombie_draw_in_all_phases():
     for k in (0.0, 0.3, 1.0):
         assert _drew(lambda s: fx_mage.draw_triple(s, (200, 150), 14, 1, k, shot=1 - k))
